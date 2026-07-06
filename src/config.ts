@@ -193,6 +193,8 @@ const SettingsSchema = z.object({
   /** Self-hosting auto-update sector. See docs/21-serve-self-hosting.md. */
   serve: ServeSettingsSchema.default({}),
   defaultMode: z.enum(['agent', 'plan']).default('agent'),
+  /** Default cursor-agent model for new sessions (cursor_set_model global scope). */
+  defaultActiveModel: z.string().min(1).default('auto'),
   maxConcurrentJobs: z.number().int().min(1).max(4).default(1),
   jobTimeoutMs: z.number().int().positive().default(600_000),
   planFirst: z.boolean().default(false),
@@ -336,6 +338,11 @@ function migrateRawConfig(raw: unknown): unknown {
         abortOnLocalChanges: true,
       };
       log.info('Migrated config — added default settings.serve');
+    }
+
+    if (s['defaultActiveModel'] === undefined || String(s['defaultActiveModel']).trim() === '') {
+      s['defaultActiveModel'] = 'auto';
+      log.info('Migrated config — added default settings.defaultActiveModel');
     }
 
     return raw;

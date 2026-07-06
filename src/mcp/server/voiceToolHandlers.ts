@@ -37,6 +37,17 @@ type SendFn = (payload: unknown) => void;
 
 const activeSessions = new Set<SendFn>();
 
+export const NO_VOICE_SESSION_ERROR =
+  'No active phone voice session — speak/done/next_voice_turn only work while the PWA voice session is live. Use normal text in the desktop IDE.';
+
+export function hasActiveVoiceSession(): boolean {
+  return activeSessions.size > 0;
+}
+
+export function getActiveVoiceSessionCount(): number {
+  return activeSessions.size;
+}
+
 export function registerVoiceSession(send: SendFn): () => void {
   activeSessions.add(send);
   log.debug({ sessions: activeSessions.size }, 'voice session registered');
@@ -122,6 +133,8 @@ export interface SpeakArgs {
 export interface SpeakResult {
   ok: boolean;
   sessions: number;
+  error?: string;
+  message?: string;
 }
 
 /**
@@ -132,6 +145,10 @@ export function handleSpeak(args: SpeakArgs): SpeakResult {
   const text = (args.text ?? '').trim();
   if (!text) {
     return { ok: false, sessions: 0 };
+  }
+  if (!hasActiveVoiceSession()) {
+    log.debug('speak rejected — no active PWA voice session');
+    return { ok: false, sessions: 0, error: 'NO_VOICE_SESSION', message: NO_VOICE_SESSION_ERROR };
   }
 
   if (args.countTowardTurn !== false) {
@@ -148,6 +165,8 @@ export function handleSpeak(args: SpeakArgs): SpeakResult {
 
 export interface DoneResult {
   ok: boolean;
+  error?: string;
+  message?: string;
 }
 
 /**
@@ -155,6 +174,9 @@ export interface DoneResult {
  * Sends turn_complete to all connected PWA sessions so the mic re-arms.
  */
 export function handleDone(): DoneResult {
+  if (!hasActiveVoiceSession()) {
+    return { ok: false, error: 'NO_VOICE_SESSION', message: NO_VOICE_SESSION_ERROR };
+  }
   broadcastVoiceTurnIdle();
   return { ok: true };
 }
@@ -184,6 +206,8 @@ export interface NextVoiceTurnResult {
   received_at: string | null;
   /** Turns still buffered after this dequeue. */
   queue_depth: number;
+  error?: string;
+  message?: string;
   /**
    * When the user barged in during TTS: what they heard (especially last_heard_words),
    * plus lines cut off / not spoken. The Cursor agent keeps running — do not stop workers.
@@ -209,6 +233,17 @@ const DEFAULT_POLL_MS = 30_000;
 export async function handleNextVoiceTurn(
   args: NextVoiceTurnArgs,
 ): Promise<NextVoiceTurnResult> {
+  if (!hasActiveVoiceSession()) {
+    return {
+      turn: null,
+      is_interrupt: false,
+      received_at: null,
+      queue_depth: 0,
+      error: 'NO_VOICE_SESSION',
+      message: NO_VOICE_SESSION_ERROR,
+    };
+  }
+
   const timeoutMs = Math.min(
     args.timeout_ms != null && args.timeout_ms > 0 ? args.timeout_ms : DEFAULT_POLL_MS,
     MAX_POLL_MS,

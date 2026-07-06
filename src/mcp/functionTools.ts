@@ -105,13 +105,20 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
     type: 'function',
     name: 'cursor_set_model',
     description:
-      'Set the AI model (e.g. claude-opus, gpt-5, auto). NEVER pass agent/plan/ask — those are cursor_submit modes, not model IDs. Call cursor_list_models first.',
+      'Set the AI model (e.g. claude-opus, gpt-5, auto). Default scope is global: updates the default, all sessions, and future sessions. ' +
+      'Pass scope "session" only when the user explicitly wants this connection/session only. Call cursor_list_models first.',
     parameters: {
       type: 'object',
       properties: {
         model_id: {
           type: 'string',
           description: 'Exact AI model ID from cursor_list_models (e.g. auto, claude-...). NOT agent/plan/ask.',
+        },
+        scope: {
+          type: 'string',
+          enum: ['global', 'session'],
+          description:
+            'global = default + all sessions + future (default). session = this connection only.',
         },
       },
       required: ['model_id'],

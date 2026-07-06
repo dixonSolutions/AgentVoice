@@ -251,7 +251,7 @@ Each image item needs exactly one of `path`, `url`, or `data` (base64). A new `s
 | `cursor_list_projects()` | List available projects. |
 | `cursor_set_project(project)` | Switch active project. |
 | `cursor_list_models()` | List available AI models. |
-| `cursor_set_model(model_id)` | Change the active model. |
+| `cursor_set_model(model_id, scope?)` | Change model. Default **global**: default selection, all sessions, future sessions. Use `scope: "session"` only if user says "just this session". |
 | `cursor_submit(prompt, mode?)` | Submit coding task (alternative to spawn_agent). |
 | `cursor_ask(question)` | Read-only question about the codebase. |
 | `cursor_status(job_id?)` | Poll a running job. |

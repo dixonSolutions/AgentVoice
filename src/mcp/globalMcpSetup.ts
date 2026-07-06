@@ -161,10 +161,11 @@ function ensureGlobalCursorVoiceRule(onLog?: SessionLogCallback): void {
   const body = cursorVoiceRuleBody();
   const content = `---
 description: >
-  Cursor Voice active — user is hands-free and cannot see the screen.
-  All communication MUST go through the cursor-voice MCP tools: speak() to talk,
-  done() to re-arm the mic, next_voice_turn() to receive requests.
-  Text-only replies are completely invisible to the user.
+  Cursor Voice — use only during an active phone/PWA voice session.
+  When a voice session is connected, all communication MUST go through cursor-voice MCP tools:
+  speak() to talk, done() to re-arm the mic, next_voice_turn() to receive requests.
+  If speak() returns NO_VOICE_SESSION, respond with normal IDE text instead.
+  Text-only replies are invisible to the hands-free user.
 alwaysApply: false
 ---
 

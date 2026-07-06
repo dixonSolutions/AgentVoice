@@ -39,6 +39,8 @@ import {
   handleSpeak,
   handleDone,
   handleNextVoiceTurn,
+  hasActiveVoiceSession,
+  NO_VOICE_SESSION_ERROR,
 } from './voiceToolHandlers.js';
 import {
   makeAgentHandlers,
@@ -52,6 +54,17 @@ import { instrumentMcpToolLogging } from './toolLogging.js';
 import { handleShowImages } from './imageToolHandlers.js';
 
 const log = childLogger('mcp:server');
+
+function voiceToolResponse(result: { error?: string; message?: string; [key: string]: unknown }) {
+  const text = JSON.stringify(result);
+  if (result.error === 'NO_VOICE_SESSION') {
+    return {
+      content: [{ type: 'text' as const, text }],
+      isError: true,
+    };
+  }
+  return { content: [{ type: 'text' as const, text }] };
+}
 
 // ── MCP server factory ────────────────────────────────────────────────────
 
@@ -72,29 +85,31 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'speak',
-    'Speak to the user out loud. Call one sentence at a time for low first-audio latency. ' +
-      'The user cannot see text — you MUST call speak() to communicate anything.',
+    'Speak to the user out loud (phone/PWA voice session only). Returns error NO_VOICE_SESSION if no listener is connected. ' +
+      'Call one sentence at a time for low first-audio latency. ' +
+      'When no voice session is active, use normal IDE text instead.',
     { text: z.string().min(1).describe('Exact words to speak aloud. One sentence per call.') },
     async ({ text }) => {
       const result = handleSpeak({ text });
-      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      return voiceToolResponse({ ...result });
     },
   );
 
   server.tool(
     'done',
-    'Signal that you have finished speaking. The mic re-arms so the user can respond. ' +
-      'Always call done() after your last speak() in each conversational turn.',
+    'Signal that you have finished speaking and re-arm the mic (phone/PWA voice session only). ' +
+      'Returns error NO_VOICE_SESSION if no listener is connected.',
     {},
     async () => {
       const result = handleDone();
-      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      return voiceToolResponse({ ...result });
     },
   );
 
   server.tool(
     'next_voice_turn',
-    'Wait for and receive the next user utterance. Long-polls up to timeout_ms (default 30 s). ' +
+    'Wait for the next user utterance (phone/PWA voice session only). Returns error NO_VOICE_SESSION if no listener. ' +
+      'Long-polls up to timeout_ms (default 30 s). ' +
       'Returns { turn: null } on timeout — call again immediately to keep listening. ' +
       'Call done() before next_voice_turn() to re-arm the mic first. ' +
       'On TTS barge-in, tts_interrupt.last_heard_words is what the user heard aloud (~10 words). Agents keep running.',
@@ -109,7 +124,7 @@ function buildMcpServer(sessionKey: string): McpServer {
     },
     async ({ timeout_ms }) => {
       const result = await handleNextVoiceTurn({ timeout_ms });
-      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      return voiceToolResponse({ ...result });
     },
   );
 
@@ -394,13 +409,18 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'cursor_set_model',
-    'Set the AI model for this session. Must be a valid model ID from cursor_list_models. ' +
-      'Default is "auto" (Cursor chooses). Change persists until session ends or model is changed again.',
+    'Set the AI model. Default scope is global: updates the bridge default, all active sessions, and future sessions. ' +
+      'Use scope "session" only when the user explicitly says they want this session/connection only. ' +
+      'Must be a valid model ID from cursor_list_models.',
     {
       model_id: z.string().describe('Exact model ID (from cursor_list_models, e.g. "claude-opus-4-8-thinking-high").'),
+      scope: z
+        .enum(['global', 'session'])
+        .optional()
+        .describe('global (default) = default + all sessions. session = this connection only.'),
     },
-    async ({ model_id }) => {
-      const result = await dispatchTool('cursor_set_model', { model_id }, sessionKey);
+    async ({ model_id, scope }) => {
+      const result = await dispatchTool('cursor_set_model', { model_id, scope }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
@@ -667,6 +687,13 @@ function buildMcpServer(sessionKey: string): McpServer {
         .describe('Optional title above the carousel'),
     },
     async (args) => {
+      if (!hasActiveVoiceSession()) {
+        return voiceToolResponse({
+          ok: false,
+          error: 'NO_VOICE_SESSION',
+          message: NO_VOICE_SESSION_ERROR,
+        });
+      }
       const result = handleShowImages(args);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
@@ -705,6 +732,12 @@ function buildMcpServer(sessionKey: string): McpServer {
         .describe('How long to wait for a response (default 120 000 ms = 2 min).'),
     },
     async ({ question, input_type, options, timeout_ms }) => {
+      if (!hasActiveVoiceSession()) {
+        return voiceToolResponse({
+          error: 'NO_VOICE_SESSION',
+          message: NO_VOICE_SESSION_ERROR,
+        });
+      }
       const timeout = timeout_ms ?? 120_000;
 
       const { request_id, promise } = registerRequest((id) => {
@@ -762,6 +795,12 @@ function buildMcpServer(sessionKey: string): McpServer {
         .describe('How long to wait for a response (default 180 000 ms = 3 min).'),
     },
     async ({ title, steps, estimated_impact, timeout_ms }) => {
+      if (!hasActiveVoiceSession()) {
+        return voiceToolResponse({
+          error: 'NO_VOICE_SESSION',
+          message: NO_VOICE_SESSION_ERROR,
+        });
+      }
       const timeout = timeout_ms ?? 180_000;
 
       const { request_id, promise } = registerRequest((id) => {

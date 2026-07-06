@@ -7,6 +7,20 @@
       optionValue="value"
       [allowEmpty]="false" />
     <p-button
+      label="Copy all"
+      icon="pi pi-copy"
+      severity="secondary"
+      [text]="true"
+      [disabled]="filteredEntries().length === 0"
+      (onClick)="copyAllLogs()" />
+    <p-button
+      label="Export JSON"
+      icon="pi pi-download"
+      severity="secondary"
+      [text]="true"
+      [disabled]="filteredEntries().length === 0"
+      (onClick)="exportLogsJson()" />
+    <p-button
       label="Clear"
       icon="pi pi-trash"
       severity="secondary"

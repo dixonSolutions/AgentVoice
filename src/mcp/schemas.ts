@@ -67,6 +67,13 @@ export const CursorListModelsSchema = z.object({
 
 export const CursorSetModelSchema = z.object({
   model_id: z.string().describe('Exact model ID to use (from cursor_list_models)'),
+  scope: z
+    .enum(['global', 'session'])
+    .optional()
+    .describe(
+      'global (default): default selection, all sessions, and future sessions. ' +
+        'session: only this voice/CLI connection — use when the user says "just this session".',
+    ),
 });
 
 // ── Group: Execute ────────────────────────────────────────────────────────

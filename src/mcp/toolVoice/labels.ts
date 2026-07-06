@@ -22,7 +22,9 @@ export function toolStartLabel(tool: string, args: unknown): string {
     case 'cursor_recall_answer':
       return 'Recalling last Cursor answer';
     case 'cursor_set_model':
-      return `Setting model → ${String(a['model_id'] ?? '')}`;
+      return a['scope'] === 'session'
+        ? `Setting model (this session only) → ${String(a['model_id'] ?? '')}`
+        : `Setting model (default + all sessions) → ${String(a['model_id'] ?? '')}`;
     case 'cursor_new_session':
       return 'Starting fresh Cursor thread';
     case 'cursor_session_info':

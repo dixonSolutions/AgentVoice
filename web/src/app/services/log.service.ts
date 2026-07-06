@@ -99,4 +99,43 @@ export class LogService {
     const detail = entry.detail ? ` — ${entry.detail}` : '';
     return `${new Date(entry.at).toLocaleTimeString()} [${tag}] ${entry.summary}${detail}`;
   }
+
+  /** Voice + transcript lines for the live session panel. */
+  sessionEntries(): LogEntry[] {
+    return this.entries().filter(
+      (e) => e.category === 'voice' || e.category === 'transcript',
+    );
+  }
+
+  formatSessionLogText(entries = this.sessionEntries()): string {
+    return this.formatLogText(entries);
+  }
+
+  formatLogText(entries: LogEntry[]): string {
+    return entries.map((e) => this.formatEntryLine(e)).join('\n');
+  }
+
+  exportSessionLogJson(entries = this.sessionEntries()): string {
+    return this.exportLogJson(entries, 'session');
+  }
+
+  exportLogJson(entries: LogEntry[], scope: 'session' | 'all' = 'all'): string {
+    return JSON.stringify(
+      {
+        exportedAt: new Date().toISOString(),
+        scope,
+        count: entries.length,
+        entries: entries.map((e) => ({
+          at: new Date(e.at).toISOString(),
+          level: e.level,
+          category: e.category,
+          subcategory: e.subcategory ?? null,
+          summary: e.summary,
+          detail: e.detail ?? null,
+        })),
+      },
+      null,
+      2,
+    );
+  }
 }

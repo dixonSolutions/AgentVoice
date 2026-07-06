@@ -115,6 +115,33 @@ export class LiveLogPanelComponent implements AfterViewInit, OnDestroy {
     this.stickToBottom.set(true);
   }
 
+  protected async copyAllLogs(): Promise<void> {
+    const text = this.logs.formatSessionLogText(this.sessionEntries());
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      this.toast.success('Copied all logs', undefined, false);
+    } catch {
+      this.toast.error('Copy failed', 'Could not access clipboard.');
+    }
+  }
+
+  protected exportLogsJson(): void {
+    const entries = this.sessionEntries();
+    if (entries.length === 0) return;
+    const blob = new Blob([this.logs.exportSessionLogJson(entries)], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `cursor-voice-session-${stamp}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    this.toast.success('Exported JSON', undefined, false);
+  }
+
   protected formatTime(at: number): string {
     return new Date(at).toLocaleTimeString(undefined, {
       hour: '2-digit',

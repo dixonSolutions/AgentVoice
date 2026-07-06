@@ -9,8 +9,12 @@ import { Fluid } from 'primeng/fluid';
 import { IftaLabel } from 'primeng/iftalabel';
 import { InputText } from 'primeng/inputtext';
 import { Message } from 'primeng/message';
-import { Select } from 'primeng/select';
 import { Tag } from 'primeng/tag';
+
+import {
+  FilterableListPickerComponent,
+  type FilterableListOption,
+} from '../filterable-list-picker/filterable-list-picker.component';
 
 import { AppStateService } from '../../services/app-state.service';
 import {
@@ -27,15 +31,14 @@ import { ImageCarouselComponent } from '../image-carousel/image-carousel.compone
 import { LiveLogPanelComponent } from '../live-log-panel/live-log-panel.component';
 import { VoiceOrbComponent, type OrbColorMode } from '../voice-orb/voice-orb.component';
 
-interface ProjectOption {
+interface ProjectOption extends FilterableListOption {
+  name: string;
+  description: string;
   label: string;
-  value: string;
 }
 
-interface SessionOption {
+interface SessionOption extends FilterableListOption {
   label: string;
-  value: string;
-  detail?: string;
   isNew?: boolean;
 }
 
@@ -55,7 +58,7 @@ interface SessionOption {
     IftaLabel,
     InputText,
     Message,
-    Select,
+    FilterableListPickerComponent,
     Tag,
     ApprovalPanelComponent,
     ImageCarouselComponent,
@@ -193,27 +196,60 @@ export class VoiceTabComponent {
   });
 
   protected readonly projectOptions = computed<ProjectOption[]>(() =>
-    this.bridge.projects().map((p) => ({
-      label: p.description ? `${p.name} — ${p.description}` : p.name,
-      value: p.name,
-    })),
+    this.bridge.projects().map((p) => {
+      const description = p.description?.trim() ?? '';
+      return {
+        value: p.name,
+        name: p.name,
+        title: p.name,
+        description,
+        detail: description || undefined,
+        label: p.name,
+        search: [p.name, description, ...(p.aliases ?? [])].filter(Boolean).join(' '),
+      };
+    }),
   );
 
   protected readonly sessionOptions = computed<SessionOption[]>(() => {
-    const fromHistory = this.cursorSessions().map((s) => ({
-      label: this.formatSessionLabel(s),
-      value: s.session_id,
-      detail: this.truncatePrompt(s.last_prompt),
-    }));
+    const fromHistory = this.cursorSessions().map((s) => {
+      const title = this.formatSessionTitle(s);
+      const detail = this.truncatePrompt(s.last_prompt, 120);
+      return {
+        value: s.session_id,
+        title,
+        detail: detail || undefined,
+        label: title,
+        search: [s.session_id, s.last_prompt, s.last_status, title, detail].join(' '),
+      };
+    });
     return [
       {
-        label: 'New session',
+        title: 'New session',
         value: NEW_CURSOR_SESSION_ID,
         detail: 'Fresh Cursor thread on start',
+        label: 'New session',
+        search: 'new session fresh thread',
         isNew: true,
       },
       ...fromHistory,
     ];
+  });
+
+  /** Shown on the collapsed accordion header so users see current context. */
+  protected readonly setupAccordionSummary = computed(() => {
+    const project = this.selectedProject ?? this.bridge.activeProject();
+    if (!project) return 'Choose project and session';
+
+    let sessionPart = 'new session';
+    const sid = this.selectedSessionId;
+    if (sid && sid !== NEW_CURSOR_SESSION_ID) {
+      const match = this.cursorSessions().find((s) => s.session_id === sid);
+      const idShort = sid.length > 10 ? `${sid.slice(0, 8)}…` : sid;
+      const prompt = match ? this.truncatePrompt(match.last_prompt, 22) : '';
+      sessionPart = prompt ? `${idShort} — ${prompt}` : idShort;
+    }
+
+    return `${project} · ${sessionPart}`;
   });
 
   protected readonly isBridgeConnected = computed(
@@ -310,6 +346,7 @@ export class VoiceTabComponent {
 
   protected onProjectChange(name: string | null): void {
     if (!name) return;
+    this.selectedProject = name;
     void this.bridge.setActiveProject(name).then(async () => {
       this.toast.info('Project updated', name);
       await this.loadSessionsForProject(name);
@@ -464,10 +501,9 @@ export class VoiceTabComponent {
     }
   }
 
-  private formatSessionLabel(s: CursorSessionEntry): string {
+  private formatSessionTitle(s: CursorSessionEntry): string {
     const id = s.session_id.length > 10 ? `${s.session_id.slice(0, 8)}…` : s.session_id;
-    const prompt = this.truncatePrompt(s.last_prompt, 36);
-    return prompt ? `${id} — ${prompt}` : id;
+    return id;
   }
 
   private truncatePrompt(text: string, max = 48): string {

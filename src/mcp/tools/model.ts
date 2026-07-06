@@ -9,7 +9,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import stripAnsi from 'strip-ansi';
 import { getCachedModels, setModelCache, filterModels, isValidModelId, type ModelEntry } from '../../state/models.js';
-import { setActiveModel } from '../../state/registry.js';
+import { setActiveModel, persistDefaultActiveModel, setActiveModelForAllSessions, setModelForAllProjects } from '../../state/registry.js';
 import { childLogger } from '../../log.js';
 import { buildCursorAgentEnv } from '../../executor/cursorAgent.js';
 import { parseMisroutedExecutionMode } from './questionDetect.js';
@@ -63,11 +63,19 @@ export async function handleListModels(
 
 export interface SetModelArgs {
   model_id: string;
+  /**
+   * global (default): default selection, all sessions, future sessions.
+   * session: only this MCP/voice connection — use when user says "just this session".
+   */
+  scope?: 'global' | 'session';
 }
 
 export interface SetModelResult {
   active_model: string;
   displayName: string;
+  scope: 'global' | 'session';
+  sessions_updated?: number;
+  default_updated?: boolean;
 }
 
 export async function handleSetModel(
@@ -105,10 +113,34 @@ export async function handleSetModel(
     );
   }
 
+  const scope = args.scope === 'session' ? 'session' : 'global';
+
   setActiveModel(sessionKey, args.model_id);
   const entry = models.find((m) => m.id === args.model_id)!;
 
-  return { active_model: args.model_id, displayName: entry.displayName };
+  if (scope === 'global') {
+    persistDefaultActiveModel(args.model_id);
+    const sessionsUpdated = setActiveModelForAllSessions(args.model_id);
+    setModelForAllProjects(args.model_id);
+    log.info(
+      { model: args.model_id, sessionsUpdated, scope },
+      'model set globally (default + all sessions)',
+    );
+    return {
+      active_model: args.model_id,
+      displayName: entry.displayName,
+      scope,
+      sessions_updated: sessionsUpdated,
+      default_updated: true,
+    };
+  }
+
+  log.info({ model: args.model_id, sessionKey, scope }, 'model set for session only');
+  return {
+    active_model: args.model_id,
+    displayName: entry.displayName,
+    scope,
+  };
 }
 
 // ── Internal ──────────────────────────────────────────────────────────────

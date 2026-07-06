@@ -60,6 +60,7 @@
       }
     },
     "defaultMode": "agent",
+    "defaultActiveModel": "auto",
     "maxConcurrentJobs": 1,
     "jobTimeoutMs": 600000,
     "planFirst": false,

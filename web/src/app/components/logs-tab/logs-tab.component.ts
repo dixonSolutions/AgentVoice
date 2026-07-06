@@ -10,6 +10,7 @@ import { Tag } from 'primeng/tag';
 
 import type { LogCategory, LogEntry, LogLevel } from '../../services/log.service';
 import { LogService } from '../../services/log.service';
+import { ToastService } from '../../services/toast.service';
 
 type LogFilter = 'all' | 'transcript' | 'debug' | 'errors';
 
@@ -29,6 +30,7 @@ type LogFilter = 'all' | 'transcript' | 'debug' | 'errors';
 })
 export class LogsTabComponent {
   protected readonly logs = inject(LogService);
+  private readonly toast = inject(ToastService);
 
   protected filter: LogFilter = 'all';
 
@@ -102,5 +104,33 @@ export class LogsTabComponent {
 
   protected clearLogs(): void {
     this.logs.clear();
+  }
+
+  protected async copyAllLogs(): Promise<void> {
+    const entries = this.filteredEntries();
+    const text = this.logs.formatLogText(entries);
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      this.toast.success('Copied all logs', undefined, false);
+    } catch {
+      this.toast.error('Copy failed', 'Could not access clipboard.');
+    }
+  }
+
+  protected exportLogsJson(): void {
+    const entries = this.filteredEntries();
+    if (entries.length === 0) return;
+    const blob = new Blob([this.logs.exportLogJson(entries, 'all')], {
+      type: 'application/json',
+    });
+    const url = URL.createObjectURL(blob);
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `cursor-voice-logs-${stamp}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+    this.toast.success('Exported JSON', undefined, false);
   }
 }

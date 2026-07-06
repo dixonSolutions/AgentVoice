@@ -13,6 +13,7 @@
 import { existsSync } from 'node:fs';
 import { getDb } from './db.js';
 import { getConfig, type ProjectConfig } from '../config.js';
+import { readConfigFile, writeConfigFile } from './configFile.js';
 import { childLogger } from '../log.js';
 import { foldedProjectMatch, projectMatchScore } from './projectMatch.js';
 
@@ -235,6 +236,36 @@ export interface SessionState {
   activeModel: string;
 }
 
+/** Bridge-wide default cursor-agent model (config.json). */
+export function getDefaultActiveModel(): string {
+  return getConfig().settings.defaultActiveModel ?? 'auto';
+}
+
+/** Persist default model for future sessions (config.json). */
+export function persistDefaultActiveModel(model: string): void {
+  const cfg = readConfigFile();
+  cfg.settings.defaultActiveModel = model;
+  writeConfigFile(cfg);
+}
+
+/** Update active_model on every stored session connection. */
+export function setActiveModelForAllSessions(model: string): number {
+  const result = getDb()
+    .prepare(
+      `UPDATE session_state SET active_model = @model, updated_at = datetime('now')`,
+    )
+    .run({ model });
+  return result.changes;
+}
+
+/** Stamp model on all projects (registry metadata for admin / future per-project hints). */
+export function setModelForAllProjects(model: string): number {
+  const result = getDb()
+    .prepare(`UPDATE project SET model = @model, updated_at = datetime('now')`)
+    .run({ model });
+  return result.changes;
+}
+
 /** Get (or create with defaults) the session state for a given session key. */
 export function getSessionState(sessionKey: string): SessionState {
   const db = getDb();
@@ -243,10 +274,11 @@ export function getSessionState(sessionKey: string): SessionState {
     .get(sessionKey) as { session_key: string; active_project: string | null; active_model: string } | undefined;
 
   if (!row) {
+    const defaultModel = getDefaultActiveModel();
     db.prepare(
-      `INSERT INTO session_state (session_key) VALUES (?) ON CONFLICT DO NOTHING`,
-    ).run(sessionKey);
-    return { sessionKey, activeProject: null, activeModel: 'auto' };
+      `INSERT INTO session_state (session_key, active_model) VALUES (?, ?) ON CONFLICT DO NOTHING`,
+    ).run(sessionKey, defaultModel);
+    return { sessionKey, activeProject: null, activeModel: defaultModel };
   }
 
   return {

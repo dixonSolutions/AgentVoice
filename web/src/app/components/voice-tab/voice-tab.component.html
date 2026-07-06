@@ -54,39 +54,41 @@
     @if (!isLiveSession()) {
       <p-accordion styleClass="cv-voice-setup-accordion">
         <p-accordion-panel value="project-session">
-          <p-accordion-header>Project &amp; session</p-accordion-header>
+          <p-accordion-header>
+            <span class="cv-voice-accordion-heading">Project &amp; session</span>
+            <span class="cv-voice-accordion-summary">{{ setupAccordionSummary() }}</span>
+          </p-accordion-header>
           <p-accordion-content>
             <div class="cv-voice-setup-body">
-              <div class="cv-voice-project-row">
-                <p-iftalabel class="cv-voice-project-col">
-                  <p-select
-                    inputId="project-select"
+              <div class="cv-voice-pickers">
+                <div class="cv-voice-picker-block">
+                  <label class="cv-voice-picker-label" for="project-picker">Project</label>
+                  <cv-filterable-list-picker
+                    inputId="project-picker"
+                    ariaLabel="Project"
+                    filterPlaceholder="Filter projects…"
+                    emptyMessage="No projects match"
                     [options]="projectOptions()"
-                    [(ngModel)]="selectedProject"
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="Select a project…"
+                    [value]="selectedProject"
                     [disabled]="projectOptions().length === 0 || !isBridgeConnected()"
-                    (onChange)="onProjectChange(selectedProject)"
-                    [fluid]="true" />
-                  <label for="project-select">Project</label>
-                </p-iftalabel>
+                    (valueChange)="onProjectChange($event)" />
+                </div>
 
-                <p-iftalabel class="cv-voice-session-col">
-                  <p-select
-                    inputId="session-select"
+                <div class="cv-voice-picker-block">
+                  <label class="cv-voice-picker-label" for="session-picker">Cursor session</label>
+                  @if (loadingSessions() || loadingSessionLogs()) {
+                    <p-message severity="secondary" variant="simple" text="Loading sessions…" />
+                  }
+                  <cv-filterable-list-picker
+                    inputId="session-picker"
+                    ariaLabel="Cursor session"
+                    filterPlaceholder="Filter sessions…"
+                    emptyMessage="No sessions match"
                     [options]="sessionOptions()"
-                    [(ngModel)]="selectedSessionId"
-                    optionLabel="label"
-                    optionValue="value"
-                    placeholder="Cursor session…"
+                    [value]="selectedSessionId"
                     [disabled]="!selectedProject || !isBridgeConnected() || loadingSessions()"
-                    [loading]="loadingSessions() || loadingSessionLogs()"
-                    [filter]="sessionOptions().length > 6"
-                    (ngModelChange)="onSessionChange($event)"
-                    [fluid]="true" />
-                  <label for="session-select">Cursor session</label>
-                </p-iftalabel>
+                    (valueChange)="onSessionChange($event)" />
+                </div>
               </div>
 
               <p-message severity="secondary" variant="simple" [text]="sessionHint()" />
