@@ -11,7 +11,7 @@
  *                  spawn_agent, stop_agent, inject, revert_agent
  *   Jobs         — list_jobs_history
  *   Mode         — set_mode, execute_plan
- *   Project      — cursor_list_projects, cursor_set_project
+ *   Project      — cursor_list_projects, cursor_set_project, cursor_manage_projects
  *   Model        — cursor_list_models, cursor_set_model
  *   Execute      — cursor_submit, cursor_ask, cursor_recall_answer
  *   Job tracking — cursor_status, cursor_stop
@@ -351,6 +351,27 @@ function buildMcpServer(sessionKey: string): McpServer {
     },
     async ({ project }) => {
       const result = await dispatchTool('cursor_set_project', { project }, sessionKey);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    'cursor_manage_projects',
+    'Administer allowlisted codebases: describe the project model, list/filter, add, update, or remove. ' +
+      'Projects map spoken names to cursor-agent workspaces; the user usually selects active project in the PWA dropdown.',
+    {
+      action: z
+        .enum(['describe', 'list', 'add', 'update', 'remove'])
+        .describe('describe | list | add | update | remove'),
+      query: z.string().optional().describe('list: filter by name, alias, or description'),
+      enabled: z.boolean().optional().describe('list: filter by enabled'),
+      name: z.string().optional().describe('Slug name — required for add/update/remove'),
+      path: z.string().optional().describe('Absolute path under ~/Projects — required for add'),
+      description: z.string().max(200).optional().describe('Short label'),
+      aliases: z.array(z.string()).optional().describe('Spoken aliases'),
+    },
+    async (args) => {
+      const result = await dispatchTool('cursor_manage_projects', args, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );

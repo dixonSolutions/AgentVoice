@@ -21,7 +21,7 @@ import { getSessionState } from '../state/registry.js';
 import { childLogger } from '../log.js';
 
 // Tool handlers
-import { handleListProjects, handleSetProject } from './tools/project.js';
+import { handleListProjects, handleSetProject, handleManageProjects } from './tools/project.js';
 import { handleListModels, handleSetModel } from './tools/model.js';
 import { handleCursorSubmit, handleCursorAsk } from './tools/execute.js';
 import { handleCursorRecallAnswer } from './tools/recall.js';
@@ -113,6 +113,8 @@ async function route(
       return handleListProjects(a, activeProject);
     case 'cursor_set_project':
       return handleSetProject(a, sessionKey);
+    case 'cursor_manage_projects':
+      return handleManageProjects(a);
     case 'cursor_list_models':
       return handleListModels(a, getSessionState(sessionKey).activeModel);
     case 'cursor_set_model':

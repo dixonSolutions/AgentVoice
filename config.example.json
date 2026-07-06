@@ -88,23 +88,10 @@
     {
       "name": "cursorvoice",
       "path": "/home/eva/Projects/SideProjects/CursorVoice",
-      "aliases": [
-        "cursor voice",
-        "the voice project"
-      ],
-      "description": "This project — the voice bridge",
-      "enabled": true
-    },
-    {
-      "name": "budget",
-      "path": "/home/projects/budget-app",
-      "aliases": [
-        "budget app",
-        "the finance tracker",
-        "money app"
-      ],
-      "description": "Personal finance tracker (web)",
+      "aliases": ["cursor voice", "the voice project"],
+      "description": "Cursor Voice — self-hosted voice bridge",
       "enabled": true
     }
-  ]
+  ],
+  "_comment_projects": "Run: node scripts/apply-projects-registry.mjs — merges config/projects.registry.json for all ~/Projects entries"
 }

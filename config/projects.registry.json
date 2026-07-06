@@ -1,0 +1,104 @@
+{
+  "projectsRoot": "Projects",
+  "projects": [
+    {
+      "name": "cursorvoice",
+      "relativePath": "SideProjects/CursorVoice",
+      "aliases": ["cursor voice", "the voice project"],
+      "description": "Cursor Voice — self-hosted voice bridge for driving Cursor's coding agent from a phone or PWA."
+    },
+    {
+      "name": "bambamofficeboy",
+      "relativePath": "SideProjects/BamBamOfficeBoy/BamBamOfficeBoy",
+      "aliases": ["bam bam office boy", "office boy"],
+      "description": "BamBamOfficeBoy project."
+    },
+    {
+      "name": "botytrader",
+      "relativePath": "SideProjects/BotyTrader/BotyTrader",
+      "aliases": ["boty trader", "bot trader"],
+      "description": "BotyTrader — automated trading bot."
+    },
+    {
+      "name": "cpify",
+      "relativePath": "SideProjects/CPify/CPify",
+      "aliases": ["cpify"],
+      "description": "CPify project."
+    },
+    {
+      "name": "educationperfected",
+      "relativePath": "SideProjects/EducationPerfectedReloaded/Education-Perfected-Reloaded",
+      "aliases": ["education perfected", "education perfected reloaded"],
+      "description": "Education Perfected Reloaded — education platform."
+    },
+    {
+      "name": "groqtype",
+      "relativePath": "SideProjects/GroqType",
+      "aliases": ["groq type", "groqtype"],
+      "description": "GroqType — typing tool powered by Groq."
+    },
+    {
+      "name": "potatotomatoe3",
+      "relativePath": "SideProjects/PotatoeTomatoe3",
+      "aliases": ["potato tomato", "potatoe tomatoe"],
+      "description": "Potato Tomato 3 — browse and play unblocked HTML5 games (Tauri desktop app)."
+    },
+    {
+      "name": "shrekescape2",
+      "relativePath": "SideProjects/ShrekEscape2",
+      "pathCandidates": ["SideProjects/ShrekSwampEscape2"],
+      "aliases": ["shrek escape", "shrek swamp escape"],
+      "description": "Shrek: Escape from the Swamp — offline desktop game."
+    },
+    {
+      "name": "unied",
+      "relativePath": "SideProjects/uniED",
+      "aliases": ["uni ed", "unied editor"],
+      "description": "uniED — cross-platform desktop editor (Tauri + Angular + CodeMirror + LibreOffice)."
+    },
+    {
+      "name": "xonotic-touch",
+      "relativePath": "SideProjects/Xonotic-Touch",
+      "pathCandidates": ["SideProjects/Xonotic-Ubuntu-Touch-App"],
+      "aliases": ["xonotic touch", "xonotic"],
+      "description": "Xonotic Touch — touch-only Xonotic build for Linux tablets and phones."
+    },
+    {
+      "name": "agf",
+      "relativePath": "ZuraSolutions/AGF/AutonomousAgentFramework",
+      "aliases": ["autonomous agent framework", "agf"],
+      "description": "Autonomous Agent Framework (AGF)."
+    },
+    {
+      "name": "logistics",
+      "relativePath": "ZuraSolutions/Logistics",
+      "aliases": ["logistics", "kingspan logistics"],
+      "description": "Logistics — delivery planning for Kingspan water tank deliveries."
+    },
+    {
+      "name": "nextsales",
+      "relativePath": "ZuraSolutions/NextSales",
+      "aliases": ["next sales", "nextsales", "kingspan graveyard tanks"],
+      "description": "NextSales — Kingspan graveyard rainwater tank management and sales platform."
+    },
+    {
+      "name": "servicefuzz",
+      "relativePath": "ZuraSolutions/ServiceFuzz/ServiceFuzzMonorepo",
+      "pathCandidates": ["ZuraSolutions/ServiceFuzzMonorepo"],
+      "aliases": ["service fuzz", "servicefuzz"],
+      "description": "ServiceFuzz monorepo."
+    },
+    {
+      "name": "tbcookies",
+      "relativePath": "ZuraSolutions/TBcookies/TBcookies",
+      "aliases": ["tb cookies", "tbcookies"],
+      "description": "TBcookies project."
+    },
+    {
+      "name": "vid-bb",
+      "relativePath": "ZuraSolutions/VID-BB",
+      "aliases": ["vid bb", "video bb", "long video generation"],
+      "description": "VID-BB — agentic system for long video generation."
+    }
+  ]
+}

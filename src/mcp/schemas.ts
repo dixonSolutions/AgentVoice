@@ -34,6 +34,31 @@ export const CursorSetProjectSchema = z.object({
   project: z.string().describe('Project name (or alias) to set as the active project'),
 });
 
+export const CursorManageProjectsSchema = z.object({
+  action: z
+    .enum(['describe', 'list', 'add', 'update', 'remove'])
+    .describe(
+      'describe = what projects are in Cursor Voice; list = filter registry; add/update/remove = mutate config',
+    ),
+  query: z.string().optional().describe('For list: filter by name, alias, or description'),
+  enabled: z.boolean().optional().describe('For list: filter by enabled flag'),
+  name: z.string().optional().describe('Slug name (required for add, update, remove)'),
+  path: z.string().optional().describe('Absolute path under ~/Projects (required for add; optional for update)'),
+  description: z.string().max(200).optional().describe('Short human-readable label'),
+  aliases: z
+    .union([z.array(z.string()), z.string()])
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined;
+      if (Array.isArray(v)) return v;
+      return v
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+    })
+    .describe('Spoken aliases for STT routing'),
+});
+
 // ── Group: Model ──────────────────────────────────────────────────────────
 
 export const CursorListModelsSchema = z.object({
@@ -171,6 +196,7 @@ export const ShowImagesSchema = z.object({
 export const TOOL_SCHEMAS = {
   cursor_list_projects: CursorListProjectsSchema,
   cursor_set_project: CursorSetProjectSchema,
+  cursor_manage_projects: CursorManageProjectsSchema,
   cursor_list_models: CursorListModelsSchema,
   cursor_set_model: CursorSetModelSchema,
   cursor_submit: CursorSubmitSchema,

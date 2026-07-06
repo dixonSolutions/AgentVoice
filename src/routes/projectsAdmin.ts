@@ -17,8 +17,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { existsSync } from 'node:fs';
 import { getConfig } from '../config.js';
-import { readConfigFile, writeConfigFile } from '../state/configFile.js';
-import { reconcileRegistry } from '../state/registry.js';
+import { addProject, removeProject, updateProject } from '../state/projectsConfig.js';
+import { readConfigFile } from '../state/configFile.js';
 import { getDb } from '../state/db.js';
 import { childLogger } from '../log.js';
 
@@ -121,20 +121,17 @@ export async function registerProjectsAdminRoutes(app: FastifyInstance): Promise
     }
     const { name, path, description, aliases, enabled } = parsed.data;
 
-    const cfg = readConfigFile();
-    if (cfg.projects.find((p) => p.name === name)) {
-      return reply.code(409).send({ error: `Project "${name}" already exists` });
+    try {
+      const project = addProject({ name, path, description, aliases, enabled });
+      log.info({ name, path }, 'project added via admin API');
+      return { ok: true, project };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message.includes('already exists')) {
+        return reply.code(409).send({ error: message });
+      }
+      return reply.code(400).send({ error: message });
     }
-
-    cfg.projects.push({ name, path, description, aliases, enabled });
-    writeConfigFile(cfg);
-    reconcileRegistry();
-
-    log.info({ name, path }, 'project added via admin API');
-    return {
-      ok: true,
-      project: { name, path, description: description ?? null, aliases, enabled, pathExists: existsSync(path) },
-    };
   });
 
   // PATCH /api/admin/projects/:name — update project
@@ -156,30 +153,22 @@ export async function registerProjectsAdminRoutes(app: FastifyInstance): Promise
       return reply.code(404).send({ error: `Project "${name}" not found` });
     }
 
-    const existing = cfg.projects[idx]!;
     const patch = bodyParsed.data;
 
-    cfg.projects[idx] = {
-      name: existing.name,
-      path: patch.path ?? existing.path,
-      description: patch.description !== undefined ? (patch.description ?? undefined) : existing.description,
-      aliases: patch.aliases ?? existing.aliases,
-      enabled: patch.enabled ?? existing.enabled,
-    };
-
-    writeConfigFile(cfg);
-    reconcileRegistry();
-
-    const updated = cfg.projects[idx]!;
-    log.info({ name }, 'project updated via admin API');
-    return {
-      ok: true,
-      project: {
-        ...updated,
-        pathExists: existsSync(updated.path),
-        description: updated.description ?? null,
-      },
-    };
+    try {
+      const project = updateProject({
+        name,
+        path: patch.path,
+        description: patch.description,
+        aliases: patch.aliases,
+        enabled: patch.enabled,
+      });
+      log.info({ name }, 'project updated via admin API');
+      return { ok: true, project };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return reply.code(400).send({ error: message });
+    }
   });
 
   // DELETE /api/admin/projects/:name — soft-delete (disable + remove from config)
@@ -190,24 +179,15 @@ export async function registerProjectsAdminRoutes(app: FastifyInstance): Promise
     }
     const { name } = paramsParsed.data;
 
-    const cfg = readConfigFile();
-    const idx = cfg.projects.findIndex((p) => p.name === name);
-    if (idx === -1) {
-      return reply.code(404).send({ error: `Project "${name}" not found` });
+    try {
+      const removed = removeProject(name);
+      log.info({ name }, 'project removed via admin API');
+      return { ok: true, ...removed };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const code = message.includes('last project') ? 400 : 404;
+      return reply.code(code).send({ error: message });
     }
-
-    if (cfg.projects.length === 1) {
-      return reply
-        .code(400)
-        .send({ error: 'Cannot remove the last project — config requires at least one.' });
-    }
-
-    cfg.projects.splice(idx, 1);
-    writeConfigFile(cfg);
-    reconcileRegistry();
-
-    log.info({ name }, 'project removed via admin API');
-    return { ok: true, name };
   });
 
   // POST /api/admin/projects/:name/ping — check if project path exists

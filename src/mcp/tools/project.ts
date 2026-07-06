@@ -1,10 +1,11 @@
 /**
- * Project tools — cursor_list_projects, cursor_set_project
+ * Project tools — cursor_list_projects, cursor_set_project, cursor_manage_projects
  *
  * Own-bridge tools backed by the project registry (not the cursor-agent CLI).
  * These are the voice model's window into which codebases exist.
  *
- * Security: paths are NEVER returned. Only name + description + aliases.
+ * Security: paths are NEVER returned to the phone/voice model on list/set.
+ * cursor_manage_projects add/update may return path to the admin agent only.
  */
 
 import {
@@ -13,6 +14,15 @@ import {
   setActiveProject,
   type Project,
 } from '../../state/registry.js';
+import {
+  PROJECTS_CATALOG_DESCRIPTION,
+  addProject,
+  filterProjects,
+  listProjectsAdmin,
+  removeProject,
+  updateProject,
+} from '../../state/projectsConfig.js';
+import { readConfigFile } from '../../state/configFile.js';
 
 // ── cursor_list_projects ──────────────────────────────────────────────────
 
@@ -41,27 +51,7 @@ export function handleListProjects(
   args: ListProjectsArgs,
   activeProject: string | null,
 ): ListProjectsResult {
-  let projects = listProjects();
-
-  if (args.query) {
-    const q = args.query.toLowerCase();
-    projects = projects.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        (p.description?.toLowerCase().includes(q) ?? false) ||
-        p.aliases.some((a) => a.toLowerCase().includes(q)),
-    );
-  }
-
-  return {
-    projects: projects.map((p) => ({
-      name: p.name,
-      description: p.description,
-      aliases: p.aliases,
-      enabled: p.enabled,
-      active: p.name === activeProject,
-    })),
-  };
+  return listProjectSummaries(args, activeProject);
 }
 
 // ── cursor_set_project ────────────────────────────────────────────────────
@@ -141,4 +131,118 @@ export function resolveProjectOrThrow(
   }
 
   return resolved;
+}
+
+// ── cursor_manage_projects ────────────────────────────────────────────────
+
+export type ManageProjectsAction = 'describe' | 'list' | 'add' | 'update' | 'remove';
+
+export interface ManageProjectsArgs {
+  action: ManageProjectsAction;
+  query?: string;
+  enabled?: boolean;
+  name?: string;
+  path?: string;
+  description?: string;
+  aliases?: string[];
+}
+
+export interface ManageProjectsResult {
+  action: ManageProjectsAction;
+  catalog?: string;
+  projects?: Array<{
+    name: string;
+    description: string | null;
+    aliases: string[];
+    enabled: boolean;
+    pathExists: boolean;
+    path?: string;
+  }>;
+  project?: {
+    name: string;
+    description: string | null;
+    aliases: string[];
+    enabled: boolean;
+    pathExists: boolean;
+    path?: string;
+  };
+  removed?: string;
+}
+
+/**
+ * Registry admin — describe the project model, list/filter, add, update, or remove entries.
+ * Mutations write config.json and reconcile the SQLite registry.
+ */
+export function handleManageProjects(args: ManageProjectsArgs): ManageProjectsResult {
+  switch (args.action) {
+    case 'describe':
+      return { action: 'describe', catalog: PROJECTS_CATALOG_DESCRIPTION };
+
+    case 'list': {
+      const admin = listProjectsAdmin({ query: args.query, enabled: args.enabled });
+      return {
+        action: 'list',
+        projects: admin.map((p) => ({
+          name: p.name,
+          description: p.description,
+          aliases: p.aliases,
+          enabled: p.enabled,
+          pathExists: p.pathExists,
+        })),
+      };
+    }
+
+    case 'add': {
+      if (!args.name?.trim()) throw new Error('add requires name (lowercase slug).');
+      if (!args.path?.trim()) throw new Error('add requires path (absolute, under ~/Projects).');
+      const project = addProject({
+        name: args.name.trim(),
+        path: args.path.trim(),
+        description: args.description,
+        aliases: args.aliases,
+        enabled: args.enabled,
+      });
+      return { action: 'add', project };
+    }
+
+    case 'update': {
+      if (!args.name?.trim()) throw new Error('update requires name.');
+      const project = updateProject({
+        name: args.name.trim(),
+        path: args.path?.trim(),
+        description: args.description,
+        aliases: args.aliases,
+        enabled: args.enabled,
+      });
+      return { action: 'update', project };
+    }
+
+    case 'remove': {
+      if (!args.name?.trim()) throw new Error('remove requires name.');
+      const { name } = removeProject(args.name.trim());
+      return { action: 'remove', removed: name };
+    }
+
+    default:
+      throw new Error(`Unknown action "${String(args.action)}". Use describe, list, add, update, or remove.`);
+  }
+}
+
+/** Public-safe project summaries for cursor_list_projects (no paths). */
+export function listProjectSummaries(
+  args: ListProjectsArgs,
+  activeProject: string | null,
+): ListProjectsResult {
+  const cfg = readConfigFile();
+  const filtered = filterProjects(cfg.projects, { query: args.query, enabled: true });
+
+  return {
+    projects: filtered.map((p) => ({
+      name: p.name,
+      description: p.description ?? null,
+      aliases: p.aliases,
+      enabled: p.enabled,
+      active: p.name === activeProject,
+    })),
+  };
 }

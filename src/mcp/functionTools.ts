@@ -52,13 +52,38 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
     type: 'function',
     name: 'cursor_set_project',
     description:
-      'Route messages to a project by name. Confirm the name briefly — do not explain the project; Cursor knows the codebase.',
+      'Set the sticky active project for this session (which codebase cursor-agent opens). ' +
+      'The user normally picks a project in the PWA dropdown before voice; use this when they ask to switch by name.',
     parameters: {
       type: 'object',
       properties: {
         project: { type: 'string', description: 'Project name or alias' },
       },
       required: ['project'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'cursor_manage_projects',
+    description:
+      'Administer the project registry (allowlisted codebases). ' +
+      'action=describe explains what projects are; list filters by query/enabled; add/update/remove mutate config.json. ' +
+      'Paths must live under ~/Projects. Never expose paths to the phone user — names and descriptions only.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['describe', 'list', 'add', 'update', 'remove'],
+          description: 'describe | list | add | update | remove',
+        },
+        query: { type: 'string', description: 'list: filter by name, alias, or description' },
+        enabled: { type: 'boolean', description: 'list: filter by enabled flag' },
+        name: { type: 'string', description: 'Slug (a-z0-9_-) — required for add/update/remove' },
+        path: { type: 'string', description: 'Absolute path under ~/Projects — required for add' },
+        description: { type: 'string', description: 'Short label shown in the app' },
+      },
+      required: ['action'],
     },
   },
 
@@ -297,6 +322,7 @@ export const FUNCTION_TOOL_MAP = new Map(FUNCTION_TOOLS.map((t) => [t.name, t]))
 const VOICE_EXCLUDED_TOOLS = new Set([
   'cursor_set_project',
   'cursor_list_projects',
+  'cursor_manage_projects',
   /** Session metadata only — voice should use cursor_ask / cursor_status instead. */
   'cursor_session_info',
   'cursor_new_session',

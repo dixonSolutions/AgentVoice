@@ -7,6 +7,10 @@ export function toolStartLabel(tool: string, args: unknown): string {
       return `Setting project → ${String(a['project'] ?? 'active')}`;
     case 'cursor_list_projects':
       return 'Listing projects';
+    case 'cursor_manage_projects': {
+      const action = String(a['action'] ?? 'list');
+      return `Managing projects → ${action}`;
+    }
     case 'cursor_ask':
       return `Asking Cursor (CLI) → ${truncate(String(a['question'] ?? 'question'), 72)}`;
     case 'cursor_submit':
@@ -40,6 +44,8 @@ export function toolDoneLabel(tool: string, result: unknown): string {
   switch (tool) {
     case 'cursor_set_project':
       return `Project set → ${String(r['active_project'] ?? 'ok')}`;
+    case 'cursor_manage_projects':
+      return `Projects ${String(r['action'] ?? 'updated')}`;
     case 'cursor_ask':
       return 'Cursor answered';
     case 'cursor_submit':
