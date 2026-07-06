@@ -83,6 +83,10 @@ export class WebkitSttSession {
 
   start(): void {
     if (this.paused || this.gate.isPaused()) return;
+    if (!canUseWebkitStt()) {
+      this.cb.onError?.('Browser STT unavailable — use Amazon Transcribe fallback.');
+      return;
+    }
     const Ctor = getSpeechRecognition();
     if (!Ctor) {
       this.cb.onError?.('Speech recognition is not supported in this browser.');

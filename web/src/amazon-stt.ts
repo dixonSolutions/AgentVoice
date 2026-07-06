@@ -6,7 +6,6 @@
  */
 
 import {
-  applyMicNoiseGate,
   captureMicStream,
   createMicProcessingChain,
   getSharedAudioContext,
@@ -45,6 +44,7 @@ export class AmazonSttSession {
   private silenceFrames = 0;
   private pcmChunks: Int16Array[] = [];
   private transcribing = false;
+  private flushInFlight: Promise<string> | null = null;
 
   constructor(
     private readonly bridgeBase: string,
@@ -54,6 +54,7 @@ export class AmazonSttSession {
   ) {}
 
   async start(mediaStream?: MediaStream): Promise<void> {
+    if (this.processor || this.closed) return;
     if (mediaStream) {
       this.micStream = mediaStream;
       this.ownsMic = false;
@@ -67,7 +68,8 @@ export class AmazonSttSession {
     }
     this.micChain = createMicProcessingChain(this.micStream, {
       highPassHz: 180,
-      noiseGateEnabled: true,
+      // Amazon Transcribe handles noise; gating here often zeroes phone mic audio.
+      noiseGateEnabled: false,
     });
     const ctx = this.audioCtx;
     const tap = getVoiceAudioMeter().tapMic(ctx, this.micChain.output);
@@ -122,13 +124,15 @@ export class AmazonSttSession {
 
   /** Transcribe buffered audio once (Vosk end phrase or VAD silence). Returns transcript text. */
   async flushNowAsync(): Promise<string> {
-    if (this.closed || this.transcribing || this.utteranceFlushed) {
-      return '';
-    }
+    if (this.closed) return '';
+    if (this.flushInFlight) return this.flushInFlight;
     if (this.pcmChunks.length === 0) {
       throw new Error('No speech captured — speak after the wake phrase, then say the end phrase.');
     }
-    return this.flushRecording();
+    this.flushInFlight = this.flushRecording().finally(() => {
+      this.flushInFlight = null;
+    });
+    return this.flushInFlight;
   }
 
   flushNow(): void {
@@ -154,20 +158,18 @@ export class AmazonSttSession {
     if (!this.micChain || !this.audioCtx) return;
 
     const input = ev.inputBuffer.getChannelData(0);
-    const gated = new Float32Array(input);
-    applyMicNoiseGate(this.micChain, gated);
-    const pcm = downsampleTo16k(gated, this.audioCtx.sampleRate);
+    const pcm = downsampleTo16k(input, this.audioCtx.sampleRate);
     this.pcmChunks.push(pcm);
 
     const totalSamples = this.pcmChunks.reduce((n, c) => n + c.length, 0);
-      if (totalSamples >= MAX_PCM_SAMPLES) {
-        void this.flushRecording().catch(() => undefined);
-        return;
-      }
+    if (totalSamples >= MAX_PCM_SAMPLES) {
+      void this.flushRecording().catch(() => undefined);
+      return;
+    }
 
     if (!this.silenceFlush) return;
 
-    const rms = computeRms(gated);
+    const rms = computeRms(input);
     const threshold = speechRmsThreshold(true);
     const speaking = rms >= threshold;
 
@@ -186,22 +188,15 @@ export class AmazonSttSession {
   }
 
   private async flushRecording(): Promise<string> {
-    if (this.transcribing || this.utteranceFlushed) return '';
+    if (this.transcribing || this.utteranceFlushed) {
+      return this.flushInFlight ?? '';
+    }
 
     const chunks = this.pcmChunks;
     const totalSamples = chunks.reduce((n, c) => n + c.length, 0);
     const minBytes = minPcmBytes(true);
     if (totalSamples * 2 < minBytes) {
       throw new Error('Speech too short — speak your request after the wake phrase.');
-    }
-
-    // Verify the gated PCM actually contains speech energy before calling the API.
-    // The noise gate zeroes out non-speech frames, so a buffer with no energy
-    // means the gate blocked everything (background noise was too loud).
-    if (!hasSpeechEnergy(chunks)) {
-      throw new Error(
-        'Transcription returned no text — background noise may be too high. Try speaking louder or closer to the mic.',
-      );
     }
 
     this.utteranceFlushed = true;
@@ -212,6 +207,11 @@ export class AmazonSttSession {
     const pcm = concatPcm16(chunks);
     this.transcribing = true;
     this.cb.onInterim?.('Transcribing…');
+    console.debug('[amazon-stt] sending to Transcribe', {
+      samples: pcm.length,
+      bytes: pcm.byteLength,
+      durationSec: (pcm.length / INPUT_RATE).toFixed(2),
+    });
 
     try {
       const text = (await this.transcribe(pcm)).trim();
@@ -231,11 +231,7 @@ export class AmazonSttSession {
 
   private async transcribe(pcm: Int16Array): Promise<string> {
     const bytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-    let binary = '';
-    for (let i = 0; i < bytes.length; i++) {
-      binary += String.fromCharCode(bytes[i] ?? 0);
-    }
-    const b64 = btoa(binary);
+    const b64 = pcm16ToBase64(bytes);
 
     const res = await fetch(`${this.bridgeBase}/api/intelligence/transcribe`, {
       method: 'POST',
@@ -244,6 +240,7 @@ export class AmazonSttSession {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ pcm: b64 }),
+      signal: AbortSignal.timeout(45_000),
     });
 
     if (!res.ok) {
@@ -271,24 +268,18 @@ function computeRms(samples: Float32Array): number {
   return Math.sqrt(sumSq / Math.max(samples.length, 1));
 }
 
-/**
- * Returns true if the gated PCM buffer contains meaningful speech energy.
- * The noise gate zeroes out silent frames, so at least MIN_SPEECH_RATIO of samples
- * must be above a small amplitude threshold for the audio to be worth transcribing.
- */
-function hasSpeechEnergy(chunks: Int16Array[]): boolean {
-  // ~0.018 float amplitude in int16 — only non-silence gated-through samples qualify.
-  const SPEECH_SAMPLE_THRESHOLD = 600;
-  const MIN_SPEECH_RATIO = 0.05;
-  let speech = 0;
-  let total = 0;
-  for (const chunk of chunks) {
-    for (let i = 0; i < chunk.length; i++) {
-      if (Math.abs(chunk[i] ?? 0) > SPEECH_SAMPLE_THRESHOLD) speech++;
-      total++;
+function pcm16ToBase64(bytes: Uint8Array): string {
+  const parts: string[] = [];
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const end = Math.min(i + chunkSize, bytes.length);
+    let chunk = '';
+    for (let j = i; j < end; j++) {
+      chunk += String.fromCharCode(bytes[j]!);
     }
+    parts.push(chunk);
   }
-  return total > 0 && speech / total >= MIN_SPEECH_RATIO;
+  return btoa(parts.join(''));
 }
 
 function downsampleTo16k(input: Float32Array, inputRate: number): Int16Array {

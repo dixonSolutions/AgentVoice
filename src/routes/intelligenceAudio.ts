@@ -77,11 +77,17 @@ export async function registerIntelligenceAudioRoutes(app: FastifyInstance): Pro
       log.info({ pcmBytes: pcm.length }, 'transcribe request');
       try {
         const text = await transcribePcm16(pcm);
+        if (!text) {
+          log.warn({ pcmBytes: pcm.length }, 'transcribe returned empty transcript');
+          return reply.code(422).send({
+            error: 'No speech detected — speak louder or closer to the mic and try again.',
+          });
+        }
         log.info({ pcmBytes: pcm.length, textLen: text.length }, 'transcribe ok');
         return { text };
       } catch (err) {
         const message = friendlyTranscribeError(err);
-        log.error({ err, pcmBytes: pcm.length }, 'transcribe failed');
+        log.error({ err, pcmBytes: pcm.length, message }, 'transcribe failed');
         return reply.code(500).send({ error: message });
       }
     },

@@ -243,12 +243,8 @@ export class LlmIntelligenceSession {
     );
     this.wsConnected = true;
 
-    if (this.sttBackend !== 'text_only') {
-      await this.startWakeWordPhase();
-      await this.ensureSttPipeline();
-    } else {
-      await this.startWakeWordPhase();
-    }
+    // STT hardware is lazy-init in beginUtteranceCapture() — only one backend (WebKit OR Amazon).
+    await this.startWakeWordPhase();
 
     this.cb.onState('connected');
   }
@@ -658,7 +654,6 @@ export class LlmIntelligenceSession {
         },
       });
       this.stt = amazon;
-      await amazon.start(this.sharedMicStream ?? undefined);
     }
   }
 
@@ -666,6 +661,9 @@ export class LlmIntelligenceSession {
   private async beginUtteranceCapture(): Promise<void> {
     if (!this.voiceActivated || this.closed) return;
     await this.ensureSttPipeline();
+    if (this.stt instanceof AmazonSttSession) {
+      await this.stt.start(this.sharedMicStream ?? undefined);
+    }
     this.capturingUtterance = true;
     this.lastLoggedSttPartial = '';
     this.voiceLog('stt', 'info', `${this.sttProviderLabel()} listening`);
@@ -730,7 +728,9 @@ export class LlmIntelligenceSession {
     void this.stopVadDetector();
     this.cb.onVadDetected?.();
     this.endUtteranceCapture(false);
-    this.flushSttNow();
+    if (this.stt instanceof WebkitSttSession) {
+      this.flushSttNow();
+    }
     void this.returnToWakeListen();
     this.scheduleVadSubmit();
   }
@@ -790,7 +790,9 @@ export class LlmIntelligenceSession {
     this.stopEndSpotter();
     this.cb.onEndPhraseDetected?.(this.wakeWords.end);
     this.endUtteranceCapture(false);
-    this.flushSttNow();
+    if (this.stt instanceof WebkitSttSession) {
+      this.flushSttNow();
+    }
     void this.returnToWakeListen();
     this.scheduleTurnSubmit('end_word');
   }
@@ -820,41 +822,74 @@ export class LlmIntelligenceSession {
 
   private scheduleTurnSubmit(reason: 'vad' | 'end_word'): void {
     this.clearEndSubmitTimer();
-    const maxAttempts = 75;
-    const retryMs = 400;
-    const trySubmit = (attempt: number): void => {
-      if (this.closed) return;
-      if (this.turnBuffer?.submitNow(reason)) {
-        if (reason === 'vad') this.vadSpeechEndPending = false;
-        if (reason === 'end_word') this.endPhrasePending = false;
-        return;
-      }
-      const buffered = this.turnBuffer?.text() ?? '';
-      if (attempt < maxAttempts) {
-        this.endSubmitTimer = window.setTimeout(() => trySubmit(attempt + 1), retryMs);
-        return;
-      }
+    if (this.stt instanceof AmazonSttSession) {
+      void this.submitAmazonTurn(reason);
+      return;
+    }
+    this.endSubmitTimer = window.setTimeout(() => this.pollTurnSubmit(reason, 0), 150);
+  }
+
+  /** Await Amazon Transcribe — single flush path (WebKit uses pollTurnSubmit instead). */
+  private async submitAmazonTurn(reason: 'vad' | 'end_word'): Promise<void> {
+    await new Promise((resolve) => window.setTimeout(resolve, 150));
+    if (this.closed || !(this.stt instanceof AmazonSttSession)) return;
+
+    try {
+      await this.stt.flushNowAsync();
+    } catch {
+      return;
+    }
+
+    if (reason === 'vad' ? !this.vadSpeechEndPending : !this.endPhrasePending) {
+      return;
+    }
+
+    if (this.turnBuffer?.submitNow(reason)) {
       if (reason === 'vad') this.vadSpeechEndPending = false;
       if (reason === 'end_word') this.endPhrasePending = false;
-      if (this.stt instanceof AmazonSttSession) this.stt.endCapture();
-      if (buffered) {
-        const hint =
-          reason === 'end_word'
-            ? `Say your request after "${this.wakeWords.start}", then "${this.wakeWords.end}".`
-            : `Say your request after "${this.wakeWords.start}".`;
-        this.cb.onSttError?.(
-          `Could not send — transcript was only "${buffered.slice(0, 40)}". ${hint}`,
-        );
-      } else {
-        this.cb.onSttError?.(
-          reason === 'end_word'
-            ? 'End phrase heard but transcription failed — check Amazon Transcribe config and speak clearly after the wake phrase.'
-            : 'Speech ended but transcription failed — check Amazon Transcribe config and speak clearly after the wake phrase.',
-        );
-      }
-      this.recoverCaptureError();
-    };
-    this.endSubmitTimer = window.setTimeout(() => trySubmit(0), 150);
+      return;
+    }
+
+    this.failTurnSubmit(reason, this.turnBuffer?.text() ?? '');
+  }
+
+  private pollTurnSubmit(reason: 'vad' | 'end_word', attempt: number): void {
+    if (this.closed) return;
+    if (this.turnBuffer?.submitNow(reason)) {
+      if (reason === 'vad') this.vadSpeechEndPending = false;
+      if (reason === 'end_word') this.endPhrasePending = false;
+      return;
+    }
+    const buffered = this.turnBuffer?.text() ?? '';
+    const maxAttempts = 75;
+    const retryMs = 400;
+    if (attempt < maxAttempts) {
+      this.endSubmitTimer = window.setTimeout(() => this.pollTurnSubmit(reason, attempt + 1), retryMs);
+      return;
+    }
+    this.failTurnSubmit(reason, buffered);
+  }
+
+  private failTurnSubmit(reason: 'vad' | 'end_word', buffered: string): void {
+    if (reason === 'vad') this.vadSpeechEndPending = false;
+    if (reason === 'end_word') this.endPhrasePending = false;
+    if (this.stt instanceof AmazonSttSession) this.stt.endCapture();
+    if (buffered) {
+      const hint =
+        reason === 'end_word'
+          ? `Say your request after "${this.wakeWords.start}", then "${this.wakeWords.end}".`
+          : `Say your request after "${this.wakeWords.start}".`;
+      this.cb.onSttError?.(
+        `Could not send — transcript was only "${buffered.slice(0, 40)}". ${hint}`,
+      );
+    } else {
+      this.cb.onSttError?.(
+        reason === 'end_word'
+          ? 'End phrase heard but transcription failed — check Amazon Transcribe config and speak clearly after the wake phrase.'
+          : 'Speech ended but transcription failed — check Amazon Transcribe config and speak clearly after the wake phrase.',
+      );
+    }
+    this.recoverCaptureError();
   }
 
   private scheduleVadSubmit(): void {
