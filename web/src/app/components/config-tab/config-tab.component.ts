@@ -50,6 +50,8 @@ import type {
   JobSettings,
   NarratorSettings,
   WorkflowSettings,
+  AgentClientSettings,
+  AgentClientId,
 } from '../../models/admin-settings';
 
 // ── Section definition ─────────────────────────────────────────────────────
@@ -61,6 +63,7 @@ type SectionId =
   | 'projects'
   | 'keys'
   | 'workflow'
+  | 'agent-client'
   | 'serve'
   | 'jobs'
   | 'narrator'
@@ -119,6 +122,13 @@ const ALL_SECTIONS: ConfigSection[] = [
     icon: 'pi-microchip-ai',
     description: 'Default workflow, model, region, audio settings, conversation memory',
     keywords: ['llm', 'model', 'workflow', 'cursor', 'claude', 'sonnet', 'polly', 'voice', 'tts', 'stt', 'memory', 'webkit', 'tokens'],
+  },
+  {
+    id: 'agent-client',
+    label: 'Agent Client',
+    icon: 'pi-microchip-ai',
+    description: 'Select the AI coding agent: Cursor, Codex, or Claude Code',
+    keywords: ['agent', 'client', 'cursor', 'codex', 'claude', 'claude-code', 'openai', 'anthropic', 'binary', 'path'],
   },
   {
     id: 'serve',
@@ -238,6 +248,8 @@ export class ConfigTabComponent implements OnInit {
     this.loadingKeys = false;
     this.workflowLoadSeq++;
     this.loadingWorkflow = false;
+    this.agentClientLoadSeq++;
+    this.loadingAgentClient = false;
     this.serveLoadSeq++;
     this.loadingServe = false;
     this.jobsLoadSeq++;
@@ -311,6 +323,9 @@ export class ConfigTabComponent implements OnInit {
         break;
       case 'workflow':
         await this.loadWorkflow();
+        break;
+      case 'agent-client':
+        await this.loadAgentClient();
         break;
       case 'serve':
         await this.loadServe();
@@ -790,6 +805,45 @@ export class ConfigTabComponent implements OnInit {
       this.toast.error('Could not save workflow settings', err instanceof Error ? err.message : String(err));
     } finally {
       this.savingWorkflow = false;
+    }
+  }
+
+  // ── Agent Client section ─────────────────────────────────────────────────
+
+  protected agentClientData: AgentClientSettings | null = null;
+  protected loadingAgentClient = false;
+  private agentClientLoadSeq = 0;
+  protected savingAgentClient = false;
+
+  private async loadAgentClient(): Promise<void> {
+    const seq = ++this.agentClientLoadSeq;
+    this.loadingAgentClient = true;
+    try {
+      const data = await this.admin.getAgentClient();
+      if (seq !== this.agentClientLoadSeq) return;
+      this.agentClientData = data;
+    } catch (err) {
+      if (seq !== this.agentClientLoadSeq) return;
+      this.toast.error('Could not load agent client', err instanceof Error ? err.message : String(err));
+    } finally {
+      if (seq === this.agentClientLoadSeq) {
+        this.loadingAgentClient = false;
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  protected async onSelectAgentClient(clientId: AgentClientId): Promise<void> {
+    if (!this.agentClientData || this.agentClientData.active === clientId) return;
+    this.savingAgentClient = true;
+    try {
+      const res = await this.admin.setAgentClient(clientId);
+      this.agentClientData = { active: res.active, clients: res.clients };
+      this.toast.success('Agent client changed', res.clients.find((c) => c.id === res.active)?.label ?? res.active);
+    } catch (err) {
+      this.toast.error('Could not change agent client', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.savingAgentClient = false;
     }
   }
 

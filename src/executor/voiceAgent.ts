@@ -15,8 +15,7 @@ import { getConfig } from '../config.js';
 import {
   attachCursorAgentSpawnGuard,
   buildCursorAgentEnv,
-  cursorAgentSpawnErrorMessage,
-  resolveCursorAgentPath,
+  resolveAgentBin,
 } from './cursorAgent.js';
 import { childLogger } from '../log.js';
 import { cursorVoiceRuleBody } from '../mcp/loadCursorVoicePrompt.js';
@@ -143,7 +142,7 @@ function extractAssistantText(event: Record<string, unknown>): string | null {
   return null;
 }
 
-function buildVoiceAgentArgs(
+function buildCursorVoiceArgs(
   project: Project,
   session: SessionState,
   pendingTurn?: string,
@@ -177,6 +176,56 @@ function buildVoiceAgentArgs(
   return args;
 }
 
+function buildCodexVoiceArgs(
+  project: Project,
+  _session: SessionState,
+  pendingTurn?: string,
+): string[] {
+  const args: string[] = ['exec'];
+
+  if (project.resumeId) {
+    args.push('resume', project.resumeId);
+  }
+
+  args.push('--json');
+  args.push('--sandbox', 'workspace-write');
+  args.push('--cd', project.path);
+  args.push(buildVoiceBootPrompt(project, pendingTurn));
+  return args;
+}
+
+function buildClaudeCodeVoiceArgs(
+  project: Project,
+  _session: SessionState,
+  pendingTurn?: string,
+): string[] {
+  const args: string[] = ['-p', '--output-format', 'stream-json'];
+
+  if (project.resumeId) {
+    args.push('--resume', project.resumeId);
+  }
+
+  args.push(buildVoiceBootPrompt(project, pendingTurn));
+  return args;
+}
+
+function buildVoiceAgentArgs(
+  project: Project,
+  session: SessionState,
+  pendingTurn?: string,
+): string[] {
+  const { settings } = getConfig();
+  switch (settings.agentClient) {
+    case 'codex':
+      return buildCodexVoiceArgs(project, session, pendingTurn);
+    case 'claude-code':
+      return buildClaudeCodeVoiceArgs(project, session, pendingTurn);
+    case 'cursor':
+    default:
+      return buildCursorVoiceArgs(project, session, pendingTurn);
+  }
+}
+
 /**
  * Spawn the conversational cursor-agent loop. At most one voice agent runs at a time.
  */
@@ -191,6 +240,8 @@ export function spawnVoiceAgent(
     );
   }
 
+  const { settings } = getConfig();
+  const client = settings.agentClient;
   const args = buildVoiceAgentArgs(project, session, pendingTurn);
   const runId = createVoiceAgentRun({ project: project.name });
 
@@ -200,12 +251,13 @@ export function spawnVoiceAgent(
       project: project.name,
       resume: project.resumeId ?? 'none',
       model: session.activeModel,
+      client,
     },
     'spawning conversational voice agent',
   );
-  log.debug({ args: args.slice(0, -1) }, 'voice agent args');
+  log.debug({ client, args: args.slice(0, -1) }, 'voice agent args');
 
-  const agentBin = resolveCursorAgentPath();
+  const agentBin = resolveAgentBin(client);
   const child = spawn(agentBin, args, {
     cwd: project.path,
     shell: false,
@@ -213,11 +265,11 @@ export function spawnVoiceAgent(
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  attachCursorAgentSpawnGuard(child, { runId, project: project.name });
+  attachCursorAgentSpawnGuard(child, { runId, project: project.name, client });
 
   const pid = child.pid;
   if (!pid) {
-    throw new Error(agentBin === 'cursor-agent' ? cursorAgentSpawnErrorMessage() : 'cursor-agent failed to spawn (no pid)');
+    throw new Error(`${client} voice agent failed to spawn (no pid) — check the binary is installed and on PATH`);
   }
 
   updateVoiceAgentRun(runId, { pid });

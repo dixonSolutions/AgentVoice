@@ -177,6 +177,22 @@ export interface AdminProject {
   updatedAt: string;
 }
 
+// ── Agent Client ───────────────────────────────────────────────────────────
+
+export type AgentClientId = 'cursor' | 'codex' | 'claude-code';
+
+export interface AgentClientInfo {
+  id: AgentClientId;
+  label: string;
+  available: boolean;
+  binPath: string | null;
+}
+
+export interface AgentClientSettings {
+  active: AgentClientId;
+  clients: AgentClientInfo[];
+}
+
 // ── Database ───────────────────────────────────────────────────────────────
 
 export interface DbStats {

@@ -1,21 +1,26 @@
 /**
- * Ensure Cursor's **global** ~/.cursor/mcp.json registers the cursor-voice bridge.
+ * Ensure the active agent client's global MCP config registers the cursor-voice bridge.
  *
  * On voice session start the bridge:
- *   1. Checks whether cursor-voice MCP config exists in the global Cursor config
+ *   1. Checks whether cursor-voice MCP config exists in the client's global config
  *   2. Installs from template if missing
  *   3. Compares embedded version — updates if older
  *   4. Enables the server entry
  *
+ * Supported clients and their config locations:
+ *   - cursor:      ~/.cursor/mcp.json           (JSON)
+ *   - codex:       ~/.codex/config.toml          (TOML)
+ *   - claude-code: ~/.claude/settings.json       (JSON)
+ *
  * Project-level `.cursor/mcp.json` is not required (and is not written). Any stale
  * project-level cursor-voice entry is removed on session prepare so it can't
  * register a second, conflicting server pointing at an outdated port.
- * See docs/16-mcp-server-cursor-as-brain.md.
+ * See docs/16-mcp-server-cursor-as-brain.md and docs/23-multi-agent-client.md.
  */
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { getConfig } from '../config.js';
+import { getConfig, type AgentClient } from '../config.js';
 import { getRunModeInfo } from '../runMode.js';
 import { resolveProject } from '../state/registry.js';
 import { childLogger } from '../log.js';
@@ -243,10 +248,224 @@ export function cleanupLegacyProjectMcp(
   }
 }
 
+// ── Codex MCP setup (~/.codex/config.toml, TOML format) ───────────────────
+
+/** Path to the Codex global config file. */
+function resolveCodexConfigPath(): string {
+  return join(resolveUserHome(), '.codex', 'config.toml');
+}
+
+/**
+ * Minimal TOML serialisation for MCP server entries.
+ * Only handles the [mcp_servers.NAME] table shape Codex expects.
+ */
+function buildCodexMcpTomlEntry(name: string, url: string, token: string): string {
+  return `\n[mcp_servers.${name}]\nurl = "${url}"\nenabled = true\n# cursor-voice version: ${CURSOR_VOICE_MCP_VERSION}\n[mcp_servers.${name}.env_http_headers]\nAuthorization = "Bearer ${token}"\n`;
+}
+
+/**
+ * Ensure cursor-voice MCP registration exists in Codex's global config.toml.
+ * Codex uses TOML format at ~/.codex/config.toml.
+ */
+async function ensureCodexMcpSetup(onLog?: SessionLogCallback): Promise<PrepareMcpResult> {
+  const mcpPath = resolveCodexConfigPath();
+  const userRoot = resolveCursorVoiceUserRoot();
+  const hostOs = detectCursorHostOs();
+  const mcpLabel = formatPathForLog(mcpPath);
+
+  const { env } = getConfig();
+  const mcpUrl = resolveMcpBridgeUrl();
+
+  emitLog(onLog, 'check', 'info', `Checking Codex MCP config (${mcpLabel}) on ${hostOs}…`);
+
+  let existingContent = '';
+  let action: PrepareMcpResult['action'] = 'unchanged';
+
+  if (!existsSync(mcpPath)) {
+    emitLog(onLog, 'install', 'info', `No Codex config.toml found — creating ${mcpLabel}…`);
+    action = 'installed';
+  } else {
+    existingContent = readFileSync(mcpPath, 'utf-8');
+    const versionMatch = existingContent.match(
+      new RegExp(`\\[mcp_servers\\.${CURSOR_VOICE_MCP_SERVER_NAME}\\][\\s\\S]*?# cursor-voice version: ([\\d.]+)`),
+    );
+    const installedVersion = versionMatch?.[1] ?? null;
+
+    if (!existingContent.includes(`[mcp_servers.${CURSOR_VOICE_MCP_SERVER_NAME}]`)) {
+      emitLog(onLog, 'install', 'info', 'cursor-voice not registered in Codex config — adding…');
+      action = 'installed';
+    } else if (!installedVersion || compareVersions(installedVersion, CURSOR_VOICE_MCP_VERSION) < 0) {
+      emitLog(onLog, 'update', 'info', `Codex MCP version ${installedVersion ?? 'unknown'} → ${CURSOR_VOICE_MCP_VERSION}…`);
+      // Remove old entry block before re-inserting.
+      existingContent = existingContent.replace(
+        new RegExp(
+          `\\[mcp_servers\\.${CURSOR_VOICE_MCP_SERVER_NAME}\\][\\s\\S]*?(?=\\[|$)`,
+          'g',
+        ),
+        '',
+      ).replace(
+        new RegExp(
+          `\\[mcp_servers\\.${CURSOR_VOICE_MCP_SERVER_NAME}\\.env_http_headers\\][\\s\\S]*?(?=\\[|$)`,
+          'g',
+        ),
+        '',
+      ).trimEnd();
+      action = 'updated';
+    } else {
+      emitLog(onLog, 'check', 'info', `Codex MCP server found (version ${installedVersion}).`);
+    }
+  }
+
+  if (action !== 'unchanged') {
+    const newEntry = buildCodexMcpTomlEntry(CURSOR_VOICE_MCP_SERVER_NAME, mcpUrl, env.APP_TOKEN);
+    const merged = (existingContent + newEntry).trimStart();
+    try {
+      mkdirSync(dirname(mcpPath), { recursive: true });
+      writeFileSync(mcpPath, merged, 'utf-8');
+      emitLog(onLog, 'done', 'info', `Codex MCP config ${action} at ${mcpLabel}.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      emitLog(onLog, 'error', 'error', `Could not write ${mcpLabel}: ${message}`);
+      return { ok: false, scope: 'global', mcpPath, userRoot, hostOs, action: 'unchanged', version: CURSOR_VOICE_MCP_VERSION, message };
+    }
+  }
+
+  return {
+    ok: true,
+    scope: 'global',
+    mcpPath,
+    userRoot,
+    hostOs,
+    action,
+    version: CURSOR_VOICE_MCP_VERSION,
+    message: `Codex MCP ${action === 'unchanged' ? 'ready' : action}.`,
+  };
+}
+
+// ── Claude Code MCP setup (~/.claude/settings.json, JSON format) ───────────
+
+/** Path to the Claude Code user-scope settings file. */
+function resolveClaudeCodeSettingsPath(): string {
+  return join(resolveUserHome(), '.claude', 'settings.json');
+}
+
+interface ClaudeCodeSettings {
+  mcpServers?: Record<string, { type: string; url: string; headers?: Record<string, string> }>;
+  [key: string]: unknown;
+}
+
+function readClaudeCodeSettings(path: string): ClaudeCodeSettings | null {
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, 'utf-8')) as ClaudeCodeSettings;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Ensure cursor-voice MCP registration exists in Claude Code's user settings.
+ * Claude Code uses JSON at ~/.claude/settings.json (mcpServers section).
+ */
+async function ensureClaudeCodeMcpSetup(onLog?: SessionLogCallback): Promise<PrepareMcpResult> {
+  const mcpPath = resolveClaudeCodeSettingsPath();
+  const userRoot = resolveCursorVoiceUserRoot();
+  const hostOs = detectCursorHostOs();
+  const mcpLabel = formatPathForLog(mcpPath);
+
+  const { env } = getConfig();
+  const mcpUrl = resolveMcpBridgeUrl();
+
+  emitLog(onLog, 'check', 'info', `Checking Claude Code MCP config (${mcpLabel}) on ${hostOs}…`);
+
+  let existing = readClaudeCodeSettings(mcpPath);
+  let action: PrepareMcpResult['action'] = 'unchanged';
+
+  if (!existing) {
+    emitLog(onLog, 'install', 'info', `No Claude Code settings.json found — creating ${mcpLabel}…`);
+    existing = {};
+    action = 'installed';
+  } else {
+    const current = existing.mcpServers?.[CURSOR_VOICE_MCP_SERVER_NAME];
+    if (!current) {
+      emitLog(onLog, 'install', 'info', 'cursor-voice not registered in Claude Code settings — adding…');
+      action = 'installed';
+    } else {
+      emitLog(onLog, 'check', 'info', 'cursor-voice already registered in Claude Code settings.');
+    }
+  }
+
+  if (action !== 'unchanged') {
+    const merged: ClaudeCodeSettings = {
+      ...existing,
+      mcpServers: {
+        ...(existing.mcpServers ?? {}),
+        [CURSOR_VOICE_MCP_SERVER_NAME]: {
+          type: 'http',
+          url: mcpUrl,
+          headers: { Authorization: `Bearer ${env.APP_TOKEN}` },
+        },
+      },
+    };
+
+    try {
+      mkdirSync(dirname(mcpPath), { recursive: true });
+      writeFileSync(mcpPath, `${JSON.stringify(merged, null, 2)}\n`, 'utf-8');
+      emitLog(onLog, 'done', 'info', `Claude Code MCP config ${action} at ${mcpLabel}.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      emitLog(onLog, 'error', 'error', `Could not write ${mcpLabel}: ${message}`);
+      return { ok: false, scope: 'global', mcpPath, userRoot, hostOs, action: 'unchanged', version: CURSOR_VOICE_MCP_VERSION, message };
+    }
+  }
+
+  return {
+    ok: true,
+    scope: 'global',
+    mcpPath,
+    userRoot,
+    hostOs,
+    action,
+    version: CURSOR_VOICE_MCP_VERSION,
+    message: `Claude Code MCP ${action === 'unchanged' ? 'ready' : action}.`,
+  };
+}
+
+// ── Unified client MCP setup ───────────────────────────────────────────────
+
+/**
+ * Ensure cursor-voice MCP registration for the specified agent client.
+ * Dispatches to the correct client-specific setup function.
+ */
+export async function ensureClientMcpSetup(
+  client: AgentClient,
+  onLog?: SessionLogCallback,
+): Promise<PrepareMcpResult> {
+  switch (client) {
+    case 'codex':
+      return ensureCodexMcpSetup(onLog);
+    case 'claude-code':
+      return ensureClaudeCodeMcpSetup(onLog);
+    case 'cursor':
+    default:
+      return ensureGlobalMcpSetupForCursor(onLog);
+  }
+}
+
+/**
+ * Ensure cursor-voice MCP registration exists in Cursor's global config.
+ * @deprecated Use ensureClientMcpSetup('cursor') instead.
+ */
+export async function ensureGlobalMcpSetup(
+  onLog?: SessionLogCallback,
+): Promise<PrepareMcpResult> {
+  return ensureGlobalMcpSetupForCursor(onLog);
+}
+
 /**
  * Ensure cursor-voice MCP registration exists in Cursor's global config.
  */
-export async function ensureGlobalMcpSetup(
+async function ensureGlobalMcpSetupForCursor(
   onLog?: SessionLogCallback,
 ): Promise<PrepareMcpResult> {
   const mcpPath = resolveGlobalMcpJsonPath();

@@ -21,6 +21,8 @@ import type {
   AdminProject,
   DbStats,
   AuditEntry,
+  AgentClientSettings,
+  AgentClientId,
 } from '../models/admin-settings';
 
 @Injectable({ providedIn: 'root' })
@@ -158,6 +160,16 @@ export class AdminService {
 
   pingProject(name: string): Promise<{ name: string; path: string; exists: boolean }> {
     return this.post(`/api/admin/projects/${name}/ping`);
+  }
+
+  // ── Agent Client ─────────────────────────────────────────────────────────
+
+  getAgentClient(): Promise<AgentClientSettings> {
+    return this.get('/api/admin/agent-client');
+  }
+
+  setAgentClient(client: AgentClientId): Promise<{ ok: boolean } & AgentClientSettings> {
+    return this.patch('/api/admin/agent-client', { client });
   }
 
   // ── Database ─────────────────────────────────────────────────────────────

@@ -17,6 +17,8 @@
  *   GET  /api/admin/keys            — AWS key status (masked)
  *   PATCH /api/admin/keys           — update AWS keys in .env
  *   POST /api/admin/keys/test       — STS credential ping
+ *   GET  /api/admin/agent-client    — active agent client + availability
+ *   PATCH /api/admin/agent-client   — change active agent client
  *   GET  /api/admin/db/stats        — table row counts + file size
  *   GET  /api/admin/db/audit        — recent audit log entries
  *   DELETE /api/admin/sessions      — clear session_state table
@@ -24,8 +26,12 @@
 
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getConfig } from '../config.js';
+import { getConfig, AGENT_CLIENTS, type AgentClient } from '../config.js';
 import { readConfigFile, writeConfigFile } from '../state/configFile.js';
+import {
+  isAgentClientAvailable,
+  resolvedAgentBinPath,
+} from '../executor/cursorAgent.js';
 import { getAwsKeyStatus, updateAwsEnvKeys, isAwsConfigured } from '../state/envFile.js';
 import { getDb } from '../state/db.js';
 import { childLogger } from '../log.js';
@@ -307,6 +313,45 @@ export async function registerAdminSettingsRoutes(app: FastifyInstance): Promise
         error: err instanceof Error ? err.message : String(err),
       };
     }
+  });
+
+  // ── Agent Client ──────────────────────────────────────────────────────
+
+  const CLIENT_LABELS: Record<AgentClient, string> = {
+    cursor: 'Cursor',
+    codex: 'Codex',
+    'claude-code': 'Claude Code',
+  };
+
+  function getAgentClientStatus() {
+    const { settings } = getConfig();
+    return {
+      active: settings.agentClient,
+      clients: AGENT_CLIENTS.map((id) => ({
+        id,
+        label: CLIENT_LABELS[id],
+        available: isAgentClientAvailable(id),
+        binPath: resolvedAgentBinPath(id),
+      })),
+    };
+  }
+
+  app.get('/api/admin/agent-client', async () => {
+    return getAgentClientStatus();
+  });
+
+  const AgentClientPatchSchema = z.object({ client: z.enum(AGENT_CLIENTS) }).strict();
+
+  app.patch<{ Body: unknown }>('/api/admin/agent-client', async (req, reply) => {
+    const parsed = AgentClientPatchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.message });
+    }
+    const cfg = readConfigFile();
+    cfg.settings.agentClient = parsed.data.client;
+    writeConfigFile(cfg);
+    log.info({ client: parsed.data.client }, 'agent client updated');
+    return { ok: true, ...getAgentClientStatus() };
   });
 
   // ── Database Stats ────────────────────────────────────────────────────
