@@ -381,7 +381,7 @@ export class LlmIntelligenceSession {
       const mic = this.sharedMicStream ?? (await this.ensureSharedMic());
       await this.startSpotter.start(start, {
         mediaStream: mic,
-        matchPartial: false,
+        matchPartial: true,
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -826,12 +826,12 @@ export class LlmIntelligenceSession {
       void this.submitAmazonTurn(reason);
       return;
     }
-    this.endSubmitTimer = window.setTimeout(() => this.pollTurnSubmit(reason, 0), 150);
+    this.endSubmitTimer = window.setTimeout(() => this.pollTurnSubmit(reason, 0), 50);
   }
 
   /** Await Amazon Transcribe — single flush path (WebKit uses pollTurnSubmit instead). */
   private async submitAmazonTurn(reason: 'vad' | 'end_word'): Promise<void> {
-    await new Promise((resolve) => window.setTimeout(resolve, 150));
+    await new Promise((resolve) => window.setTimeout(resolve, 50));
     if (this.closed || !(this.stt instanceof AmazonSttSession)) return;
 
     try {
