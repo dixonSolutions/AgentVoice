@@ -52,6 +52,7 @@ import type {
   WorkflowSettings,
   AgentClientSettings,
   AgentClientId,
+  SystemPromptsInfo,
 } from '../../models/admin-settings';
 
 // ── Section definition ─────────────────────────────────────────────────────
@@ -64,6 +65,7 @@ type SectionId =
   | 'keys'
   | 'workflow'
   | 'agent-client'
+  | 'system-prompt'
   | 'serve'
   | 'jobs'
   | 'narrator'
@@ -129,6 +131,13 @@ const ALL_SECTIONS: ConfigSection[] = [
     icon: 'pi-microchip-ai',
     description: 'Select the AI coding agent: Cursor, Codex, or Claude Code',
     keywords: ['agent', 'client', 'cursor', 'codex', 'claude', 'claude-code', 'openai', 'anthropic', 'binary', 'path'],
+  },
+  {
+    id: 'system-prompt',
+    label: 'System Prompt',
+    icon: 'pi-file-edit',
+    description: 'Select MCP system prompt file from prompts/ folder or provide a custom path',
+    keywords: ['system', 'prompt', 'mcp', 'instruction', 'custom', 'file', 'context', 'brain'],
   },
   {
     id: 'serve',
@@ -250,6 +259,8 @@ export class ConfigTabComponent implements OnInit {
     this.loadingWorkflow = false;
     this.agentClientLoadSeq++;
     this.loadingAgentClient = false;
+    this.systemPromptLoadSeq++;
+    this.loadingSystemPrompts = false;
     this.serveLoadSeq++;
     this.loadingServe = false;
     this.jobsLoadSeq++;
@@ -326,6 +337,9 @@ export class ConfigTabComponent implements OnInit {
         break;
       case 'agent-client':
         await this.loadAgentClient();
+        break;
+      case 'system-prompt':
+        await this.loadSystemPrompts();
         break;
       case 'serve':
         await this.loadServe();
@@ -1151,8 +1165,120 @@ export class ConfigTabComponent implements OnInit {
     }
   }
 
-  // ── Database section ─────────────────────────────────────────────────────
+  // ── System Prompt section ─────────────────────────────────────────────────
 
+  protected systemPromptsInfo: SystemPromptsInfo | null = null;
+  protected loadingSystemPrompts = false;
+  private systemPromptLoadSeq = 0;
+  protected savingSystemPrompt = false;
+  protected selectedPromptFile: string | null = null;
+  protected customPromptPath = '';
+  protected useCustomPath = false;
+  protected promptPreviewContent: string | null = null;
+  protected loadingPreview = false;
+
+  protected get promptFileOptions(): Array<{ label: string; value: string }> {
+    if (!this.systemPromptsInfo) return [];
+    return this.systemPromptsInfo.files.map((f) => ({ label: f, value: f }));
+  }
+
+  private async loadSystemPrompts(): Promise<void> {
+    const seq = ++this.systemPromptLoadSeq;
+    this.loadingSystemPrompts = true;
+    try {
+      const data = await this.admin.getSystemPrompts();
+      if (seq !== this.systemPromptLoadSeq) return;
+      this.systemPromptsInfo = data;
+      const active = data.active;
+      if (active) {
+        const isKnownFile = data.files.includes(active);
+        if (isKnownFile) {
+          this.selectedPromptFile = active;
+          this.useCustomPath = false;
+          this.customPromptPath = '';
+        } else {
+          this.useCustomPath = true;
+          this.customPromptPath = active;
+          this.selectedPromptFile = null;
+        }
+      } else {
+        this.selectedPromptFile = null;
+        this.useCustomPath = false;
+        this.customPromptPath = '';
+      }
+      this.promptPreviewContent = null;
+    } catch (err) {
+      if (seq !== this.systemPromptLoadSeq) return;
+      this.toast.error('Could not load system prompts', err instanceof Error ? err.message : String(err));
+    } finally {
+      if (seq === this.systemPromptLoadSeq) {
+        this.loadingSystemPrompts = false;
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  protected async onSelectPromptFile(value: string | null): Promise<void> {
+    this.selectedPromptFile = value;
+    this.promptPreviewContent = null;
+    if (value) {
+      await this.loadPromptPreview(value);
+    }
+  }
+
+  protected async loadPromptPreview(path: string): Promise<void> {
+    this.loadingPreview = true;
+    this.promptPreviewContent = null;
+    try {
+      const res = await this.admin.readSystemPromptFile(path);
+      this.promptPreviewContent = res.content;
+    } catch (err) {
+      this.promptPreviewContent = `Error loading preview: ${err instanceof Error ? err.message : String(err)}`;
+    } finally {
+      this.loadingPreview = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  protected async onPreviewCustomPath(): Promise<void> {
+    const path = this.customPromptPath.trim();
+    if (!path) return;
+    await this.loadPromptPreview(path);
+  }
+
+  protected async onSaveSystemPrompt(): Promise<void> {
+    let filePath: string | null;
+    if (this.useCustomPath) {
+      filePath = this.customPromptPath.trim() || null;
+    } else {
+      filePath = this.selectedPromptFile;
+    }
+
+    this.savingSystemPrompt = true;
+    try {
+      await this.admin.setSystemPrompt(filePath);
+      if (this.systemPromptsInfo) {
+        this.systemPromptsInfo = { ...this.systemPromptsInfo, active: filePath };
+      }
+      this.toast.success(
+        'System prompt saved',
+        filePath ? `Active: ${filePath}` : 'Reverted to built-in default',
+      );
+    } catch (err) {
+      this.toast.error('Could not save system prompt', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.savingSystemPrompt = false;
+    }
+  }
+
+  protected onResetToDefault(): void {
+    this.selectedPromptFile = null;
+    this.customPromptPath = '';
+    this.useCustomPath = false;
+    this.promptPreviewContent = null;
+  }
+
+  // ── Database section ─────────────────────────────────────────────────────
   protected dbStats: DbStats | null = null;
   protected auditEntries: AuditEntry[] = [];
   protected loadingDb = false;

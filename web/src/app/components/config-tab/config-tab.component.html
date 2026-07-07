@@ -640,6 +640,120 @@
     </div>
   }
 
+  <!-- ── System Prompt ── -->
+  @if (activeSection() === 'system-prompt') {
+    <div class="cv-cfg-detail">
+
+      @if (loadingSystemPrompts && !systemPromptsInfo) {
+        <div class="cv-cfg-loading"><p-progressSpinner strokeWidth="3" /></div>
+      }
+
+      @if (systemPromptsInfo) {
+        <p-fluid>
+          <p-fieldset legend="Active system prompt">
+            <p class="cv-cfg-hint">
+              Choose which system prompt file is injected into the Cursor brain as MCP instructions.
+              Defaults to <code>prompts/cursor-voice/system.md</code> when nothing is selected.
+            </p>
+            @if (systemPromptsInfo.active) {
+              <p-message severity="info" styleClass="cv-cfg-active-msg">
+                <span>Currently active: <strong>{{ systemPromptsInfo.active }}</strong></span>
+              </p-message>
+            } @else {
+              <p-message severity="secondary" styleClass="cv-cfg-active-msg">
+                <span>Using built-in default: <strong>{{ systemPromptsInfo.defaultFile }}</strong></span>
+              </p-message>
+            }
+          </p-fieldset>
+
+          <p-fieldset legend="Select from prompts folder">
+            <p class="cv-cfg-hint">
+              All <code>.md</code> files discovered inside the <code>prompts/</code> directory.
+            </p>
+            <p-ifta-label>
+              <p-select
+                inputId="promptFileSelect"
+                [options]="promptFileOptions"
+                [(ngModel)]="selectedPromptFile"
+                [disabled]="useCustomPath || savingSystemPrompt"
+                placeholder="— use built-in default —"
+                [showClear]="true"
+                styleClass="w-full"
+                (onChange)="onSelectPromptFile(selectedPromptFile)" />
+              <label for="promptFileSelect">Prompt file</label>
+            </p-ifta-label>
+
+            @if (promptFileOptions.length === 0) {
+              <p-message severity="warn">No .md files found in prompts/ folder.</p-message>
+            }
+          </p-fieldset>
+
+          <p-fieldset legend="Custom file path">
+            <p class="cv-cfg-hint">
+              Point to any <code>.md</code> file — relative to the repo root or absolute.
+            </p>
+            <div class="cv-cfg-row-toggle">
+              <p-toggleSwitch [(ngModel)]="useCustomPath" (onChange)="promptPreviewContent = null" />
+              <span>Use custom path instead of dropdown selection</span>
+            </div>
+            @if (useCustomPath) {
+              <div class="cv-cfg-row-btn">
+                <p-ifta-label style="flex:1">
+                  <input
+                    pInputText
+                    id="customPromptPath"
+                    [(ngModel)]="customPromptPath"
+                    [disabled]="savingSystemPrompt"
+                    placeholder="e.g. prompts/cursor-voice/system.md"
+                    style="width:100%" />
+                  <label for="customPromptPath">File path</label>
+                </p-ifta-label>
+                <p-button
+                  label="Preview"
+                  icon="pi pi-eye"
+                  severity="secondary"
+                  [loading]="loadingPreview"
+                  [disabled]="!customPromptPath.trim()"
+                  (click)="onPreviewCustomPath()" />
+              </div>
+            }
+          </p-fieldset>
+
+          @if (promptPreviewContent !== null || loadingPreview) {
+            <p-fieldset legend="Preview">
+              @if (loadingPreview) {
+                <div class="cv-cfg-loading"><p-progressSpinner strokeWidth="3" /></div>
+              } @else {
+                <textarea
+                  pTextarea
+                  [value]="promptPreviewContent ?? ''"
+                  [readonly]="true"
+                  rows="14"
+                  style="width:100%; font-family: monospace; font-size: 0.8rem; resize: vertical;">
+                </textarea>
+              }
+            </p-fieldset>
+          }
+
+          <div class="cv-cfg-actions">
+            <p-button
+              label="Reset to default"
+              icon="pi pi-undo"
+              severity="secondary"
+              [disabled]="savingSystemPrompt"
+              (click)="onResetToDefault()" />
+            <p-button
+              label="Save"
+              icon="pi pi-save"
+              [loading]="savingSystemPrompt"
+              [disabled]="!canUseApi()"
+              (click)="onSaveSystemPrompt()" />
+          </div>
+        </p-fluid>
+      }
+    </div>
+  }
+
   <!-- ── Serve hub ── -->
   @if (activeSection() === 'serve') {
     <div class="cv-cfg-detail cv-cfg-serve">

@@ -1311,6 +1311,34 @@ body {
   code { display: block; }
 }
 
+/* ── System Prompt ── */
+
+.cv-cfg-active-msg {
+  margin-bottom: 0.75rem;
+}
+
+.cv-cfg-row-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.875rem;
+}
+
+.cv-cfg-row-btn {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.cv-cfg-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
 /* ── Serve hub ── */
 
 .cv-cfg-serve-tabs {

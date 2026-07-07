@@ -42,6 +42,7 @@ import { registerConfigRoutes } from './routes/config.js';
 import { registerAdminSettingsRoutes } from './routes/adminSettings.js';
 import { registerServeRoutes } from './routes/serve.js';
 import { registerProjectsAdminRoutes } from './routes/projectsAdmin.js';
+import { registerSystemPromptsRoutes } from './routes/systemPrompts.js';
 import { registerMcpServer } from './mcp/server/index.js';
 import { attachDevWebProxy, registerProductionWeb } from './webDispatch.js';
 import { registerControlSocket } from './state/controlSocket.js';
@@ -257,6 +258,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   await registerAdminSettingsRoutes(app);
   await registerServeRoutes(app);
   await registerProjectsAdminRoutes(app);
+  await registerSystemPromptsRoutes(app);
   registerPushRoutes(app);
 
   /** GET /api/settings — non-secret operational settings. */

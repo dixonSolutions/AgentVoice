@@ -193,6 +193,14 @@ export interface AgentClientSettings {
   clients: AgentClientInfo[];
 }
 
+// ── System Prompts ──────────────────────────────────────────────────────────
+
+export interface SystemPromptsInfo {
+  files: string[];
+  active: string | null;
+  defaultFile: string;
+}
+
 // ── Database ───────────────────────────────────────────────────────────────
 
 export interface DbStats {

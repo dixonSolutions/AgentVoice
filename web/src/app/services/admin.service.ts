@@ -23,6 +23,7 @@ import type {
   AuditEntry,
   AgentClientSettings,
   AgentClientId,
+  SystemPromptsInfo,
 } from '../models/admin-settings';
 
 @Injectable({ providedIn: 'root' })
@@ -184,6 +185,20 @@ export class AdminService {
 
   clearSessions(): Promise<{ ok: boolean; cleared: number }> {
     return this.delete('/api/admin/sessions');
+  }
+
+  // ── System Prompts ────────────────────────────────────────────────────────
+
+  getSystemPrompts(): Promise<SystemPromptsInfo> {
+    return this.get('/api/admin/system-prompts');
+  }
+
+  setSystemPrompt(systemPromptFile: string | null): Promise<{ ok: boolean; active: string | null }> {
+    return this.patch('/api/admin/system-prompts', { systemPromptFile });
+  }
+
+  readSystemPromptFile(path: string): Promise<{ path: string; content: string }> {
+    return this.get(`/api/admin/system-prompts/read?path=${encodeURIComponent(path)}`);
   }
 
   // ── Health ────────────────────────────────────────────────────────────────
