@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { getConfigPath } from '../config.js';
+import { getConfigPath, getConfig } from '../config.js';
 
 /**
  * Returns the project root directory derived from the config file path.
@@ -24,5 +24,11 @@ export function cursorVoiceMcpInstructions(): string {
 }
 
 export function cursorVoiceRuleBody(): string {
+  const { systemPromptFile } = getConfig().settings;
+  if (systemPromptFile) {
+    const repoRoot = getRepoRoot();
+    const absolutePath = resolve(repoRoot, systemPromptFile);
+    return readFileSync(absolutePath, 'utf-8').trim();
+  }
   return readCursorVoicePrompt('prompts/cursor-voice/system.md');
 }

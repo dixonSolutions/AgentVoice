@@ -199,6 +199,12 @@ const SettingsSchema = z.object({
   /** Self-hosting auto-update sector. See docs/21-serve-self-hosting.md. */
   serve: ServeSettingsSchema.default({}),
   defaultMode: z.enum(['agent', 'plan']).default('agent'),
+  /**
+   * Active system prompt for the MCP instructions injected into the Cursor brain.
+   * Relative paths are resolved from the repo root (next to config.json).
+   * When omitted, defaults to the built-in prompts/cursor-voice/system.md.
+   */
+  systemPromptFile: z.string().min(1).optional(),
   /** Default cursor-agent model for new sessions (cursor_set_model global scope). */
   defaultActiveModel: z.string().min(1).default('auto'),
   maxConcurrentJobs: z.number().int().min(1).max(4).default(1),
