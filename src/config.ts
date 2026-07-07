@@ -43,6 +43,9 @@ const EnvSchema = z.object({
   APNS_KEY_PATH: z.string().optional(),
   APNS_BUNDLE_ID: z.string().optional(),
   APNS_PRODUCTION: z.string().optional(),
+  /** Override paths for alternative agent client binaries */
+  CODEX_PATH: z.string().optional(),
+  CLAUDE_CODE_PATH: z.string().optional(),
 });
 
 // ── Voice settings (config.json) ─────────────────────────────────────────────
@@ -183,6 +186,9 @@ export const ServeSettingsSchema = z.object({
 
 // ── config.json schema ───────────────────────────────────────────────────────
 
+export const AGENT_CLIENTS = ['cursor', 'codex', 'claude-code'] as const;
+export type AgentClient = (typeof AGENT_CLIENTS)[number];
+
 const SettingsSchema = z.object({
   /** `test` = localhost dev (backend + ng serve). `serve` = production / Tailscale. */
   runMode: z.enum(RUN_MODES).default('test'),
@@ -208,6 +214,12 @@ const SettingsSchema = z.object({
   logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   /** Optional name the voice agent uses when addressing the user. */
   userName: z.string().min(1).max(64).optional(),
+  /**
+   * Active agent client for worker and voice agent spawning.
+   * All three clients support the cursor-voice global MCP server.
+   * See docs/23-multi-agent-client.md for installation and flag details.
+   */
+  agentClient: z.enum(AGENT_CLIENTS).default('cursor'),
 });
 
 const ProjectConfigSchema = z.object({
@@ -231,6 +243,7 @@ export const ConfigFileSchema = z.object({
 // ── Exported types ────────────────────────────────────────────────────────────
 
 export type AppEnv = z.infer<typeof EnvSchema>;
+// AgentClient and AGENT_CLIENTS are exported above the schema definition.
 export type WakeWords = z.infer<typeof WakeWordsSchema>;
 export type TurnSubmit = z.infer<typeof TurnSubmitSchema>;
 export type WebkitTtsDefaults = z.infer<typeof WebkitTtsDefaultsSchema>;
@@ -343,6 +356,11 @@ function migrateRawConfig(raw: unknown): unknown {
     if (s['defaultActiveModel'] === undefined || String(s['defaultActiveModel']).trim() === '') {
       s['defaultActiveModel'] = 'auto';
       log.info('Migrated config — added default settings.defaultActiveModel');
+    }
+
+    if (s['agentClient'] === undefined) {
+      s['agentClient'] = 'cursor';
+      log.info('Migrated config — added default settings.agentClient');
     }
 
     return raw;

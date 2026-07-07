@@ -7,8 +7,9 @@
 | **Phone PWA** | Angular + vanilla TS modules | Mic capture, Vosk wake words, Silero VAD, STT, TTS playback, orb UI |
 | **Bridge** | Node 20+, TypeScript, Fastify | Serves PWA, `/ws/intelligence`, MCP HTTP server, spawns voice + worker agents, SQLite state |
 | **MCP server** | `@modelcontextprotocol/sdk` | Voice I/O (`speak`, `done`, `next_voice_turn`) + agent control tools |
-| **Voice agent** | `cursor-agent -p` | Conversational loop for `cursor_native`; calls MCP voice tools |
-| **Worker agents** | `cursor-agent -p` | Coding tasks spawned via `spawn_agent` |
+| **Voice agent** | `cursor-agent -p` / `codex exec` / `claude -p` | Conversational loop for `cursor_native`; calls MCP voice tools |
+| **Worker agents** | Same as voice agent | Coding tasks spawned via `spawn_agent` |
+| **Agent client** | `cursor` (default) \| `codex` \| `claude-code` | Selectable via `config.json` `agentClient` or PWA config tab; see [docs/23-multi-agent-client.md](./23-multi-agent-client.md) |
 | **AWS (optional)** | Polly, Transcribe, Bedrock Converse | TTS/STT fallback and `llm_intelligence` orchestrator |
 | **Network** | Tailscale (`serve`) | Private mesh + HTTPS for mic access |
 | **State** | SQLite | Jobs, voice agent runs, project registry, audit log |

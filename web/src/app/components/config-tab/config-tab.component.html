@@ -580,6 +580,66 @@
     </div>
   }
 
+  <!-- ── Agent Client ── -->
+  @if (activeSection() === 'agent-client') {
+    <div class="cv-cfg-detail">
+
+      @if (loadingAgentClient && !agentClientData) {
+        <div class="cv-cfg-loading"><p-progressSpinner strokeWidth="3" /></div>
+      }
+
+      @if (agentClientData) {
+        <p-fluid>
+          <p-fieldset legend="Active agent client">
+            <p class="cv-cfg-hint">
+              Select the AI coding agent the bridge will spawn for voice and worker jobs.
+              All three clients support the shared cursor-voice MCP server.
+            </p>
+            <div class="cv-client-list">
+              @for (client of agentClientData.clients; track client.id) {
+                <button
+                  class="cv-client-option"
+                  [class.cv-client-option--active]="agentClientData.active === client.id"
+                  [disabled]="savingAgentClient || !isBridgeConnected()"
+                  (click)="onSelectAgentClient(client.id)">
+                  <div class="cv-client-option-header">
+                    <span class="cv-client-option-label">{{ client.label }}</span>
+                    <span class="cv-client-status-dot"
+                      [class.cv-client-status-dot--ok]="client.available"
+                      [title]="client.available ? 'Binary found: ' + (client.binPath ?? client.id) : 'Not found on PATH'">
+                    </span>
+                    @if (agentClientData.active === client.id) {
+                      <p-tag value="Active" severity="success" styleClass="cv-client-active-tag" />
+                    }
+                  </div>
+                  <div class="cv-client-option-path">
+                    @if (client.available) {
+                      <i class="pi pi-check-circle" style="color: var(--p-green-500)"></i>
+                      <span>{{ client.binPath ?? client.id }}</span>
+                    } @else {
+                      <i class="pi pi-exclamation-circle" style="color: var(--p-orange-400)"></i>
+                      <span>Not installed — see docs/23-multi-agent-client.md</span>
+                    }
+                  </div>
+                </button>
+              }
+            </div>
+          </p-fieldset>
+
+          <p-fieldset legend="Environment overrides">
+            <p class="cv-cfg-hint">
+              Set these in your <code>.env</code> file to override the binary path for each client:
+            </p>
+            <div class="cv-cfg-code-block">
+              <code>CODEX_PATH=/path/to/codex</code><br>
+              <code>CLAUDE_CODE_PATH=/path/to/claude</code>
+            </div>
+          </p-fieldset>
+        </p-fluid>
+      }
+    </div>
+  }
+
   <!-- ── Serve hub ── -->
   @if (activeSection() === 'serve') {
     <div class="cv-cfg-detail cv-cfg-serve">

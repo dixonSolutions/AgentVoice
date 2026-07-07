@@ -18,12 +18,15 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import stripAnsi from 'strip-ansi';
-import { getConfig } from '../config.js';
+import { AGENT_CLIENTS, getConfig, type AgentClient } from '../config.js';
 import { childLogger } from '../log.js';
 import type { Project } from '../state/registry.js';
 import type { SessionState } from '../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from './agentPrompt.js';
 import type { StreamJsonEvent } from './watcher.js';
+
+export { AGENT_CLIENTS };
+export type { AgentClient };
 
 const log = childLogger('cursor-agent');
 
@@ -69,6 +72,90 @@ export function resolveCursorAgentPath(): string {
 export function isCursorAgentAvailable(): boolean {
   const path = resolveCursorAgentPath();
   return path !== 'cursor-agent' || existsSync(path);
+}
+
+let cachedCodexPath: string | null = null;
+
+/** Resolve the codex CLI binary path. */
+export function resolveCodexPath(): string {
+  if (cachedCodexPath && existsSync(cachedCodexPath)) {
+    return cachedCodexPath;
+  }
+
+  const fromEnv = process.env.CODEX_PATH?.trim();
+  if (fromEnv && existsSync(fromEnv)) {
+    cachedCodexPath = fromEnv;
+    return fromEnv;
+  }
+
+  const home = homedir();
+  for (const candidate of [
+    join(home, '.local/bin/codex'),
+    join(home, '.codex/bin/codex'),
+    '/usr/local/bin/codex',
+  ]) {
+    if (existsSync(candidate)) {
+      cachedCodexPath = candidate;
+      return candidate;
+    }
+  }
+
+  return 'codex';
+}
+
+let cachedClaudeCodePath: string | null = null;
+
+/** Resolve the claude CLI binary path (Claude Code). */
+export function resolveClaudeCodePath(): string {
+  if (cachedClaudeCodePath && existsSync(cachedClaudeCodePath)) {
+    return cachedClaudeCodePath;
+  }
+
+  const fromEnv = process.env.CLAUDE_CODE_PATH?.trim();
+  if (fromEnv && existsSync(fromEnv)) {
+    cachedClaudeCodePath = fromEnv;
+    return fromEnv;
+  }
+
+  const home = homedir();
+  for (const candidate of [
+    join(home, '.local/bin/claude'),
+    join(home, '.claude/bin/claude'),
+    '/usr/local/bin/claude',
+  ]) {
+    if (existsSync(candidate)) {
+      cachedClaudeCodePath = candidate;
+      return candidate;
+    }
+  }
+
+  return 'claude';
+}
+
+/** Resolve the binary path for the given agent client. */
+export function resolveAgentBin(client: AgentClient): string {
+  switch (client) {
+    case 'cursor':
+      return resolveCursorAgentPath();
+    case 'codex':
+      return resolveCodexPath();
+    case 'claude-code':
+      return resolveClaudeCodePath();
+  }
+}
+
+/** Check whether a given agent client binary is available on the system. */
+export function isAgentClientAvailable(client: AgentClient): boolean {
+  const bin = resolveAgentBin(client);
+  const fallback = client === 'cursor' ? 'cursor-agent' : client === 'codex' ? 'codex' : 'claude';
+  return bin !== fallback || existsSync(bin);
+}
+
+/** Return the resolved binary path if found, or null if only the fallback name is available. */
+export function resolvedAgentBinPath(client: AgentClient): string | null {
+  const bin = resolveAgentBin(client);
+  const fallback = client === 'cursor' ? 'cursor-agent' : client === 'codex' ? 'codex' : 'claude';
+  return bin !== fallback ? bin : null;
 }
 
 /** Prevent spawn ENOENT/EACCES from becoming an uncaught exception (crashes the bridge). */
@@ -124,13 +211,13 @@ export interface AgentResult {
   error: string | null;
 }
 
-// ── Flag builder ──────────────────────────────────────────────────────────
+// ── Flag builders ─────────────────────────────────────────────────────────
 
 /**
- * Builds the cursor-agent argument array.
+ * Builds cursor-agent CLI arguments.
  * Shell interpolation is impossible here — this is an array, not a string.
  */
-export function buildArgs(opts: SpawnOptions): string[] {
+function buildCursorArgs(opts: SpawnOptions): string[] {
   const { project, session, prompt, mode = 'agent', oneShot = false, worktree, browser } = opts;
   const { settings } = getConfig();
 
@@ -142,36 +229,28 @@ export function buildArgs(opts: SpawnOptions): string[] {
     project.path, // ONLY from registry — never from caller
   ];
 
-  // Worktree: isolated git worktree for parallel agents (no working-tree conflicts).
   if (worktree) {
     args.push('-w', worktree);
   }
 
-  // Model: from session state (default 'auto' = Cursor chooses).
   if (session.activeModel && session.activeModel !== 'auto') {
     args.push('--model', session.activeModel);
   }
 
-  // Resume session for submit jobs only — ask/worktree mode always starts fresh.
   if (project.resumeId && !oneShot && mode !== 'ask' && !worktree) {
     args.push('--resume', project.resumeId);
   }
 
-  // Mode flags. 'debug' maps to agent mode (no CLI flag) — debug intent is prompt-steered.
   if (mode === 'plan') {
     args.push('--mode', 'plan');
   } else if (mode === 'ask') {
     args.push('--mode', 'ask');
   }
-  // 'agent' and 'debug' are the default; no flag needed.
 
-  // Pre-run flags from config (e.g. ['--force', '--trust']).
-  // Applied after mode flags so they can't change mode.
   for (const flag of settings.preRunFlags) {
     args.push(flag);
   }
 
-  // Prompt is the last — the only caller-controlled value.
   if (mode === 'ask') {
     args.push(buildAskPrompt(prompt));
   } else {
@@ -179,6 +258,84 @@ export function buildArgs(opts: SpawnOptions): string[] {
   }
 
   return args;
+}
+
+/**
+ * Builds Codex CLI (`codex exec`) arguments for headless non-interactive use.
+ *
+ * Codex flags used:
+ *   exec                              — non-interactive subcommand
+ *   --json                            — JSONL event stream on stdout
+ *   --sandbox workspace-write         — grant write access inside workspace
+ *   --cd <path>                       — set working directory
+ *   resume <SESSION_ID>               — optional resume subcommand
+ *
+ * Model selection is handled by Codex's own config; no --model flag in exec.
+ * preRunFlags from config are NOT forwarded (Codex uses different flags).
+ */
+function buildCodexArgs(opts: SpawnOptions): string[] {
+  const { project, prompt, mode = 'agent', oneShot = false } = opts;
+
+  const args: string[] = ['exec'];
+
+  // Resume: Codex uses `exec resume <id>` subcommand pattern.
+  if (project.resumeId && !oneShot && mode !== 'ask') {
+    args.push('resume', project.resumeId);
+  }
+
+  args.push('--json');
+  args.push('--sandbox', 'workspace-write');
+  args.push('--cd', project.path);
+
+  args.push(buildAgentPrompt(prompt, {}));
+
+  return args;
+}
+
+/**
+ * Builds Claude Code CLI (`claude -p`) arguments for headless use.
+ *
+ * Claude Code flags used:
+ *   -p / --print                      — non-interactive headless mode
+ *   --output-format stream-json       — JSONL event stream
+ *   --resume <id>                     — continue a prior conversation
+ *
+ * MCP servers are loaded from ~/.claude/settings.json (user-scope) which is
+ * set up by ensureClientMcpSetup('claude-code'). We do NOT use --bare so that
+ * the global MCP config is auto-discovered.
+ * preRunFlags are NOT forwarded (Claude Code uses different flags).
+ */
+function buildClaudeCodeArgs(opts: SpawnOptions): string[] {
+  const { project, prompt, mode = 'agent', oneShot = false } = opts;
+
+  const args: string[] = ['-p'];
+
+  args.push('--output-format', oneShot ? 'json' : 'stream-json');
+
+  if (project.resumeId && !oneShot && mode !== 'ask') {
+    args.push('--resume', project.resumeId);
+  }
+
+  args.push(buildAgentPrompt(prompt, {}));
+
+  return args;
+}
+
+/**
+ * Builds the argument array for the configured agent client.
+ * Shell interpolation is impossible here — this is an array, not a string.
+ */
+export function buildArgs(opts: SpawnOptions): string[] {
+  const { settings } = getConfig();
+  switch (settings.agentClient) {
+    case 'codex':
+      return buildCodexArgs(opts);
+    case 'claude-code':
+      return buildClaudeCodeArgs(opts);
+    case 'cursor':
+    default:
+      return buildCursorArgs(opts);
+  }
 }
 
 // ── Spawn ─────────────────────────────────────────────────────────────────
@@ -190,6 +347,8 @@ export function buildArgs(opts: SpawnOptions): string[] {
  * stderr: buffered for error capture.
  */
 export function spawnAgent(opts: SpawnOptions): AgentHandle {
+  const { settings } = getConfig();
+  const client = settings.agentClient;
   const args = buildArgs(opts);
 
   log.info(
@@ -198,12 +357,13 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
       mode: opts.mode ?? 'agent',
       resume: opts.project.resumeId ?? 'none',
       model: opts.session.activeModel,
+      client,
     },
-    'spawning cursor-agent',
+    'spawning agent',
   );
-  log.debug({ args }, 'cursor-agent args');
+  log.debug({ client, args }, 'agent args');
 
-  const agentBin = resolveCursorAgentPath();
+  const agentBin = resolveAgentBin(client);
   const child = spawn(agentBin, args, {
     cwd: opts.project.path,
     shell: false, // SECURITY: never true
@@ -211,11 +371,11 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  attachCursorAgentSpawnGuard(child, { project: opts.project.name, mode: opts.mode ?? 'agent' });
+  attachCursorAgentSpawnGuard(child, { project: opts.project.name, mode: opts.mode ?? 'agent', client });
 
   const pid = child.pid;
   if (!pid) {
-    throw new Error(agentBin === 'cursor-agent' ? cursorAgentSpawnErrorMessage() : 'cursor-agent failed to spawn (no pid)');
+    throw new Error(`${client} agent failed to spawn (no pid) — check the binary is installed and on PATH`);
   }
 
   const eventListeners: Array<(event: StreamJsonEvent) => void> = [];

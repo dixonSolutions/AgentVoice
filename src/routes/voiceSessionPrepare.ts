@@ -11,7 +11,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
-  ensureGlobalMcpSetup,
+  ensureClientMcpSetup,
   cleanupLegacyProjectMcp,
   type SessionLogEvent,
 } from '../mcp/globalMcpSetup.js';
@@ -73,7 +73,8 @@ export async function registerVoiceSessionPrepareRoutes(app: FastifyInstance): P
       const logs: SessionLogEvent[] = [];
 
       try {
-        const result = await ensureGlobalMcpSetup((event) => {
+        const { settings } = getConfig();
+        const result = await ensureClientMcpSetup(settings.agentClient, (event) => {
           logs.push(event);
           writeSse(reply, 'session_log', event);
         });
