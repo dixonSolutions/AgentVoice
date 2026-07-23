@@ -211,31 +211,44 @@
 
           @if (ttsProvider === 'browser') {
             <p-message severity="secondary" variant="simple"
-              text="Voices from {{ currentBrowserLabel }} via speechSynthesis (local voices preferred — Firefox can expose hundreds of remote espeak voices that freeze overlays)." />
+              text="Voices from {{ currentBrowserLabel }} via speechSynthesis. Search and scroll the list — virtual/lazy loading keeps large Firefox catalogs responsive." />
 
             @if (browserVoicesLoading) {
               <p-message severity="secondary" variant="simple" text="Loading browser voices…" />
             } @else if (browserVoicesTotal > 0) {
               <p-message severity="secondary" variant="simple"
-                text="Showing {{ browserVoicesShown }} of {{ browserVoicesTotal }} voices." />
+                text="{{ browserVoicesShown }} in list ({{ browserVoicesTotal }} from browser){{ browserVoicesShowAll ? '' : ' — curated; turn on all voices to browse everything' }}." />
             }
 
-            <!-- Optimus Select: virtual + lazy so Firefox-scale voice lists stay responsive. -->
+            <!-- Optimus Select: custom search + virtualScroll + lazy window over full catalog. -->
             <p-iftalabel>
               <p-select id="cfg-browser-voice"
                 [(ngModel)]="browserVoiceUri"
                 [options]="browserVoiceOptions"
                 optionLabel="label"
                 optionValue="value"
+                optionDisabled="disabled"
                 [filter]="true"
-                filterBy="label"
                 [virtualScroll]="true"
                 [virtualScrollItemSize]="38"
                 [lazy]="true"
+                appendTo="body"
+                scrollHeight="280px"
                 (onLazyLoad)="onBrowserVoicesLazyLoad($event)"
-                (onFilter)="onBrowserVoicesFilter($event)"
-                placeholder="Select a browser voice"
-                [showClear]="true" />
+                placeholder="Search or select a browser voice"
+                [showClear]="true">
+                <ng-template pTemplate="filter">
+                  <input
+                    type="text"
+                    pInputText
+                    class="p-select-filter w-full"
+                    placeholder="Search voices…"
+                    [ngModel]="browserVoiceFilter"
+                    (ngModelChange)="onBrowserVoiceSearch($event)"
+                    (click)="$event.stopPropagation()"
+                    (keydown)="$event.stopPropagation()" />
+                </ng-template>
+              </p-select>
               <label for="cfg-browser-voice">Browser voice</label>
             </p-iftalabel>
 
@@ -243,7 +256,7 @@
               <p-toggleSwitch id="cfg-browser-voices-all"
                 [(ngModel)]="browserVoicesShowAll"
                 (onChange)="onBrowserVoicesShowAllChange()" />
-              <label for="cfg-browser-voices-all">Include remote / all voices (may be slow)</label>
+              <label for="cfg-browser-voices-all">Include remote / all voices (virtual + lazy)</label>
             </div>
 
             <p-iftalabel>

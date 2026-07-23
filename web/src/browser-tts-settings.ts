@@ -218,13 +218,14 @@ export function curateBrowserTtsVoices(
 
   let pool = voices.filter((v) => {
     if (selected && v.voiceURI === selected.voiceURI) return true;
-    if (!includeRemote && !v.localService) return false;
-    if (!includeRemote && isLikelyEspeakBulk(v)) return false;
-    return true;
+    if (includeRemote) return true;
+    // Default: local voices + preferred-language remotes (skip espeak bulk dumps).
+    if (isLikelyEspeakBulk(v)) return false;
+    if (v.localService) return true;
+    return preferredSet.has(langPrefix(v.lang));
   });
 
-  // If local-only produced nothing useful, fall back to preferred-lang remotes
-  // (still capped) so the picker isn't empty on odd platforms.
+  // Last resort when the platform exposes only remote bulk voices.
   if (pool.length === 0) {
     pool = voices.filter((v) => {
       if (selected && v.voiceURI === selected.voiceURI) return true;

@@ -12,8 +12,9 @@ import { InputText } from '@openng/optimus-ui/inputtext';
 import { Message } from '@openng/optimus-ui/message';
 import { Password } from '@openng/optimus-ui/password';
 import { ProgressSpinner } from '@openng/optimus-ui/progressspinner';
+import { PrimeTemplate } from '@openng/optimus-ui/api';
 import { Select } from '@openng/optimus-ui/select';
-import type { SelectFilterEvent, SelectLazyLoadEvent } from '@openng/optimus-ui/types/select';
+import type { SelectLazyLoadEvent } from '@openng/optimus-ui/types/select';
 import { SelectButton } from '@openng/optimus-ui/selectbutton';
 import { Tag } from '@openng/optimus-ui/tag';
 import { Textarea } from '@openng/optimus-ui/textarea';
@@ -83,9 +84,10 @@ type SectionId =
   | 'database'
   | 'debug';
 
-type BrowserVoiceOption = { label: string; value: string };
+type BrowserVoiceOption = { label: string; value: string; disabled?: boolean };
 
-const BROWSER_VOICE_LAZY_CHUNK = 48;
+const BROWSER_VOICE_LAZY_CHUNK = 64;
+const BROWSER_VOICE_CURATED_MAX = 80;
 
 type ServeTabId = 'status' | 'actions' | 'network' | 'automation' | 'activity';
 
@@ -218,6 +220,7 @@ const ALL_SECTIONS: ConfigSection[] = [
     Tab,
     TabPanels,
     TabPanel,
+    PrimeTemplate,
     ConnectionTabComponent,
   ],
   templateUrl: './config-tab.component.html',
@@ -388,6 +391,10 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.browserVoiceSearchTimer) {
+      clearTimeout(this.browserVoiceSearchTimer);
+      this.browserVoiceSearchTimer = null;
+    }
     this.unsubBrowserVoices?.();
     this.unsubBrowserVoices = null;
   }
@@ -459,16 +466,22 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected browserTtsVolume = 1;
   protected browserTtsLang = 'en-US';
   protected browserProfiles: BrowserTtsProfile[] = [];
-  /** Window fed to p-select (grows via lazy load; never the full catalog on open). */
+  /**
+   * Sparse options bound to p-select: length === filtered catalog for correct
+   * virtual-scroll height; only the visible window holds real rows.
+   */
   protected browserVoiceOptions: BrowserVoiceOption[] = [];
-  /** Full filtered source kept in memory for lazy windows. */
+  /** Active catalog (curated or all) — full objects in memory for search/lazy. */
   private browserVoiceSource: BrowserVoiceOption[] = [];
-  private browserVoiceFilter = '';
+  /** Search query for the custom Select filter (does not use Select’s built-in filter). */
+  protected browserVoiceFilter = '';
   protected browserVoicesLoading = false;
   protected browserVoicesShowAll = false;
   protected browserVoicesTotal = 0;
   protected browserVoicesShown = 0;
+  protected browserVoicesLoaded = 0;
   private rawBrowserVoices: SpeechSynthesisVoice[] = [];
+  private browserVoiceSearchTimer: ReturnType<typeof setTimeout> | null = null;
   protected readonly currentBrowserLabel = detectBrowserLabel();
   protected readonly currentBrowserId = currentBrowserProfileId();
 
@@ -564,13 +577,16 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     };
   }
 
+  private lazyPad(index: number): BrowserVoiceOption {
+    return { label: ' ', value: `__lazy_${index}`, disabled: true };
+  }
+
   private buildBrowserVoiceSource(voices: SpeechSynthesisVoice[]): BrowserVoiceOption[] {
     const curated = curateBrowserTtsVoices(voices, {
       preferredLang: this.browserTtsLang || undefined,
       selectedVoiceURI: this.browserVoiceUri || undefined,
       includeRemote: this.browserVoicesShowAll,
-      // Curated pool by default; "show all" keeps full catalog in memory for lazy windows.
-      maxVoices: this.browserVoicesShowAll ? Number.POSITIVE_INFINITY : 48,
+      maxVoices: this.browserVoicesShowAll ? Number.POSITIVE_INFINITY : BROWSER_VOICE_CURATED_MAX,
     });
     const mapped = curated.map((v) => this.voiceToOption(v));
     return [{ label: 'System default', value: '' }, ...mapped];
@@ -582,21 +598,38 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     return this.browserVoiceSource.filter((opt) => opt.label.toLowerCase().includes(q));
   }
 
+  /**
+   * Bind a full-length sparse array so virtual scroll height matches the catalog,
+   * and only hydrate the visible window (plus the selected row).
+   */
   private fillBrowserVoiceWindow(first: number, last: number): void {
     const source = this.filteredBrowserVoiceSource();
     this.browserVoicesShown = source.length;
-    const need = Math.min(
-      source.length,
-      Math.max(BROWSER_VOICE_LAZY_CHUNK, last, first + BROWSER_VOICE_LAZY_CHUNK),
-    );
-    // Append-style: grow the bound prefix as the scroller requests more rows.
-    const next = source.slice(0, Math.max(need, 1));
-    // Ensure the current selection is present even if it sits outside the loaded prefix.
-    const selected = this.browserVoiceUri;
-    if (selected && !next.some((o) => o.value === selected)) {
-      const match = source.find((o) => o.value === selected);
-      if (match) next.unshift(match);
+
+    if (source.length === 0) {
+      this.browserVoiceOptions = [];
+      this.browserVoicesLoaded = 0;
+      return;
     }
+
+    const from = Math.max(0, Math.min(first, source.length - 1));
+    const to = Math.min(
+      source.length,
+      Math.max(last + 1, from + BROWSER_VOICE_LAZY_CHUNK, BROWSER_VOICE_LAZY_CHUNK),
+    );
+
+    const next: BrowserVoiceOption[] = new Array(source.length);
+    for (let i = 0; i < source.length; i++) {
+      next[i] = i >= from && i < to ? source[i]! : this.lazyPad(i);
+    }
+
+    const selected = this.browserVoiceUri;
+    if (selected !== undefined && selected !== null) {
+      const selectedIdx = source.findIndex((o) => o.value === selected);
+      if (selectedIdx >= 0) next[selectedIdx] = source[selectedIdx]!;
+    }
+
+    this.browserVoicesLoaded = to - from;
     this.browserVoiceOptions = next;
   }
 
@@ -618,10 +651,15 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  protected onBrowserVoicesFilter(event: SelectFilterEvent): void {
-    this.browserVoiceFilter = String(event.filter ?? '');
-    this.fillBrowserVoiceWindow(0, BROWSER_VOICE_LAZY_CHUNK);
-    this.cdr.markForCheck();
+  /** Custom filter — searches the full source, then rebuilds the lazy window. */
+  protected onBrowserVoiceSearch(query: string): void {
+    this.browserVoiceFilter = query;
+    if (this.browserVoiceSearchTimer) clearTimeout(this.browserVoiceSearchTimer);
+    this.browserVoiceSearchTimer = setTimeout(() => {
+      this.browserVoiceSearchTimer = null;
+      this.fillBrowserVoiceWindow(0, BROWSER_VOICE_LAZY_CHUNK);
+      this.cdr.markForCheck();
+    }, 120);
   }
 
   private async loadSpeechOutputUi(): Promise<void> {
