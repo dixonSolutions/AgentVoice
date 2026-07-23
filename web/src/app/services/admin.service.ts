@@ -24,6 +24,7 @@ import type {
   AgentClientSettings,
   AgentClientId,
   PollyVoiceInfo,
+  TranscribeModelInfo,
 } from '../models/admin-settings';
 
 @Injectable({ providedIn: 'root' })
@@ -194,6 +195,10 @@ export class AdminService {
   ): Promise<{ engine: string; voices: PollyVoiceInfo[] }> {
     const q = engine ? `?engine=${encodeURIComponent(engine)}` : '';
     return this.get(`/api/intelligence/polly-voices${q}`);
+  }
+
+  getTranscribeModels(): Promise<{ models: TranscribeModelInfo[]; note: string }> {
+    return this.get('/api/intelligence/transcribe-models');
   }
 
   // ── Health ────────────────────────────────────────────────────────────────

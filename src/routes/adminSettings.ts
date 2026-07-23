@@ -64,7 +64,13 @@ const WorkflowPatchSchema = z
             region: z.string().optional(),
             pollyVoiceId: z.string().min(1).optional(),
             pollyEngine: z.enum(['standard', 'neural', 'generative']).optional(),
+            transcribeModel: z.enum(['speech_foundation_model']).optional(),
+            transcribeLanguageMode: z.enum(['fixed', 'identify']).optional(),
             transcribeLanguageCode: z.string().min(1).optional(),
+            transcribeLanguageOptions: z.string().min(2).optional(),
+            transcribePreferredLanguage: z.string().min(2).optional(),
+            transcribePartialResultsStabilization: z.boolean().optional(),
+            transcribePartialResultsStability: z.enum(['low', 'medium', 'high']).optional(),
           })
           .optional(),
         memory: z

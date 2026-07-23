@@ -256,6 +256,73 @@
             (onClick)="onSaveSpeechOutput()" />
         </p-fieldset>
 
+        <p-fieldset legend="Speech input (Amazon Transcribe)">
+          <p-message severity="secondary" variant="simple"
+            text="Uses Amazon Transcribe’s Speech Foundation Model (SFM) — the premier multi-billion-parameter ASR. Bedrock has no native real-time STT; Medical/Call Analytics are omitted as they are slower or domain-specific for voice turns." />
+
+          <p-iftalabel>
+            <p-select id="cfg-transcribe-model" [(ngModel)]="transcribeModel"
+              [options]="transcribeModelOptions" optionLabel="label" optionValue="value"
+              [disabled]="!isBridgeConnected()" />
+            <label for="cfg-transcribe-model">Transcribe model</label>
+          </p-iftalabel>
+
+          <p-iftalabel>
+            <p-select id="cfg-transcribe-lang-mode" [(ngModel)]="transcribeLanguageMode"
+              [options]="transcribeLanguageModeOptions" optionLabel="label" optionValue="value"
+              [disabled]="!isBridgeConnected()" />
+            <label for="cfg-transcribe-lang-mode">Language mode</label>
+          </p-iftalabel>
+
+          @if (transcribeLanguageMode === 'fixed') {
+            <p-iftalabel>
+              <input pInputText id="cfg-transcribe-lang-code"
+                [(ngModel)]="transcribeLanguageCode"
+                placeholder="en-US"
+                [disabled]="!isBridgeConnected()" />
+              <label for="cfg-transcribe-lang-code">Language code</label>
+            </p-iftalabel>
+          } @else {
+            <p-iftalabel>
+              <input pInputText id="cfg-transcribe-lang-options"
+                [(ngModel)]="transcribeLanguageOptions"
+                placeholder="en-US,es-US,fr-FR,de-DE"
+                [disabled]="!isBridgeConnected()" />
+              <label for="cfg-transcribe-lang-options">Language options (one locale per language)</label>
+            </p-iftalabel>
+            <p-iftalabel>
+              <input pInputText id="cfg-transcribe-pref-lang"
+                [(ngModel)]="transcribePreferredLanguage"
+                placeholder="en-US"
+                [disabled]="!isBridgeConnected()" />
+              <label for="cfg-transcribe-pref-lang">Preferred language</label>
+            </p-iftalabel>
+            <p-message severity="warn" variant="simple"
+              text="Auto-identify is more accurate across languages but ~3× slower in our tests — prefer fixed language for voice latency." />
+          }
+
+          <div class="cv-cfg-toggle-row">
+            <p-toggleSwitch id="cfg-transcribe-stabilize"
+              [(ngModel)]="transcribePartialResultsStabilization"
+              [disabled]="!isBridgeConnected()" />
+            <label for="cfg-transcribe-stabilize">Partial results stabilization (faster streaming)</label>
+          </div>
+
+          @if (transcribePartialResultsStabilization) {
+            <p-iftalabel>
+              <p-select id="cfg-transcribe-stability"
+                [(ngModel)]="transcribePartialResultsStability"
+                [options]="transcribeStabilityOptions" optionLabel="label" optionValue="value"
+                [disabled]="!isBridgeConnected()" />
+              <label for="cfg-transcribe-stability">Stability level</label>
+            </p-iftalabel>
+          }
+
+          <p-button label="Save speech input" icon="pi pi-microphone"
+            [loading]="savingSpeechInput" [disabled]="!isBridgeConnected()"
+            (onClick)="onSaveSpeechInput()" />
+        </p-fieldset>
+
         @if (browserProfiles.length > 0) {
           <p-fieldset legend="Saved browser profiles">
             @for (profile of browserProfiles; track profile.id) {
@@ -561,7 +628,7 @@
 
           <p-fieldset legend="Audio (STT / region)">
             <p-message severity="secondary" variant="simple"
-              text="Speech output (browser vs Polly) is configured under Voice → Speech output. These settings cover speech-to-text preference and AWS audio region." />
+              text="Speech output and Transcribe SFM options live under Voice. Here: browser STT preference and AWS audio region." />
             <div class="cv-cfg-toggle-row">
               <p-toggleSwitch id="cfg-prefer-webkit"
                 [(ngModel)]="workflowData.llmIntelligence.audio.preferWebkit"
@@ -588,6 +655,13 @@
                 [(ngModel)]="workflowData.llmIntelligence.audio.pollyEngine"
                 [disabled]="!isBridgeConnected()" />
               <label for="cfg-polly-engine">Polly engine</label>
+            </p-iftalabel>
+            <p-iftalabel>
+              <p-select id="cfg-workflow-transcribe-model"
+                [options]="transcribeModelOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="workflowData.llmIntelligence.audio.transcribeModel"
+                [disabled]="!isBridgeConnected()" />
+              <label for="cfg-workflow-transcribe-model">Transcribe model</label>
             </p-iftalabel>
             <p-iftalabel>
               <input pInputText id="cfg-transcribe-lang"

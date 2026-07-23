@@ -32,7 +32,12 @@
           "ttsProvider": "browser",
           "pollyVoiceId": "Joanna",
           "pollyEngine": "neural",
-          "transcribeLanguageCode": "en-US"
+          "transcribeModel": "speech_foundation_model",
+          "transcribeLanguageMode": "fixed",
+          "transcribeLanguageCode": "en-US",
+          "transcribeLanguageOptions": "en-US,es-US,fr-FR,de-DE",
+          "transcribePartialResultsStabilization": true,
+          "transcribePartialResultsStability": "high"
         }
       }
     },

@@ -1,12 +1,16 @@
 /**
- * Amazon Transcribe streaming STT for llm_intelligence fallback when WebKit STT is unavailable.
+ * Amazon Transcribe streaming STT — Speech Foundation Model (SFM).
  *
- * Accepts 16-bit PCM mono at 16 kHz (same as Bedrock voice uplink).
+ * Uses StartStreamTranscription (HTTP/2). AWS’s premier multi-billion-parameter
+ * ASR powers this API; there is no separate ModelId — SFM is the standard engine.
+ *
+ * Accepts 16-bit PCM mono at 16 kHz.
  */
 
 import {
   LanguageCode,
   MediaEncoding,
+  PartialResultsStability,
   StartStreamTranscriptionCommand,
   type TranscribeStreamingClient,
 } from '@aws-sdk/client-transcribe-streaming';
@@ -18,9 +22,35 @@ const log = childLogger('intelligence:transcribe');
 
 const CHUNK_BYTES = 6400; // 200 ms @ 16 kHz 16-bit mono
 
-function languageCode(): LanguageCode {
-  const code = getConfig().settings.workflow.llmIntelligence.audio.transcribeLanguageCode;
+export const TRANSCRIBE_MODELS = [
+  {
+    id: 'speech_foundation_model' as const,
+    label: 'Speech Foundation Model (SFM)',
+    description:
+      'Amazon Transcribe’s premier multi-billion-parameter ASR — 100+ languages, word timestamps, streaming. Fastest real-time option with IAM keys.',
+    recommended: true,
+  },
+] as const;
+
+export type TranscribeModelId = (typeof TRANSCRIBE_MODELS)[number]['id'];
+
+function asLanguageCode(code: string): LanguageCode {
   return code as LanguageCode;
+}
+
+/** Keep at most one locale per ISO language (Transcribe identify requirement). */
+export function sanitizeLanguageOptions(raw: string): string {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(/[,\s]+/)) {
+    const code = part.trim();
+    if (!code || !/^[a-z]{2}-[A-Z]{2}$/.test(code)) continue;
+    const lang = code.slice(0, 2).toLowerCase();
+    if (seen.has(lang)) continue;
+    seen.add(lang);
+    out.push(code);
+  }
+  return out.join(',') || 'en-US';
 }
 
 async function* pcmAudioStream(pcm: Buffer): AsyncGenerator<{ AudioEvent: { AudioChunk: Uint8Array } }> {
@@ -43,12 +73,53 @@ export async function transcribePcm16(pcm: Buffer): Promise<string> {
 }
 
 async function runTranscribeStream(client: TranscribeStreamingClient, pcm: Buffer): Promise<string> {
-  const command = new StartStreamTranscriptionCommand({
-    LanguageCode: languageCode(),
+  const audio = getConfig().settings.workflow.llmIntelligence.audio;
+  const stabilize = audio.transcribePartialResultsStabilization !== false;
+  const stability = audio.transcribePartialResultsStability ?? 'high';
+
+  const base = {
     MediaEncoding: MediaEncoding.PCM,
     MediaSampleRateHertz: 16000,
     AudioStream: pcmAudioStream(pcm),
-  });
+    ...(stabilize
+      ? {
+          EnablePartialResultsStabilization: true,
+          PartialResultsStability:
+            stability === 'low'
+              ? PartialResultsStability.LOW
+              : stability === 'medium'
+                ? PartialResultsStability.MEDIUM
+                : PartialResultsStability.HIGH,
+        }
+      : {}),
+  };
+
+  const command =
+    audio.transcribeLanguageMode === 'identify'
+      ? new StartStreamTranscriptionCommand({
+          ...base,
+          IdentifyLanguage: true,
+          LanguageOptions: sanitizeLanguageOptions(audio.transcribeLanguageOptions),
+          PreferredLanguage: asLanguageCode(
+            audio.transcribePreferredLanguage?.trim() || audio.transcribeLanguageCode,
+          ),
+        })
+      : new StartStreamTranscriptionCommand({
+          ...base,
+          LanguageCode: asLanguageCode(audio.transcribeLanguageCode),
+        });
+
+  log.debug(
+    {
+      model: audio.transcribeModel,
+      languageMode: audio.transcribeLanguageMode,
+      languageCode: audio.transcribeLanguageCode,
+      stabilize,
+      stability,
+      pcmBytes: pcm.length,
+    },
+    'transcribe SFM stream start',
+  );
 
   const response = await client.send(command);
   const parts: string[] = [];

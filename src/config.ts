@@ -154,7 +154,28 @@ const LlmIntelligenceAudioSchema = z.object({
   region: z.string().min(1).optional(),
   pollyVoiceId: z.string().min(1).default('Joanna'),
   pollyEngine: z.enum(['standard', 'neural', 'generative']).default('neural'),
+  /**
+   * Amazon Transcribe ASR model.
+   * Only Speech Foundation Model (SFM) is exposed — it is AWS’s premier multi-billion
+   * parameter ASR used by StartStreamTranscription (100+ languages). Bedrock has no
+   * native real-time STT; Whisper-on-Marketplace is batch-oriented and slower for voice.
+   */
+  transcribeModel: z.enum(['speech_foundation_model']).default('speech_foundation_model'),
+  /**
+   * Language selection for Transcribe SFM.
+   * - fixed: fastest — use transcribeLanguageCode
+   * - identify: auto-detect among languageOptions (slower; one locale per language)
+   */
+  transcribeLanguageMode: z.enum(['fixed', 'identify']).default('fixed'),
   transcribeLanguageCode: z.string().min(2).default('en-US'),
+  /** Comma-separated locales for identify mode — at most one locale per language (e.g. en-US,pl-PL). */
+  transcribeLanguageOptions: z.string().min(2).default('en-US,es-US,fr-FR,de-DE'),
+  /** Preferred language hint when identify mode is on (defaults to languageCode). */
+  transcribePreferredLanguage: z.string().min(2).optional(),
+  /** Reduce streaming latency (recommended on for voice). */
+  transcribePartialResultsStabilization: z.boolean().default(true),
+  /** high = lowest latency / more aggressive freeze of early words. */
+  transcribePartialResultsStability: z.enum(['low', 'medium', 'high']).default('high'),
 });
 
 export const LlmIntelligenceWorkflowSchema = z.object({

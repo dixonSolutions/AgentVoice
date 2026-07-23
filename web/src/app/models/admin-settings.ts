@@ -13,13 +13,30 @@ export interface LlmSettings {
 
 export type TtsProvider = 'browser' | 'amazon_polly';
 
+export type TranscribeModelId = 'speech_foundation_model';
+export type TranscribeLanguageMode = 'fixed' | 'identify';
+export type TranscribePartialStability = 'low' | 'medium' | 'high';
+
 export interface AudioSettings {
   preferWebkit: boolean;
   ttsProvider: TtsProvider;
   region?: string;
   pollyVoiceId: string;
   pollyEngine: 'standard' | 'neural' | 'generative';
+  transcribeModel: TranscribeModelId;
+  transcribeLanguageMode: TranscribeLanguageMode;
   transcribeLanguageCode: string;
+  transcribeLanguageOptions: string;
+  transcribePreferredLanguage?: string;
+  transcribePartialResultsStabilization: boolean;
+  transcribePartialResultsStability: TranscribePartialStability;
+}
+
+export interface TranscribeModelInfo {
+  id: TranscribeModelId;
+  label: string;
+  description: string;
+  recommended: boolean;
 }
 
 export interface PollyVoiceInfo {

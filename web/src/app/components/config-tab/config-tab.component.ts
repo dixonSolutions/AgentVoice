@@ -56,6 +56,9 @@ import type {
   AgentClientId,
   PollyVoiceInfo,
   TtsProvider,
+  TranscribeLanguageMode,
+  TranscribeModelId,
+  TranscribePartialStability,
 } from '../../models/admin-settings';
 
 // ── Section definition ─────────────────────────────────────────────────────
@@ -97,7 +100,7 @@ const ALL_SECTIONS: ConfigSection[] = [
     label: 'Voice & Wake Words',
     icon: 'pi-microphone',
     description: 'Activation phrases, VAD, silence threshold, sound effects, TTS',
-    keywords: ['wake', 'phrase', 'vad', 'silence', 'start', 'end', 'cancel', 'audio', 'sound', 'cue', 'tts', 'voice', 'deafen', 'interrupt', 'browser'],
+    keywords: ['wake', 'phrase', 'vad', 'silence', 'start', 'end', 'cancel', 'audio', 'sound', 'cue', 'tts', 'voice', 'deafen', 'interrupt', 'browser', 'polly', 'transcribe', 'sfm', 'speech', 'stt'],
   },
   {
     id: 'personal',
@@ -290,6 +293,30 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     { label: 'Amazon Polly', value: 'amazon_polly' },
   ];
 
+  protected readonly transcribeModelOptions: Array<{ label: string; value: TranscribeModelId }> = [
+    {
+      label: 'Speech Foundation Model (SFM) — recommended',
+      value: 'speech_foundation_model',
+    },
+  ];
+
+  protected readonly transcribeLanguageModeOptions: Array<{
+    label: string;
+    value: TranscribeLanguageMode;
+  }> = [
+    { label: 'Fixed language (fastest)', value: 'fixed' },
+    { label: 'Auto-identify (slower, multilingual)', value: 'identify' },
+  ];
+
+  protected readonly transcribeStabilityOptions: Array<{
+    label: string;
+    value: TranscribePartialStability;
+  }> = [
+    { label: 'High — lowest latency', value: 'high' },
+    { label: 'Medium — balanced', value: 'medium' },
+    { label: 'Low — highest accuracy on revisions', value: 'low' },
+  ];
+
   protected readonly runModeOptions = [
     { label: 'Test (local dev)', value: 'test' },
     { label: 'Serve (production)', value: 'serve' },
@@ -401,6 +428,15 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected savingSpeechOutput = false;
   protected previewingPolly = false;
 
+  protected transcribeModel: TranscribeModelId = 'speech_foundation_model';
+  protected transcribeLanguageMode: TranscribeLanguageMode = 'fixed';
+  protected transcribeLanguageCode = 'en-US';
+  protected transcribeLanguageOptions = 'en-US,es-US,fr-FR,de-DE';
+  protected transcribePreferredLanguage = 'en-US';
+  protected transcribePartialResultsStabilization = true;
+  protected transcribePartialResultsStability: TranscribePartialStability = 'high';
+  protected savingSpeechInput = false;
+
   protected readonly interruptModeOptions = [
     { label: 'Pause — stop speech on wake; cancel resumes', value: 'pause' },
     { label: 'Deafen (legacy — same as pause)', value: 'deafen' },
@@ -507,6 +543,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       this.ttsProvider = audio.ttsProvider ?? (audio.preferWebkit === false ? 'amazon_polly' : 'browser');
       this.pollyVoiceId = audio.pollyVoiceId || 'Joanna';
       this.pollyEngine = audio.pollyEngine || 'neural';
+      this.applyTranscribeAudio(audio);
       if (this.workflowData) {
         this.workflowData.llmIntelligence.audio.ttsProvider = this.ttsProvider;
         this.workflowData.llmIntelligence.audio.pollyVoiceId = this.pollyVoiceId;
@@ -612,6 +649,51 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       this.toast.error('Could not save speech output', err instanceof Error ? err.message : String(err));
     } finally {
       this.savingSpeechOutput = false;
+    }
+  }
+
+  private applyTranscribeAudio(audio: WorkflowSettings['llmIntelligence']['audio']): void {
+    this.transcribeModel = audio.transcribeModel ?? 'speech_foundation_model';
+    this.transcribeLanguageMode = audio.transcribeLanguageMode ?? 'fixed';
+    this.transcribeLanguageCode = audio.transcribeLanguageCode || 'en-US';
+    this.transcribeLanguageOptions =
+      audio.transcribeLanguageOptions || 'en-US,es-US,fr-FR,de-DE';
+    this.transcribePreferredLanguage =
+      audio.transcribePreferredLanguage || audio.transcribeLanguageCode || 'en-US';
+    this.transcribePartialResultsStabilization =
+      audio.transcribePartialResultsStabilization !== false;
+    this.transcribePartialResultsStability =
+      audio.transcribePartialResultsStability ?? 'high';
+  }
+
+  protected async onSaveSpeechInput(): Promise<void> {
+    this.savingSpeechInput = true;
+    try {
+      const res = await this.admin.patchWorkflow({
+        llmIntelligence: {
+          audio: {
+            transcribeModel: this.transcribeModel,
+            transcribeLanguageMode: this.transcribeLanguageMode,
+            transcribeLanguageCode: this.transcribeLanguageCode.trim() || 'en-US',
+            transcribeLanguageOptions: this.transcribeLanguageOptions.trim() || 'en-US',
+            transcribePreferredLanguage: this.transcribePreferredLanguage.trim() || 'en-US',
+            transcribePartialResultsStabilization: this.transcribePartialResultsStabilization,
+            transcribePartialResultsStability: this.transcribePartialResultsStability,
+          },
+        },
+      } as Partial<WorkflowSettings>);
+      this.workflowData = structuredClone(res.workflow);
+      this.applyTranscribeAudio(res.workflow.llmIntelligence.audio);
+      this.toast.success(
+        'Speech input saved',
+        this.transcribeLanguageMode === 'fixed'
+          ? `Transcribe SFM · ${this.transcribeLanguageCode} · stability ${this.transcribePartialResultsStability}`
+          : `Transcribe SFM · auto-identify · stability ${this.transcribePartialResultsStability}`,
+      );
+    } catch (err) {
+      this.toast.error('Could not save speech input', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.savingSpeechInput = false;
     }
   }
 
@@ -964,9 +1046,21 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       if (!audio.ttsProvider) {
         audio.ttsProvider = audio.preferWebkit === false ? 'amazon_polly' : 'browser';
       }
+      if (!audio.transcribeModel) audio.transcribeModel = 'speech_foundation_model';
+      if (!audio.transcribeLanguageMode) audio.transcribeLanguageMode = 'fixed';
+      if (audio.transcribePartialResultsStabilization === undefined) {
+        audio.transcribePartialResultsStabilization = true;
+      }
+      if (!audio.transcribePartialResultsStability) {
+        audio.transcribePartialResultsStability = 'high';
+      }
+      if (!audio.transcribeLanguageOptions) {
+        audio.transcribeLanguageOptions = 'en-US,es-US,fr-FR,de-DE';
+      }
       this.ttsProvider = audio.ttsProvider;
       this.pollyVoiceId = audio.pollyVoiceId;
       this.pollyEngine = audio.pollyEngine;
+      this.applyTranscribeAudio(audio);
     } catch (err) {
       if (seq !== this.workflowLoadSeq) return;
       this.toast.error('Could not load workflow settings', err instanceof Error ? err.message : String(err));

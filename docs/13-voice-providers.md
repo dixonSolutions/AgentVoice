@@ -108,6 +108,22 @@ Set in `config.json`:
 
 Browser voices are listed from the device `speechSynthesis.getVoices()` API (not a hard-coded browser list). Polly voices come from `GET /api/intelligence/polly-voices` (`DescribeVoices`).
 
+### Speech input — Amazon Transcribe SFM
+
+Amazon **Transcribe** (not Bedrock) provides real-time STT. The Speech Foundation Model
+powers `StartStreamTranscription` with no separate ModelId.
+
+| Field | Default | Notes |
+| --- | --- | --- |
+| `transcribeModel` | `speech_foundation_model` | Only premier option exposed |
+| `transcribeLanguageMode` | `fixed` | `identify` is ~3× slower in voice tests |
+| `transcribeLanguageCode` | `en-US` | Used in fixed mode |
+| `transcribePartialResultsStabilization` | `true` | Lower streaming latency |
+| `transcribePartialResultsStability` | `high` | Best latency for voice turns |
+
+Catalog: `GET /api/intelligence/transcribe-models`. Medical / Call Analytics / Bedrock Whisper
+Marketplace are intentionally not offered for interactive voice.
+
 ## Security
 
 - `.env` is chmod 600, never committed, never returned by API.
