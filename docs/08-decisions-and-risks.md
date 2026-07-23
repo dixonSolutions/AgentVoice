@@ -201,6 +201,7 @@ config edit. "Skip questions" is a prompt-engineering concern, not a flag.
 
 ### ADR-018 — TTS wake-word echo: compare Vosk heard text to current TTS line
 
+
 **Decision:** Keep the Vosk wake spotter **active during TTS** so user barge-in
 works. When Vosk fires while TTS is playing, ignore the detection if the wake
 phrase appears in `TtsPile.getCurrentLine()` (assistant echo from the speaker).
@@ -218,6 +219,21 @@ plus whole-word phrase matching is sufficient without playback-position APIs.
 **Consequence:** `TtsPile.getCurrentLine()`, `textContainsWakePhrase()` in
 `wake-words.ts`, Vosk `onMatch(phrase, heard)` passes raw transcript. Documented
 in [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md).
+
+### ADR-019 — Optimus UI + local appearance theming
+
+**Decision:** Use `@openng/optimus-ui` (MIT PrimeNG fork) for the PWA component
+library. Drive light/dark/system and primary tone through Optimus theming
+(`provideOptimus` + `updatePrimaryPalette`), persisted only in browser
+`localStorage` (`cv-appearance`) — never `config.json` / admin API. Browser TTS
+voice pickers use Optimus `p-select` with `virtualScroll` + lazy chunking so
+Firefox-scale remote voice lists stay responsive.
+
+**Rejected:** Native `<select>` workaround; always-on dark via hardcoded
+`html.p-dark`; brand colors hardcoded in SCSS.
+
+**Consequence:** Templates keep `p-*` selectors. App CSS is structural and uses
+`--p-*` tokens only. Dark mode class is `.app-dark` on `<html>`.
 
 ## Open items / risks (to resolve during build)
 

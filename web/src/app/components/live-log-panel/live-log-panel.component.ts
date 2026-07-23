@@ -11,8 +11,8 @@ import {
   type OnDestroy,
 } from '@angular/core';
 
-import { Button } from 'primeng/button';
-import { Tag } from 'primeng/tag';
+import { Button } from '@openng/optimus-ui/button';
+import { Tag } from '@openng/optimus-ui/tag';
 
 import type { LogEntry } from '../../services/log.service';
 import { LogService } from '../../services/log.service';

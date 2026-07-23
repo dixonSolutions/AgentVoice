@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { MessageService } from 'primeng/api';
+import { MessageService } from '@openng/optimus-ui/api';
 import { LogService } from './log.service';
 
 @Injectable({ providedIn: 'root' })

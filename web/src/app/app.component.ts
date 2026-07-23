@@ -3,21 +3,22 @@ import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 
-import { Button } from 'primeng/button';
-import { Dialog } from 'primeng/dialog';
-import { Fluid } from 'primeng/fluid';
-import { IftaLabel } from 'primeng/iftalabel';
-import { Message } from 'primeng/message';
-import { Password } from 'primeng/password';
-import { Tag } from 'primeng/tag';
-import { Toast } from 'primeng/toast';
-import { Toolbar } from 'primeng/toolbar';
+import { Button } from '@openng/optimus-ui/button';
+import { Dialog } from '@openng/optimus-ui/dialog';
+import { Fluid } from '@openng/optimus-ui/fluid';
+import { IftaLabel } from '@openng/optimus-ui/iftalabel';
+import { Message } from '@openng/optimus-ui/message';
+import { Password } from '@openng/optimus-ui/password';
+import { Tag } from '@openng/optimus-ui/tag';
+import { Toast } from '@openng/optimus-ui/toast';
+import { Toolbar } from '@openng/optimus-ui/toolbar';
 
 import { BrandLogoComponent } from './components/brand-logo/brand-logo.component';
 import { ConfigTabComponent } from './components/config-tab/config-tab.component';
 import { LogsTabComponent } from './components/logs-tab/logs-tab.component';
 import { VoiceTabComponent } from './components/voice-tab/voice-tab.component';
 import { WakeWordTestComponent } from './components/wake-word-test/wake-word-test.component';
+import { AppearanceService } from './services/appearance.service';
 import { AppStateService } from './services/app-state.service';
 import { BridgeService } from './services/bridge.service';
 import { LogService } from './services/log.service';
@@ -63,6 +64,7 @@ export class AppComponent implements OnInit, OnDestroy {
   protected readonly appState = inject(AppStateService);
   protected readonly voiceSession = inject(VoiceSessionService);
   protected readonly voiceProviders = inject(VoiceProvidersService);
+  private readonly appearance = inject(AppearanceService);
   private readonly toast = inject(ToastService);
   private readonly logs = inject(LogService);
   private readonly push = inject(PushService);
@@ -139,6 +141,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.appearance.init();
     this.bridge.loadCredentials();
     if (this.bridge.hasCredentials()) {
       this.bridge.connect();

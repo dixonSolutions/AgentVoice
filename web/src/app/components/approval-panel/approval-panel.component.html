@@ -130,7 +130,7 @@
   .approval-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.55);
+    background: color-mix(in srgb, var(--p-mask-background) 55%, transparent);
     backdrop-filter: blur(4px);
     display: flex;
     align-items: flex-end;
@@ -141,13 +141,13 @@
   }
 
   .approval-card {
-    background: var(--surface-card, #1e1e2e);
-    border: 1px solid var(--surface-border, #3a3a5c);
+    background: var(--p-content-background);
+    border: 1px solid var(--p-content-border-color);
     border-radius: 1rem;
     padding: 1.25rem 1.5rem 1.5rem;
     width: 100%;
     max-width: 520px;
-    box-shadow: 0 -4px 40px rgba(0, 0, 0, 0.4);
+    box-shadow: 0 -4px 40px color-mix(in srgb, var(--p-mask-background) 40%, transparent);
     animation: slideUp 0.22s ease-out;
   }
 
@@ -171,11 +171,11 @@
   .approval-title {
     font-size: 1rem;
     font-weight: 600;
-    color: var(--text-color, #e2e8f0);
+    color: var(--p-text-color);
   }
 
   .approval-question {
-    color: var(--text-color-secondary, #94a3b8);
+    color: var(--p-text-muted-color);
     font-size: 0.95rem;
     line-height: 1.5;
     margin: 0 0 1rem;
@@ -183,8 +183,8 @@
 
   .approval-impact {
     font-size: 0.8rem;
-    color: var(--text-color-secondary, #94a3b8);
-    background: var(--surface-ground, #13131f);
+    color: var(--p-text-muted-color);
+    background: var(--p-surface-ground);
     border-radius: 0.4rem;
     padding: 0.35rem 0.6rem;
     margin-bottom: 0.75rem;
@@ -204,7 +204,7 @@
     align-items: flex-start;
     gap: 0.55rem;
     font-size: 0.875rem;
-    color: var(--text-color, #e2e8f0);
+    color: var(--p-text-color);
     line-height: 1.4;
   }
 
@@ -213,8 +213,8 @@
     width: 1.4rem;
     height: 1.4rem;
     border-radius: 50%;
-    background: var(--primary-color, #7c3aed);
-    color: #fff;
+    background: var(--p-primary-color);
+    color: var(--p-primary-contrast-color);
     font-size: 0.72rem;
     font-weight: 700;
     display: flex;

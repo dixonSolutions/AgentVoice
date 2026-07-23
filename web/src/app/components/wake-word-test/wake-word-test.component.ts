@@ -2,10 +2,10 @@ import { NgClass } from '@angular/common';
 import type { OnDestroy, OnInit } from '@angular/core';
 import { Component, computed, inject, signal } from '@angular/core';
 
-import { Button } from 'primeng/button';
-import { Card } from 'primeng/card';
-import { Message } from 'primeng/message';
-import { Tag } from 'primeng/tag';
+import { Button } from '@openng/optimus-ui/button';
+import { Card } from '@openng/optimus-ui/card';
+import { Message } from '@openng/optimus-ui/message';
+import { Tag } from '@openng/optimus-ui/tag';
 
 import { captureMicStream, unlockAudioContext } from '../../../audio.js';
 import { playVoiceCueNow } from '../../../sound-effects.js';

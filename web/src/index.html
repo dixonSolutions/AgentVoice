@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en" class="p-dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#1a1a2e" />
+    <meta name="theme-color" content="#0f172a" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Cursor Voice" />
@@ -11,6 +11,26 @@
     <link rel="apple-touch-icon" href="/icon-192.png" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <title>Cursor Voice</title>
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('cv-appearance');
+          var scheme = 'system';
+          if (raw) {
+            var parsed = JSON.parse(raw);
+            if (parsed && (parsed.scheme === 'light' || parsed.scheme === 'dark' || parsed.scheme === 'system')) {
+              scheme = parsed.scheme;
+            }
+          }
+          var dark =
+            scheme === 'dark' ||
+            (scheme === 'system' &&
+              window.matchMedia &&
+              window.matchMedia('(prefers-color-scheme: dark)').matches);
+          document.documentElement.classList.toggle('app-dark', !!dark);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <cv-root></cv-root>

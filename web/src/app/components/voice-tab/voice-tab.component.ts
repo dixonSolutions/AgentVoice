@@ -1,15 +1,15 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { Accordion, AccordionContent, AccordionHeader, AccordionPanel } from 'primeng/accordion';
-import { Button } from 'primeng/button';
-import { Card } from 'primeng/card';
-import { Fieldset } from 'primeng/fieldset';
-import { Fluid } from 'primeng/fluid';
-import { IftaLabel } from 'primeng/iftalabel';
-import { InputText } from 'primeng/inputtext';
-import { Message } from 'primeng/message';
-import { Tag } from 'primeng/tag';
+import { Accordion, AccordionContent, AccordionHeader, AccordionPanel } from '@openng/optimus-ui/accordion';
+import { Button } from '@openng/optimus-ui/button';
+import { Card } from '@openng/optimus-ui/card';
+import { Fieldset } from '@openng/optimus-ui/fieldset';
+import { Fluid } from '@openng/optimus-ui/fluid';
+import { IftaLabel } from '@openng/optimus-ui/iftalabel';
+import { InputText } from '@openng/optimus-ui/inputtext';
+import { Message } from '@openng/optimus-ui/message';
+import { Tag } from '@openng/optimus-ui/tag';
 
 import {
   FilterableListPickerComponent,

@@ -1,7 +1,7 @@
 import { Component, computed, input, output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { InputText } from 'primeng/inputtext';
+import { InputText } from '@openng/optimus-ui/inputtext';
 
 export interface FilterableListOption {
   value: string;

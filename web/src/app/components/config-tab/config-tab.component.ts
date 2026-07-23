@@ -2,24 +2,23 @@ import type { OnDestroy, OnInit } from '@angular/core';
 import { ChangeDetectorRef, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { Button } from 'primeng/button';
-import { Card } from 'primeng/card';
-import { Checkbox } from 'primeng/checkbox';
-import { Chip } from 'primeng/chip';
-import { Divider } from 'primeng/divider';
-import { Fieldset } from 'primeng/fieldset';
-import { Fluid } from 'primeng/fluid';
-import { IftaLabel } from 'primeng/iftalabel';
-import { InputNumber } from 'primeng/inputnumber';
-import { InputText } from 'primeng/inputtext';
-import { Message } from 'primeng/message';
-import { Password } from 'primeng/password';
-import { ProgressSpinner } from 'primeng/progressspinner';
-import { Select } from 'primeng/select';
-import { Tag } from 'primeng/tag';
-import { Textarea } from 'primeng/textarea';
-import { ToggleSwitch } from 'primeng/toggleswitch';
-import { Tabs, TabList, Tab, TabPanels, TabPanel } from 'primeng/tabs';
+import { Button } from '@openng/optimus-ui/button';
+import { Divider } from '@openng/optimus-ui/divider';
+import { Fieldset } from '@openng/optimus-ui/fieldset';
+import { Fluid } from '@openng/optimus-ui/fluid';
+import { IftaLabel } from '@openng/optimus-ui/iftalabel';
+import { InputNumber } from '@openng/optimus-ui/inputnumber';
+import { InputText } from '@openng/optimus-ui/inputtext';
+import { Message } from '@openng/optimus-ui/message';
+import { Password } from '@openng/optimus-ui/password';
+import { ProgressSpinner } from '@openng/optimus-ui/progressspinner';
+import { Select } from '@openng/optimus-ui/select';
+import type { SelectFilterEvent, SelectLazyLoadEvent } from '@openng/optimus-ui/types/select';
+import { SelectButton } from '@openng/optimus-ui/selectbutton';
+import { Tag } from '@openng/optimus-ui/tag';
+import { Textarea } from '@openng/optimus-ui/textarea';
+import { ToggleSwitch } from '@openng/optimus-ui/toggleswitch';
+import { Tabs, TabList, Tab, TabPanels, TabPanel } from '@openng/optimus-ui/tabs';
 
 import { phrasesConflict } from '../../../wake-words.js';
 import {
@@ -34,6 +33,11 @@ import {
   type BrowserTtsProfile,
 } from '../../../browser-tts-settings.js';
 import { speakAmazonPolly } from '../../../amazon-tts.js';
+import {
+  APPEARANCE_TONES,
+  AppearanceService,
+  type AppearanceScheme,
+} from '../../services/appearance.service';
 import { AdminService } from '../../services/admin.service';
 import { BridgeService } from '../../services/bridge.service';
 import { ToastService } from '../../services/toast.service';
@@ -65,6 +69,7 @@ import type {
 // ── Section definition ─────────────────────────────────────────────────────
 
 type SectionId =
+  | 'appearance'
   | 'connection'
   | 'voice'
   | 'personal'
@@ -78,6 +83,10 @@ type SectionId =
   | 'database'
   | 'debug';
 
+type BrowserVoiceOption = { label: string; value: string };
+
+const BROWSER_VOICE_LAZY_CHUNK = 48;
+
 type ServeTabId = 'status' | 'actions' | 'network' | 'automation' | 'activity';
 
 interface ConfigSection {
@@ -89,6 +98,13 @@ interface ConfigSection {
 }
 
 const ALL_SECTIONS: ConfigSection[] = [
+  {
+    id: 'appearance',
+    label: 'Appearance',
+    icon: 'pi-palette',
+    description: 'Light / dark / system and primary color tone',
+    keywords: ['appearance', 'theme', 'dark', 'light', 'system', 'color', 'tone', 'palette', 'mode'],
+  },
   {
     id: 'connection',
     label: 'Connection',
@@ -193,6 +209,7 @@ const ALL_SECTIONS: ConfigSection[] = [
     Password,
     ProgressSpinner,
     Select,
+    SelectButton,
     Tag,
     Textarea,
     ToggleSwitch,
@@ -210,9 +227,37 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected readonly voiceProviders = inject(VoiceProvidersService);
   protected readonly voiceSession = inject(VoiceSessionService);
   protected readonly admin = inject(AdminService);
+  protected readonly appearance = inject(AppearanceService);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly toast = inject(ToastService);
   private unsubBrowserVoices: (() => void) | null = null;
+
+  protected readonly appearanceSchemeOptions: Array<{ label: string; value: AppearanceScheme }> = [
+    { label: 'Light', value: 'light' },
+    { label: 'Dark', value: 'dark' },
+    { label: 'System', value: 'system' },
+  ];
+
+  protected readonly appearanceToneOptions = APPEARANCE_TONES.map((tone) => ({
+    label: tone.charAt(0).toUpperCase() + tone.slice(1),
+    value: tone,
+  }));
+
+  protected get appearanceScheme(): AppearanceScheme {
+    return this.appearance.settings().scheme;
+  }
+
+  protected set appearanceScheme(scheme: AppearanceScheme) {
+    this.appearance.setScheme(scheme);
+  }
+
+  protected get appearanceTone(): string {
+    return this.appearance.settings().tone;
+  }
+
+  protected set appearanceTone(tone: string) {
+    this.appearance.setTone(tone);
+  }
 
   // ── Navigation ─────────────────────────────────────────────────────────
 
@@ -414,7 +459,11 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected browserTtsVolume = 1;
   protected browserTtsLang = 'en-US';
   protected browserProfiles: BrowserTtsProfile[] = [];
-  protected browserVoiceOptions: Array<{ label: string; value: string }> = [];
+  /** Window fed to p-select (grows via lazy load; never the full catalog on open). */
+  protected browserVoiceOptions: BrowserVoiceOption[] = [];
+  /** Full filtered source kept in memory for lazy windows. */
+  private browserVoiceSource: BrowserVoiceOption[] = [];
+  private browserVoiceFilter = '';
   protected browserVoicesLoading = false;
   protected browserVoicesShowAll = false;
   protected browserVoicesTotal = 0;
@@ -508,28 +557,71 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     }
   }
 
-  private applyBrowserVoiceOptions(voices: SpeechSynthesisVoice[]): void {
-    this.rawBrowserVoices = voices;
-    this.browserVoicesTotal = voices.length;
+  private voiceToOption(v: SpeechSynthesisVoice): BrowserVoiceOption {
+    return {
+      label: `${v.name} · ${v.lang}${v.localService ? '' : ' · remote'}`,
+      value: v.voiceURI,
+    };
+  }
+
+  private buildBrowserVoiceSource(voices: SpeechSynthesisVoice[]): BrowserVoiceOption[] {
     const curated = curateBrowserTtsVoices(voices, {
       preferredLang: this.browserTtsLang || undefined,
       selectedVoiceURI: this.browserVoiceUri || undefined,
       includeRemote: this.browserVoicesShowAll,
-      maxVoices: this.browserVoicesShowAll ? 120 : 48,
+      // Curated pool by default; "show all" keeps full catalog in memory for lazy windows.
+      maxVoices: this.browserVoicesShowAll ? Number.POSITIVE_INFINITY : 48,
     });
-    this.browserVoicesShown = curated.length;
-    this.browserVoiceOptions = [
-      { label: 'System default', value: '' },
-      ...curated.map((v) => ({
-        label: `${v.name} · ${v.lang}${v.localService ? '' : ' · remote'}`,
-        value: v.voiceURI,
-      })),
-    ];
+    const mapped = curated.map((v) => this.voiceToOption(v));
+    return [{ label: 'System default', value: '' }, ...mapped];
+  }
+
+  private filteredBrowserVoiceSource(): BrowserVoiceOption[] {
+    const q = this.browserVoiceFilter.trim().toLowerCase();
+    if (!q) return this.browserVoiceSource;
+    return this.browserVoiceSource.filter((opt) => opt.label.toLowerCase().includes(q));
+  }
+
+  private fillBrowserVoiceWindow(first: number, last: number): void {
+    const source = this.filteredBrowserVoiceSource();
+    this.browserVoicesShown = source.length;
+    const need = Math.min(
+      source.length,
+      Math.max(BROWSER_VOICE_LAZY_CHUNK, last, first + BROWSER_VOICE_LAZY_CHUNK),
+    );
+    // Append-style: grow the bound prefix as the scroller requests more rows.
+    const next = source.slice(0, Math.max(need, 1));
+    // Ensure the current selection is present even if it sits outside the loaded prefix.
+    const selected = this.browserVoiceUri;
+    if (selected && !next.some((o) => o.value === selected)) {
+      const match = source.find((o) => o.value === selected);
+      if (match) next.unshift(match);
+    }
+    this.browserVoiceOptions = next;
+  }
+
+  private applyBrowserVoiceOptions(voices: SpeechSynthesisVoice[]): void {
+    this.rawBrowserVoices = voices;
+    this.browserVoicesTotal = voices.length;
+    this.browserVoiceSource = this.buildBrowserVoiceSource(voices);
+    this.fillBrowserVoiceWindow(0, BROWSER_VOICE_LAZY_CHUNK);
     this.cdr.markForCheck();
   }
 
   protected onBrowserVoicesShowAllChange(): void {
+    this.browserVoiceFilter = '';
     this.applyBrowserVoiceOptions(this.rawBrowserVoices);
+  }
+
+  protected onBrowserVoicesLazyLoad(event: SelectLazyLoadEvent): void {
+    this.fillBrowserVoiceWindow(event.first, event.last);
+    this.cdr.markForCheck();
+  }
+
+  protected onBrowserVoicesFilter(event: SelectFilterEvent): void {
+    this.browserVoiceFilter = String(event.filter ?? '');
+    this.fillBrowserVoiceWindow(0, BROWSER_VOICE_LAZY_CHUNK);
+    this.cdr.markForCheck();
   }
 
   private async loadSpeechOutputUi(): Promise<void> {

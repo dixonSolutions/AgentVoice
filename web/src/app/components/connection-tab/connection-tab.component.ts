@@ -1,13 +1,13 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { Button } from 'primeng/button';
-import { Card } from 'primeng/card';
-import { Fluid } from 'primeng/fluid';
-import { IftaLabel } from 'primeng/iftalabel';
-import { Message } from 'primeng/message';
-import { Password } from 'primeng/password';
-import { Tag } from 'primeng/tag';
+import { Button } from '@openng/optimus-ui/button';
+import { Card } from '@openng/optimus-ui/card';
+import { Fluid } from '@openng/optimus-ui/fluid';
+import { IftaLabel } from '@openng/optimus-ui/iftalabel';
+import { Message } from '@openng/optimus-ui/message';
+import { Password } from '@openng/optimus-ui/password';
+import { Tag } from '@openng/optimus-ui/tag';
 
 import { BridgeService } from '../../services/bridge.service';
 import { LogService } from '../../services/log.service';

@@ -52,6 +52,44 @@
        SECTION DETAIL VIEWS
   ═══════════════════════════════════════════════════════════════════ -->
 
+  <!-- ── Appearance ── -->
+  @if (activeSection() === 'appearance') {
+    <div class="cv-cfg-detail">
+      <p-fluid>
+        <p-message severity="secondary" variant="simple"
+          text="Theme stays on this device only (localStorage). It never goes into config.json or the bridge." />
+
+        <p-fieldset legend="Color scheme">
+          <p-selectButton
+            [options]="appearanceSchemeOptions"
+            optionLabel="label"
+            optionValue="value"
+            [(ngModel)]="appearanceScheme"
+            [allowEmpty]="false" />
+        </p-fieldset>
+
+        <p-fieldset legend="Primary tone">
+          <p-iftalabel>
+            <p-select id="cfg-appearance-tone"
+              [options]="appearanceToneOptions"
+              optionLabel="label"
+              optionValue="value"
+              [(ngModel)]="appearanceTone"
+              [filter]="true"
+              filterBy="label"
+              placeholder="Choose a tone" />
+            <label for="cfg-appearance-tone">Accent palette</label>
+          </p-iftalabel>
+          <div class="cv-appearance-preview" aria-hidden="true">
+            <span class="cv-appearance-swatch cv-appearance-swatch--primary"></span>
+            <span class="cv-appearance-swatch cv-appearance-swatch--surface"></span>
+            <span class="cv-appearance-swatch cv-appearance-swatch--border"></span>
+          </div>
+        </p-fieldset>
+      </p-fluid>
+    </div>
+  }
+
   <!-- ── Connection ── -->
   @if (activeSection() === 'connection') {
     <div class="cv-cfg-detail">
@@ -182,14 +220,22 @@
                 text="Showing {{ browserVoicesShown }} of {{ browserVoicesTotal }} voices." />
             }
 
-            <!-- Native select: PrimeNG overlay + filter freezes with large Firefox voice lists. -->
+            <!-- Optimus Select: virtual + lazy so Firefox-scale voice lists stay responsive. -->
             <p-iftalabel>
-              <select id="cfg-browser-voice" class="cv-native-select"
-                [(ngModel)]="browserVoiceUri">
-                @for (opt of browserVoiceOptions; track opt.value) {
-                  <option [ngValue]="opt.value">{{ opt.label }}</option>
-                }
-              </select>
+              <p-select id="cfg-browser-voice"
+                [(ngModel)]="browserVoiceUri"
+                [options]="browserVoiceOptions"
+                optionLabel="label"
+                optionValue="value"
+                [filter]="true"
+                filterBy="label"
+                [virtualScroll]="true"
+                [virtualScrollItemSize]="38"
+                [lazy]="true"
+                (onLazyLoad)="onBrowserVoicesLazyLoad($event)"
+                (onFilter)="onBrowserVoicesFilter($event)"
+                placeholder="Select a browser voice"
+                [showClear]="true" />
               <label for="cfg-browser-voice">Browser voice</label>
             </p-iftalabel>
 

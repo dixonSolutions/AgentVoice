@@ -1,9 +1,9 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { Button } from 'primeng/button';
-import { InputText } from 'primeng/inputtext';
-import { Textarea } from 'primeng/textarea';
+import { Button } from '@openng/optimus-ui/button';
+import { InputText } from '@openng/optimus-ui/inputtext';
+import { Textarea } from '@openng/optimus-ui/textarea';
 
 import {
   BridgeService,

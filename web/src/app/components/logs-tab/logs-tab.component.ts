@@ -1,12 +1,12 @@
 import { Component, computed, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { Button } from 'primeng/button';
-import { Card } from 'primeng/card';
-import { Message } from 'primeng/message';
-import { ScrollPanel } from 'primeng/scrollpanel';
-import { SelectButton } from 'primeng/selectbutton';
-import { Tag } from 'primeng/tag';
+import { Button } from '@openng/optimus-ui/button';
+import { Card } from '@openng/optimus-ui/card';
+import { Message } from '@openng/optimus-ui/message';
+import { ScrollPanel } from '@openng/optimus-ui/scrollpanel';
+import { SelectButton } from '@openng/optimus-ui/selectbutton';
+import { Tag } from '@openng/optimus-ui/tag';
 
 import type { LogCategory, LogEntry, LogLevel } from '../../services/log.service';
 import { LogService } from '../../services/log.service';

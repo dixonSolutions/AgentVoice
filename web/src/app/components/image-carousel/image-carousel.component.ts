@@ -1,6 +1,6 @@
 import { Component, computed, effect, inject, signal } from '@angular/core';
 
-import { Button } from 'primeng/button';
+import { Button } from '@openng/optimus-ui/button';
 
 import { BridgeService } from '../../services/bridge.service';
 
