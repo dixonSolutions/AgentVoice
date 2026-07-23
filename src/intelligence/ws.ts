@@ -160,10 +160,12 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
             model: workflowId === 'cursor_native' ? 'cursor' : llm.model,
             audio: {
               preferWebkit: audio.preferWebkit,
+              ttsProvider: audio.ttsProvider,
               amazonAvailable,
               sttFallback: amazonAvailable ? 'amazon_transcribe' : null,
               ttsFallback: amazonAvailable ? 'amazon_polly' : null,
               pollyVoiceId: audio.pollyVoiceId,
+              pollyEngine: audio.pollyEngine,
               transcribeLanguageCode: audio.transcribeLanguageCode,
             },
           });

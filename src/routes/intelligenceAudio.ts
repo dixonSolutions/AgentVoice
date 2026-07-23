@@ -5,14 +5,19 @@
  */
 
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { isAmazonAudioAvailable } from '../intelligence/audio/awsClient.js';
-import { synthesizePollyMp3 } from '../intelligence/audio/polly.js';
+import { listPollyVoices, synthesizePollyMp3 } from '../intelligence/audio/polly.js';
 import { transcribePcm16 } from '../intelligence/audio/transcribe.js';
 import { friendlyTranscribeError } from '../intelligence/audio/transcribeErrors.js';
 import { getConfig } from '../config.js';
 import { childLogger } from '../log.js';
 
 const log = childLogger('api:intelligence-audio');
+
+const PollyVoicesQuerySchema = z.object({
+  engine: z.enum(['standard', 'neural', 'generative']).optional(),
+});
 
 export async function registerIntelligenceAudioRoutes(app: FastifyInstance): Promise<void> {
   /** GET /api/intelligence/audio — capabilities for the PWA. */
@@ -21,23 +26,54 @@ export async function registerIntelligenceAudioRoutes(app: FastifyInstance): Pro
     const amazonAvailable = isAmazonAudioAvailable();
     return {
       preferWebkit: audio.preferWebkit,
+      ttsProvider: audio.ttsProvider,
       amazonAvailable,
       sttFallback: amazonAvailable ? 'amazon_transcribe' : null,
       ttsFallback: amazonAvailable ? 'amazon_polly' : null,
       pollyVoiceId: audio.pollyVoiceId,
+      pollyEngine: audio.pollyEngine,
       transcribeLanguageCode: audio.transcribeLanguageCode,
     };
   });
 
-  /** POST /api/intelligence/tts { text } → MP3 audio. */
-  app.post<{ Body: { text?: string } }>(
+  /** GET /api/intelligence/polly-voices?engine=neural — DescribeVoices catalog. */
+  app.get<{ Querystring: { engine?: string } }>(
+    '/api/intelligence/polly-voices',
+    async (req, reply) => {
+      const parsed = PollyVoicesQuerySchema.safeParse(req.query ?? {});
+      if (!parsed.success) {
+        return reply.code(400).send({ error: parsed.error.message });
+      }
+      if (!isAmazonAudioAvailable()) {
+        return reply
+          .code(503)
+          .send({ error: 'Amazon Polly not configured — set IAM keys in .env', voices: [] });
+      }
+      const { audio } = getConfig().settings.workflow.llmIntelligence;
+      const engine = parsed.data.engine ?? audio.pollyEngine;
+      try {
+        const voices = await listPollyVoices(engine);
+        return { engine, voices };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return reply.code(500).send({ error: message, voices: [] });
+      }
+    },
+  );
+
+  /** POST /api/intelligence/tts { text, voiceId?, engine? } → MP3 audio. */
+  app.post<{ Body: { text?: string; voiceId?: string; engine?: string } }>(
     '/api/intelligence/tts',
     {
       schema: {
         body: {
           type: 'object',
           required: ['text'],
-          properties: { text: { type: 'string', minLength: 1, maxLength: 3000 } },
+          properties: {
+            text: { type: 'string', minLength: 1, maxLength: 3000 },
+            voiceId: { type: 'string', minLength: 1, maxLength: 64 },
+            engine: { type: 'string', enum: ['standard', 'neural', 'generative'] },
+          },
         },
       },
     },
@@ -45,7 +81,16 @@ export async function registerIntelligenceAudioRoutes(app: FastifyInstance): Pro
       if (!isAmazonAudioAvailable()) {
         return reply.code(503).send({ error: 'Amazon Polly not configured — set IAM keys in .env' });
       }
-      const { audio, contentType } = await synthesizePollyMp3(req.body.text ?? '');
+      const engine =
+        req.body.engine === 'standard' ||
+        req.body.engine === 'neural' ||
+        req.body.engine === 'generative'
+          ? req.body.engine
+          : undefined;
+      const { audio, contentType } = await synthesizePollyMp3(req.body.text ?? '', {
+        voiceId: req.body.voiceId,
+        engine,
+      });
       return reply.header('Content-Type', contentType).send(audio);
     },
   );

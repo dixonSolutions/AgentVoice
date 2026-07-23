@@ -11,17 +11,30 @@ import {
   webkitTtsSkipReason,
 } from './webkit-capabilities.js';
 
+export type TtsProvider = 'browser' | 'amazon_polly';
+
 export interface IntelligenceAudioConfig {
   preferWebkit: boolean;
+  /** Preferred speech output. Defaults to browser when omitted (legacy configs). */
+  ttsProvider?: TtsProvider;
   amazonAvailable: boolean;
   sttFallback: 'amazon_transcribe' | null;
   ttsFallback: 'amazon_polly' | null;
   pollyVoiceId?: string;
+  pollyEngine?: 'standard' | 'neural' | 'generative';
   transcribeLanguageCode?: string;
 }
 
 export type SttBackend = 'webkit' | 'amazon_transcribe' | 'text_only';
 export type TtsBackend = 'webkit' | 'amazon_polly' | 'none';
+
+function resolvePreferredTtsProvider(config: IntelligenceAudioConfig): TtsProvider {
+  if (config.ttsProvider === 'browser' || config.ttsProvider === 'amazon_polly') {
+    return config.ttsProvider;
+  }
+  // Legacy: preferWebkit gated both STT and TTS.
+  return config.preferWebkit ? 'browser' : 'amazon_polly';
+}
 
 export function resolveSttBackend(
   config: IntelligenceAudioConfig,
@@ -35,13 +48,23 @@ export function resolveSttBackend(
 }
 
 export function resolveTtsBackend(config: IntelligenceAudioConfig): TtsBackend {
-  if (isIosStandalonePwa() && config.amazonAvailable && config.ttsFallback === 'amazon_polly') {
+  const provider = resolvePreferredTtsProvider(config);
+  const pollyReady = config.amazonAvailable && config.ttsFallback === 'amazon_polly';
+
+  // Standalone iOS PWA cannot use speechSynthesis reliably — force Polly when available.
+  if (isIosStandalonePwa() && pollyReady) {
     return 'amazon_polly';
   }
-  if (config.preferWebkit && canUseWebkitTts()) return 'webkit';
-  if (config.amazonAvailable && config.ttsFallback === 'amazon_polly') {
-    return 'amazon_polly';
+
+  if (provider === 'amazon_polly') {
+    if (pollyReady) return 'amazon_polly';
+    if (canUseWebkitTts()) return 'webkit';
+    return 'none';
   }
+
+  // provider === 'browser'
+  if (canUseWebkitTts()) return 'webkit';
+  if (pollyReady) return 'amazon_polly';
   return 'none';
 }
 
@@ -87,11 +110,18 @@ export async function resolveAudioBackendsAsync(
   }
 
   let ttsNote: string | undefined;
-  if (tts !== 'webkit' && config.preferWebkit) {
+  const preferred = resolvePreferredTtsProvider(config);
+  if (tts !== 'webkit' && preferred === 'browser') {
     ttsNote = webkitTtsSkipReason() ?? undefined;
   }
+  if (tts === 'amazon_polly' && preferred === 'browser') {
+    ttsNote = (ttsNote ? `${ttsNote} — ` : '') + 'Falling back to Amazon Polly';
+  }
   if (tts === 'none' && !ttsNote) {
-    ttsNote = 'No TTS backend — configure AWS IAM keys for Amazon Polly fallback';
+    ttsNote =
+      preferred === 'amazon_polly'
+        ? 'Amazon Polly unavailable — configure AWS IAM keys'
+        : 'No TTS backend — browser speechSynthesis unavailable and Polly not configured';
   }
 
   return { stt, tts, sttNote, ttsNote };

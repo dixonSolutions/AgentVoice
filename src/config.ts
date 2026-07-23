@@ -142,8 +142,14 @@ const LlmIntelligenceLlmSchema = z.object({
 });
 
 const LlmIntelligenceAudioSchema = z.object({
-  /** Try WebKit STT/TTS first (iPhone); fall back to Amazon when unavailable. */
+  /** Try WebKit STT first; fall back to Amazon Transcribe when unavailable. */
   preferWebkit: z.boolean().default(true),
+  /**
+   * Speech output (TTS) provider.
+   * - browser: Web Speech API / speechSynthesis voices on the device
+   * - amazon_polly: Amazon Polly (server-side)
+   */
+  ttsProvider: z.enum(['browser', 'amazon_polly']).default('browser'),
   /** AWS region for Polly + Transcribe (defaults to llm.region if omitted at runtime). */
   region: z.string().min(1).optional(),
   pollyVoiceId: z.string().min(1).default('Joanna'),
@@ -330,7 +336,20 @@ function migrateRawConfig(raw: unknown): unknown {
       }
       delete wf['s2sVoice'];
       if (typeof wf['llmIntelligence'] === 'object' && wf['llmIntelligence'] !== null) {
-        delete (wf['llmIntelligence'] as Record<string, unknown>)['systemPrompts'];
+        const li = wf['llmIntelligence'] as Record<string, unknown>;
+        delete li['systemPrompts'];
+        if (typeof li['audio'] === 'object' && li['audio'] !== null) {
+          const audio = li['audio'] as Record<string, unknown>;
+          if (audio['ttsProvider'] === undefined) {
+            // Legacy: preferWebkit=false meant Polly-first for TTS.
+            audio['ttsProvider'] =
+              audio['preferWebkit'] === false ? 'amazon_polly' : 'browser';
+            log.info(
+              { ttsProvider: audio['ttsProvider'] },
+              'Migrated config — added settings.workflow.llmIntelligence.audio.ttsProvider',
+            );
+          }
+        }
       }
     }
 

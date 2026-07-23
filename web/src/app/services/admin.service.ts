@@ -23,6 +23,7 @@ import type {
   AuditEntry,
   AgentClientSettings,
   AgentClientId,
+  PollyVoiceInfo,
 } from '../models/admin-settings';
 
 @Injectable({ providedIn: 'root' })
@@ -184,6 +185,15 @@ export class AdminService {
 
   clearSessions(): Promise<{ ok: boolean; cleared: number }> {
     return this.delete('/api/admin/sessions');
+  }
+
+  // ── Speech / Polly ───────────────────────────────────────────────────────
+
+  getPollyVoices(
+    engine?: 'standard' | 'neural' | 'generative',
+  ): Promise<{ engine: string; voices: PollyVoiceInfo[] }> {
+    const q = engine ? `?engine=${encodeURIComponent(engine)}` : '';
+    return this.get(`/api/intelligence/polly-voices${q}`);
   }
 
   // ── Health ────────────────────────────────────────────────────────────────

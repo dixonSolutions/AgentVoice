@@ -95,8 +95,18 @@ Set in `config.json`:
 
 | Workflow | AWS usage |
 | --- | --- |
-| `cursor_native` | Polly/Transcribe fallback only (WebKit preferred) |
-| `llm_intelligence` | Bedrock Converse + Polly/Transcribe fallback |
+| `cursor_native` | Polly/Transcribe per `ttsProvider` / STT preference |
+| `llm_intelligence` | Bedrock Converse + Polly/Transcribe per audio settings |
+
+### Speech output (`settings.workflow.llmIntelligence.audio`)
+
+| Field | Values | Meaning |
+| --- | --- | --- |
+| `ttsProvider` | `browser` \| `amazon_polly` | Default TTS backend (Config → Voice → Speech output) |
+| `pollyVoiceId` / `pollyEngine` | e.g. `Joanna` / `neural` | Used when provider is Polly |
+| `preferWebkit` | boolean | Prefer browser **STT** when available |
+
+Browser voices are listed from the device `speechSynthesis.getVoices()` API (not a hard-coded browser list). Polly voices come from `GET /api/intelligence/polly-voices` (`DescribeVoices`).
 
 ## Security
 

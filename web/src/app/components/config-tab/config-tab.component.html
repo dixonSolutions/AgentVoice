@@ -159,47 +159,101 @@
             (onClick)="onSaveTtsSettings()" />
         </p-fieldset>
 
-        <p-fieldset legend="Browser TTS — this device">
+        <p-fieldset legend="Speech output">
           <p-message severity="secondary" variant="simple"
-            text="WebKit speechSynthesis options for {{ currentBrowserLabel }}. Saved locally on this phone/browser — server defaults above apply when no profile exists." />
+            text="Choose how Cursor Voice speaks replies. Browser voices come from this device’s speechSynthesis API (not a hard-coded Chrome/Safari list). Amazon Polly voices are loaded from AWS for the selected engine." />
 
           <p-iftalabel>
-            <p-select id="cfg-browser-voice" [(ngModel)]="browserVoiceUri"
-              [options]="browserVoiceOptions" optionLabel="label" optionValue="value"
-              [filter]="true" filterPlaceholder="Search voices…" />
-            <label for="cfg-browser-voice">Voice</label>
+            <p-select id="cfg-tts-provider" [(ngModel)]="ttsProvider"
+              [options]="ttsProviderOptions" optionLabel="label" optionValue="value"
+              [disabled]="!isBridgeConnected()"
+              (onChange)="onTtsProviderChange()" />
+            <label for="cfg-tts-provider">Default speech output</label>
           </p-iftalabel>
 
-          <p-iftalabel>
-            <p-inputNumber id="cfg-browser-rate" [(ngModel)]="browserTtsRate"
-              [min]="0.5" [max]="2" [step]="0.05" [minFractionDigits]="2" />
-            <label for="cfg-browser-rate">Rate (speed)</label>
-          </p-iftalabel>
+          @if (ttsProvider === 'browser') {
+            <p-message severity="secondary" variant="simple"
+              text="Voices available on {{ currentBrowserLabel }} via speechSynthesis. Profile is saved on this device." />
 
-          <p-iftalabel>
-            <p-inputNumber id="cfg-browser-pitch" [(ngModel)]="browserTtsPitch"
-              [min]="0" [max]="2" [step]="0.05" [minFractionDigits]="2" />
-            <label for="cfg-browser-pitch">Pitch</label>
-          </p-iftalabel>
+            @if (browserVoicesLoading) {
+              <p-message severity="secondary" variant="simple" text="Loading browser voices…" />
+            }
 
-          <p-iftalabel>
-            <p-inputNumber id="cfg-browser-volume" [(ngModel)]="browserTtsVolume"
-              [min]="0" [max]="1" [step]="0.05" [minFractionDigits]="2" />
-            <label for="cfg-browser-volume">Volume</label>
-          </p-iftalabel>
+            <p-iftalabel>
+              <p-select id="cfg-browser-voice" [(ngModel)]="browserVoiceUri"
+                [options]="browserVoiceOptions" optionLabel="label" optionValue="value"
+                [filter]="true" filterPlaceholder="Search voices…"
+                [showClear]="true" placeholder="System default" />
+              <label for="cfg-browser-voice">Browser voice</label>
+            </p-iftalabel>
 
-          <p-iftalabel>
-            <input pInputText id="cfg-browser-lang" [(ngModel)]="browserTtsLang"
-              placeholder="en-US" />
-            <label for="cfg-browser-lang">Language (BCP-47)</label>
-          </p-iftalabel>
+            <p-iftalabel>
+              <p-inputNumber id="cfg-browser-rate" [(ngModel)]="browserTtsRate"
+                [min]="0.5" [max]="2" [step]="0.05" [minFractionDigits]="2" />
+              <label for="cfg-browser-rate">Rate (speed)</label>
+            </p-iftalabel>
 
-          <div class="cv-cfg-row-actions">
-            <p-button label="Preview" icon="pi pi-play" severity="secondary" [outlined]="true"
-              (onClick)="onPreviewBrowserTts()" />
-            <p-button label="Save for this browser" icon="pi pi-save"
-              (onClick)="onSaveBrowserTtsProfile()" />
-          </div>
+            <p-iftalabel>
+              <p-inputNumber id="cfg-browser-pitch" [(ngModel)]="browserTtsPitch"
+                [min]="0" [max]="2" [step]="0.05" [minFractionDigits]="2" />
+              <label for="cfg-browser-pitch">Pitch</label>
+            </p-iftalabel>
+
+            <p-iftalabel>
+              <p-inputNumber id="cfg-browser-volume" [(ngModel)]="browserTtsVolume"
+                [min]="0" [max]="1" [step]="0.05" [minFractionDigits]="2" />
+              <label for="cfg-browser-volume">Volume</label>
+            </p-iftalabel>
+
+            <p-iftalabel>
+              <input pInputText id="cfg-browser-lang" [(ngModel)]="browserTtsLang"
+                placeholder="en-US" />
+              <label for="cfg-browser-lang">Language (BCP-47)</label>
+            </p-iftalabel>
+
+            <div class="cv-cfg-row-actions">
+              <p-button label="Preview" icon="pi pi-play" severity="secondary" [outlined]="true"
+                (onClick)="onPreviewBrowserTts()" />
+            </div>
+          }
+
+          @if (ttsProvider === 'amazon_polly') {
+            <p-iftalabel>
+              <p-select id="cfg-speech-polly-engine"
+                [options]="pollyEngineOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="pollyEngine"
+                [disabled]="!isBridgeConnected()"
+                (onChange)="onPollyEngineChange()" />
+              <label for="cfg-speech-polly-engine">Polly engine</label>
+            </p-iftalabel>
+
+            @if (loadingPollyVoices) {
+              <p-message severity="secondary" variant="simple" text="Loading Polly voices from AWS…" />
+            }
+
+            <p-iftalabel>
+              <p-select id="cfg-speech-polly-voice" [(ngModel)]="pollyVoiceId"
+                [options]="pollyVoiceOptions" optionLabel="label" optionValue="value"
+                [filter]="true" filterPlaceholder="Search Polly voices…"
+                [disabled]="!isBridgeConnected() || loadingPollyVoices"
+                [editable]="true" placeholder="Joanna" />
+              <label for="cfg-speech-polly-voice">Polly voice</label>
+            </p-iftalabel>
+
+            <div class="cv-cfg-row-actions">
+              <p-button label="Preview" icon="pi pi-play" severity="secondary" [outlined]="true"
+                [loading]="previewingPolly" [disabled]="!isBridgeConnected()"
+                (onClick)="onPreviewPollyVoice()" />
+              <p-button label="Refresh voices" icon="pi pi-refresh" severity="secondary"
+                [outlined]="true" [loading]="loadingPollyVoices"
+                [disabled]="!isBridgeConnected()"
+                (onClick)="onPollyEngineChange()" />
+            </div>
+          }
+
+          <p-button label="Save speech output" icon="pi pi-volume-up"
+            [loading]="savingSpeechOutput" [disabled]="!isBridgeConnected()"
+            (onClick)="onSaveSpeechOutput()" />
         </p-fieldset>
 
         @if (browserProfiles.length > 0) {
@@ -505,13 +559,22 @@
             </p-iftalabel>
           </p-fieldset>
 
-          <p-fieldset legend="Audio (Polly / Transcribe)">
+          <p-fieldset legend="Audio (STT / region)">
+            <p-message severity="secondary" variant="simple"
+              text="Speech output (browser vs Polly) is configured under Voice → Speech output. These settings cover speech-to-text preference and AWS audio region." />
             <div class="cv-cfg-toggle-row">
               <p-toggleSwitch id="cfg-prefer-webkit"
                 [(ngModel)]="workflowData.llmIntelligence.audio.preferWebkit"
                 [disabled]="!isBridgeConnected()" />
-              <label for="cfg-prefer-webkit">Prefer WebKit TTS/STT when available</label>
+              <label for="cfg-prefer-webkit">Prefer browser STT when available</label>
             </div>
+            <p-iftalabel>
+              <p-select id="cfg-workflow-tts-provider"
+                [options]="ttsProviderOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="workflowData.llmIntelligence.audio.ttsProvider"
+                [disabled]="!isBridgeConnected()" />
+              <label for="cfg-workflow-tts-provider">Speech output provider</label>
+            </p-iftalabel>
             <p-iftalabel>
               <input pInputText id="cfg-polly-voice"
                 [(ngModel)]="workflowData.llmIntelligence.audio.pollyVoiceId"

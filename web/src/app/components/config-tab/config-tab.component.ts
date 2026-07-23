@@ -1,4 +1,4 @@
-import type { OnInit } from '@angular/core';
+import type { OnDestroy, OnInit } from '@angular/core';
 import { ChangeDetectorRef, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
@@ -27,10 +27,12 @@ import {
   deleteBrowserTtsProfile,
   detectBrowserLabel,
   listBrowserTtsProfiles,
-  listBrowserTtsVoices,
+  listBrowserTtsVoicesAsync,
+  onBrowserTtsVoicesChanged,
   saveBrowserTtsProfile,
   type BrowserTtsProfile,
 } from '../../../browser-tts-settings.js';
+import { speakAmazonPolly } from '../../../amazon-tts.js';
 import { AdminService } from '../../services/admin.service';
 import { BridgeService } from '../../services/bridge.service';
 import { ToastService } from '../../services/toast.service';
@@ -52,6 +54,8 @@ import type {
   WorkflowSettings,
   AgentClientSettings,
   AgentClientId,
+  PollyVoiceInfo,
+  TtsProvider,
 } from '../../models/admin-settings';
 
 // ── Section definition ─────────────────────────────────────────────────────
@@ -197,13 +201,14 @@ const ALL_SECTIONS: ConfigSection[] = [
   ],
   templateUrl: './config-tab.component.html',
 })
-export class ConfigTabComponent implements OnInit {
+export class ConfigTabComponent implements OnInit, OnDestroy {
   protected readonly bridge = inject(BridgeService);
   protected readonly voiceProviders = inject(VoiceProvidersService);
   protected readonly voiceSession = inject(VoiceSessionService);
   protected readonly admin = inject(AdminService);
   private readonly cdr = inject(ChangeDetectorRef);
   private readonly toast = inject(ToastService);
+  private unsubBrowserVoices: (() => void) | null = null;
 
   // ── Navigation ─────────────────────────────────────────────────────────
 
@@ -280,6 +285,11 @@ export class ConfigTabComponent implements OnInit {
     { label: 'Standard', value: 'standard' },
   ];
 
+  protected readonly ttsProviderOptions: Array<{ label: string; value: TtsProvider }> = [
+    { label: 'Browser text-to-speech', value: 'browser' },
+    { label: 'Amazon Polly', value: 'amazon_polly' },
+  ];
+
   protected readonly runModeOptions = [
     { label: 'Test (local dev)', value: 'test' },
     { label: 'Serve (production)', value: 'serve' },
@@ -304,13 +314,18 @@ export class ConfigTabComponent implements OnInit {
     void this.voiceProviders.refresh().then(() => this.syncVoiceForm());
   }
 
+  ngOnDestroy(): void {
+    this.unsubBrowserVoices?.();
+    this.unsubBrowserVoices = null;
+  }
+
   private async loadSection(id: SectionId): Promise<void> {
     if (!this.canUseApi()) return;
     switch (id) {
       case 'voice':
         await this.voiceProviders.refresh();
         this.syncVoiceForm();
-        this.loadBrowserTtsUi();
+        await this.loadSpeechOutputUi();
         break;
       case 'personal':
         this.syncVoiceForm();
@@ -372,8 +387,19 @@ export class ConfigTabComponent implements OnInit {
   protected browserTtsLang = 'en-US';
   protected browserProfiles: BrowserTtsProfile[] = [];
   protected browserVoiceOptions: Array<{ label: string; value: string }> = [];
+  protected browserVoicesLoading = false;
   protected readonly currentBrowserLabel = detectBrowserLabel();
   protected readonly currentBrowserId = currentBrowserProfileId();
+
+  /** Speech output (TTS) — synced with workflow.llmIntelligence.audio */
+  protected ttsProvider: TtsProvider = 'browser';
+  protected pollyVoiceId = 'Joanna';
+  protected pollyEngine: 'standard' | 'neural' | 'generative' = 'neural';
+  protected pollyVoiceOptions: Array<{ label: string; value: string }> = [];
+  protected pollyVoices: PollyVoiceInfo[] = [];
+  protected loadingPollyVoices = false;
+  protected savingSpeechOutput = false;
+  protected previewingPolly = false;
 
   protected readonly interruptModeOptions = [
     { label: 'Pause — stop speech on wake; cancel resumes', value: 'pause' },
@@ -441,16 +467,19 @@ export class ConfigTabComponent implements OnInit {
     }
   }
 
-  private loadBrowserTtsUi(): void {
-    this.browserProfiles = listBrowserTtsProfiles();
-    const voices = listBrowserTtsVoices();
+  private applyBrowserVoiceOptions(voices: SpeechSynthesisVoice[]): void {
     this.browserVoiceOptions = [
       { label: 'System default', value: '' },
       ...voices.map((v) => ({
-        label: `${v.name} (${v.lang})`,
+        label: `${v.name} · ${v.lang}${v.localService ? '' : ' · remote'}`,
         value: v.voiceURI,
       })),
     ];
+    this.cdr.markForCheck();
+  }
+
+  private async loadSpeechOutputUi(): Promise<void> {
+    this.browserProfiles = listBrowserTtsProfiles();
     const current = this.browserProfiles.find((p) => p.id === this.currentBrowserId);
     const opts = current?.options ?? {};
     this.browserVoiceUri = opts.voiceURI ?? '';
@@ -458,6 +487,153 @@ export class ConfigTabComponent implements OnInit {
     this.browserTtsPitch = opts.pitch ?? this.webkitPitch;
     this.browserTtsVolume = opts.volume ?? this.webkitVolume;
     this.browserTtsLang = opts.lang ?? this.webkitLang;
+
+    this.browserVoicesLoading = true;
+    try {
+      const voices = await listBrowserTtsVoicesAsync();
+      this.applyBrowserVoiceOptions(voices);
+    } finally {
+      this.browserVoicesLoading = false;
+    }
+
+    this.unsubBrowserVoices?.();
+    this.unsubBrowserVoices = onBrowserTtsVoicesChanged((voices) => {
+      this.applyBrowserVoiceOptions(voices);
+    });
+
+    try {
+      const res = await this.admin.getWorkflow();
+      const audio = res.workflow.llmIntelligence.audio;
+      this.ttsProvider = audio.ttsProvider ?? (audio.preferWebkit === false ? 'amazon_polly' : 'browser');
+      this.pollyVoiceId = audio.pollyVoiceId || 'Joanna';
+      this.pollyEngine = audio.pollyEngine || 'neural';
+      if (this.workflowData) {
+        this.workflowData.llmIntelligence.audio.ttsProvider = this.ttsProvider;
+        this.workflowData.llmIntelligence.audio.pollyVoiceId = this.pollyVoiceId;
+        this.workflowData.llmIntelligence.audio.pollyEngine = this.pollyEngine;
+      }
+    } catch {
+      // Bridge offline — keep local defaults
+    }
+
+    if (this.ttsProvider === 'amazon_polly') {
+      await this.loadPollyVoices();
+    }
+    this.cdr.markForCheck();
+  }
+
+  protected async onTtsProviderChange(): Promise<void> {
+    if (this.ttsProvider === 'amazon_polly') {
+      await this.loadPollyVoices();
+    }
+  }
+
+  protected async onPollyEngineChange(): Promise<void> {
+    await this.loadPollyVoices();
+  }
+
+  private async loadPollyVoices(): Promise<void> {
+    if (!this.isBridgeConnected()) {
+      this.pollyVoiceOptions = [];
+      return;
+    }
+    this.loadingPollyVoices = true;
+    try {
+      const res = await this.admin.getPollyVoices(this.pollyEngine);
+      this.pollyVoices = res.voices;
+      this.pollyVoiceOptions = res.voices.map((v) => ({
+        label: `${v.name} · ${v.languageName || v.languageCode}${v.gender ? ` · ${v.gender}` : ''}`,
+        value: v.id,
+      }));
+      if (
+        this.pollyVoiceId &&
+        this.pollyVoiceOptions.length > 0 &&
+        !this.pollyVoiceOptions.some((o) => o.value === this.pollyVoiceId)
+      ) {
+        // Keep custom/legacy id selectable so save still works.
+        this.pollyVoiceOptions = [
+          { label: `${this.pollyVoiceId} (saved)`, value: this.pollyVoiceId },
+          ...this.pollyVoiceOptions,
+        ];
+      }
+    } catch (err) {
+      this.pollyVoices = [];
+      this.pollyVoiceOptions = this.pollyVoiceId
+        ? [{ label: `${this.pollyVoiceId} (saved — list unavailable)`, value: this.pollyVoiceId }]
+        : [];
+      this.toast.warn(
+        'Could not load Polly voices',
+        err instanceof Error ? err.message : String(err),
+      );
+    } finally {
+      this.loadingPollyVoices = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  protected async onSaveSpeechOutput(): Promise<void> {
+    this.savingSpeechOutput = true;
+    try {
+      if (this.ttsProvider === 'browser') {
+        saveBrowserTtsProfile(this.currentBrowserId, {
+          voiceURI: this.browserVoiceUri || undefined,
+          rate: Number(this.browserTtsRate),
+          pitch: Number(this.browserTtsPitch),
+          volume: Number(this.browserTtsVolume),
+          lang: this.browserTtsLang.trim() || 'en-US',
+        });
+        this.browserProfiles = listBrowserTtsProfiles();
+        this.voiceSession.refreshBrowserTtsOptions();
+      }
+
+      const res = await this.admin.patchWorkflow({
+        llmIntelligence: {
+          audio: {
+            ttsProvider: this.ttsProvider,
+            pollyVoiceId: this.pollyVoiceId.trim() || 'Joanna',
+            pollyEngine: this.pollyEngine,
+          },
+        },
+      } as Partial<WorkflowSettings>);
+      this.workflowData = structuredClone(res.workflow);
+      this.ttsProvider = res.workflow.llmIntelligence.audio.ttsProvider ?? this.ttsProvider;
+      this.pollyVoiceId = res.workflow.llmIntelligence.audio.pollyVoiceId;
+      this.pollyEngine = res.workflow.llmIntelligence.audio.pollyEngine;
+
+      this.toast.success(
+        'Speech output saved',
+        this.voiceSession.conversationActive()
+          ? 'Restart the voice session to apply the new TTS provider.'
+          : this.ttsProvider === 'browser'
+            ? `Browser voice profile saved for ${this.currentBrowserLabel}.`
+            : `Amazon Polly voice: ${this.pollyVoiceId}.`,
+      );
+    } catch (err) {
+      this.toast.error('Could not save speech output', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.savingSpeechOutput = false;
+    }
+  }
+
+  protected async onPreviewPollyVoice(): Promise<void> {
+    if (!this.isBridgeConnected()) {
+      this.toast.warn('Not connected', 'Connect to the bridge to preview Polly.');
+      return;
+    }
+    this.previewingPolly = true;
+    try {
+      await speakAmazonPolly(
+        `This is the Amazon Polly voice ${this.pollyVoiceId}.`,
+        this.bridge.bridgeBase,
+        this.bridge.appToken,
+        undefined,
+        { voiceId: this.pollyVoiceId, engine: this.pollyEngine },
+      );
+    } catch (err) {
+      this.toast.error('Polly preview failed', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.previewingPolly = false;
+    }
   }
 
   protected async onSaveTtsSettings(): Promise<void> {
@@ -503,7 +679,7 @@ export class ConfigTabComponent implements OnInit {
       volume: Number(this.browserTtsVolume),
       lang: this.browserTtsLang.trim() || 'en-US',
     });
-    this.loadBrowserTtsUi();
+    this.browserProfiles = listBrowserTtsProfiles();
     this.voiceSession.refreshBrowserTtsOptions();
     this.toast.success('Browser TTS saved', this.currentBrowserLabel);
   }
@@ -514,11 +690,12 @@ export class ConfigTabComponent implements OnInit {
     this.browserTtsPitch = profile.options.pitch ?? this.webkitPitch;
     this.browserTtsVolume = profile.options.volume ?? this.webkitVolume;
     this.browserTtsLang = profile.options.lang ?? this.webkitLang;
+    this.ttsProvider = 'browser';
   }
 
   protected onDeleteBrowserProfile(id: string): void {
     deleteBrowserTtsProfile(id);
-    this.loadBrowserTtsUi();
+    this.browserProfiles = listBrowserTtsProfiles();
     this.toast.success('Profile removed');
   }
 
@@ -783,6 +960,13 @@ export class ConfigTabComponent implements OnInit {
       const res = await this.admin.getWorkflow();
       if (seq !== this.workflowLoadSeq) return;
       this.workflowData = structuredClone(res.workflow);
+      const audio = this.workflowData.llmIntelligence.audio;
+      if (!audio.ttsProvider) {
+        audio.ttsProvider = audio.preferWebkit === false ? 'amazon_polly' : 'browser';
+      }
+      this.ttsProvider = audio.ttsProvider;
+      this.pollyVoiceId = audio.pollyVoiceId;
+      this.pollyEngine = audio.pollyEngine;
     } catch (err) {
       if (seq !== this.workflowLoadSeq) return;
       this.toast.error('Could not load workflow settings', err instanceof Error ? err.message : String(err));

@@ -60,6 +60,7 @@ const WorkflowPatchSchema = z
         audio: z
           .object({
             preferWebkit: z.boolean().optional(),
+            ttsProvider: z.enum(['browser', 'amazon_polly']).optional(),
             region: z.string().optional(),
             pollyVoiceId: z.string().min(1).optional(),
             pollyEngine: z.enum(['standard', 'neural', 'generative']).optional(),

@@ -50,12 +50,18 @@ export function isWebkitTtsSupported(): boolean {
   return canUseWebkitTts();
 }
 
+export interface SpeakAmazonPollyOptions {
+  voiceId?: string;
+  engine?: 'standard' | 'neural' | 'generative';
+}
+
 /** Fetch Polly MP3 from bridge and play; resolves when playback ends or aborts. */
 export async function speakAmazonPolly(
   text: string,
   bridgeBase: string,
   appToken: string,
   ctx?: TtsPlayContext,
+  options?: SpeakAmazonPollyOptions,
 ): Promise<void> {
   const clean = cleanText(text);
   if (!clean) return;
@@ -69,7 +75,11 @@ export async function speakAmazonPolly(
       Authorization: `Bearer ${appToken}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ text: clean }),
+    body: JSON.stringify({
+      text: clean,
+      ...(options?.voiceId ? { voiceId: options.voiceId } : {}),
+      ...(options?.engine ? { engine: options.engine } : {}),
+    }),
   });
 
   if (!res.ok) {

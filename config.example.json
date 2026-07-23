@@ -29,6 +29,7 @@
         "readOutputMaxChars": 8000,
         "audio": {
           "preferWebkit": true,
+          "ttsProvider": "browser",
           "pollyVoiceId": "Joanna",
           "pollyEngine": "neural",
           "transcribeLanguageCode": "en-US"

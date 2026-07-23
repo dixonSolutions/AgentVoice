@@ -11,12 +11,24 @@ export interface LlmSettings {
   maxTokens: number;
 }
 
+export type TtsProvider = 'browser' | 'amazon_polly';
+
 export interface AudioSettings {
   preferWebkit: boolean;
+  ttsProvider: TtsProvider;
   region?: string;
   pollyVoiceId: string;
   pollyEngine: 'standard' | 'neural' | 'generative';
   transcribeLanguageCode: string;
+}
+
+export interface PollyVoiceInfo {
+  id: string;
+  name: string;
+  languageCode: string;
+  languageName: string;
+  gender: string;
+  supportedEngines: string[];
 }
 
 export interface MemorySettings {

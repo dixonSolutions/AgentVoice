@@ -100,6 +100,7 @@ export class LlmIntelligenceSession {
   private wsConnected = false;
   private audioConfig: IntelligenceAudioConfig = {
     preferWebkit: true,
+    ttsProvider: 'browser',
     amazonAvailable: false,
     sttFallback: null,
     ttsFallback: null,

@@ -162,3 +162,40 @@ export function listBrowserTtsVoices(): SpeechSynthesisVoice[] {
   if (typeof window === 'undefined' || !window.speechSynthesis) return [];
   return window.speechSynthesis.getVoices();
 }
+
+/**
+ * Wait for the browser to populate speechSynthesis voices (Chrome often loads async).
+ * Resolves with whatever is available after voiceschanged or a short timeout.
+ */
+export function listBrowserTtsVoicesAsync(timeoutMs = 1500): Promise<SpeechSynthesisVoice[]> {
+  if (typeof window === 'undefined' || !window.speechSynthesis) {
+    return Promise.resolve([]);
+  }
+  const synth = window.speechSynthesis;
+  const immediate = synth.getVoices();
+  if (immediate.length > 0) return Promise.resolve(immediate);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      synth.removeEventListener('voiceschanged', onChange);
+      resolve(synth.getVoices());
+    };
+    const onChange = () => finish();
+    synth.addEventListener('voiceschanged', onChange);
+    window.setTimeout(finish, timeoutMs);
+  });
+}
+
+/** Subscribe to voice catalog changes; returns an unsubscribe function. */
+export function onBrowserTtsVoicesChanged(cb: (voices: SpeechSynthesisVoice[]) => void): () => void {
+  if (typeof window === 'undefined' || !window.speechSynthesis) {
+    return () => undefined;
+  }
+  const synth = window.speechSynthesis;
+  const handler = () => cb(synth.getVoices());
+  synth.addEventListener('voiceschanged', handler);
+  return () => synth.removeEventListener('voiceschanged', handler);
+}
