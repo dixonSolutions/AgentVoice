@@ -381,7 +381,7 @@ function buildMcpServer(sessionKey: string): McpServer {
       query: z.string().optional().describe('list: filter by name, alias, or description'),
       enabled: z.boolean().optional().describe('list: filter by enabled'),
       name: z.string().optional().describe('Slug name — required for add/update/remove'),
-      path: z.string().optional().describe('Absolute path under ~/Projects — required for add'),
+      path: z.string().optional().describe('Absolute host path — required for add'),
       description: z.string().max(200).optional().describe('Short label'),
       aliases: z.array(z.string()).optional().describe('Spoken aliases'),
     },

@@ -43,7 +43,7 @@ export const CursorManageProjectsSchema = z.object({
   query: z.string().optional().describe('For list: filter by name, alias, or description'),
   enabled: z.boolean().optional().describe('For list: filter by enabled flag'),
   name: z.string().optional().describe('Slug name (required for add, update, remove)'),
-  path: z.string().optional().describe('Absolute path under ~/Projects (required for add; optional for update)'),
+  path: z.string().optional().describe('Absolute host path (required for add; optional for update)'),
   description: z.string().max(200).optional().describe('Short human-readable label'),
   aliases: z
     .union([z.array(z.string()), z.string()])

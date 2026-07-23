@@ -151,15 +151,15 @@ export class AdminService {
     name: string,
     patch: { path?: string; description?: string | null; aliases?: string[]; enabled?: boolean },
   ): Promise<{ ok: boolean; project: AdminProject }> {
-    return this.patch(`/api/admin/projects/${name}`, patch);
+    return this.patch(`/api/admin/projects/${encodeURIComponent(name)}`, patch);
   }
 
   deleteProject(name: string): Promise<{ ok: boolean; name: string }> {
-    return this.delete(`/api/admin/projects/${name}`);
+    return this.delete(`/api/admin/projects/${encodeURIComponent(name)}`);
   }
 
   pingProject(name: string): Promise<{ name: string; path: string; exists: boolean }> {
-    return this.post(`/api/admin/projects/${name}/ping`);
+    return this.post(`/api/admin/projects/${encodeURIComponent(name)}/ping`);
   }
 
   // ── Agent Client ─────────────────────────────────────────────────────────

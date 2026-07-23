@@ -51,64 +51,39 @@ const ProjectUpdateSchema = z
 
 export async function registerProjectsAdminRoutes(app: FastifyInstance): Promise<void> {
   // GET /api/admin/projects — full project list including paths
+  // config.json is source of truth; registry supplies resume_id / model only.
+  // Soft-disabled DB orphans (removed from config) must not reappear in the UI.
   app.get('/api/admin/projects', async () => {
     const cfg = getConfig();
     const db = getDb();
 
-    // Merge config data with registry data (resume_id, model, timestamps)
     const rows = db
-      .prepare('SELECT name, path, aliases, description, resume_id, model, enabled, updated_at FROM project ORDER BY name')
+      .prepare('SELECT name, resume_id, model, updated_at FROM project')
       .all() as Array<{
         name: string;
-        path: string;
-        aliases: string;
-        description: string | null;
         resume_id: string | null;
         model: string | null;
-        enabled: number;
         updated_at: string;
       }>;
+    const registryByName = new Map(rows.map((r) => [r.name, r]));
 
-    // Use config as source-of-truth for enabled/path since registry lags until reconcile
-    const configByName = new Map(cfg.projects.map((p) => [p.name, p]));
-
-    const projects = rows.map((r) => {
-      const cfgProject = configByName.get(r.name);
-      let aliases: string[] = [];
-      try {
-        aliases = JSON.parse(r.aliases) as string[];
-      } catch {
-        // ignore malformed
-      }
-      return {
-        name: r.name,
-        path: cfgProject?.path ?? r.path,
-        description: cfgProject?.description ?? r.description ?? null,
-        aliases: cfgProject?.aliases ?? aliases,
-        enabled: cfgProject?.enabled ?? r.enabled === 1,
-        resumeId: r.resume_id,
-        model: r.model,
-        pathExists: existsSync(cfgProject?.path ?? r.path),
-        updatedAt: r.updated_at,
-      };
-    });
-
-    // Include config projects that may not yet be in registry
-    for (const p of cfg.projects) {
-      if (!rows.find((r) => r.name === p.name)) {
-        projects.push({
+    const projects = cfg.projects
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((p) => {
+        const reg = registryByName.get(p.name);
+        return {
           name: p.name,
           path: p.path,
           description: p.description ?? null,
           aliases: p.aliases,
           enabled: p.enabled,
-          resumeId: null,
-          model: null,
+          resumeId: reg?.resume_id ?? null,
+          model: reg?.model ?? null,
           pathExists: existsSync(p.path),
-          updatedAt: new Date().toISOString(),
-        });
-      }
-    }
+          updatedAt: reg?.updated_at ?? new Date().toISOString(),
+        };
+      });
 
     return { projects };
   });

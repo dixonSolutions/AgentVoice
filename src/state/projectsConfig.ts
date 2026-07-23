@@ -6,13 +6,11 @@
  */
 
 import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import type { ProjectConfig } from '../config.js';
 import { readConfigFile, writeConfigFile } from './configFile.js';
 import { reconcileRegistry } from './registry.js';
 
-const PROJECTS_ROOT = join(homedir(), 'Projects');
 const SLUG_RE = /^[a-z0-9_-]+$/;
 
 export const PROJECTS_CATALOG_DESCRIPTION =
@@ -74,12 +72,14 @@ export function assertValidSlug(name: string): void {
   }
 }
 
-/** Reject paths outside ~/Projects to prevent arbitrary workspace injection. */
-export function assertAllowedProjectPath(path: string): void {
-  const abs = resolve(path);
-  const root = resolve(PROJECTS_ROOT);
-  if (!abs.startsWith(root + '/') && abs !== root) {
-    throw new Error(`Project path must be under ${root}.`);
+/** Require an absolute filesystem path (any location the host can open). */
+export function assertValidProjectPath(path: string): void {
+  const trimmed = path.trim();
+  if (!trimmed) {
+    throw new Error('Project path is required.');
+  }
+  if (!isAbsolute(trimmed)) {
+    throw new Error('Project path must be absolute.');
   }
 }
 
@@ -93,7 +93,7 @@ export interface AddProjectInput {
 
 export function addProject(input: AddProjectInput): ProjectAdminView {
   assertValidSlug(input.name);
-  assertAllowedProjectPath(input.path);
+  assertValidProjectPath(input.path);
 
   const cfg = readConfigFile();
   if (cfg.projects.some((p) => p.name === input.name)) {
@@ -139,7 +139,7 @@ export function updateProject(input: UpdateProjectInput): ProjectAdminView {
 
   const existing = cfg.projects[idx]!;
   if (input.path !== undefined) {
-    assertAllowedProjectPath(input.path);
+    assertValidProjectPath(input.path);
   }
 
   const updated: ProjectConfig = {

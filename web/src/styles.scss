@@ -273,6 +273,11 @@ body {
   padding-top: env(safe-area-inset-top, 0);
 }
 
+/* Toasts must sit above the sticky shell header / mobile tabbar (z-index 1200). */
+.p-toast {
+  z-index: 9200 !important;
+}
+
 .cv-topbar {
   border-bottom: none;
 }

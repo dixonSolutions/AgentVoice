@@ -194,7 +194,7 @@ export function handleManageProjects(args: ManageProjectsArgs): ManageProjectsRe
 
     case 'add': {
       if (!args.name?.trim()) throw new Error('add requires name (lowercase slug).');
-      if (!args.path?.trim()) throw new Error('add requires path (absolute, under ~/Projects).');
+      if (!args.path?.trim()) throw new Error('add requires an absolute path.');
       const project = addProject({
         name: args.name.trim(),
         path: args.path.trim(),

@@ -165,7 +165,7 @@ widening the write surface.
 | --- | --- |
 | Stolen tailnet device | App token still required + token rotation |
 | Token leak | Rotate via `.env`; short ephemeral provider TTL limits provider abuse |
-| Path traversal / arbitrary workspace | Registry allowlist; path from registry only |
+| Path traversal / arbitrary workspace | Registry allowlist; runtime path from registry only (admin may register any absolute host path) |
 | Shell injection via prompt | `shell:false` + args array; prompt is a task, not a command |
 | Destructive but valid agent action | `cursor_revert` (git); optional plan-mode-first |
 | Runaway/zombie agent process | Timeouts, concurrency cap, `cursor_stop`, reaping |

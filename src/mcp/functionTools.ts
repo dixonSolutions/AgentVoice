@@ -68,7 +68,7 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
     description:
       'Administer the project registry (allowlisted codebases). ' +
       'action=describe explains what projects are; list filters by query/enabled; add/update/remove mutate config.json. ' +
-      'Paths must live under ~/Projects. Never expose paths to the phone user — names and descriptions only.',
+      'Paths must be absolute on the host. Never expose paths to the phone user — names and descriptions only.',
     parameters: {
       type: 'object',
       properties: {
@@ -80,7 +80,7 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
         query: { type: 'string', description: 'list: filter by name, alias, or description' },
         enabled: { type: 'boolean', description: 'list: filter by enabled flag' },
         name: { type: 'string', description: 'Slug (a-z0-9_-) — required for add/update/remove' },
-        path: { type: 'string', description: 'Absolute path under ~/Projects — required for add' },
+        path: { type: 'string', description: 'Absolute host path — required for add' },
         description: { type: 'string', description: 'Short label shown in the app' },
       },
       required: ['action'],
