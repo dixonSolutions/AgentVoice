@@ -286,14 +286,16 @@ export class VoiceTabComponent {
   });
 
   protected readonly orbColorMode = computed((): OrbColorMode => {
-    if (!this.voiceSession.conversationActive()) return 'blue';
-    if (this.voiceSession.voiceActivated()) return 'green';
-    if (this.voiceSession.sessionConnecting()) return 'blue';
-    return 'red';
+    if (this.voiceSession.sessionPrepActive() || this.voiceSession.sessionConnecting()) {
+      return 'idle';
+    }
+    if (!this.voiceSession.conversationActive()) return 'idle';
+    if (this.voiceSession.voiceActivated()) return 'listening';
+    return 'ready';
   });
 
   protected readonly showOrbCaption = computed(
-    () => !this.isLiveSession() && this.orbColorMode() === 'blue',
+    () => !this.isLiveSession() && this.orbColorMode() === 'idle',
   );
 
   protected readonly orbStateLabel = computed(() => {

@@ -230,28 +230,34 @@ export class AmazonSttSession {
   }
 
   private async transcribe(pcm: Int16Array): Promise<string> {
+    // Raw PCM body (not JSON+base64) — smaller upload; nginx default 1m was rejecting ~45s clips.
     const bytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
-    const b64 = pcm16ToBase64(bytes);
 
     const res = await fetch(`${this.bridgeBase}/api/intelligence/transcribe`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${this.appToken}`,
-        'Content-Type': 'application/json',
+        'Content-Type': 'application/octet-stream',
       },
-      body: JSON.stringify({ pcm: b64 }),
+      body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
       signal: AbortSignal.timeout(45_000),
     });
 
     if (!res.ok) {
-      let detail = `${res.status} ${res.statusText}`;
+      let detail = `${res.status} ${res.statusText}`.trim();
       try {
-        const body = (await res.json()) as { error?: string };
+        const body = (await res.json()) as { error?: string; message?: string };
         if (body.error) detail = body.error;
+        else if (body.message) detail = body.message;
       } catch {
         // ignore
       }
-      throw new Error(detail);
+      if (res.status === 413) {
+        throw new Error(
+          'Recording too long to upload — say send sooner, or keep the request shorter.',
+        );
+      }
+      throw new Error(detail || `Transcribe failed (${res.status})`);
     }
 
     const data = (await res.json()) as { text?: string };
@@ -266,20 +272,6 @@ function computeRms(samples: Float32Array): number {
     sumSq += s * s;
   }
   return Math.sqrt(sumSq / Math.max(samples.length, 1));
-}
-
-function pcm16ToBase64(bytes: Uint8Array): string {
-  const parts: string[] = [];
-  const chunkSize = 8192;
-  for (let i = 0; i < bytes.length; i += chunkSize) {
-    const end = Math.min(i + chunkSize, bytes.length);
-    let chunk = '';
-    for (let j = i; j < end; j++) {
-      chunk += String.fromCharCode(bytes[j]!);
-    }
-    parts.push(chunk);
-  }
-  return btoa(parts.join(''));
 }
 
 function downsampleTo16k(input: Float32Array, inputRate: number): Int16Array {

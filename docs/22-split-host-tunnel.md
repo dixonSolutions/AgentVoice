@@ -47,7 +47,9 @@ Run these **inside the incus container**, e.g. `incus exec dev -- bash`:
    ```
 
    See [`scripts/nginx-cursor-voice.conf.example`](../scripts/nginx-cursor-voice.conf.example)
-   and incus proxy `host:5671 → container:5671`.
+   and incus proxy `host:5671 → container:5671`. Nginx must set
+   `client_max_body_size 12m` (default `1m` returns **413** on longer Amazon
+   Transcribe uploads).
 
 5. **Verify from inside the container:**
 

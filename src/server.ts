@@ -98,6 +98,15 @@ export async function buildServer(): Promise<FastifyInstance> {
   const { settings } = getConfig();
   const run = getRunModeInfo(settings);
 
+  // Raw PCM uploads for Amazon Transcribe (PWA posts application/octet-stream).
+  app.addContentTypeParser(
+    'application/octet-stream',
+    { parseAs: 'buffer' },
+    (_req, body, done) => {
+      done(null, body);
+    },
+  );
+
   app.addHook('onSend', async (req, reply, payload) => {
     // COOP/COEP are required for the PWA (Vosk WASM SharedArrayBuffer).
     // Do NOT send them on /mcp — Cursor's MCP process is not a browser and
