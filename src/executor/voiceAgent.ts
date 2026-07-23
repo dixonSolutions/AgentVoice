@@ -401,6 +401,9 @@ export function spawnVoiceAgent(
       project: project.name,
     });
 
+    // Safety net only when the agent never called speak() this user turn.
+    // spokeThisTurn must survive done() — clearing it there made normal turns
+    // look silent and TTS’d Cursor’s final process/summary text after exit.
     if (!hadSpeakThisTurn()) {
       const fallback = summarizeForSpeechFallback(lastAssistantText);
       if (fallback) {

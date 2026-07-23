@@ -17,7 +17,13 @@ import { voiceTurnQueue } from './turnQueue.js';
 
 const log = childLogger('mcp:server:voiceTools');
 
-/** Tracks whether the current voice turn produced any speak() calls. */
+/**
+ * Tracks whether the current voice turn produced any speak() calls.
+ * Used by the voice-agent exit fallback so mute agents still get TTS.
+ * Cleared only when a new user turn arrives — not on done() — otherwise a
+ * normal speak→done turn looks silent at process exit and the fallback
+ * speaks Cursor’s final assistant/process text a second time.
+ */
 let spokeThisTurn = false;
 
 /** Reset at the start of each user turn (before the agent responds). */
@@ -183,7 +189,7 @@ export function handleDone(): DoneResult {
 
 /** Re-arm PWA mic — after done() or when the voice agent process exits. */
 export function broadcastVoiceTurnIdle(): void {
-  spokeThisTurn = false;
+  // Do not clear spokeThisTurn here — voiceAgent exit still needs it.
   log.info('voice turn idle — re-arming mic');
   // eslint-disable-next-line no-console
   console.log('[voice] ✓ done — mic re-arming, waiting for next wake phrase');

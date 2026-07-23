@@ -283,6 +283,10 @@ See [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) and
 - Intelligence WebSocket routes turns to `VoiceTurnQueue`.
 - Bridge auto-spawns conversational `cursor-agent` via `src/executor/voiceAgent.ts`.
 - `done()` triggers `{ type: "turn_complete" }` to the PWA.
+- Voice-agent exit may TTS a fallback only if **no** `speak()` ran this user
+  turn (`spokeThisTurn`). That flag is cleared on the next `user_turn`, not on
+  `done()` — clearing it on `done()` caused Cursor’s final process/summary text
+  to be spoken after a normal speak→done turn.
 
 ### Phase 3 — Auto-Spawn Conversational Agent ✅
 
