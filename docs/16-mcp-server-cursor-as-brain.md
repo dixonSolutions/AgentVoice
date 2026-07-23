@@ -301,7 +301,8 @@ Before the mic opens, the bridge runs `ensureGlobalMcpSetup()` — **not** per-p
 4. User root for metadata: `~/Projects` when that folder exists, else `~`
 
 Project-level `.cursor/mcp.json` is optional and not written. A legacy project
-entry triggers a warning in the prep log stream.
+entry is stripped on prepare. Projects rooted at `$HOME` are skipped — their
+`.cursor/mcp.json` *is* the global Cursor config and must never be deleted.
 
 Progress streams to the PWA via `POST /api/voice-session/prepare` (SSE):
 

@@ -74,12 +74,17 @@ export async function registerVoiceSessionPrepareRoutes(app: FastifyInstance): P
 
       try {
         const { settings } = getConfig();
-        const result = await ensureClientMcpSetup(settings.agentClient, (event) => {
+
+        // Strip stale project-level entries BEFORE writing global config, so a
+        // project rooted at $HOME can never delete the freshly installed global
+        // ~/.cursor/mcp.json (cleanup skips that path, but order still matters
+        // for older builds and clearer logs).
+        cleanupLegacyProjectMcp(project, (event) => {
           logs.push(event);
           writeSse(reply, 'session_log', event);
         });
 
-        cleanupLegacyProjectMcp(project, (event) => {
+        const result = await ensureClientMcpSetup(settings.agentClient, (event) => {
           logs.push(event);
           writeSse(reply, 'session_log', event);
         });

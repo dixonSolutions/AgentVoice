@@ -19,7 +19,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { getConfig, type AgentClient } from '../config.js';
 import { getRunModeInfo } from '../runMode.js';
 import { resolveProject } from '../state/registry.js';
@@ -214,7 +214,22 @@ export function cleanupLegacyProjectMcp(
   const project = resolveProject(projectName);
   if (!project) return;
 
-  const legacyPath = join(project.path, '.cursor', 'mcp.json');
+  const legacyPath = resolve(join(project.path, '.cursor', 'mcp.json'));
+  const globalPath = resolve(resolveGlobalMcpJsonPath());
+
+  // Projects rooted at $HOME resolve `.cursor/mcp.json` to the GLOBAL Cursor
+  // MCP config. Never delete or strip that file — it is the authoritative
+  // registration written by ensureGlobalMcpSetupForCursor().
+  if (legacyPath === globalPath) {
+    emitLog(
+      onLog,
+      'check',
+      'info',
+      `Skipping project MCP cleanup for ${formatPathForLog(project.path)} — ${formatPathForLog(legacyPath)} is the global Cursor MCP config.`,
+    );
+    return;
+  }
+
   if (!existsSync(legacyPath)) return;
 
   const legacy = readGlobalMcpFile(legacyPath);
