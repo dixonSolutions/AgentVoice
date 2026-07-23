@@ -647,19 +647,26 @@ export class BridgeService {
 
   /** Authenticated fetch to the bridge API. Uses relative paths — app and API share the same origin. */
   async apiFetch<T>(path: string, opts: RequestInit = {}): Promise<T> {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${this._appToken}`,
+      ...(opts.headers as Record<string, string> | undefined),
+    };
+    // Fastify rejects empty bodies when Content-Type is application/json
+    // (FST_ERR_CTP_EMPTY_JSON_BODY). Only set it when we actually send JSON.
+    if (opts.body !== undefined && opts.body !== null && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+
     const res = await fetch(path, {
       ...opts,
-      headers: {
-        Authorization: `Bearer ${this._appToken}`,
-        'Content-Type': 'application/json',
-        ...(opts.headers as Record<string, string> | undefined),
-      },
+      headers,
     });
     if (!res.ok) {
       let detail = `${res.status} ${res.statusText}`;
       try {
-        const body = (await res.json()) as { error?: string };
-        if (body.error) detail = body.error;
+        const body = (await res.json()) as { error?: string; message?: string };
+        if (body.message) detail = body.message;
+        else if (body.error) detail = body.error;
       } catch {
         // ignore non-JSON error bodies
       }
