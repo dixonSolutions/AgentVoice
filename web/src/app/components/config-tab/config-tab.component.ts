@@ -26,6 +26,7 @@ import {
   currentBrowserProfileId,
   deleteBrowserTtsProfile,
   detectBrowserLabel,
+  curateBrowserTtsVoices,
   listBrowserTtsProfiles,
   listBrowserTtsVoicesAsync,
   onBrowserTtsVoicesChanged,
@@ -415,6 +416,10 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected browserProfiles: BrowserTtsProfile[] = [];
   protected browserVoiceOptions: Array<{ label: string; value: string }> = [];
   protected browserVoicesLoading = false;
+  protected browserVoicesShowAll = false;
+  protected browserVoicesTotal = 0;
+  protected browserVoicesShown = 0;
+  private rawBrowserVoices: SpeechSynthesisVoice[] = [];
   protected readonly currentBrowserLabel = detectBrowserLabel();
   protected readonly currentBrowserId = currentBrowserProfileId();
 
@@ -504,14 +509,27 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   }
 
   private applyBrowserVoiceOptions(voices: SpeechSynthesisVoice[]): void {
+    this.rawBrowserVoices = voices;
+    this.browserVoicesTotal = voices.length;
+    const curated = curateBrowserTtsVoices(voices, {
+      preferredLang: this.browserTtsLang || undefined,
+      selectedVoiceURI: this.browserVoiceUri || undefined,
+      includeRemote: this.browserVoicesShowAll,
+      maxVoices: this.browserVoicesShowAll ? 120 : 48,
+    });
+    this.browserVoicesShown = curated.length;
     this.browserVoiceOptions = [
       { label: 'System default', value: '' },
-      ...voices.map((v) => ({
+      ...curated.map((v) => ({
         label: `${v.name} · ${v.lang}${v.localService ? '' : ' · remote'}`,
         value: v.voiceURI,
       })),
     ];
     this.cdr.markForCheck();
+  }
+
+  protected onBrowserVoicesShowAllChange(): void {
+    this.applyBrowserVoiceOptions(this.rawBrowserVoices);
   }
 
   private async loadSpeechOutputUi(): Promise<void> {

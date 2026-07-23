@@ -173,19 +173,32 @@
 
           @if (ttsProvider === 'browser') {
             <p-message severity="secondary" variant="simple"
-              text="Voices available on {{ currentBrowserLabel }} via speechSynthesis. Profile is saved on this device." />
+              text="Voices from {{ currentBrowserLabel }} via speechSynthesis (local voices preferred — Firefox can expose hundreds of remote espeak voices that freeze overlays)." />
 
             @if (browserVoicesLoading) {
               <p-message severity="secondary" variant="simple" text="Loading browser voices…" />
+            } @else if (browserVoicesTotal > 0) {
+              <p-message severity="secondary" variant="simple"
+                text="Showing {{ browserVoicesShown }} of {{ browserVoicesTotal }} voices." />
             }
 
+            <!-- Native select: PrimeNG overlay + filter freezes with large Firefox voice lists. -->
             <p-iftalabel>
-              <p-select id="cfg-browser-voice" [(ngModel)]="browserVoiceUri"
-                [options]="browserVoiceOptions" optionLabel="label" optionValue="value"
-                [filter]="true" filterPlaceholder="Search voices…"
-                [showClear]="true" placeholder="System default" />
+              <select id="cfg-browser-voice" class="cv-native-select"
+                [(ngModel)]="browserVoiceUri">
+                @for (opt of browserVoiceOptions; track opt.value) {
+                  <option [ngValue]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
               <label for="cfg-browser-voice">Browser voice</label>
             </p-iftalabel>
+
+            <div class="cv-cfg-toggle-row">
+              <p-toggleSwitch id="cfg-browser-voices-all"
+                [(ngModel)]="browserVoicesShowAll"
+                (onChange)="onBrowserVoicesShowAllChange()" />
+              <label for="cfg-browser-voices-all">Include remote / all voices (may be slow)</label>
+            </div>
 
             <p-iftalabel>
               <p-inputNumber id="cfg-browser-rate" [(ngModel)]="browserTtsRate"

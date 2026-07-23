@@ -1213,6 +1213,25 @@ body {
   label, span { cursor: pointer; font-size: 0.9375rem; }
 }
 
+/* Native <select> for large option lists (browser TTS voices on Firefox). */
+.cv-native-select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--surface-border, #3a3a5c);
+  background: var(--surface-ground, #13131f);
+  color: var(--text-color, #e0e0ef);
+  font-size: 0.9375rem;
+  outline: none;
+  appearance: auto;
+
+  &:focus {
+    border-color: var(--primary-color, #7c3aed);
+    box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.18);
+  }
+}
+
 /* Inline row actions (save + secondary buttons side by side) */
 .cv-cfg-row-actions {
   display: flex;

@@ -163,6 +163,106 @@ export function listBrowserTtsVoices(): SpeechSynthesisVoice[] {
   return window.speechSynthesis.getVoices();
 }
 
+export interface CurateBrowserVoicesOptions {
+  /** Preferred BCP-47 language (e.g. en-US). */
+  preferredLang?: string;
+  /** Always keep this voiceURI even if it would be filtered out. */
+  selectedVoiceURI?: string;
+  /**
+   * When false (default), drop remote/espeak-style bulk voices that Firefox
+   * often dumps by the hundreds — those freeze PrimeNG/select overlays.
+   */
+  includeRemote?: boolean;
+  /** Hard cap after curation (default 48). */
+  maxVoices?: number;
+}
+
+function langPrefix(code: string | undefined): string {
+  return (code ?? '').trim().toLowerCase().split('-')[0] ?? '';
+}
+
+function isLikelyEspeakBulk(voice: SpeechSynthesisVoice): boolean {
+  const name = voice.name.toLowerCase();
+  return (
+    name.includes('klatt') ||
+    name.includes('norbert') ||
+    name.includes('shelby') ||
+    name.includes('+male') ||
+    name.includes('+female') ||
+    (name.includes('whisper') && name.includes('+')) ||
+    /^[a-z]+\+[a-z0-9]+$/i.test(voice.name)
+  );
+}
+
+/**
+ * Curate speechSynthesis voices for UI pickers.
+ * Firefox/Linux can expose 200–1000+ remote espeak voices; rendering all of them
+ * in a filtered overlay freezes the page.
+ */
+export function curateBrowserTtsVoices(
+  voices: SpeechSynthesisVoice[],
+  opts: CurateBrowserVoicesOptions = {},
+): SpeechSynthesisVoice[] {
+  const maxVoices = opts.maxVoices ?? 48;
+  const includeRemote = opts.includeRemote === true;
+  const preferred = langPrefix(opts.preferredLang);
+  const navLang =
+    typeof navigator !== 'undefined' ? langPrefix(navigator.language) : '';
+  const preferredSet = new Set(
+    [preferred, navLang, 'en'].filter((x) => x.length > 0),
+  );
+
+  const selected = opts.selectedVoiceURI
+    ? voices.find((v) => v.voiceURI === opts.selectedVoiceURI)
+    : undefined;
+
+  let pool = voices.filter((v) => {
+    if (selected && v.voiceURI === selected.voiceURI) return true;
+    if (!includeRemote && !v.localService) return false;
+    if (!includeRemote && isLikelyEspeakBulk(v)) return false;
+    return true;
+  });
+
+  // If local-only produced nothing useful, fall back to preferred-lang remotes
+  // (still capped) so the picker isn't empty on odd platforms.
+  if (pool.length === 0) {
+    pool = voices.filter((v) => {
+      if (selected && v.voiceURI === selected.voiceURI) return true;
+      return preferredSet.has(langPrefix(v.lang));
+    });
+  }
+
+  const scored = pool
+    .map((v, index) => {
+      const lp = langPrefix(v.lang);
+      let score = 0;
+      if (v.localService) score += 100;
+      if (preferred && lp === preferred) score += 50;
+      if (preferredSet.has(lp)) score += 25;
+      if (v.default) score += 10;
+      if (isLikelyEspeakBulk(v)) score -= 40;
+      return { v, score, index };
+    })
+    .sort((a, b) => b.score - a.score || a.v.name.localeCompare(b.v.name));
+
+  const out: SpeechSynthesisVoice[] = [];
+  const seen = new Set<string>();
+  for (const { v } of scored) {
+    const key = `${v.name.toLowerCase()}|${v.lang.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(v);
+    if (out.length >= maxVoices) break;
+  }
+
+  if (selected && !out.some((v) => v.voiceURI === selected.voiceURI)) {
+    out.unshift(selected);
+    if (out.length > maxVoices) out.length = maxVoices;
+  }
+
+  return out;
+}
+
 /**
  * Wait for the browser to populate speechSynthesis voices (Chrome often loads async).
  * Resolves with whatever is available after voiceschanged or a short timeout.
@@ -190,12 +290,25 @@ export function listBrowserTtsVoicesAsync(timeoutMs = 1500): Promise<SpeechSynth
 }
 
 /** Subscribe to voice catalog changes; returns an unsubscribe function. */
-export function onBrowserTtsVoicesChanged(cb: (voices: SpeechSynthesisVoice[]) => void): () => void {
+export function onBrowserTtsVoicesChanged(
+  cb: (voices: SpeechSynthesisVoice[]) => void,
+  debounceMs = 250,
+): () => void {
   if (typeof window === 'undefined' || !window.speechSynthesis) {
     return () => undefined;
   }
   const synth = window.speechSynthesis;
-  const handler = () => cb(synth.getVoices());
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const handler = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      cb(synth.getVoices());
+    }, debounceMs);
+  };
   synth.addEventListener('voiceschanged', handler);
-  return () => synth.removeEventListener('voiceschanged', handler);
+  return () => {
+    if (timer) clearTimeout(timer);
+    synth.removeEventListener('voiceschanged', handler);
+  };
 }
