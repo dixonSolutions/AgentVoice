@@ -1,5 +1,6 @@
 import {
   Component,
+  HostBinding,
   ViewChild,
   afterRenderEffect,
   computed,
@@ -24,6 +25,34 @@ const DEFAULT_VIEWPORT_HEIGHT_PX = 144;
 const OVERSCAN = 3;
 /** Within this distance of the bottom, treat scroll as "at bottom" and auto-follow new lines. */
 const SCROLL_STICK_EPS_PX = 12;
+const PANEL_HEIGHT_STORAGE_KEY = 'cv-live-log-panel-height-px';
+const DEFAULT_PANEL_HEIGHT_PX = 144;
+const MIN_PANEL_HEIGHT_PX = 112;
+const MIN_VOICE_CONTROLS_HEIGHT_PX = 220;
+const KEYBOARD_RESIZE_STEP_PX = 16;
+
+function maximumPanelHeightPx(): number {
+  if (typeof window === 'undefined') return 360;
+  return Math.max(
+    MIN_PANEL_HEIGHT_PX,
+    window.innerHeight - MIN_VOICE_CONTROLS_HEIGHT_PX,
+  );
+}
+
+function clampPanelHeight(heightPx: number): number {
+  return Math.min(
+    maximumPanelHeightPx(),
+    Math.max(MIN_PANEL_HEIGHT_PX, Math.round(heightPx)),
+  );
+}
+
+function readStoredPanelHeightPx(): number {
+  if (typeof localStorage === 'undefined') return DEFAULT_PANEL_HEIGHT_PX;
+  const storedHeight = Number(localStorage.getItem(PANEL_HEIGHT_STORAGE_KEY));
+  return Number.isFinite(storedHeight) && storedHeight > 0
+    ? clampPanelHeight(storedHeight)
+    : DEFAULT_PANEL_HEIGHT_PX;
+}
 
 @Component({
   selector: 'cv-live-log-panel',
@@ -44,8 +73,18 @@ export class LiveLogPanelComponent implements AfterViewInit, OnDestroy {
   private readonly scrollTop = signal(0);
   private readonly stickToBottom = signal(true);
   private readonly viewportHeightPx = signal(DEFAULT_VIEWPORT_HEIGHT_PX);
+  protected readonly panelHeightPx = signal(readStoredPanelHeightPx());
+  protected readonly panelMinimumHeightPx = MIN_PANEL_HEIGHT_PX;
+  protected readonly panelMaximumHeightPx = signal(maximumPanelHeightPx());
   private viewReady = false;
   private resizeObserver?: ResizeObserver;
+  private resizeStartY = 0;
+  private resizeStartHeightPx = DEFAULT_PANEL_HEIGHT_PX;
+
+  @HostBinding('style.flex-basis.px')
+  protected get preferredPanelHeightPx(): number {
+    return this.panelHeightPx();
+  }
 
   /** Voice + transcript only — bridge/system logs stay in the Logs tab. */
   protected readonly sessionEntries = computed(() =>
@@ -107,6 +146,45 @@ export class LiveLogPanelComponent implements AfterViewInit, OnDestroy {
     const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
     this.scrollTop.set(el.scrollTop);
     this.stickToBottom.set(el.scrollTop >= maxScroll - SCROLL_STICK_EPS_PX);
+  }
+
+  protected startPanelResize(event: PointerEvent): void {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    this.refreshPanelMaximumHeight();
+    this.resizeStartY = event.clientY;
+    this.resizeStartHeightPx = this.panelHeightPx();
+    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+  }
+
+  protected resizePanel(event: PointerEvent): void {
+    const handle = event.currentTarget as HTMLElement;
+    if (!handle.hasPointerCapture(event.pointerId)) return;
+    this.panelHeightPx.set(
+      clampPanelHeight(this.resizeStartHeightPx + event.clientY - this.resizeStartY),
+    );
+  }
+
+  protected finishPanelResize(event: PointerEvent): void {
+    const handle = event.currentTarget as HTMLElement;
+    if (!handle.hasPointerCapture(event.pointerId)) return;
+    handle.releasePointerCapture(event.pointerId);
+    this.persistPanelHeight();
+  }
+
+  protected resizePanelWithKeyboard(event: KeyboardEvent): void {
+    const direction =
+      event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0;
+    if (direction === 0) return;
+    event.preventDefault();
+    this.refreshPanelMaximumHeight();
+    const step = event.shiftKey
+      ? KEYBOARD_RESIZE_STEP_PX * 2
+      : KEYBOARD_RESIZE_STEP_PX;
+    this.panelHeightPx.update((heightPx) =>
+      clampPanelHeight(heightPx + direction * step),
+    );
+    this.persistPanelHeight();
   }
 
   protected clearLogs(): void {
@@ -175,5 +253,19 @@ export class LiveLogPanelComponent implements AfterViewInit, OnDestroy {
     const maxScroll = Math.max(0, el.scrollHeight - el.clientHeight);
     el.scrollTop = maxScroll;
     this.scrollTop.set(el.scrollTop);
+  }
+
+  private refreshPanelMaximumHeight(): void {
+    this.panelMaximumHeightPx.set(maximumPanelHeightPx());
+    this.panelHeightPx.update(clampPanelHeight);
+  }
+
+  private persistPanelHeight(): void {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(
+        PANEL_HEIGHT_STORAGE_KEY,
+        String(this.panelHeightPx()),
+      );
+    }
   }
 }

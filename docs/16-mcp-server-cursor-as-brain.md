@@ -69,7 +69,11 @@ session without requiring microphone input.
 
 Live mode is a single non-scrolling viewport: session logs stay in a bounded
 region at the top, while the orb, mute control, hint, and pen action remain
-inside the available section below.
+inside the available section below. The divider beneath the virtualized logs
+can be dragged with a pointer or adjusted with the Up and Down arrow keys. The
+last selected height is stored in browser `localStorage` and restored on the
+next visit, with a viewport-aware maximum that preserves space for voice
+controls.
 
 ---
 

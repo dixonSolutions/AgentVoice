@@ -330,6 +330,36 @@ body {
   min-height: 0;
 }
 
+.cv-live-log-resize-handle {
+  display: flex;
+  flex: 0 0 16px;
+  align-items: center;
+  justify-content: center;
+  cursor: row-resize;
+  touch-action: none;
+  border-top: 1px solid color-mix(in srgb, var(--p-content-border-color) 65%, transparent);
+  outline: none;
+}
+
+.cv-live-log-resize-handle span {
+  width: 2.5rem;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--p-text-muted-color);
+  opacity: 0.45;
+  transition:
+    width 120ms ease,
+    opacity 120ms ease,
+    background 120ms ease;
+}
+
+.cv-live-log-resize-handle:hover span,
+.cv-live-log-resize-handle:focus-visible span {
+  width: 3.25rem;
+  background: var(--p-primary-color);
+  opacity: 0.9;
+}
+
 .cv-live-log-panel-header {
   display: flex;
   align-items: center;
