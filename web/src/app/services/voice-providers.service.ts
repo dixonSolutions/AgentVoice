@@ -1,6 +1,9 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { BridgeService } from './bridge.service';
-import type { VoiceSettingsResponse } from '../models/voice-providers';
+import type {
+  VoiceSettingsResponse,
+  WakeSensitivity,
+} from '../models/voice-providers';
 
 /**
  * Voice settings — wake words and turn-submit timing via /api/voice/*.
@@ -32,6 +35,7 @@ export class VoiceProvidersService {
     silenceMs?: number,
     vadEnabled?: boolean,
     cancel?: string,
+    sensitivity?: WakeSensitivity,
   ): Promise<void> {
     await this.mutate('/api/voice/wake-words', {
       method: 'PATCH',
@@ -41,6 +45,7 @@ export class VoiceProvidersService {
         ...(silenceMs !== undefined ? { silenceMs } : {}),
         ...(vadEnabled !== undefined ? { vadEnabled } : {}),
         ...(cancel !== undefined ? { cancel } : {}),
+        ...(sensitivity !== undefined ? { sensitivity } : {}),
       }),
     });
   }

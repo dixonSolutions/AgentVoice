@@ -66,6 +66,7 @@ import type {
   TranscribeModelId,
   TranscribePartialStability,
 } from '../../models/admin-settings';
+import type { WakeSensitivity } from '../../models/voice-providers';
 
 // ── Section definition ─────────────────────────────────────────────────────
 
@@ -445,6 +446,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected wakeStart = '';
   protected wakeEnd = 'send';
   protected wakeCancel = 'cancel';
+  protected wakeSensitivity: WakeSensitivity = 'high';
   protected vadEnabled = true;
   protected silenceSubmitMs = 1500;
   protected savingVoice = false;
@@ -509,6 +511,14 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     { label: 'Deafen (legacy — same as pause)', value: 'deafen' },
     { label: 'Stop (legacy — same as pause)', value: 'stop' },
   ];
+  protected readonly wakeSensitivityOptions: Array<{
+    label: string;
+    value: WakeSensitivity;
+  }> = [
+    { label: 'High — fastest response', value: 'high' },
+    { label: 'Balanced — fewer false activations', value: 'balanced' },
+    { label: 'Strict — highest confidence only', value: 'strict' },
+  ];
 
   protected readonly phraseConflict = computed(() => {
     if (this.vadEnabled) return false;
@@ -534,7 +544,14 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     }
     this.savingVoice = true;
     try {
-      await this.voiceProviders.updateWakeWords(start, end, silenceMs, this.vadEnabled, cancel);
+      await this.voiceProviders.updateWakeWords(
+        start,
+        end,
+        silenceMs,
+        this.vadEnabled,
+        cancel,
+        this.wakeSensitivity,
+      );
       this.syncVoiceForm();
       this.toast.success(
         'Voice settings saved',
@@ -554,6 +571,9 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     if (data?.wakeWords.start) this.wakeStart = data.wakeWords.start;
     if (data?.wakeWords.end) this.wakeEnd = data.wakeWords.end;
     if (data?.wakeWords.cancel) this.wakeCancel = data.wakeWords.cancel;
+    if (data?.wakeWords.sensitivity) {
+      this.wakeSensitivity = data.wakeWords.sensitivity;
+    }
     if (data?.turnSubmit.silenceMs) this.silenceSubmitMs = Number(data.turnSubmit.silenceMs);
     if (data?.turnSubmit.vadEnabled !== undefined) this.vadEnabled = data.turnSubmit.vadEnabled;
     this.userName = data?.userName ?? '';

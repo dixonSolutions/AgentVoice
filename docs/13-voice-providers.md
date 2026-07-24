@@ -12,7 +12,8 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
       "wakeWords": {
         "start": "cursor listen",
         "end": "cursor send",
-        "cancel": "cancel"
+        "cancel": "cancel",
+        "sensitivity": "high"
       },
       "turnSubmit": {
         "silenceMs": 1500,
@@ -39,6 +40,7 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
 | `wakeWords.start` | Activation phrase (Vosk offline detection) |
 | `wakeWords.end` | Submit phrase when VAD is disabled |
 | `wakeWords.cancel` | Abort phrase during capture (no turn sent) |
+| `wakeWords.sensitivity` | `high` accepts partial recognition; `balanced` requires 65% final confidence; `strict` requires 80% |
 | `turnSubmit.silenceMs` | Silence before auto-submit (500–30000 ms) |
 | `turnSubmit.vadEnabled` | Use Silero VAD for speech-end detection |
 | `tts.cursorVoiceEnabled` | Play MCP `speak()` lines aloud |

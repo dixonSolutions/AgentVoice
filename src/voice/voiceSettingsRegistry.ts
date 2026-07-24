@@ -49,6 +49,7 @@ const WakeWordsBodySchema = z.object({
   start: z.string().min(1).max(100),
   end: z.string().max(100).optional(),
   cancel: z.string().max(100).optional(),
+  sensitivity: z.enum(['high', 'balanced', 'strict']).optional(),
   silenceMs: z.coerce.number().int().min(500).max(30_000).optional(),
   vadEnabled: z.boolean().optional(),
 });
@@ -104,6 +105,7 @@ export function setWakeWords(raw: unknown): VoiceSettingsResponse {
       start: startTrim,
       end: parsed.data.end !== undefined ? endTrim ?? '' : (voice.wakeWords.end ?? 'send'),
       cancel: parsed.data.cancel !== undefined ? cancelTrim ?? 'cancel' : (voice.wakeWords.cancel ?? 'cancel'),
+      sensitivity: parsed.data.sensitivity ?? voice.wakeWords.sensitivity ?? 'high',
     };
     if (parsed.data.silenceMs !== undefined || parsed.data.vadEnabled !== undefined) {
       voice.turnSubmit = {
@@ -111,7 +113,7 @@ export function setWakeWords(raw: unknown): VoiceSettingsResponse {
         vadEnabled: parsed.data.vadEnabled ?? voice.turnSubmit.vadEnabled ?? true,
       };
     }
-  }, `wake phrase → start="${startTrim}" end="${endTrim ?? '(unchanged)'}" cancel="${cancelTrim ?? '(unchanged)'}"`);
+  }, `wake phrase → start="${startTrim}" end="${endTrim ?? '(unchanged)'}" cancel="${cancelTrim ?? '(unchanged)'}" sensitivity="${parsed.data.sensitivity ?? '(unchanged)'}"`);
 
   return getVoiceSettingsView();
 }

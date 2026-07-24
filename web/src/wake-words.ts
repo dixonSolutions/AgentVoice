@@ -1,10 +1,14 @@
 /** Client-side wake phrase matching — phrase from config via token mint only. */
 
+export type WakeSensitivity = 'high' | 'balanced' | 'strict';
+
 export interface WakeWords {
   start: string;
   end: string;
   /** Spoken during capture to abort the turn silently — default "cancel". */
   cancel?: string;
+  /** Vosk start-phrase detection trade-off; defaults to high for compatibility. */
+  sensitivity?: WakeSensitivity;
 }
 
 export interface TurnSubmit {

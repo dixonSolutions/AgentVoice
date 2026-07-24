@@ -1,9 +1,12 @@
 /** Voice settings types — mirrors GET /api/voice/providers (no secrets). */
 
+export type WakeSensitivity = 'high' | 'balanced' | 'strict';
+
 export interface WakeWords {
   start: string;
   end: string;
   cancel?: string;
+  sensitivity: WakeSensitivity;
 }
 
 export interface TurnSubmit {

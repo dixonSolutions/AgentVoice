@@ -8,7 +8,7 @@ import type { Model } from 'vosk-browser';
 import { captureMicStream, getSharedAudioContext, unlockAudioContext, connectSilentSink } from './audio.js';
 import { isCrossOriginIsolated, voskCoopError } from './cross-origin-isolation.js';
 import { loadVoskModel } from './vosk-model-cache.js';
-import { normalizeForWakeMatch } from './wake-words.js';
+import { normalizeForWakeMatch, type WakeSensitivity } from './wake-words.js';
 
 export const VOSK_MODEL_URL = '/vosk/model.tar.gz';
 export const VOSK_SAMPLE_RATE = 16000;
@@ -40,6 +40,22 @@ export interface VoskSpotterStartOptions {
   mediaStream?: MediaStream;
   /** When false, only final results fire onMatch (recommended for submit/end phrase). */
   matchPartial?: boolean;
+  /** Minimum mean Vosk word confidence for final-result matching. */
+  minimumConfidence?: number;
+}
+
+/** Convert the user-facing wake sensitivity into concrete Vosk behavior. */
+export function wakeSpotterOptions(
+  sensitivity: WakeSensitivity = 'high',
+): Pick<VoskSpotterStartOptions, 'matchPartial' | 'minimumConfidence'> {
+  switch (sensitivity) {
+    case 'strict':
+      return { matchPartial: false, minimumConfidence: 0.8 };
+    case 'balanced':
+      return { matchPartial: false, minimumConfidence: 0.65 };
+    case 'high':
+      return { matchPartial: true, minimumConfidence: 0.45 };
+  }
 }
 
 /** @deprecated use buildVoskGrammar */
@@ -56,6 +72,7 @@ export class VoskGrammarSpotter {
   private phrase = '';
   private triggered = false;
   private matchPartial = true;
+  private minimumConfidence = 0;
 
   constructor(private readonly cb: VoskGrammarSpotterCallbacks) {}
 
@@ -78,6 +95,7 @@ export class VoskGrammarSpotter {
     this.triggered = false;
     this.paused = false;
     this.matchPartial = opts.matchPartial ?? true;
+    this.minimumConfidence = opts.minimumConfidence ?? 0;
     this.cb.onStatus?.('Loading Vosk model…');
 
     await unlockAudioContext();
@@ -85,10 +103,16 @@ export class VoskGrammarSpotter {
 
     const grammar = buildVoskGrammar(this.phrase);
     this.recognizer = new model.KaldiRecognizer(VOSK_SAMPLE_RATE, grammar);
+    this.recognizer.setWords(true);
 
     this.recognizer.on('result', (message) => {
       if (message.event === 'result') {
-        this.handleRecognition(message.result.text, true);
+        const words = message.result.result ?? [];
+        const confidence =
+          words.length > 0
+            ? words.reduce((sum, word) => sum + word.conf, 0) / words.length
+            : null;
+        this.handleRecognition(message.result.text, true, confidence);
       }
     });
     this.recognizer.on('partialresult', (message) => {
@@ -169,9 +193,20 @@ export class VoskGrammarSpotter {
     this.stop();
   }
 
-  private handleRecognition(text: string | undefined, _fromFinal: boolean): void {
+  private handleRecognition(
+    text: string | undefined,
+    fromFinal: boolean,
+    confidence: number | null = null,
+  ): void {
     if (this.triggered || !text?.trim()) return;
     if (!voskPhraseMatches(text, this.phrase)) return;
+    if (
+      fromFinal &&
+      this.minimumConfidence > 0 &&
+      (confidence === null || confidence < this.minimumConfidence)
+    ) {
+      return;
+    }
     this.triggered = true;
     this.cb.onMatch?.(this.phrase, text.trim());
   }

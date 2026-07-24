@@ -118,6 +118,14 @@
               placeholder="cancel" [disabled]="!isBridgeConnected()" />
             <label for="cfg-wake-cancel">Cancel phrase</label>
           </p-iftalabel>
+          <p-iftalabel>
+            <p-select id="cfg-wake-sensitivity" [(ngModel)]="wakeSensitivity"
+              [options]="wakeSensitivityOptions" optionLabel="label" optionValue="value"
+              [disabled]="!isBridgeConnected()" />
+            <label for="cfg-wake-sensitivity">Wake sensitivity</label>
+          </p-iftalabel>
+          <p-message severity="secondary" variant="simple"
+            text="High reacts to partial speech. Balanced and Strict wait for Vosk confidence, reducing false activations with a slightly slower response." />
         </p-fieldset>
 
         <p-fieldset legend="Turn submit">

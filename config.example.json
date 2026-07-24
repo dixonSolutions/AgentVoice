@@ -45,7 +45,8 @@
       "wakeWords": {
         "start": "cursor listen",
         "end": "cursor send",
-        "cancel": "cancel"
+        "cancel": "cancel",
+        "sensitivity": "high"
       },
       "turnSubmit": {
         "silenceMs": 1500,

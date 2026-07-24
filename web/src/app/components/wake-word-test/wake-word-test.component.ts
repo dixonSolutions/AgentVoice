@@ -11,7 +11,10 @@ import { captureMicStream, unlockAudioContext } from '../../../audio.js';
 import { playVoiceCueNow } from '../../../sound-effects.js';
 import { isCrossOriginIsolated } from '../../../cross-origin-isolation.js';
 import { SileroVadDetector } from '../../../silero-vad.js';
-import { VoskGrammarSpotter } from '../../../vosk-wake-word.js';
+import {
+  VoskGrammarSpotter,
+  wakeSpotterOptions,
+} from '../../../vosk-wake-word.js';
 import { phrasesConflict } from '../../../wake-words.js';
 import { VoiceProvidersService } from '../../services/voice-providers.service';
 
@@ -286,7 +289,7 @@ export class WakeWordTestComponent implements OnInit, OnDestroy {
 
     await this.startSpotter.start(start, {
       mediaStream: this.micStream,
-      matchPartial: false,
+      ...wakeSpotterOptions(this.voiceProviders.data()?.wakeWords.sensitivity),
     });
   }
 

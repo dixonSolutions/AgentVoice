@@ -55,6 +55,11 @@ export const WakeWordsSchema = z.object({
   end: z.string().max(100).default('send'),
   /** Spoken during capture to abort the turn without sending — default "cancel". */
   cancel: z.string().max(100).default('cancel'),
+  /**
+   * Vosk wake detection trade-off. High accepts partial recognition for the
+   * lowest latency; balanced/strict wait for final word confidence.
+   */
+  sensitivity: z.enum(['high', 'balanced', 'strict']).default('high'),
 });
 
 export const TurnSubmitSchema = z.object({

@@ -41,7 +41,11 @@ import {
 } from './intelligence-audio.js';
 import type { SttGate } from './stt-gate.js';
 import { isCrossOriginIsolated, wakePhraseCoopError } from './cross-origin-isolation.js';
-import { VoskGrammarSpotter, voskPhraseMatches } from './vosk-wake-word.js';
+import {
+  VoskGrammarSpotter,
+  voskPhraseMatches,
+  wakeSpotterOptions,
+} from './vosk-wake-word.js';
 import { SileroVadDetector } from './silero-vad.js';
 import { TurnSubmitBuffer } from './turn-submit-buffer.js';
 import { playVoiceCueNow } from './sound-effects.js';
@@ -382,7 +386,7 @@ export class LlmIntelligenceSession {
       const mic = this.sharedMicStream ?? (await this.ensureSharedMic());
       await this.startSpotter.start(start, {
         mediaStream: mic,
-        matchPartial: true,
+        ...wakeSpotterOptions(this.wakeWords.sensitivity),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
