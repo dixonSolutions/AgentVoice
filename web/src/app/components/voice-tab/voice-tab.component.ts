@@ -173,14 +173,15 @@ export class VoiceTabComponent {
     () => this.isBridgeConnected() && this.isCascadeWorkflow(),
   );
 
-  /** Pen orb is available only while the live session can accept a text turn. */
-  protected readonly showTextOrb = computed(() => {
+  /** Keep the editor reachable throughout a live session, including while Cursor works. */
+  protected readonly showTextOrb = computed(
+    () => this.showTextInput() && this.voiceSession.conversationActive(),
+  );
+
+  /** A draft may be edited while busy, but a new turn waits for an idle listener. */
+  protected readonly canSendTextTurn = computed(() => {
     const state = this.appState.state();
-    return (
-      this.showTextInput() &&
-      this.voiceSession.conversationActive() &&
-      (state === 'inactive' || state === 'listening')
-    );
+    return state === 'inactive' || state === 'listening';
   });
 
   /** Hide project/setup chrome while a voice session is starting or live. */
@@ -412,7 +413,7 @@ export class VoiceTabComponent {
 
   protected sendTypedMessage(): void {
     const text = this.typedMessage.trim();
-    if (!text) return;
+    if (!text || !this.canSendTextTurn()) return;
     void this.voiceSession.sendTextMessage(text);
     this.typedMessage = '';
     this.textDialogVisible = false;

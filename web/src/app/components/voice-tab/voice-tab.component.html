@@ -159,7 +159,7 @@
     <p-button
       label="Send"
       icon="pi pi-send"
-      [disabled]="!typedMessage.trim() || appState.state() === 'working'"
+      [disabled]="!typedMessage.trim() || !canSendTextTurn()"
       (onClick)="sendTypedMessage()" />
   </div>
 </p-dialog>
