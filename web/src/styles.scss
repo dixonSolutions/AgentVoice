@@ -79,6 +79,15 @@ body {
 .cv-main--fullscreen {
   max-width: 100%;
   padding: 0;
+  overflow: hidden;
+  display: flex;
+}
+
+.cv-main--fullscreen > cv-voice-tab {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .cv-config {
@@ -295,13 +304,22 @@ body {
 }
 
 .cv-main--fullscreen .cv-live-log-panel {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 10;
+  display: flex;
+  flex: 0 0 min(28dvh, 12rem);
+  flex-direction: column;
+  min-height: 0;
   margin-bottom: 0;
   border-radius: 0;
   border-left: none;
   border-right: none;
+}
+
+.cv-main--fullscreen .cv-live-log-viewport {
+  flex: 1;
+  height: auto;
+  min-height: 0;
 }
 
 .cv-live-log-panel-header {
@@ -456,20 +474,45 @@ body {
   position: relative;
   z-index: 1;
   flex: 1;
+  min-height: 0;
+  overflow: hidden;
   margin: 0;
   padding: 1.5rem 1rem 2rem;
   gap: 1rem;
   justify-content: center;
-  min-height: min(70dvh, calc(100dvh - 10rem));
   border: none;
   border-radius: 0;
   background: var(--p-content-background);
 }
 
-.cv-main--fullscreen p-fluid {
+.cv-main--fullscreen .cv-voice-card {
   display: flex;
+  flex: 1;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+}
+
+.cv-main--fullscreen .cv-voice-card .p-card-header {
+  display: none;
+}
+
+.cv-main--fullscreen .cv-voice-card .p-card-body,
+.cv-main--fullscreen .cv-voice-card .p-card-content {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+}
+
+.cv-main--fullscreen .cv-voice-fluid {
+  display: flex;
+  flex: 1;
   flex-direction: column;
-  min-height: 100dvh;
+  min-height: 0;
+  gap: 0;
+  overflow: hidden;
 }
 
 .cv-voice-orb-stage--session .cv-voice-orb-caption {
@@ -843,7 +886,7 @@ body {
   }
 
   .cv-main--fullscreen .cv-live-log-viewport {
-    height: min(36vh, 14rem);
+    height: auto;
   }
 
   .cv-live-log-panel-header {
@@ -882,7 +925,7 @@ body {
   }
 
   .cv-voice-orb-stage--session {
-    min-height: min(58dvh, calc(100dvh - 14rem));
+    min-height: 0;
     padding: 0.75rem 0.75rem max(1rem, env(safe-area-inset-bottom, 0));
   }
 

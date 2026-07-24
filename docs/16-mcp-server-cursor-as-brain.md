@@ -67,6 +67,10 @@ orb at the bottom-left. It opens an Optimus dialog with a multiline Markdown
 request editor; Close preserves the draft and Send uses the same authenticated
 session without requiring microphone input.
 
+Live mode is a single non-scrolling viewport: session logs stay in a bounded
+region at the top, while the orb, mute control, hint, and pen action remain
+inside the available section below.
+
 ---
 
 ## 4 — Tool Surface Exposed to Cursor
