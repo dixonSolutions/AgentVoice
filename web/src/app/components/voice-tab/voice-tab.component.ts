@@ -178,10 +178,14 @@ export class VoiceTabComponent {
     () => this.showTextInput() && this.voiceSession.conversationActive(),
   );
 
-  /** A draft may be edited while busy, but a new turn waits for an idle listener. */
+  /** Cursor-native follow-ups are queued even while its current turn is running. */
   protected readonly canSendTextTurn = computed(() => {
     const state = this.appState.state();
-    return state === 'inactive' || state === 'listening';
+    return (
+      this.isCursorNative() ||
+      state === 'inactive' ||
+      state === 'listening'
+    );
   });
 
   /** Hide project/setup chrome while a voice session is starting or live. */

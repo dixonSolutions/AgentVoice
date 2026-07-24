@@ -65,9 +65,10 @@ manifest over HTTP. From that point Cursor's conversational agent has the full
 Throughout a live session, the Voice tab shows a secondary pen orb at the
 bottom-left. It opens an Optimus dialog with a multiline Markdown request
 editor. Close preserves the draft, and Send uses the same authenticated session
-without requiring microphone input. While Cursor is handling a turn, the
-editor remains available for drafting but Send is disabled until the session
-can safely accept another turn.
+without requiring microphone input. In `cursor_native`, Send remains available
+while Cursor is working; follow-up text is added to the existing voice-turn
+queue for the running agent. Workflows that cannot safely process overlapping
+turns retain their busy guard.
 
 Live mode is a single non-scrolling viewport: session logs stay in a bounded
 region at the top, while the orb, mute control, hint, and pen action remain

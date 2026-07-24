@@ -82,6 +82,7 @@ export class LlmIntelligenceSession {
   private closed = false;
   private wakeWords: WakeWords = { start: '', end: 'send' };
   private turnSubmit: TurnSubmit = { silenceMs: 1500, vadEnabled: true };
+  private workflow = 'cursor_native';
   private ttsSettings: VoiceTtsSettings = {
     cursorVoiceEnabled: true,
     interruptMode: 'pause',
@@ -305,7 +306,13 @@ export class LlmIntelligenceSession {
   /** Typed message — works even before wake phrase (skips wake gate). */
   sendTextTurn(text: string): void {
     const trimmed = text.trim();
-    if (!trimmed || this.closed || this.orchestratorBusy) return;
+    if (
+      !trimmed ||
+      this.closed ||
+      (this.orchestratorBusy && this.workflow !== 'cursor_native')
+    ) {
+      return;
+    }
     if (!this.wsConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.cb.onSttError?.('Not connected — tap the orb to start a session.');
       return;
@@ -1005,6 +1012,8 @@ export class LlmIntelligenceSession {
 
     switch (msg['type']) {
       case 'auth_ok': {
+        this.workflow =
+          typeof msg['workflow'] === 'string' ? msg['workflow'] : 'cursor_native';
         const wake = msg['wakeWords'] as WakeWords | undefined;
         this.wakeWords = wake ?? { start: '', end: 'send' };
         const submit = msg['turnSubmit'] as TurnSubmit | undefined;
