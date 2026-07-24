@@ -303,12 +303,20 @@ body {
   background: var(--p-content-background);
 }
 
-.cv-main--fullscreen .cv-live-log-panel {
+.cv-main--fullscreen cv-live-log-panel {
+  display: flex;
+  flex: 0 0 clamp(8rem, 24dvh, 11rem);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cv-main--fullscreen cv-live-log-panel > .cv-live-log-panel {
   position: relative;
   z-index: 10;
   display: flex;
-  flex: 0 0 min(28dvh, 12rem);
+  flex: 1;
   flex-direction: column;
+  width: 100%;
   min-height: 0;
   margin-bottom: 0;
   border-radius: 0;
@@ -493,7 +501,9 @@ body {
   border-radius: 0;
 }
 
-.cv-main--fullscreen .cv-voice-card .p-card-header {
+.cv-main--fullscreen .cv-voice-card .p-card-header,
+.cv-main--fullscreen .cv-voice-card .p-card-caption,
+.cv-main--fullscreen .cv-voice-card .p-card-title {
   display: none;
 }
 
