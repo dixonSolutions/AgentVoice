@@ -21,6 +21,9 @@ build/
 
 # Runtime state
 data/
+!docs/data/
+!docs/data/runlogs/
+!docs/data/runlogs/*.json
 *.db
 *.sqlite
 *.sqlite3

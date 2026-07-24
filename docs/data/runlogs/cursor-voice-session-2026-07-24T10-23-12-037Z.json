@@ -1,0 +1,1607 @@
+{
+  "exportedAt": "2026-07-24T10:23:12.037Z",
+  "scope": "session",
+  "count": 200,
+  "entries": [
+    {
+      "at": "2026-07-24T10:10:23.090Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Starting now — the QA agent is running lint, tests, and build."
+    },
+    {
+      "at": "2026-07-24T10:10:23.093Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Starting now — the QA agent is running lint, tests, and build."
+    },
+    {
+      "at": "2026-07-24T10:10:23.107Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Starting now — the QA agent is running lint, tests, and build.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:23.107Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:10:23.109Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Starting now — the QA agent is running lint, tests, and build."
+    },
+    {
+      "at": "2026-07-24T10:10:25.941Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ next_voice_turn",
+      "detail": "timeout_ms=25000"
+    },
+    {
+      "at": "2026-07-24T10:10:27.365Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Starting now — the QA agent is running lint, tests, and build."
+    },
+    {
+      "at": "2026-07-24T10:10:28.298Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Cursor started working on ship-game."
+    },
+    {
+      "at": "2026-07-24T10:10:28.311Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor started working on ship-game.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:28.311Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor started working on ship-game.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:28.315Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Cursor started working on ship-game."
+    },
+    {
+      "at": "2026-07-24T10:10:30.674Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Cursor started working on ship-game."
+    },
+    {
+      "at": "2026-07-24T10:10:33.738Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && git "
+    },
+    {
+      "at": "2026-07-24T10:10:33.751Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && git stat.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:33.751Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && git stat.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:33.756Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && git "
+    },
+    {
+      "at": "2026-07-24T10:10:33.759Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Got it — I'll finish QA, browser checks, and the private GitHub push myself in …"
+    },
+    {
+      "at": "2026-07-24T10:10:33.759Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Got it — I'll finish QA, browser checks, and the private GitHub push myself in this session.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:33.759Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:10:39.476Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && git "
+    },
+    {
+      "at": "2026-07-24T10:10:39.476Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Got it — I'll finish QA, browser checks, and the private GitHub push myself in t"
+    },
+    {
+      "at": "2026-07-24T10:10:39.497Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Got it — I'll finish QA, browser checks, and the private GitHub push myself in t"
+    },
+    {
+      "at": "2026-07-24T10:10:39.865Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Running lint, typecheck, tests, and build first."
+    },
+    {
+      "at": "2026-07-24T10:10:39.868Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Running lint, typecheck, tests, and build first.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:39.868Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:10:39.868Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ cursor_mcp_list",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:40.991Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← cursor_mcp_list",
+      "detail": "{\"servers\":[{\"name\":\"cursor-voice\",\"status\":\"ready\"}]}"
+    },
+    {
+      "at": "2026-07-24T10:10:45.183Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Got it — I'll finish QA, browser checks, and the private GitHub push myself in t"
+    },
+    {
+      "at": "2026-07-24T10:10:45.184Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Running lint, typecheck, tests, and build first."
+    },
+    {
+      "at": "2026-07-24T10:10:45.199Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Running lint, typecheck, tests, and build first."
+    },
+    {
+      "at": "2026-07-24T10:10:47.873Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ list_agents",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:47.873Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← list_agents",
+      "detail": "{\"agents\":[{\"id\":\"82987e2a-f9cc-4ad8-9df0-daf7ba9a7613\",\"kind\":\"job\",\"pid\":63560,\"activity\":\"called a tool\",\"busy\":true…"
+    },
+    {
+      "at": "2026-07-24T10:10:48.666Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Running lint, typecheck, tests, and build first."
+    },
+    {
+      "at": "2026-07-24T10:10:48.784Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && npm "
+    },
+    {
+      "at": "2026-07-24T10:10:48.797Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && npm run .",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:48.797Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && npm run .",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:48.803Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && npm "
+    },
+    {
+      "at": "2026-07-24T10:10:50.849Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← next_voice_turn",
+      "detail": "timeout"
+    },
+    {
+      "at": "2026-07-24T10:10:53.305Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ get_agent_status",
+      "detail": "id=82987e2a-f9cc-4ad8-9df0-daf7ba9a7613"
+    },
+    {
+      "at": "2026-07-24T10:10:53.306Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← get_agent_status",
+      "detail": "called a tool (32s elapsed)"
+    },
+    {
+      "at": "2026-07-24T10:10:54.616Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && npm "
+    },
+    {
+      "at": "2026-07-24T10:10:55.113Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Cursor is running: ran: which mcporter; mcporter list 2>&1 | head -40; ls /home/"
+    },
+    {
+      "at": "2026-07-24T10:10:55.122Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor is running: ran: which mcporter; mcporter list 2>&1 | head -40; ls /home/bory.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:55.122Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor is running: ran: which mcporter; mcporter list 2>&1 | head -40; ls /home/bory.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:55.127Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Cursor is running: ran: which mcporter; mcporter list 2>&1 | head -40; ls /home/"
+    },
+    {
+      "at": "2026-07-24T10:10:55.938Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ stop_agent",
+      "detail": "id=82987e2a-f9cc-4ad8-9df0-daf7ba9a7613"
+    },
+    {
+      "at": "2026-07-24T10:10:55.943Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← stop_agent",
+      "detail": "{\"ok\":true,\"message\":\"Agent 82987e2a-f9cc-4ad8-9df0-daf7ba9a7613 stopped.\"}"
+    },
+    {
+      "at": "2026-07-24T10:10:56.220Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Quality gates are running, and it's checking BrowserOS for the live browser pas…"
+    },
+    {
+      "at": "2026-07-24T10:10:56.220Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Quality gates are running, and it's checking BrowserOS for the live browser pass.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:10:56.227Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:10:58.412Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ next_voice_turn",
+      "detail": "timeout_ms=25000"
+    },
+    {
+      "at": "2026-07-24T10:11:01.642Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Cursor is running: ran: which mcporter; mcporter list 2>&1 | head -40; ls /home/"
+    },
+    {
+      "at": "2026-07-24T10:11:01.642Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Quality gates are running, and it's checking BrowserOS for the live browser pass"
+    },
+    {
+      "at": "2026-07-24T10:11:01.653Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Quality gates are running, and it's checking BrowserOS for the live browser pass"
+    },
+    {
+      "at": "2026-07-24T10:11:06.015Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Quality gates are running, and it's checking BrowserOS for the live browser pass"
+    },
+    {
+      "at": "2026-07-24T10:11:07.413Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && npm "
+    },
+    {
+      "at": "2026-07-24T10:11:07.423Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && npm run .",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:11:07.423Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && npm run .",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:11:07.427Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && npm "
+    },
+    {
+      "at": "2026-07-24T10:11:07.428Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor is running: ran: mcporter list browserose 2>&1 | head -80.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:11:07.428Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cursor is running: ran: mcporter list browserose 2>&1 | head -80.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:11:13.257Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Cursor is running: ran: cd \"/home/borys/Projects/SideProjects/Ship game\" && npm "
+    },
+    {
+      "at": "2026-07-24T10:11:13.257Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Cursor is running: ran: mcporter list browserose 2>&1 | head -80."
+    },
+    {
+      "at": "2026-07-24T10:11:13.270Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Cursor is running: ran: mcporter list browserose 2>&1 | head -80."
+    },
+    {
+      "at": "2026-07-24T10:11:17.928Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Cursor is running: ran: mcporter list browserose 2>&1 | head -80."
+    },
+    {
+      "at": "2026-07-24T10:11:23.617Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← next_voice_turn",
+      "detail": "timeout"
+    },
+    {
+      "at": "2026-07-24T10:11:38.852Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ get_agent_status",
+      "detail": "id=82987e2a-f9cc-4ad8-9df0-daf7ba9a7613"
+    },
+    {
+      "at": "2026-07-24T10:11:38.859Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← get_agent_status",
+      "detail": "error"
+    },
+    {
+      "at": "2026-07-24T10:11:44.689Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "The workers keep self-stopping, so I'm finishing QA, browser checks, and the Gi…"
+    },
+    {
+      "at": "2026-07-24T10:11:44.690Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "The workers keep self-stopping, so I'm finishing QA, browser checks, and the Git"
+    },
+    {
+      "at": "2026-07-24T10:11:44.707Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "The workers keep self-stopping, so I'm finishing QA, browser checks, and the GitHub push myself.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:11:44.707Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "The workers keep self-stopping, so I'm finishing QA, browser checks, and the Git"
+    },
+    {
+      "at": "2026-07-24T10:11:44.710Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:11:47.030Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Running lint, typecheck, tests, and production build now."
+    },
+    {
+      "at": "2026-07-24T10:11:47.038Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Running lint, typecheck, tests, and production build now.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:11:47.038Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:11:50.799Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "The workers keep self-stopping, so I'm finishing QA, browser checks, and the Git"
+    },
+    {
+      "at": "2026-07-24T10:11:50.800Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Running lint, typecheck, tests, and production build now."
+    },
+    {
+      "at": "2026-07-24T10:11:50.812Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Running lint, typecheck, tests, and production build now."
+    },
+    {
+      "at": "2026-07-24T10:11:54.778Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Running lint, typecheck, tests, and production build now."
+    },
+    {
+      "at": "2026-07-24T10:12:07.712Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "All quality gates passed — strengthening API security tests, then opening the g…"
+    },
+    {
+      "at": "2026-07-24T10:12:07.712Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "All quality gates passed — strengthening API security tests, then opening the ga"
+    },
+    {
+      "at": "2026-07-24T10:12:07.728Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "All quality gates passed — strengthening API security tests, then opening the game in a browser.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:12:07.733Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "All quality gates passed — strengthening API security tests, then opening the ga"
+    },
+    {
+      "at": "2026-07-24T10:12:07.735Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:12:13.399Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "All quality gates passed — strengthening API security tests, then opening the ga"
+    },
+    {
+      "at": "2026-07-24T10:12:20.825Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Servers are starting — I'll open the game once Angular finishes compiling."
+    },
+    {
+      "at": "2026-07-24T10:12:20.825Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Servers are starting — I'll open the game once Angular finishes compiling."
+    },
+    {
+      "at": "2026-07-24T10:12:20.838Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Servers are starting — I'll open the game once Angular finishes compiling.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:12:20.839Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:12:20.839Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Servers are starting — I'll open the game once Angular finishes compiling."
+    },
+    {
+      "at": "2026-07-24T10:12:25.224Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Servers are starting — I'll open the game once Angular finishes compiling."
+    },
+    {
+      "at": "2026-07-24T10:12:26.140Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ next_voice_turn",
+      "detail": "timeout_ms=15000"
+    },
+    {
+      "at": "2026-07-24T10:12:41.192Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← next_voice_turn",
+      "detail": "timeout"
+    },
+    {
+      "at": "2026-07-24T10:12:53.693Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Game is live on port 4200 — opening it in the browser now."
+    },
+    {
+      "at": "2026-07-24T10:12:53.694Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Game is live on port 4200 — opening it in the browser now."
+    },
+    {
+      "at": "2026-07-24T10:12:53.717Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Game is live on port 4200 — opening it in the browser now.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:12:53.718Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Game is live on port 4200 — opening it in the browser now."
+    },
+    {
+      "at": "2026-07-24T10:12:53.718Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:12:56.623Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "BrowserOS isn't up yet — starting it, then I'll retry the game page."
+    },
+    {
+      "at": "2026-07-24T10:12:56.629Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "BrowserOS isn't up yet — starting it, then I'll retry the game page.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:12:56.629Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:12:58.088Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Game is live on port 4200 — opening it in the browser now."
+    },
+    {
+      "at": "2026-07-24T10:12:58.089Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "BrowserOS isn't up yet — starting it, then I'll retry the game page."
+    },
+    {
+      "at": "2026-07-24T10:12:58.107Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "BrowserOS isn't up yet — starting it, then I'll retry the game page."
+    },
+    {
+      "at": "2026-07-24T10:13:02.446Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "BrowserOS isn't up yet — starting it, then I'll retry the game page."
+    },
+    {
+      "at": "2026-07-24T10:14:00.858Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "BrowserOS is launching with remote debugging — waiting for the CDP port."
+    },
+    {
+      "at": "2026-07-24T10:14:00.872Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "BrowserOS is launching with remote debugging — waiting for the CDP port."
+    },
+    {
+      "at": "2026-07-24T10:14:00.881Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "BrowserOS is launching with remote debugging — waiting for the CDP port.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:14:00.881Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:14:00.887Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "BrowserOS is launching with remote debugging — waiting for the CDP port."
+    },
+    {
+      "at": "2026-07-24T10:14:05.093Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "BrowserOS is launching with remote debugging — waiting for the CDP port."
+    },
+    {
+      "at": "2026-07-24T10:14:39.929Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "BrowserOS CDP isn't binding — I'm restarting it with a clean debug profile."
+    },
+    {
+      "at": "2026-07-24T10:14:39.929Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "BrowserOS CDP isn't binding — I'm restarting it with a clean debug profile."
+    },
+    {
+      "at": "2026-07-24T10:14:39.938Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "BrowserOS CDP isn't binding — I'm restarting it with a clean debug profile.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:14:39.948Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:14:39.948Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "BrowserOS CDP isn't binding — I'm restarting it with a clean debug profile."
+    },
+    {
+      "at": "2026-07-24T10:14:44.692Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "BrowserOS CDP isn't binding — I'm restarting it with a clean debug profile."
+    },
+    {
+      "at": "2026-07-24T10:16:10.789Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Got a debug browser on port 9100 — loading the game and grabbing screenshots."
+    },
+    {
+      "at": "2026-07-24T10:16:10.790Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Got a debug browser on port 9100 — loading the game and grabbing screenshots."
+    },
+    {
+      "at": "2026-07-24T10:16:10.808Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Got a debug browser on port 9100 — loading the game and grabbing screenshots.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:16:10.809Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:16:10.809Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Got a debug browser on port 9100 — loading the game and grabbing screenshots."
+    },
+    {
+      "at": "2026-07-24T10:16:16.417Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Got a debug browser on port 9100 — loading the game and grabbing screenshots."
+    },
+    {
+      "at": "2026-07-24T10:19:08.331Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "The browser hit an instant Defeat screen — I'm fixing that win-lose bug now."
+    },
+    {
+      "at": "2026-07-24T10:19:08.342Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "The browser hit an instant Defeat screen — I'm fixing that win-lose bug now."
+    },
+    {
+      "at": "2026-07-24T10:19:08.357Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "The browser hit an instant Defeat screen — I'm fixing that win-lose bug now.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:19:08.357Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:19:08.357Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "The browser hit an instant Defeat screen — I'm fixing that win-lose bug now."
+    },
+    {
+      "at": "2026-07-24T10:19:12.863Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "The browser hit an instant Defeat screen — I'm fixing that win-lose bug now."
+    },
+    {
+      "at": "2026-07-24T10:20:17.040Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Gameplay HUD is working after Refit — I added a combat grace period so you don'…"
+    },
+    {
+      "at": "2026-07-24T10:20:17.045Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Gameplay HUD is working after Refit — I added a combat grace period so you don't"
+    },
+    {
+      "at": "2026-07-24T10:20:17.060Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Gameplay HUD is working after Refit — I added a combat grace period so you don't"
+    },
+    {
+      "at": "2026-07-24T10:20:17.060Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Gameplay HUD is working after Refit — I added a combat grace period so you don't die the second you cast off.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:20:17.060Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:20:23.407Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Gameplay HUD is working after Refit — I added a combat grace period so you don't"
+    },
+    {
+      "at": "2026-07-24T10:20:48.190Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Cast off works — the sailing HUD is up with pause, sail, fire, and anchor contr…"
+    },
+    {
+      "at": "2026-07-24T10:20:48.191Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Cast off works — the sailing HUD is up with pause, sail, fire, and anchor contro"
+    },
+    {
+      "at": "2026-07-24T10:20:48.215Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Cast off works — the sailing HUD is up with pause, sail, fire, and anchor contro"
+    },
+    {
+      "at": "2026-07-24T10:20:48.215Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Cast off works — the sailing HUD is up with pause, sail, fire, and anchor controls.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:20:48.215Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:20:54.058Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Cast off works — the sailing HUD is up with pause, sail, fire, and anchor contro"
+    },
+    {
+      "at": "2026-07-24T10:21:05.142Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Showing the onboarding and gameplay screenshots on your phone now."
+    },
+    {
+      "at": "2026-07-24T10:21:05.153Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Showing the onboarding and gameplay screenshots on your phone now."
+    },
+    {
+      "at": "2026-07-24T10:21:05.170Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Showing the onboarding and gameplay screenshots on your phone now."
+    },
+    {
+      "at": "2026-07-24T10:21:05.170Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Showing the onboarding and gameplay screenshots on your phone now.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:21:05.170Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:21:05.170Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ show_images",
+      "detail": "images=…, duration_ms=20000, caption=Ship Game vertical slice"
+    },
+    {
+      "at": "2026-07-24T10:21:05.171Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← show_images",
+      "detail": "{\"ok\":true,\"count\":2,\"delivered\":true,\"batch_id\":\"9469f06e-b584-43e7-8451-070696a256ad\"}"
+    },
+    {
+      "at": "2026-07-24T10:21:08.764Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Showing the onboarding and gameplay screenshots on your phone now."
+    },
+    {
+      "at": "2026-07-24T10:21:25.235Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Tests and build are green — committing the balance fix, then pushing a private …"
+    },
+    {
+      "at": "2026-07-24T10:21:25.235Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Tests and build are green — committing the balance fix, then pushing a private G"
+    },
+    {
+      "at": "2026-07-24T10:21:25.254Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Tests and build are green — committing the balance fix, then pushing a private GitHub repo.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:21:25.254Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:21:25.255Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Tests and build are green — committing the balance fix, then pushing a private G"
+    },
+    {
+      "at": "2026-07-24T10:21:30.656Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Tests and build are green — committing the balance fix, then pushing a private G"
+    },
+    {
+      "at": "2026-07-24T10:21:38.762Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Done — Ship Game is playable at localhost 4200 with the private repo pushed."
+    },
+    {
+      "at": "2026-07-24T10:21:38.763Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Done — Ship Game is playable at localhost 4200 with the private repo pushed."
+    },
+    {
+      "at": "2026-07-24T10:21:38.773Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Done — Ship Game is playable at localhost 4200 with the private repo pushed.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:21:38.782Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:21:38.782Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Done — Ship Game is playable at localhost 4200 with the private repo pushed."
+    },
+    {
+      "at": "2026-07-24T10:21:41.617Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "What works: wind sailing, weather, ocean waves, AI ships, cannons, crew dialogu…"
+    },
+    {
+      "at": "2026-07-24T10:21:41.617Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "What works: wind sailing, weather, ocean waves, AI ships, cannons, crew dialogue via mock Bedrock, and an Optimus edge HUD.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:21:41.617Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:21:44.194Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Done — Ship Game is playable at localhost 4200 with the private repo pushed."
+    },
+    {
+      "at": "2026-07-24T10:21:44.195Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "What works: wind sailing, weather, ocean waves, AI ships, cannons, crew dialogue"
+    },
+    {
+      "at": "2026-07-24T10:21:44.207Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "What works: wind sailing, weather, ocean waves, AI ships, cannons, crew dialogue"
+    },
+    {
+      "at": "2026-07-24T10:21:44.277Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Controls are Q and E to steer, W and S for sail trim, Shift throttle, Space fir…"
+    },
+    {
+      "at": "2026-07-24T10:21:44.280Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Controls are Q and E to steer, W and S for sail trim, Shift throttle, Space fire, A anchor, mouse aim, Esc pause, plus touch and gamepad.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:21:44.280Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:21:47.247Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Verification passed for lint, typecheck, seventeen tests, production build, and…"
+    },
+    {
+      "at": "2026-07-24T10:21:47.248Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Verification passed for lint, typecheck, seventeen tests, production build, and live browser casting off into gameplay.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:21:47.252Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:21:50.130Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Private repo is at github.com slash dixonSolutions slash ship-game, and .env wa…"
+    },
+    {
+      "at": "2026-07-24T10:21:50.130Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Private repo is at github.com slash dixonSolutions slash ship-game, and .env was never tracked.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:21:50.130Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:21:52.638Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "What works: wind sailing, weather, ocean waves, AI ships, cannons, crew dialogue"
+    },
+    {
+      "at": "2026-07-24T10:21:52.638Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Controls are Q and E to steer, W and S for sail trim, Shift throttle, Space fire"
+    },
+    {
+      "at": "2026-07-24T10:21:52.653Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Controls are Q and E to steer, W and S for sail trim, Shift throttle, Space fire"
+    },
+    {
+      "at": "2026-07-24T10:21:53.809Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "Limits: procedural placeholder art and sounds, and real Bedrock Polly stay off …"
+    },
+    {
+      "at": "2026-07-24T10:21:53.813Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "Limits: procedural placeholder art and sounds, and real Bedrock Polly stay off until you fill AWS keys with MOCK_AWS false.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:21:53.813Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:21:56.779Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ speak",
+      "detail": "To run it, open the Ship game folder and use npm start — client on 4200, API on…"
+    },
+    {
+      "at": "2026-07-24T10:21:56.779Z",
+      "level": "info",
+      "category": "transcript",
+      "subcategory": null,
+      "summary": "To run it, open the Ship game folder and use npm start — client on 4200, API on 8787.",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:21:56.782Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← speak",
+      "detail": "ok (1 sessions)"
+    },
+    {
+      "at": "2026-07-24T10:22:00.359Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "→ done",
+      "detail": null
+    },
+    {
+      "at": "2026-07-24T10:22:00.364Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tool",
+      "summary": "← done",
+      "detail": "mic re-armed"
+    },
+    {
+      "at": "2026-07-24T10:22:02.259Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Controls are Q and E to steer, W and S for sail trim, Shift throttle, Space fire"
+    },
+    {
+      "at": "2026-07-24T10:22:02.259Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Verification passed for lint, typecheck, seventeen tests, production build, and "
+    },
+    {
+      "at": "2026-07-24T10:22:02.278Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Verification passed for lint, typecheck, seventeen tests, production build, and "
+    },
+    {
+      "at": "2026-07-24T10:22:09.811Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Verification passed for lint, typecheck, seventeen tests, production build, and "
+    },
+    {
+      "at": "2026-07-24T10:22:09.811Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Private repo is at github.com slash dixonSolutions slash ship-game, and .env was"
+    },
+    {
+      "at": "2026-07-24T10:22:09.832Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Private repo is at github.com slash dixonSolutions slash ship-game, and .env was"
+    },
+    {
+      "at": "2026-07-24T10:22:15.772Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Private repo is at github.com slash dixonSolutions slash ship-game, and .env was"
+    },
+    {
+      "at": "2026-07-24T10:22:15.772Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "Limits: procedural placeholder art and sounds, and real Bedrock Polly stay off u"
+    },
+    {
+      "at": "2026-07-24T10:22:15.786Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "Limits: procedural placeholder art and sounds, and real Bedrock Polly stay off u"
+    },
+    {
+      "at": "2026-07-24T10:22:23.903Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "Limits: procedural placeholder art and sounds, and real Bedrock Polly stay off u"
+    },
+    {
+      "at": "2026-07-24T10:22:23.903Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS start",
+      "detail": "To run it, open the Ship game folder and use npm start — client on 4200, API on "
+    },
+    {
+      "at": "2026-07-24T10:22:23.916Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS playing",
+      "detail": "To run it, open the Ship game folder and use npm start — client on 4200, API on "
+    },
+    {
+      "at": "2026-07-24T10:22:32.732Z",
+      "level": "info",
+      "category": "voice",
+      "subcategory": "tts",
+      "summary": "Browser TTS done",
+      "detail": "To run it, open the Ship game folder and use npm start — client on 4200, API on "
+    }
+  ]
+}
