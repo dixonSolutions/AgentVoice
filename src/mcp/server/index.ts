@@ -52,6 +52,7 @@ import { registerRequest, type UserInputRequest, type PlanApprovalRequest } from
 import { notifyPhone } from '../../push/notifyPhone.js';
 import { instrumentMcpToolLogging } from './toolLogging.js';
 import { handleShowImages } from './imageToolHandlers.js';
+import { voiceTurnQueue } from './turnQueue.js';
 
 const log = childLogger('mcp:server');
 
@@ -236,9 +237,25 @@ function buildMcpServer(sessionKey: string): McpServer {
   server.tool(
     'stop_agent',
     'Terminate a specific worker agent immediately (SIGTERM → SIGKILL). ' +
-      'Works for both singleton and worktree agents. Use list_agents() to get the id.',
+      'Works for both singleton and worktree agents. Use list_agents() to get the id. ' +
+      'The API rejects this unless the user explicitly issued a recent stop/cancel command.',
     { id: z.string().min(1).describe('Agent or job ID from list_agents.') },
     async ({ id }) => {
+      if (hasActiveVoiceSession() && !voiceTurnQueue.checkAndClearInterrupt()) {
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                ok: false,
+                error: 'USER_STOP_REQUIRED',
+                message: 'Worker remains running — only an explicit recent user stop command can terminate it.',
+              }),
+            },
+          ],
+          isError: true,
+        };
+      }
       const result = await agentTools.handleStopAgent({ id });
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },

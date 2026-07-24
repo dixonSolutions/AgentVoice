@@ -113,7 +113,7 @@ export function summarizeToolResult(tool: string, result: unknown): string {
     case 'speak':
       return parsed['ok'] ? `ok (${parsed['sessions'] ?? 0} sessions)` : 'failed';
     case 'done':
-      return parsed['ok'] ? 'mic re-armed' : 'failed';
+      return parsed['ok'] ? 'turn complete; mic waits for queued speech' : 'failed';
     case 'next_voice_turn': {
       const turn = parsed['turn'];
       if (turn == null) return 'timeout';

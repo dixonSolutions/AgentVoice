@@ -32,7 +32,11 @@ export function isStartPhrase(text: string, start: string): boolean {
   return normText.startsWith(`${normPhrase} `);
 }
 
-/** True when text contains the wake phrase as consecutive whole words (e.g. TTS line). */
+/**
+ * True when TTS text contains the wake phrase as consecutive words.
+ * During playback Vosk may reduce an inflected word ("starting") to the
+ * configured wake word ("start"), so long wake tokens also match prefixes.
+ */
 export function textContainsWakePhrase(text: string, wake: string): boolean {
   const normText = normalizeForWakeMatch(text);
   const normWake = normalizeForWakeMatch(wake);
@@ -44,7 +48,12 @@ export function textContainsWakePhrase(text: string, wake: string): boolean {
   if (textWords.length < wakeWords.length) return false;
 
   for (let i = 0; i <= textWords.length - wakeWords.length; i++) {
-    if (wakeWords.every((word, j) => textWords[i + j] === word)) {
+    if (
+      wakeWords.every((word, j) => {
+        const textWord = textWords[i + j] ?? '';
+        return textWord === word || (word.length >= 4 && textWord.startsWith(word));
+      })
+    ) {
       return true;
     }
   }

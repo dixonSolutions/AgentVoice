@@ -112,6 +112,8 @@ export class LlmIntelligenceSession {
   private sttBackend: SttBackend = 'text_only';
   private ttsBackend: TtsBackend = 'none';
   private readonly ttsPile = new TtsPile((text, ctx) => this.playSpeakUtterance(text, ctx));
+  /** Server called done(); re-arm only after all queued speech finishes. */
+  private turnCompletionPending = false;
   private pendingTtsInterrupt: TtsInterruptSnapshot | null = null;
   private meterMicChain: MicProcessingChain | null = null;
   private startSpotter: VoskGrammarSpotter | null = null;
@@ -154,7 +156,11 @@ export class LlmIntelligenceSession {
       this.cb.onSpeaking(active);
       this.notifySpeakingState(active);
       if (!active) {
-        this.ensureWakeListening();
+        if (this.turnCompletionPending && !this.ttsPile.isBargeInPaused()) {
+          this.finishTurnComplete();
+        } else {
+          this.ensureWakeListening();
+        }
       }
       this.syncCapture();
     });
@@ -1110,11 +1116,12 @@ export class LlmIntelligenceSession {
         this.endPhrasePending = false;
         this.turnBuffer?.dispose();
         this.turnBuffer = null;
-        this.ttsPile.resetHeard();
         this.pendingTtsInterrupt = null;
         this.cb.onWorking(false);
-        this.cb.onTurnComplete?.();
-        void this.returnToWakeListen();
+        this.turnCompletionPending = true;
+        if (!this.ttsPile.isActive() && !this.ttsPile.isBargeInPaused()) {
+          this.finishTurnComplete();
+        }
         break;
 
       case 'error': {
@@ -1133,6 +1140,14 @@ export class LlmIntelligenceSession {
       default:
         break;
     }
+  }
+
+  private finishTurnComplete(): void {
+    if (!this.turnCompletionPending || this.closed) return;
+    this.turnCompletionPending = false;
+    this.ttsPile.resetHeard();
+    this.cb.onTurnComplete?.();
+    void this.returnToWakeListen();
   }
 
   /** Queue speak lines from MCP — piles and plays sequentially. */

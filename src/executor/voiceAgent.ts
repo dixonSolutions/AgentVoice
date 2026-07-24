@@ -86,7 +86,8 @@ function buildPendingTurnBlock(pendingTurn?: string): string {
   const text = pendingTurn?.trim();
   if (!text) return '';
   return (
-    `\n\nUser just spoke (also queued for next_voice_turn()):\n"${text}"\n\n` +
+    `\n\nUser just spoke (delivered here directly; it is not queued):\n"${text}"\n\n` +
+    'Address this request now and do not call next_voice_turn() before acting. ' +
     'You MUST answer via speak() — text-only replies are inaudible. Call speak() then done().'
   );
 }

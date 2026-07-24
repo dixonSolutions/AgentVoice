@@ -36,7 +36,10 @@ interface PendingWaiter {
   timer: NodeJS.Timeout;
 }
 
-const INTERRUPT_PHRASES = [/\bstop\b/i, /\bcancel\b/i, /\babort\b/i, /\bquit\b/i];
+const INTERRUPT_PHRASES = [
+  /^(?:please\s+)?(?:stop|cancel|abort|quit)\b/i,
+  /^(?:can|could|would)\s+you\s+(?:please\s+)?(?:stop|cancel|abort|quit)\b/i,
+];
 
 function detectInterrupt(text: string): boolean {
   return INTERRUPT_PHRASES.some((re) => re.test(text));
@@ -50,6 +53,7 @@ class VoiceTurnQueue {
   private readonly queue: VoiceTurn[] = [];
   private readonly waiters: PendingWaiter[] = [];
   private interruptFlag = false;
+  private interruptFlagAt = 0;
 
   /**
    * Push a transcribed turn from the PWA into the queue.
@@ -60,6 +64,7 @@ class VoiceTurnQueue {
     const isInterrupt = Boolean(options?.isInterrupt) || phraseInterrupt;
     if (isInterrupt) {
       this.interruptFlag = true;
+      this.interruptFlagAt = Date.now();
       log.info(
         {
           text: text.slice(0, 80),
@@ -107,10 +112,11 @@ class VoiceTurnQueue {
     });
   }
 
-  /** Check and reset the interrupt flag (for tool handlers to honour). */
+  /** Check and reset recent user authorization for a destructive stop action. */
   checkAndClearInterrupt(): boolean {
-    const v = this.interruptFlag;
+    const v = this.interruptFlag && Date.now() - this.interruptFlagAt <= 120_000;
     this.interruptFlag = false;
+    this.interruptFlagAt = 0;
     return v;
   }
 

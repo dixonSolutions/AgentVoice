@@ -203,8 +203,10 @@ unspoken line in full.
 | TTS playing; Vosk hears wake; current line **does not** contain wake phrase | Barge-in → snapshot → `tts_interrupt` on next turn |
 | TTS playing; Vosk mis-hears wake on unrelated audio | Barge-in (rare; no echo filter) |
 
-The echo check uses **whole-word** matching (`textContainsWakePhrase`) on the
-**full current TTS line** from `ttsPile.getCurrentLine()`, not playback position.
+The echo check uses word matching (`textContainsWakePhrase`) on the **full current
+TTS line** from `ttsPile.getCurrentLine()`, not playback position. Tokens of four
+or more characters also match inflected prefixes, so a `start` wake phrase is
+suppressed while TTS says “starting”.
 
 ### Rejected approach
 
@@ -233,7 +235,7 @@ Also stop running workers on barge-in (`stop_agent`) before handling the new req
 | Event | Effect |
 | --- | --- |
 | `sendUserTurn()` | Consumes and clears `pendingTtsInterrupt` |
-| `turn_complete` (from bridge) | Clears `pendingTtsInterrupt`; `ttsPile.resetHeard()` |
+| `turn_complete` (from bridge) | Marks completion pending; after queued TTS drains, clears state and re-arms wake detection |
 | Echo ignored | No snapshot created; spotter trigger reset only |
 
 ---

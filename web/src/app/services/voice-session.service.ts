@@ -264,7 +264,6 @@ export class VoiceSessionService {
   injectNarration(text: string): void {
     if (!this.conversationActive()) return;
     this._session?.injectNarration(text);
-    this.addEntry(text, 'assistant');
   }
 
   /** Typed message for llm_intelligence (desktop dev / no mic STT). */

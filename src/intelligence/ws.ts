@@ -213,12 +213,12 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
             const phraseInterrupt = /\b(stop everything|abort|quit)\b/i.test(text);
             const isInterrupt =
               Boolean(msg['is_interrupt']) && phraseInterrupt && !ttsInterrupt;
-            voiceTurnQueue.enqueue(text, { isInterrupt, ttsInterrupt });
 
             const bridgeSession = getSessionState(sessionKey);
             let project = resolveProject(bridgeSession.activeProject ?? '');
+            const agentAlreadyRunning = isVoiceAgentRunning();
 
-            if (!isVoiceAgentRunning()) {
+            if (!agentAlreadyRunning) {
               if (!project) {
                 send(socket, {
                   type: 'speak',
@@ -243,13 +243,24 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
                 intelSession.busy = false;
                 return;
               }
+            } else {
+              // A running voice agent receives follow-up turns through MCP polling.
+              // Initial turns are passed directly in the spawn prompt and must not
+              // also be queued, otherwise next_voice_turn() delivers them twice.
+              voiceTurnQueue.enqueue(text, { isInterrupt, ttsInterrupt });
             }
 
             const va = getActiveVoiceAgent();
 
             log.info(
-              { sessionKey, runId: va?.runId, pid: va?.pid, sessionId: va?.sessionId },
-              'cursor_native turn queued',
+              {
+                sessionKey,
+                runId: va?.runId,
+                pid: va?.pid,
+                sessionId: va?.sessionId,
+                delivery: agentAlreadyRunning ? 'queue' : 'spawn_prompt',
+              },
+              'cursor_native turn delivered',
             );
             return;
           }

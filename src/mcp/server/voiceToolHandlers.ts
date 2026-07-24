@@ -177,7 +177,7 @@ export interface DoneResult {
 
 /**
  * done() — called by Cursor when it has finished speaking.
- * Sends turn_complete to all connected PWA sessions so the mic re-arms.
+ * Sends turn_complete; the PWA re-arms after queued TTS has finished.
  */
 export function handleDone(): DoneResult {
   if (!hasActiveVoiceSession()) {
@@ -187,12 +187,12 @@ export function handleDone(): DoneResult {
   return { ok: true };
 }
 
-/** Re-arm PWA mic — after done() or when the voice agent process exits. */
+/** Mark the turn complete — PWA waits for queued speech before re-arming. */
 export function broadcastVoiceTurnIdle(): void {
   // Do not clear spokeThisTurn here — voiceAgent exit still needs it.
-  log.info('voice turn idle — re-arming mic');
+  log.info('voice turn complete — PWA will re-arm after queued speech');
   // eslint-disable-next-line no-console
-  console.log('[voice] ✓ done — mic re-arming, waiting for next wake phrase');
+  console.log('[voice] ✓ done — finishing queued speech before mic re-arms');
   broadcastToVoiceSessions({ type: 'thinking', value: false });
   broadcastToVoiceSessions({ type: 'turn_complete' });
   notifyTurnComplete();

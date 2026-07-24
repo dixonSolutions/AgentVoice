@@ -334,7 +334,8 @@ export class Watcher {
     } else if (kind === 'shell') {
       if (cmd) this.summary.shellCommands.push(cmd);
       this.trackEvent('shell_run', { cmd, label });
-      this.emit({ kind: 'shell_run', text: `Cursor is running: ${label}.` });
+      // Raw commands are useful in logs/status but noisy and potentially
+      // sensitive over TTS. Cadence ticks provide concise spoken progress.
     }
   }
 
@@ -353,7 +354,7 @@ export class Watcher {
 
   /**
    * Emit a NarrationEvent to all subscribers.
-   * Transition events (file_write, shell_run, job_done, job_error) bypass
+   * Transition events (file_write, job_done, job_error) bypass
    * the cadence gate. Only progress_tick is gated.
    */
   private emit(params: { kind: NarrationKind; text: string }): void {
