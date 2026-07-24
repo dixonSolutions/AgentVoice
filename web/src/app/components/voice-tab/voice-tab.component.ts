@@ -4,12 +4,11 @@ import { FormsModule } from '@angular/forms';
 import { Accordion, AccordionContent, AccordionHeader, AccordionPanel } from '@openng/optimus-ui/accordion';
 import { Button } from '@openng/optimus-ui/button';
 import { Card } from '@openng/optimus-ui/card';
-import { Fieldset } from '@openng/optimus-ui/fieldset';
+import { Dialog } from '@openng/optimus-ui/dialog';
 import { Fluid } from '@openng/optimus-ui/fluid';
-import { IftaLabel } from '@openng/optimus-ui/iftalabel';
-import { InputText } from '@openng/optimus-ui/inputtext';
 import { Message } from '@openng/optimus-ui/message';
 import { Tag } from '@openng/optimus-ui/tag';
+import { Textarea } from '@openng/optimus-ui/textarea';
 
 import {
   FilterableListPickerComponent,
@@ -53,13 +52,12 @@ interface SessionOption extends FilterableListOption {
     AccordionContent,
     Button,
     Card,
-    Fieldset,
+    Dialog,
     Fluid,
-    IftaLabel,
-    InputText,
     Message,
     FilterableListPickerComponent,
     Tag,
+    Textarea,
     ApprovalPanelComponent,
     ImageCarouselComponent,
     VoiceOrbComponent,
@@ -78,6 +76,7 @@ export class VoiceTabComponent {
   protected selectedProject: string | null = null;
   protected selectedSessionId: string = NEW_CURSOR_SESSION_ID;
   protected typedMessage = '';
+  protected textDialogVisible = false;
   protected readonly sessionHistoryLoaded = signal(false);
   protected readonly loadingSessionLogs = signal(false);
   protected readonly cursorSessions = signal<CursorSessionEntry[]>([]);
@@ -406,6 +405,22 @@ export class VoiceTabComponent {
     if (!text) return;
     void this.voiceSession.sendTextMessage(text);
     this.typedMessage = '';
+    this.textDialogVisible = false;
+  }
+
+  protected openTextDialog(): void {
+    this.textDialogVisible = true;
+  }
+
+  protected closeTextDialog(): void {
+    this.textDialogVisible = false;
+  }
+
+  protected handleEditorKeydown(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      this.sendTypedMessage();
+    }
   }
 
   private async loadSessionsForProject(project: string): Promise<void> {

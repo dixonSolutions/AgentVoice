@@ -58,9 +58,13 @@ manifest over HTTP. From that point Cursor's conversational agent has the full
 6. Cursor reasons with full project context
 7. Cursor calls speak(text) — one sentence at a time for low first-audio latency
 8. Bridge handles speak(): → Amazon Polly/WebKit TTS → PWA audio
-9. Cursor calls done() → bridge sends mic-rearm signal to PWA
+9. Cursor calls done() → PWA finishes queued TTS, then re-arms the mic
 10. Loop: back to step 1
 ```
+
+The Voice tab also provides a secondary pen orb. It opens an Optimus dialog with
+a multiline Markdown request editor; Close preserves the draft and Send starts
+the same authenticated voice-session flow without requiring microphone input.
 
 ---
 

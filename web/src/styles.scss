@@ -482,7 +482,15 @@ body {
   padding: 0 1.25rem 1.5rem;
 }
 
+.cv-voice-orb-actions {
+  display: grid;
+  grid-template-columns: 3.5rem auto 3.5rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .cv-voice-orb-btn {
+  grid-column: 2;
   appearance: none;
   border: none;
   background: transparent;
@@ -509,6 +517,70 @@ body {
     outline: 2px solid var(--p-focus-ring-color, var(--p-primary-color));
     outline-offset: 4px;
   }
+}
+
+.cv-text-orb-btn {
+  grid-column: 3;
+  width: 3.5rem;
+  height: 3.5rem;
+  border: 1px solid var(--p-primary-color);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--p-primary-color) 16%, var(--p-content-background));
+  color: var(--p-primary-color);
+  box-shadow: 0 0.5rem 1.5rem color-mix(in srgb, var(--p-primary-color) 18%, transparent);
+  cursor: pointer;
+  display: inline-grid;
+  place-items: center;
+  font-size: 1.15rem;
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+
+  &:not(:disabled):hover {
+    background: color-mix(in srgb, var(--p-primary-color) 24%, var(--p-content-background));
+  }
+
+  &:not(:disabled):active {
+    transform: scale(0.95);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--p-focus-ring-color, var(--p-primary-color));
+    outline-offset: 4px;
+  }
+}
+
+.cv-markdown-editor {
+  display: grid;
+  gap: 0.5rem;
+
+  label {
+    font-weight: 600;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 18rem;
+    resize: vertical;
+    font-family: var(--p-font-family);
+    line-height: 1.55;
+  }
+
+  small {
+    color: var(--p-text-muted-color);
+  }
+}
+
+.cv-markdown-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 1rem;
 }
 
 .cv-voice-orb-caption {
@@ -811,6 +883,19 @@ body {
   .cv-voice-orb-stage--session {
     min-height: min(58dvh, calc(100dvh - 14rem));
     padding: 0.75rem 0.75rem max(1rem, env(safe-area-inset-bottom, 0));
+  }
+
+  .cv-text-orb-btn {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .cv-markdown-editor textarea {
+    min-height: min(45dvh, 20rem);
+  }
+
+  .cv-markdown-dialog-actions .p-button {
+    min-height: 44px;
   }
 
   .cv-voice-orb-hint {

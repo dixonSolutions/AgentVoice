@@ -10,22 +10,36 @@
         voiceSession.conversationActive() || voiceSession.sessionConnecting()
       "
       [class.cv-voice-orb-stage--preparing]="isPreparing()">
-      <button
-        type="button"
-        class="cv-voice-orb-btn"
-        [attr.aria-label]="pttAriaLabel()"
-        [disabled]="pttDisabled()"
-        (click)="handlePtt()">
-        <cv-voice-orb
-          [spectrum]="voiceSession.audioSpectrum()"
-          [live]="voiceSession.conversationActive()"
-          [dimmed]="pttDisabled()"
-          [colorMode]="orbColorMode()"
-          [visualizeUserSpeech]="visualizeUserSpeech()"
-          [expanded]="
-            voiceSession.conversationActive() || voiceSession.sessionConnecting()
-          " />
-      </button>
+      <div class="cv-voice-orb-actions">
+        <button
+          type="button"
+          class="cv-voice-orb-btn"
+          [attr.aria-label]="pttAriaLabel()"
+          [disabled]="pttDisabled()"
+          (click)="handlePtt()">
+          <cv-voice-orb
+            [spectrum]="voiceSession.audioSpectrum()"
+            [live]="voiceSession.conversationActive()"
+            [dimmed]="pttDisabled()"
+            [colorMode]="orbColorMode()"
+            [visualizeUserSpeech]="visualizeUserSpeech()"
+            [expanded]="
+              voiceSession.conversationActive() || voiceSession.sessionConnecting()
+            " />
+        </button>
+
+        @if (showTextInput()) {
+          <button
+            type="button"
+            class="cv-text-orb-btn"
+            aria-label="Write a Markdown request"
+            title="Write a request"
+            [disabled]="pttDisabled() || appState.state() === 'working'"
+            (click)="openTextDialog()">
+            <i class="pi pi-pencil" aria-hidden="true"></i>
+          </button>
+        }
+      </div>
       @if (isPreparing()) {
         <p class="cv-voice-preparing-label" aria-live="polite">Preparing</p>
         <p class="cv-voice-preparing-hint">Tap the orb to cancel</p>
@@ -113,28 +127,43 @@
       </p-accordion>
     }
 
-    @if (showTextInput()) {
-      <p-fieldset legend="Type to test" styleClass="cv-voice-type-fieldset">
-        <p-fluid>
-          <p-iftalabel>
-            <input
-              pInputText
-              id="typed-message"
-              [(ngModel)]="typedMessage"
-              placeholder="Ask Cursor something…"
-              (keydown.enter)="sendTypedMessage()" />
-            <label for="typed-message">Message</label>
-          </p-iftalabel>
-          <p-button
-            label="Send"
-            icon="pi pi-send"
-            [disabled]="!typedMessage.trim() || appState.state() === 'working'"
-            (onClick)="sendTypedMessage()" />
-        </p-fluid>
-      </p-fieldset>
-    }
   </p-fluid>
 </p-card>
+
+<p-dialog
+  header="Ask Cursor"
+  [(visible)]="textDialogVisible"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [style]="{ width: 'min(44rem, 94vw)' }">
+  <div class="cv-markdown-editor">
+    <label for="typed-message">Request in Markdown</label>
+    <textarea
+      pTextarea
+      id="typed-message"
+      [(ngModel)]="typedMessage"
+      rows="14"
+      [autoResize]="false"
+      placeholder="Describe what you want Cursor to do…"
+      (keydown)="handleEditorKeydown($event)"></textarea>
+    <small>Markdown supported · Ctrl/⌘ + Enter to send</small>
+  </div>
+
+  <div class="cv-markdown-dialog-actions">
+    <p-button
+      label="Close"
+      icon="pi pi-times"
+      severity="secondary"
+      [outlined]="true"
+      (onClick)="closeTextDialog()" />
+    <p-button
+      label="Send"
+      icon="pi pi-send"
+      [disabled]="!typedMessage.trim() || appState.state() === 'working'"
+      (onClick)="sendTypedMessage()" />
+  </div>
+</p-dialog>
 
 <cv-approval-panel />
 <cv-image-carousel />
