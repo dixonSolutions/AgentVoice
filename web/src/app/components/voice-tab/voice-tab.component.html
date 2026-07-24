@@ -27,19 +27,18 @@
               voiceSession.conversationActive() || voiceSession.sessionConnecting()
             " />
         </button>
-
-        @if (showTextInput()) {
-          <button
-            type="button"
-            class="cv-text-orb-btn"
-            aria-label="Write a Markdown request"
-            title="Write a request"
-            [disabled]="pttDisabled() || appState.state() === 'working'"
-            (click)="openTextDialog()">
-            <i class="pi pi-pencil" aria-hidden="true"></i>
-          </button>
-        }
       </div>
+
+      @if (showTextOrb()) {
+        <button
+          type="button"
+          class="cv-text-orb-btn"
+          aria-label="Write a Markdown request"
+          title="Write a request"
+          (click)="openTextDialog()">
+          <i class="pi pi-pencil" aria-hidden="true"></i>
+        </button>
+      }
       @if (isPreparing()) {
         <p class="cv-voice-preparing-label" aria-live="polite">Preparing</p>
         <p class="cv-voice-preparing-hint">Tap the orb to cancel</p>

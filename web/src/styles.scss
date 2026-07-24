@@ -483,14 +483,12 @@ body {
 }
 
 .cv-voice-orb-actions {
-  display: grid;
-  grid-template-columns: 3.5rem auto 3.5rem;
+  display: flex;
   align-items: center;
-  gap: 0.75rem;
+  justify-content: center;
 }
 
 .cv-voice-orb-btn {
-  grid-column: 2;
   appearance: none;
   border: none;
   background: transparent;
@@ -520,7 +518,10 @@ body {
 }
 
 .cv-text-orb-btn {
-  grid-column: 3;
+  position: absolute;
+  left: 1.25rem;
+  bottom: max(1.25rem, env(safe-area-inset-bottom, 0px));
+  z-index: 2;
   width: 3.5rem;
   height: 3.5rem;
   border: 1px solid var(--p-primary-color);
@@ -886,6 +887,8 @@ body {
   }
 
   .cv-text-orb-btn {
+    left: 0.75rem;
+    bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
     width: 3rem;
     height: 3rem;
   }

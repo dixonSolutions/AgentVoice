@@ -62,9 +62,10 @@ manifest over HTTP. From that point Cursor's conversational agent has the full
 10. Loop: back to step 1
 ```
 
-The Voice tab also provides a secondary pen orb. It opens an Optimus dialog with
-a multiline Markdown request editor; Close preserves the draft and Send starts
-the same authenticated voice-session flow without requiring microphone input.
+While a live session is ready or listening, the Voice tab shows a secondary pen
+orb at the bottom-left. It opens an Optimus dialog with a multiline Markdown
+request editor; Close preserves the draft and Send uses the same authenticated
+session without requiring microphone input.
 
 ---
 

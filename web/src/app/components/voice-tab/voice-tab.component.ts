@@ -173,6 +173,16 @@ export class VoiceTabComponent {
     () => this.isBridgeConnected() && this.isCascadeWorkflow(),
   );
 
+  /** Pen orb is available only while the live session can accept a text turn. */
+  protected readonly showTextOrb = computed(() => {
+    const state = this.appState.state();
+    return (
+      this.showTextInput() &&
+      this.voiceSession.conversationActive() &&
+      (state === 'inactive' || state === 'listening')
+    );
+  });
+
   /** Hide project/setup chrome while a voice session is starting or live. */
   protected readonly isLiveSession = computed(
     () =>
