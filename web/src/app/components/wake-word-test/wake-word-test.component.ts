@@ -15,7 +15,7 @@ import {
   VoskGrammarSpotter,
   wakeSpotterOptions,
 } from '../../../vosk-wake-word.js';
-import { phrasesConflict } from '../../../wake-words.js';
+import { phrasesConflict, resolveWakeConfidenceThreshold } from '../../../wake-words.js';
 import { VoiceProvidersService } from '../../services/voice-providers.service';
 
 /**
@@ -289,7 +289,9 @@ export class WakeWordTestComponent implements OnInit, OnDestroy {
 
     await this.startSpotter.start(start, {
       mediaStream: this.micStream,
-      ...wakeSpotterOptions(this.voiceProviders.data()?.wakeWords.sensitivity),
+      ...wakeSpotterOptions(
+        resolveWakeConfidenceThreshold(this.voiceProviders.data()?.wakeWords),
+      ),
     });
   }
 

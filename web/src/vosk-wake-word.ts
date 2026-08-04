@@ -8,7 +8,7 @@ import type { Model } from 'vosk-browser';
 import { captureMicStream, getSharedAudioContext, unlockAudioContext, connectSilentSink } from './audio.js';
 import { isCrossOriginIsolated, voskCoopError } from './cross-origin-isolation.js';
 import { loadVoskModel } from './vosk-model-cache.js';
-import { normalizeForWakeMatch, type WakeSensitivity } from './wake-words.js';
+import { normalizeForWakeMatch } from './wake-words.js';
 
 export const VOSK_MODEL_URL = '/vosk/model.tar.gz';
 export const VOSK_SAMPLE_RATE = 16000;
@@ -44,18 +44,18 @@ export interface VoskSpotterStartOptions {
   minimumConfidence?: number;
 }
 
-/** Convert the user-facing wake sensitivity into concrete Vosk behavior. */
+/** Partial results lack per-word confidence — enable them only at lower thresholds. */
+export const WAKE_PARTIAL_MATCH_THRESHOLD = 0.55;
+
+/** Convert wake confidence threshold (0–1) into concrete Vosk spotter behavior. */
 export function wakeSpotterOptions(
-  sensitivity: WakeSensitivity = 'high',
+  threshold = 0.45,
 ): Pick<VoskSpotterStartOptions, 'matchPartial' | 'minimumConfidence'> {
-  switch (sensitivity) {
-    case 'strict':
-      return { matchPartial: false, minimumConfidence: 0.8 };
-    case 'balanced':
-      return { matchPartial: false, minimumConfidence: 0.65 };
-    case 'high':
-      return { matchPartial: true, minimumConfidence: 0.45 };
-  }
+  const minimumConfidence = Math.min(1, Math.max(0, threshold));
+  return {
+    matchPartial: minimumConfidence < WAKE_PARTIAL_MATCH_THRESHOLD,
+    minimumConfidence,
+  };
 }
 
 /** @deprecated use buildVoskGrammar */

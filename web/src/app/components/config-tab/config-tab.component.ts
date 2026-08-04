@@ -66,8 +66,6 @@ import type {
   TranscribeModelId,
   TranscribePartialStability,
 } from '../../models/admin-settings';
-import type { WakeSensitivity } from '../../models/voice-providers';
-
 // ── Section definition ─────────────────────────────────────────────────────
 
 type SectionId =
@@ -446,7 +444,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected wakeStart = '';
   protected wakeEnd = 'send';
   protected wakeCancel = 'cancel';
-  protected wakeSensitivity: WakeSensitivity = 'high';
+  protected wakeConfidencePercent = 45;
   protected vadEnabled = true;
   protected silenceSubmitMs = 1500;
   protected savingVoice = false;
@@ -511,13 +509,10 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     { label: 'Deafen (legacy — same as pause)', value: 'deafen' },
     { label: 'Stop (legacy — same as pause)', value: 'stop' },
   ];
-  protected readonly wakeSensitivityOptions: Array<{
-    label: string;
-    value: WakeSensitivity;
-  }> = [
-    { label: 'High — fastest response', value: 'high' },
-    { label: 'Balanced — fewer false activations', value: 'balanced' },
-    { label: 'Strict — highest confidence only', value: 'strict' },
+  protected readonly wakeConfidencePresets = [
+    { label: '45% — fast (partial)', value: 45 },
+    { label: '65% — balanced', value: 65 },
+    { label: '80% — strict', value: 80 },
   ];
 
   protected readonly phraseConflict = computed(() => {
@@ -542,6 +537,15 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       this.toast.warn('Invalid silence duration', 'Use a value between 500 and 30000 ms.');
       return;
     }
+    const wakeConfidenceThreshold = Number(this.wakeConfidencePercent) / 100;
+    if (
+      !Number.isFinite(wakeConfidenceThreshold) ||
+      wakeConfidenceThreshold < 0 ||
+      wakeConfidenceThreshold > 1
+    ) {
+      this.toast.warn('Invalid wake confidence', 'Use a value between 0% and 100%.');
+      return;
+    }
     this.savingVoice = true;
     try {
       await this.voiceProviders.updateWakeWords(
@@ -550,7 +554,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
         silenceMs,
         this.vadEnabled,
         cancel,
-        this.wakeSensitivity,
+        wakeConfidenceThreshold,
       );
       this.syncVoiceForm();
       this.toast.success(
@@ -571,8 +575,8 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     if (data?.wakeWords.start) this.wakeStart = data.wakeWords.start;
     if (data?.wakeWords.end) this.wakeEnd = data.wakeWords.end;
     if (data?.wakeWords.cancel) this.wakeCancel = data.wakeWords.cancel;
-    if (data?.wakeWords.sensitivity) {
-      this.wakeSensitivity = data.wakeWords.sensitivity;
+    if (data?.wakeWords.wakeConfidenceThreshold !== undefined) {
+      this.wakeConfidencePercent = Math.round(data.wakeWords.wakeConfidenceThreshold * 100);
     }
     if (data?.turnSubmit.silenceMs) this.silenceSubmitMs = Number(data.turnSubmit.silenceMs);
     if (data?.turnSubmit.vadEnabled !== undefined) this.vadEnabled = data.turnSubmit.vadEnabled;
