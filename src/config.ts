@@ -50,17 +50,33 @@ const EnvSchema = z.object({
 
 // ── Voice settings (config.json) ─────────────────────────────────────────────
 
-export const WakeWordsSchema = z.object({
-  start: z.string().min(1).max(100),
-  end: z.string().max(100).default('send'),
-  /** Spoken during capture to abort the turn without sending — default "cancel". */
-  cancel: z.string().max(100).default('cancel'),
-  /**
-   * Vosk wake detection trade-off. High accepts partial recognition for the
-   * lowest latency; balanced/strict wait for final word confidence.
-   */
-  sensitivity: z.enum(['high', 'balanced', 'strict']).default('high'),
-});
+/** Legacy wake sensitivity presets — migrated to wakeConfidenceThreshold on read. */
+export const LEGACY_WAKE_SENSITIVITY_THRESHOLD = {
+  high: 0.45,
+  balanced: 0.65,
+  strict: 0.8,
+} as const;
+
+export const WakeWordsSchema = z
+  .object({
+    start: z.string().min(1).max(100),
+    end: z.string().max(100).default('send'),
+    /** Spoken during capture to abort the turn without sending — default "cancel". */
+    cancel: z.string().max(100).default('cancel'),
+    /** @deprecated — use wakeConfidenceThreshold; kept for config migration only. */
+    sensitivity: z.enum(['high', 'balanced', 'strict']).optional(),
+    /**
+     * Minimum mean Vosk word confidence (0–1) to accept a wake phrase match.
+     * Values below 0.55 also enable partial recognition for lower latency.
+     */
+    wakeConfidenceThreshold: z.number().min(0).max(1).optional(),
+  })
+  .transform(({ sensitivity, wakeConfidenceThreshold, ...rest }) => ({
+    ...rest,
+    wakeConfidenceThreshold:
+      wakeConfidenceThreshold ??
+      (sensitivity ? LEGACY_WAKE_SENSITIVITY_THRESHOLD[sensitivity] : 0.45),
+  }));
 
 export const TurnSubmitSchema = z.object({
   /** Ms of silence after last STT final before auto-submitting the buffered turn. */

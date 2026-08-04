@@ -1,14 +1,33 @@
 /** Client-side wake phrase matching — phrase from config via token mint only. */
 
-export type WakeSensitivity = 'high' | 'balanced' | 'strict';
+/** Legacy wake sensitivity presets — migrated to wakeConfidenceThreshold on read. */
+export const LEGACY_WAKE_SENSITIVITY_THRESHOLD = {
+  high: 0.45,
+  balanced: 0.65,
+  strict: 0.8,
+} as const;
+
+export type LegacyWakeSensitivity = keyof typeof LEGACY_WAKE_SENSITIVITY_THRESHOLD;
 
 export interface WakeWords {
   start: string;
   end: string;
   /** Spoken during capture to abort the turn silently — default "cancel". */
   cancel?: string;
-  /** Vosk start-phrase detection trade-off; defaults to high for compatibility. */
-  sensitivity?: WakeSensitivity;
+  /** @deprecated — use wakeConfidenceThreshold. */
+  sensitivity?: LegacyWakeSensitivity;
+  /** Minimum mean Vosk word confidence (0–1) for wake phrase detection. */
+  wakeConfidenceThreshold?: number;
+}
+
+/** Resolve wake confidence threshold from config (handles legacy sensitivity). */
+export function resolveWakeConfidenceThreshold(wakeWords: WakeWords | undefined): number {
+  if (wakeWords?.wakeConfidenceThreshold !== undefined) {
+    return wakeWords.wakeConfidenceThreshold;
+  }
+  const legacy = wakeWords?.sensitivity;
+  if (legacy) return LEGACY_WAKE_SENSITIVITY_THRESHOLD[legacy];
+  return 0.45;
 }
 
 export interface TurnSubmit {

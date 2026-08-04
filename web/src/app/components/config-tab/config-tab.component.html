@@ -119,13 +119,18 @@
             <label for="cfg-wake-cancel">Cancel phrase</label>
           </p-iftalabel>
           <p-iftalabel>
-            <p-select id="cfg-wake-sensitivity" [(ngModel)]="wakeSensitivity"
-              [options]="wakeSensitivityOptions" optionLabel="label" optionValue="value"
-              [disabled]="!isBridgeConnected()" />
-            <label for="cfg-wake-sensitivity">Wake sensitivity</label>
+            <p-inputNumber id="cfg-wake-confidence" [(ngModel)]="wakeConfidencePercent"
+              [min]="0" [max]="100" [step]="5" suffix="%" [disabled]="!isBridgeConnected()" />
+            <label for="cfg-wake-confidence">Wake confidence threshold</label>
+          </p-iftalabel>
+          <p-iftalabel>
+            <p-select id="cfg-wake-confidence-presets" [(ngModel)]="wakeConfidencePercent"
+              [options]="wakeConfidencePresets" optionLabel="label" optionValue="value"
+              placeholder="Choose preset" [disabled]="!isBridgeConnected()" />
+            <label for="cfg-wake-confidence-presets">Presets</label>
           </p-iftalabel>
           <p-message severity="secondary" variant="simple"
-            text="High reacts to partial speech. Balanced and Strict wait for Vosk confidence, reducing false activations with a slightly slower response." />
+            text="Minimum Vosk word confidence (0–100%) to accept the wake phrase. Below 55% also enables partial recognition for faster response; higher values reduce false activations." />
         </p-fieldset>
 
         <p-fieldset legend="Turn submit">

@@ -6,6 +6,7 @@
 
 import { z } from 'zod';
 import {
+  LEGACY_WAKE_SENSITIVITY_THRESHOLD,
   getConfig,
   type TurnSubmit,
   type VoiceSettings,
@@ -45,14 +46,23 @@ export function getVoiceSettingsView(): VoiceSettingsResponse {
   return { wakeWords, turnSubmit, tts, ...(userName ? { userName } : {}) };
 }
 
-const WakeWordsBodySchema = z.object({
-  start: z.string().min(1).max(100),
-  end: z.string().max(100).optional(),
-  cancel: z.string().max(100).optional(),
-  sensitivity: z.enum(['high', 'balanced', 'strict']).optional(),
-  silenceMs: z.coerce.number().int().min(500).max(30_000).optional(),
-  vadEnabled: z.boolean().optional(),
-});
+const WakeWordsBodySchema = z
+  .object({
+    start: z.string().min(1).max(100),
+    end: z.string().max(100).optional(),
+    cancel: z.string().max(100).optional(),
+    /** @deprecated — use wakeConfidenceThreshold */
+    sensitivity: z.enum(['high', 'balanced', 'strict']).optional(),
+    wakeConfidenceThreshold: z.coerce.number().min(0).max(1).optional(),
+    silenceMs: z.coerce.number().int().min(500).max(30_000).optional(),
+    vadEnabled: z.boolean().optional(),
+  })
+  .transform(({ sensitivity, wakeConfidenceThreshold, ...rest }) => ({
+    ...rest,
+    wakeConfidenceThreshold:
+      wakeConfidenceThreshold ??
+      (sensitivity ? LEGACY_WAKE_SENSITIVITY_THRESHOLD[sensitivity] : undefined),
+  }));
 
 const UserNameBodySchema = z.object({
   userName: z.string().min(1).max(64).optional().nullable(),
@@ -105,7 +115,10 @@ export function setWakeWords(raw: unknown): VoiceSettingsResponse {
       start: startTrim,
       end: parsed.data.end !== undefined ? endTrim ?? '' : (voice.wakeWords.end ?? 'send'),
       cancel: parsed.data.cancel !== undefined ? cancelTrim ?? 'cancel' : (voice.wakeWords.cancel ?? 'cancel'),
-      sensitivity: parsed.data.sensitivity ?? voice.wakeWords.sensitivity ?? 'high',
+      wakeConfidenceThreshold:
+        parsed.data.wakeConfidenceThreshold ??
+        voice.wakeWords.wakeConfidenceThreshold ??
+        0.45,
     };
     if (parsed.data.silenceMs !== undefined || parsed.data.vadEnabled !== undefined) {
       voice.turnSubmit = {
@@ -113,7 +126,7 @@ export function setWakeWords(raw: unknown): VoiceSettingsResponse {
         vadEnabled: parsed.data.vadEnabled ?? voice.turnSubmit.vadEnabled ?? true,
       };
     }
-  }, `wake phrase → start="${startTrim}" end="${endTrim ?? '(unchanged)'}" cancel="${cancelTrim ?? '(unchanged)'}" sensitivity="${parsed.data.sensitivity ?? '(unchanged)'}"`);
+  }, `wake phrase → start="${startTrim}" end="${endTrim ?? '(unchanged)'}" cancel="${cancelTrim ?? '(unchanged)'}" wakeConfidenceThreshold="${parsed.data.wakeConfidenceThreshold ?? '(unchanged)'}"`);
 
   return getVoiceSettingsView();
 }
