@@ -118,7 +118,7 @@ const ALL_SECTIONS: ConfigSection[] = [
     label: 'Voice & Wake Words',
     icon: 'pi-microphone',
     description: 'Activation phrases, VAD, silence threshold, sound effects, TTS',
-    keywords: ['wake', 'phrase', 'vad', 'silence', 'start', 'end', 'cancel', 'audio', 'sound', 'cue', 'tts', 'voice', 'deafen', 'interrupt', 'browser', 'polly', 'transcribe', 'sfm', 'speech', 'stt'],
+    keywords: ['wake', 'phrase', 'vad', 'silence', 'start', 'end', 'cancel', 'audio', 'sound', 'cue', 'tts', 'voice', 'interrupt', 'browser', 'polly', 'transcribe', 'sfm', 'speech', 'stt'],
   },
   {
     id: 'personal',
@@ -450,8 +450,6 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected savingVoice = false;
 
   protected cursorVoiceEnabled = true;
-  protected interruptMode: 'pause' | 'deafen' | 'stop' = 'pause';
-  protected interruptDeafenFactor = 0.2;
   protected errorSoundEnabled = true;
   protected errorSpeakEnabled = true;
   protected webkitRate = 1.02;
@@ -504,11 +502,6 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected transcribePartialResultsStability: TranscribePartialStability = 'high';
   protected savingSpeechInput = false;
 
-  protected readonly interruptModeOptions = [
-    { label: 'Pause — stop speech on wake; cancel resumes', value: 'pause' },
-    { label: 'Deafen (legacy — same as pause)', value: 'deafen' },
-    { label: 'Stop (legacy — same as pause)', value: 'stop' },
-  ];
   protected readonly wakeConfidencePresets = [
     { label: '45% — fast (partial)', value: 45 },
     { label: '65% — balanced', value: 65 },
@@ -583,8 +576,6 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     this.userName = data?.userName ?? '';
     if (data?.tts) {
       this.cursorVoiceEnabled = data.tts.cursorVoiceEnabled;
-      this.interruptMode = data.tts.interruptMode;
-      this.interruptDeafenFactor = data.tts.interruptDeafenFactor;
       this.errorSoundEnabled = data.tts.errorSoundEnabled ?? true;
       this.errorSpeakEnabled = data.tts.errorSpeakEnabled ?? true;
       this.webkitRate = data.tts.webkit.rate;
@@ -891,17 +882,10 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   }
 
   protected async onSaveTtsSettings(): Promise<void> {
-    const factor = Number(this.interruptDeafenFactor);
-    if (!Number.isFinite(factor) || factor < 0 || factor > 1) {
-      this.toast.warn('Invalid deafen factor', 'Use a value between 0 and 1.');
-      return;
-    }
     this.savingTts = true;
     try {
       await this.voiceProviders.updateVoiceTts({
         cursorVoiceEnabled: this.cursorVoiceEnabled,
-        interruptMode: this.interruptMode,
-        interruptDeafenFactor: factor,
         errorSoundEnabled: this.errorSoundEnabled,
         errorSpeakEnabled: this.errorSpeakEnabled,
         webkit: {

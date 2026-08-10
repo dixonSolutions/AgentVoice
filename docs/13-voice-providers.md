@@ -21,8 +21,8 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
       },
       "tts": {
         "cursorVoiceEnabled": true,
-        "interruptMode": "deafen",
-        "interruptDeafenFactor": 0.2,
+        "errorSoundEnabled": true,
+        "errorSpeakEnabled": true,
         "webkit": {
           "rate": 1.02,
           "pitch": 1,
@@ -44,15 +44,15 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
 | `turnSubmit.silenceMs` | Silence before auto-submit (500–30000 ms) |
 | `turnSubmit.vadEnabled` | Use Silero VAD for speech-end detection |
 | `tts.cursorVoiceEnabled` | Play MCP `speak()` lines aloud |
-| `tts.interruptMode` | `deafen` (duck volume) or `stop` (cancel speech) on barge-in |
-| `tts.interruptDeafenFactor` | Volume multiplier during deafen capture (0–1) |
+| `tts.errorSoundEnabled` | Play error earcon on voice pipeline failures |
+| `tts.errorSpeakEnabled` | Speak error messages aloud |
 | `tts.webkit.*` | Default browser TTS rate/pitch/volume/lang |
 
 Managed via Config tab or API:
 
 - `GET /api/voice/providers` — returns `{ wakeWords, turnSubmit, tts, userName? }`
 - `PATCH /api/voice/wake-words` — update wake words and turn submit
-- `PATCH /api/voice/tts` — update cursor voice, interrupt deafen, WebKit defaults
+- `PATCH /api/voice/tts` — update cursor voice on/off, error feedback, WebKit defaults
 - `PATCH /api/voice/user-name` — optional name the agent uses for the user
 
 Per-browser TTS voice selection is stored in PWA localStorage (not `config.json`).

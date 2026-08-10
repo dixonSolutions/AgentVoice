@@ -11,17 +11,10 @@ export interface TtsInterruptSnapshot {
   last_heard_words?: string;
 }
 
-export interface TtsVolumeControl {
-  /** Effective multiplier 0–1 applied to this playback. */
-  setVolume(multiplier: number): void;
-}
-
 export interface TtsPlayContext {
   onStart: () => void;
   signal: AbortSignal;
-  /** Live volume control for ducking during barge-in. */
-  volume: TtsVolumeControl;
-  /** Base volume from browser TTS settings (before interrupt ducking). */
+  /** Base volume from browser TTS settings (0–1). */
   baseVolume: number;
 }
 

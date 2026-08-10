@@ -175,21 +175,8 @@
             <label for="cfg-cursor-voice">Play Cursor voice aloud</label>
           </div>
 
-          <p-iftalabel>
-            <p-select id="cfg-interrupt-mode" [(ngModel)]="interruptMode"
-              [options]="interruptModeOptions" optionLabel="label" optionValue="value"
-              [disabled]="!isBridgeConnected()" />
-            <label for="cfg-interrupt-mode">Barge-in behaviour</label>
-          </p-iftalabel>
-
-          @if (interruptMode === 'deafen') {
-            <p-iftalabel>
-              <p-inputNumber id="cfg-deafen-factor" [(ngModel)]="interruptDeafenFactor"
-                [min]="0" [max]="1" [step]="0.05" [minFractionDigits]="2"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-deafen-factor">Deafen volume (0 = mute, 1 = full)</label>
-            </p-iftalabel>
-          }
+          <p-message severity="secondary" variant="simple"
+            text="Wake during speech pauses TTS at full volume — cancel resumes, submit sends what you heard. Volume is never ducked." />
 
           <div class="cv-cfg-toggle-row">
             <p-toggleSwitch id="cfg-error-sound" [(ngModel)]="errorSoundEnabled"
