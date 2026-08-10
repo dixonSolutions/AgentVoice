@@ -57,8 +57,6 @@ import {
 
 export interface VoiceTtsSettings {
   cursorVoiceEnabled: boolean;
-  interruptMode: 'pause' | 'deafen' | 'stop';
-  interruptDeafenFactor: number;
   errorSoundEnabled: boolean;
   errorSpeakEnabled: boolean;
   webkit: WebkitTtsDefaults;
@@ -85,8 +83,6 @@ export class LlmIntelligenceSession {
   private workflow = 'cursor_native';
   private ttsSettings: VoiceTtsSettings = {
     cursorVoiceEnabled: true,
-    interruptMode: 'pause',
-    interruptDeafenFactor: 0.2,
     errorSoundEnabled: true,
     errorSpeakEnabled: true,
     webkit: { rate: 1.02, pitch: 1, volume: 1, lang: 'en-US' },
@@ -1204,7 +1200,6 @@ export class LlmIntelligenceSession {
     const wrappedCtx: TtsPlayContext = {
       signal: ctx.signal,
       baseVolume: ctx.baseVolume,
-      volume: ctx.volume,
       onStart: () => {
         playbackStarted = true;
         this.voiceLog('tts', 'info', `${provider} playing`, text.slice(0, 80));
@@ -1308,15 +1303,6 @@ export class LlmIntelligenceSession {
       };
 
       ctx.signal.addEventListener('abort', onAbort, { once: true });
-
-      const applyVolume = (multiplier: number) => {
-        utter.volume = Math.max(0, Math.min(1, ctx.baseVolume * multiplier));
-      };
-      const origSetVolume = ctx.volume.setVolume.bind(ctx.volume);
-      ctx.volume.setVolume = (multiplier: number) => {
-        origSetVolume(multiplier);
-        applyVolume(multiplier);
-      };
 
       utter.onstart = () => ctx.onStart();
       utter.onend = () => {

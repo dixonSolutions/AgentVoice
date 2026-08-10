@@ -64,9 +64,6 @@ export class TtsPile {
   private currentLine: string | null = null;
   private lineStarted = false;
   private lineAbort: AbortController | null = null;
-  /** Interrupt ducking — 1 = full volume, lower while user captures after barge-in. */
-  private interruptVolume = 1;
-  private currentVolumeControl: import('./tts-interrupt.js').TtsVolumeControl | null = null;
   /** When true, wake barge-in paused playback — queue saved for cancel-resume. */
   private bargeInPaused = false;
   private bargeInResumeQueue: string[] = [];
@@ -111,7 +108,6 @@ export class TtsPile {
     this.partialWordsEstimate = null;
     this.bargeInPaused = false;
     this.bargeInResumeQueue = [];
-    this.interruptVolume = 1;
   }
 
   enqueue(text: string): void {
@@ -155,8 +151,6 @@ export class TtsPile {
     this.lineStarted = false;
     this.lineStartedAt = 0;
     this.lineAbort = null;
-    this.interruptVolume = 1;
-    this.currentVolumeControl = null;
     this.setActive(false);
 
     if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -215,29 +209,6 @@ export class TtsPile {
     return words.slice(0, count).join(' ');
   }
 
-  /**
-   * @deprecated Use pauseForBargeIn — deafen kept for API compat; maps to pause.
-   */
-  deafen(_factor: number): boolean {
-    if (!this.isActive()) return false;
-    this.pauseForBargeIn();
-    return true;
-  }
-
-  restoreInterruptVolume(): void {
-    // No-op — pause mode stops audio instead of ducking.
-  }
-
-  /**
-   * @deprecated Use finalizeBargeInOnSubmit.
-   */
-  finishDeferredInterrupt(): TtsInterruptSnapshot {
-    if (this.bargeInPaused) {
-      return this.finalizeBargeInOnSubmit();
-    }
-    return this.interruptWithSnapshot();
-  }
-
   /** Line currently playing — used to ignore wake-word echo from assistant TTS. */
   interruptWithSnapshot(): TtsInterruptSnapshot {
     this.hardStop = true;
@@ -263,8 +234,6 @@ export class TtsPile {
     this.lineAbort = null;
     this.bargeInPaused = false;
     this.bargeInResumeQueue = [];
-    this.interruptVolume = 1;
-    this.currentVolumeControl = null;
     this.setActive(false);
 
     if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -313,13 +282,6 @@ export class TtsPile {
     this.lineAbort = new AbortController();
     const signal = this.lineAbort.signal;
 
-    const volumeControl: import('./tts-interrupt.js').TtsVolumeControl = {
-      setVolume: (multiplier: number) => {
-        this.interruptVolume = Math.max(0, Math.min(1, multiplier));
-      },
-    };
-    this.currentVolumeControl = volumeControl;
-
     try {
       await this.playLine(line, {
         onStart: () => {
@@ -327,8 +289,7 @@ export class TtsPile {
           this.lineStartedAt = Date.now();
         },
         signal,
-        volume: volumeControl,
-        baseVolume: this.baseVolume * this.interruptVolume,
+        baseVolume: this.baseVolume,
       });
       if (!signal.aborted && !this.hardStop) {
         this.completedLines.push(line);
@@ -341,9 +302,6 @@ export class TtsPile {
       this.currentLine = null;
       this.lineStarted = false;
       this.lineAbort = null;
-      if (this.currentVolumeControl === volumeControl) {
-        this.currentVolumeControl = null;
-      }
     }
   }
 }
@@ -389,17 +347,6 @@ function playWebkitLine(
     };
 
     ctx?.signal.addEventListener('abort', onAbort, { once: true });
-
-    const applyVolume = (multiplier: number) => {
-      utter.volume = Math.max(0, Math.min(1, (ctx?.baseVolume ?? 1) * multiplier));
-    };
-    if (ctx?.volume) {
-      const orig = ctx.volume.setVolume.bind(ctx.volume);
-      ctx.volume.setVolume = (multiplier: number) => {
-        orig(multiplier);
-        applyVolume(multiplier);
-      };
-    }
 
     utter.onstart = () => {
       lastSpokenAt = Date.now();

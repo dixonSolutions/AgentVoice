@@ -23,8 +23,6 @@ export interface WebkitTtsDefaults {
 
 export interface VoiceTtsSettings {
   cursorVoiceEnabled: boolean;
-  interruptMode: 'pause' | 'deafen' | 'stop';
-  interruptDeafenFactor: number;
   errorSoundEnabled: boolean;
   errorSpeakEnabled: boolean;
   webkit: WebkitTtsDefaults;

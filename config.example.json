@@ -54,8 +54,6 @@
       },
       "tts": {
         "cursorVoiceEnabled": true,
-        "interruptMode": "deafen",
-        "interruptDeafenFactor": 0.2,
         "errorSoundEnabled": true,
         "errorSpeakEnabled": true,
         "webkit": {
@@ -96,10 +94,13 @@
     {
       "name": "cursorvoice",
       "path": "/home/eva/Projects/SideProjects/CursorVoice",
-      "aliases": ["cursor voice", "the voice project"],
-      "description": "Cursor Voice — self-hosted voice bridge",
+      "aliases": [
+        "cursor voice",
+        "the voice project"
+      ],
+      "description": "Cursor Voice \u2014 self-hosted voice bridge",
       "enabled": true
     }
   ],
-  "_comment_projects": "Run: node scripts/apply-projects-registry.mjs — merges config/projects.registry.json for all ~/Projects entries"
+  "_comment_projects": "Run: node scripts/apply-projects-registry.mjs \u2014 merges config/projects.registry.json for all ~/Projects entries"
 }

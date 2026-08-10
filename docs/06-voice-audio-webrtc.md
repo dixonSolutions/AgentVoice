@@ -85,16 +85,12 @@ browser TTS fallback (`web/src/tts-fallback.ts`).
 
 ## TTS barge-in
 
-User can say the wake phrase during assistant playback. The client behaviour depends on
-`settings.voice.tts.interruptMode`:
+User can say the wake phrase during assistant playback. The client **pauses TTS at full
+volume** (never ducks), keeps the queue for cancel-resume, and on submit snapshots
+`heard_complete` / `heard_partial` / `not_spoken` so Cursor knows what was heard.
 
-| Mode | Behaviour |
-| --- | --- |
-| **`deafen`** (default) | Ducks assistant volume to `interruptDeafenFactor` (0–1). Speech continues in the background while the user captures a new request. Playback stops when the turn is submitted or cancelled. |
-| **`stop`** | Cancels TTS immediately and snapshots what was playing (legacy). |
-
-On submit (deafen mode), the client snapshots `heard_complete` / `heard_partial` / `not_spoken`
-and sends `tts_interrupt` with the `user_turn` so Cursor knows what was heard.
+Legacy `interruptMode` / `interruptDeafenFactor` config keys are stripped on load — volume
+ducking is gone.
 
 Set `settings.voice.tts.cursorVoiceEnabled: false` to disable MCP `speak()` playback entirely
 (transcripts still appear in the UI).

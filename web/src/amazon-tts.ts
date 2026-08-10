@@ -122,14 +122,6 @@ export async function speakAmazonPolly(
 
     ctx?.signal.addEventListener('abort', onAbort, { once: true });
 
-    if (ctx?.volume) {
-      const orig = ctx.volume.setVolume.bind(ctx.volume);
-      ctx.volume.setVolume = (multiplier: number) => {
-        orig(multiplier);
-        audio.volume = Math.max(0, Math.min(1, baseVol * multiplier));
-      };
-    }
-
     audio.onplay = () => ctx?.onStart();
     audio.onended = () => {
       URL.revokeObjectURL(url);
@@ -183,14 +175,6 @@ async function playBlobViaAudioContext(blob: Blob, ctx?: TtsPlayContext): Promis
     };
 
     ctx?.signal.addEventListener('abort', onAbort, { once: true });
-
-    if (ctx?.volume) {
-      const orig = ctx.volume.setVolume.bind(ctx.volume);
-      ctx.volume.setVolume = (multiplier: number) => {
-        orig(multiplier);
-        gain.gain.value = Math.max(0, Math.min(1, baseVol * multiplier));
-      };
-    }
 
     source.onended = finish;
     try {
