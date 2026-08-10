@@ -163,6 +163,14 @@
                 text="Wake and end phrases must be different — e.g. listen / send." />
             }
           }
+          <p-iftalabel>
+            <p-inputNumber id="cfg-worker-poll" [(ngModel)]="workerPollTimeoutMs"
+              [min]="5000" [max]="60000" [step]="1000" suffix=" ms"
+              [disabled]="!isBridgeConnected()" />
+            <label for="cfg-worker-poll">Worker status poll interval</label>
+          </p-iftalabel>
+          <p-message severity="secondary" variant="simple"
+            text="While a sub-agent runs, how long to wait for your next voice/text turn before checking worker status again. Speaking is optional when nothing meaningful changed." />
         </p-fieldset>
 
         <p-fieldset legend="Cursor voice (TTS)">
@@ -1261,7 +1269,7 @@
       @if (narratorData) {
         <p-fluid>
           <p-message severity="secondary" variant="simple"
-            text="The narrator pushes periodic status updates to the voice agent while jobs are running." />
+            text="Narrator still announces job start/finish and file writes. Count-only 'still working' ticks are off — the voice agent speaks milestones instead." />
 
           <div class="cv-cfg-toggle-row">
             <p-toggleSwitch id="cfg-narrator-enabled"

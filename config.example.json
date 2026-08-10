@@ -62,7 +62,8 @@
           "volume": 1,
           "lang": "en-US"
         }
-      }
+      },
+      "workerPollTimeoutMs": 25000
     },
     "defaultMode": "agent",
     "defaultActiveModel": "auto",

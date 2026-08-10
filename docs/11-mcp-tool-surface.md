@@ -67,8 +67,8 @@ Parallel Agents capability exposed via voice.
 
 | Tool | Purpose |
 | --- | --- |
-| `request_user_input(question, input_type, options?)` | Ask user a question; blocks until answered. |
-| `submit_plan_for_approval(title, steps, estimated_impact?)` | Show plan card; blocks until approve/reject/modify. |
+| `request_user_input(question, input_type, options?)` | Ask user a question; blocks until answered **or** a new voice/text turn arrives (`interrupted: true`). |
+| `submit_plan_for_approval(title, steps, estimated_impact?)` | Show plan card; blocks until approve/reject/modify **or** a new turn (`interrupted: true`). |
 
 ### Group: User display (non-blocking)
 

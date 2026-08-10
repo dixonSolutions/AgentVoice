@@ -447,6 +447,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected wakeConfidencePercent = 45;
   protected vadEnabled = true;
   protected silenceSubmitMs = 1500;
+  protected workerPollTimeoutMs = 25_000;
   protected savingVoice = false;
 
   protected cursorVoiceEnabled = true;
@@ -539,6 +540,15 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       this.toast.warn('Invalid wake confidence', 'Use a value between 0% and 100%.');
       return;
     }
+    const workerPollTimeoutMs = Number(this.workerPollTimeoutMs);
+    if (
+      !Number.isFinite(workerPollTimeoutMs) ||
+      workerPollTimeoutMs < 5_000 ||
+      workerPollTimeoutMs > 60_000
+    ) {
+      this.toast.warn('Invalid worker poll interval', 'Use a value between 5000 and 60000 ms.');
+      return;
+    }
     this.savingVoice = true;
     try {
       await this.voiceProviders.updateWakeWords(
@@ -548,6 +558,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
         this.vadEnabled,
         cancel,
         wakeConfidenceThreshold,
+        workerPollTimeoutMs,
       );
       this.syncVoiceForm();
       this.toast.success(
@@ -573,6 +584,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     }
     if (data?.turnSubmit.silenceMs) this.silenceSubmitMs = Number(data.turnSubmit.silenceMs);
     if (data?.turnSubmit.vadEnabled !== undefined) this.vadEnabled = data.turnSubmit.vadEnabled;
+    if (data?.workerPollTimeoutMs) this.workerPollTimeoutMs = Number(data.workerPollTimeoutMs);
     this.userName = data?.userName ?? '';
     if (data?.tts) {
       this.cursorVoiceEnabled = data.tts.cursorVoiceEnabled;

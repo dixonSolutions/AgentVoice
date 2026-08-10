@@ -33,6 +33,7 @@ export class VoiceProvidersService {
     vadEnabled?: boolean,
     cancel?: string,
     wakeConfidenceThreshold?: number,
+    workerPollTimeoutMs?: number,
   ): Promise<void> {
     await this.mutate('/api/voice/wake-words', {
       method: 'PATCH',
@@ -43,6 +44,7 @@ export class VoiceProvidersService {
         ...(vadEnabled !== undefined ? { vadEnabled } : {}),
         ...(cancel !== undefined ? { cancel } : {}),
         ...(wakeConfidenceThreshold !== undefined ? { wakeConfidenceThreshold } : {}),
+        ...(workerPollTimeoutMs !== undefined ? { workerPollTimeoutMs } : {}),
       }),
     });
   }

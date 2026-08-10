@@ -24,6 +24,7 @@ export interface VoiceSettingsResponse {
   wakeWords: WakeWords;
   turnSubmit: TurnSubmit;
   tts: VoiceTtsSettings;
+  workerPollTimeoutMs: number;
   userName?: string;
 }
 
@@ -41,9 +42,15 @@ function persistVoiceUpdate(
 
 export function getVoiceSettingsView(): VoiceSettingsResponse {
   const settings = getConfig().settings;
-  const { wakeWords, turnSubmit, tts } = settings.voice;
+  const { wakeWords, turnSubmit, tts, workerPollTimeoutMs } = settings.voice;
   const { userName } = settings;
-  return { wakeWords, turnSubmit, tts, ...(userName ? { userName } : {}) };
+  return {
+    wakeWords,
+    turnSubmit,
+    tts,
+    workerPollTimeoutMs: workerPollTimeoutMs ?? 25_000,
+    ...(userName ? { userName } : {}),
+  };
 }
 
 const WakeWordsBodySchema = z
@@ -56,6 +63,7 @@ const WakeWordsBodySchema = z
     wakeConfidenceThreshold: z.coerce.number().min(0).max(1).optional(),
     silenceMs: z.coerce.number().int().min(500).max(30_000).optional(),
     vadEnabled: z.boolean().optional(),
+    workerPollTimeoutMs: z.coerce.number().int().min(5_000).max(60_000).optional(),
   })
   .transform(({ sensitivity, wakeConfidenceThreshold, ...rest }) => ({
     ...rest,
@@ -124,7 +132,10 @@ export function setWakeWords(raw: unknown): VoiceSettingsResponse {
         vadEnabled: parsed.data.vadEnabled ?? voice.turnSubmit.vadEnabled ?? true,
       };
     }
-  }, `wake phrase → start="${startTrim}" end="${endTrim ?? '(unchanged)'}" cancel="${cancelTrim ?? '(unchanged)'}" wakeConfidenceThreshold="${parsed.data.wakeConfidenceThreshold ?? '(unchanged)'}"`);
+    if (parsed.data.workerPollTimeoutMs !== undefined) {
+      voice.workerPollTimeoutMs = parsed.data.workerPollTimeoutMs;
+    }
+  }, `wake phrase → start="${startTrim}" end="${endTrim ?? '(unchanged)'}" cancel="${cancelTrim ?? '(unchanged)'}" wakeConfidenceThreshold="${parsed.data.wakeConfidenceThreshold ?? '(unchanged)'}" workerPollTimeoutMs="${parsed.data.workerPollTimeoutMs ?? '(unchanged)'}"`);
 
   return getVoiceSettingsView();
 }

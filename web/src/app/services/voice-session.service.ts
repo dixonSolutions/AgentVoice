@@ -266,18 +266,20 @@ export class VoiceSessionService {
     this._session?.injectNarration(text);
   }
 
-  /** Typed message for llm_intelligence (desktop dev / no mic STT). */
-  async sendTextMessage(text: string): Promise<void> {
+  /** Typed message for cascade workflows — same turn path as voice (queued while agent runs). */
+  async sendTextMessage(text: string): Promise<boolean> {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed) return false;
 
     if (!this._session && !this.sessionConnecting()) {
       await this.startSession();
     }
     const session = this._session;
     if (session instanceof LlmIntelligenceSession) {
-      session.sendTextTurn(trimmed);
+      return session.sendTextTurn(trimmed);
     }
+    this.toast.warn('Not connected', 'Tap the orb to start a voice session first.');
+    return false;
   }
 
   addEntry(text: string, role: TranscriptEntry['role']): void {

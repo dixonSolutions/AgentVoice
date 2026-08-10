@@ -581,6 +581,15 @@ export class BridgeService {
         break;
       }
 
+      case 'approval_cancelled': {
+        const requestId = typeof msg['request_id'] === 'string' ? msg['request_id'] : null;
+        const current = this.pendingApproval();
+        if (!requestId || current?.request_id === requestId) {
+          this.pendingApproval.set(null);
+        }
+        break;
+      }
+
       case 'show_images': {
         const rawImages = msg['images'];
         if (!Array.isArray(rawImages)) break;

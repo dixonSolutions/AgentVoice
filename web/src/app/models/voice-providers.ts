@@ -30,5 +30,7 @@ export interface VoiceSettingsResponse {
   wakeWords: WakeWords;
   turnSubmit: TurnSubmit;
   tts: VoiceTtsSettings;
+  /** next_voice_turn timeout while narrating workers (ms). */
+  workerPollTimeoutMs: number;
   userName?: string;
 }
