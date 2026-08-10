@@ -178,15 +178,10 @@ export class VoiceTabComponent {
     () => this.showTextInput() && this.voiceSession.conversationActive(),
   );
 
-  /** Cursor-native follow-ups are queued even while its current turn is running. */
-  protected readonly canSendTextTurn = computed(() => {
-    const state = this.appState.state();
-    return (
-      this.isCursorNative() ||
-      state === 'inactive' ||
-      state === 'listening'
-    );
-  });
+  /** Typed follow-ups use the same turn queue as voice — available whenever the session is live. */
+  protected readonly canSendTextTurn = computed(
+    () => this.voiceSession.conversationActive() || this.voiceSession.sessionConnecting(),
+  );
 
   /** Hide project/setup chrome while a voice session is starting or live. */
   protected readonly isLiveSession = computed(
@@ -415,10 +410,11 @@ export class VoiceTabComponent {
     }
   }
 
-  protected sendTypedMessage(): void {
+  protected async sendTypedMessage(): Promise<void> {
     const text = this.typedMessage.trim();
     if (!text || !this.canSendTextTurn()) return;
-    void this.voiceSession.sendTextMessage(text);
+    const sent = await this.voiceSession.sendTextMessage(text);
+    if (!sent) return;
     this.typedMessage = '';
     this.textDialogVisible = false;
   }

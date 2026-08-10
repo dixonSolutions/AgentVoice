@@ -722,7 +722,8 @@ function buildMcpServer(sessionKey: string): McpServer {
     'request_user_input',
     'Ask the user a question and wait for their spoken or tapped reply. ' +
       'The PWA shows a prompt card; the user answers by voice or tap. ' +
-      'This tool BLOCKS until the user responds or timeout_ms elapses. ' +
+      'This tool BLOCKS until the user responds, a new voice/text turn arrives, or timeout_ms elapses. ' +
+      'If the user speaks/types while waiting, returns { interrupted: true, user_turn } instead of an answer — treat that as the new request. ' +
       'Use for yes/no decisions, short choices, or free-text clarifications. ' +
       'Do NOT call speak() before this — the PWA card is the notification.',
     {
@@ -773,6 +774,26 @@ function buildMcpServer(sessionKey: string): McpServer {
 
       try {
         const response = await promise;
+        if (response.kind === 'interrupted_by_voice_turn') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  interrupted: true,
+                  request_id,
+                  user_turn: response.user_turn,
+                  is_interrupt: response.is_interrupt,
+                  received_at: response.received_at,
+                  tts_interrupt: response.tts_interrupt ?? null,
+                  pending_user_turns: 0,
+                  message:
+                    'User sent a new turn while this question was open. Act on user_turn; do not expect an answer to the original question.',
+                }),
+              },
+            ],
+          };
+        }
         if (response.kind !== 'user_input') {
           return { content: [{ type: 'text', text: JSON.stringify({ error: 'Unexpected response kind' }) }] };
         }
@@ -788,7 +809,8 @@ function buildMcpServer(sessionKey: string): McpServer {
     'submit_plan_for_approval',
     'Present a numbered plan to the user and wait for them to approve, reject, or request modifications. ' +
       'The PWA shows a structured plan card with step-by-step detail — a core hands-free UX feature. ' +
-      'This tool BLOCKS until the user responds or timeout_ms elapses. ' +
+      'This tool BLOCKS until the user responds, a new voice/text turn arrives, or timeout_ms elapses. ' +
+      'If the user speaks/types while waiting, returns { interrupted: true, user_turn } instead of a decision — treat that as the new request (do not proceed with the plan). ' +
       'Always use this before applying significant, multi-file, or irreversible changes. ' +
       'Speak first: tell the user the plan is on their phone and summarize it in one sentence, then call this tool.',
     {
@@ -836,6 +858,26 @@ function buildMcpServer(sessionKey: string): McpServer {
 
       try {
         const response = await promise;
+        if (response.kind === 'interrupted_by_voice_turn') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  interrupted: true,
+                  request_id,
+                  user_turn: response.user_turn,
+                  is_interrupt: response.is_interrupt,
+                  received_at: response.received_at,
+                  tts_interrupt: response.tts_interrupt ?? null,
+                  pending_user_turns: 0,
+                  message:
+                    'User sent a new turn while this plan was awaiting approval. Do not execute the plan; act on user_turn.',
+                }),
+              },
+            ],
+          };
+        }
         if (response.kind !== 'plan_approval') {
           return { content: [{ type: 'text', text: JSON.stringify({ error: 'Unexpected response kind' }) }] };
         }

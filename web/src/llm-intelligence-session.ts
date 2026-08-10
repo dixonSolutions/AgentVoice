@@ -299,19 +299,17 @@ export class LlmIntelligenceSession {
     this.cb.onAssistantTranscript(text);
   }
 
-  /** Typed message — works even before wake phrase (skips wake gate). */
-  sendTextTurn(text: string): void {
+  /**
+   * Typed message — skips the wake gate; uses the same user_turn path as voice.
+   * Always enqueues while the session is live (cursor_native queues behind a running agent).
+   * @returns false when the turn could not be sent (caller should keep the draft).
+   */
+  sendTextTurn(text: string): boolean {
     const trimmed = text.trim();
-    if (
-      !trimmed ||
-      this.closed ||
-      (this.orchestratorBusy && this.workflow !== 'cursor_native')
-    ) {
-      return;
-    }
+    if (!trimmed || this.closed) return false;
     if (!this.wsConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) {
       this.cb.onSttError?.('Not connected — tap the orb to start a session.');
-      return;
+      return false;
     }
     if (!this.voiceActivated) {
       this.voiceActivated = true;
@@ -319,6 +317,7 @@ export class LlmIntelligenceSession {
     }
     this.cb.onUserTranscript(trimmed);
     this.sendUserTurn(trimmed);
+    return true;
   }
 
   private async ensureSharedMic(): Promise<MediaStream> {

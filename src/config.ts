@@ -112,6 +112,11 @@ export const VoiceSettingsSchema = z.object({
   wakeWords: WakeWordsSchema,
   turnSubmit: TurnSubmitSchema.default({}),
   tts: VoiceTtsSchema,
+  /**
+   * While a worker runs, the voice agent long-polls `next_voice_turn` for this many ms
+   * before checking `get_agent_status` again. Speak only when there is a real milestone.
+   */
+  workerPollTimeoutMs: z.number().int().min(5_000).max(60_000).default(25_000),
 });
 
 // ── Run mode (test vs serve) ────────────────────────────────────────────────

@@ -61,7 +61,7 @@ spawn cursor-agent
 | `job_started` | On `system:init` | "Cursor started working on the budget app." |
 | `file_write` | On `tool_use` with `tool: Write` | "Cursor just wrote the settings component." |
 | `shell_run` | On `tool_use` with `tool: Shell` | "Cursor is running the tests now." |
-| `progress_tick` | Every 15 s if still running | "Still working — just finished reading 4 files." |
+| `progress_tick` | _(disabled for TTS)_ | Formerly "Still working — read N files." Count ticks no longer speak; voice agent narrates via `get_agent_status`. |
 | `job_done` | On `result` | "Done — Cursor changed 3 files. Want to see the diff?" |
 | `job_error` | On `error` or non-zero exit | "Something went wrong. Cursor said: …" |
 | `ghost_killed` | Task/subagent tool detected | "Stopped — Cursor tried to spawn extra agents …" |
@@ -129,11 +129,11 @@ job's `job_events` table and replayed as a summary when Dad next connects.
 
 ### Cadence rules (prevent spam)
 
-- At most **one injection per 15 s** during a running job (configurable via
-  `settings.narratorCadenceMs`, default `15000`).
-- Transitions (`file_write`, `shell_run`, `job_done`, `job_error`) always inject
-  immediately, bypassing the cadence timer.
-- `progress_tick` respects the cadence timer.
+- Count-only `progress_tick` events are **not** spoken (narrator skips them; watcher no longer emits them).
+- Spoken progress while workers run comes from the **voice agent** via `get_agent_status` + optional `speak()`.
+- Transitions (`file_write`, `job_done`, `job_error`, `ghost_killed`) may still inject via the narrator.
+- Worker poll interval is `settings.voice.workerPollTimeoutMs` (default `25000`) — how long
+  `next_voice_turn` waits before the agent re-checks status.
 - If the session is actively speaking (a prior injection hasn't finished TTS),
   the narrator defers until the prior turn completes.
 

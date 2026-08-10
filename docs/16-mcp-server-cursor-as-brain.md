@@ -65,10 +65,9 @@ manifest over HTTP. From that point Cursor's conversational agent has the full
 Throughout a live session, the Voice tab shows a secondary pen orb at the
 bottom-left. It opens an Optimus dialog with a multiline Markdown request
 editor. Close preserves the draft, and Send uses the same authenticated session
-without requiring microphone input. In `cursor_native`, Send remains available
-while Cursor is working; follow-up text is added to the existing voice-turn
-queue for the running agent. Workflows that cannot safely process overlapping
-turns retain their busy guard.
+and `user_turn` WebSocket path as voice — including while Cursor is working.
+Follow-up text is queued for the running voice agent via `next_voice_turn()`.
+If send fails (no live session), the draft is kept and an error toast is shown.
 
 Live mode is a single non-scrolling viewport: session logs stay in a bounded
 region at the top, while the orb, mute control, hint, and pen action remain
@@ -213,17 +212,40 @@ message lands.
 The recommended fallback (stop → spawn with amended instructions) is documented
 in the system prompt. No false promises are made in the tool description.
 
-### 8.4 No Interrupt / Preempt on `next_voice_turn`
+### 8.4 Mid-tool wake via owned MCP tool results (not arbitrary tools)
 
-**Problem:** If Cursor is processing a long coding task and the user says
-"cancel", the voice turn queues but Cursor is not listening. The turn sits in
-the queue until the current tool call returns.
+**Problem:** If the voice agent is inside a long MCP tool call (not polling
+`next_voice_turn`), a new user turn queues but Cursor does not wake until that
+tool returns. MCP cannot push a new tool invocation into the client mid-call —
+server notifications do not interrupt an in-flight tool (and newer MCP drafts
+are moving *away* from server→client back-channels).
 
-**Resolution adopted:**
-- `next_voice_turn()` supports a short `timeout_ms` (≤ 2 s) in the polling loop
-  so Cursor interleaves quickly.
-- A `VoiceInterrupt` flag is set when the word "stop" or "cancel" appears in a
-  queued turn; `speak()` and tool handlers check this flag and raise early.
+**What works today:**
+- While the agent **is** blocked in `next_voice_turn`, enqueue wakes the waiter immediately.
+- While the agent is blocked in `request_user_input` or `submit_plan_for_approval`,
+  enqueue **resolves that tool early** with
+  `{ interrupted: true, user_turn, … }`. Cursor injects that JSON as normal tool
+  output — same mechanism as any other tool finishing. The turn is **not** also
+  queued for `next_voice_turn` (avoids double delivery). The PWA receives
+  `approval_cancelled` so the card dismisses.
+- `list_agents` / `get_agent_status` expose `pending_user_turns`; prompts tell the agent to
+  call `next_voice_turn` immediately when that count is &gt; 0.
+- Queueing without a waiter (and without an approval wait) emits a `user_turn`
+  tool_activity event for logs/UI.
+
+**Not viable as a silent MCP hook:** Cursor IDE hooks (`beforeMCPExecution`, `stop`, etc.)
+and MCP notifications cannot yank the model out of an arbitrary **built-in** tool
+(Read, Shell, Write, Task, …) mid-flight — we do not own those result streams.
+
+**Real push options (future):**
+- Run the voice agent under **ACP** (`agent acp`) and send `session/prompt` / cancel when a
+  turn arrives — true mid-run follow-up.
+- Or Cursor SDK `Agent` + `send` / resume for programmatic follow-ups.
+
+**Resolution adopted (near-term):** Keep the poll loop with configurable
+`workerPollTimeoutMs`, surface `pending_user_turns`, abort owned approval waits
+with inject-as-tool-output, and document ACP as the path for true mid-tool wake
+on Cursor-native tools.
 
 ### 8.5 Bridge URL in Global `~/.cursor/mcp.json`
 

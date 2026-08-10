@@ -13,9 +13,43 @@
  */
 
 import { childLogger } from '../../log.js';
+import { getConfig } from '../../config.js';
+import { notifyPhone } from '../../push/notifyPhone.js';
 import { voiceTurnQueue } from './turnQueue.js';
 
 const log = childLogger('mcp:server:voiceTools');
+
+voiceTurnQueue.setQueuedWithoutWaiterHandler((queueLen) => {
+  broadcastToVoiceSessions({
+    type: 'tool_activity',
+    tool: 'user_turn',
+    phase: 'start',
+    label: 'User turn queued',
+    detail: `${queueLen} pending — voice agent not in next_voice_turn()`,
+  });
+  log.info({ queueLen }, 'user turn queued while voice agent busy (not polling)');
+});
+
+voiceTurnQueue.setApprovalsInterruptedHandler((aborted, turn) => {
+  for (const req of aborted) {
+    void notifyPhone({
+      type: 'approval_cancelled',
+      request_id: req.request_id,
+      reason: 'user_turn',
+    });
+  }
+  broadcastToVoiceSessions({
+    type: 'tool_activity',
+    tool: 'user_turn',
+    phase: 'start',
+    label: 'Interrupted approval wait',
+    detail: turn.text.slice(0, 120),
+  });
+  log.info(
+    { aborted: aborted.length, text: turn.text.slice(0, 80) },
+    'approval/input wait interrupted by user turn',
+  );
+});
 
 /**
  * Tracks whether the current voice turn produced any speak() calls.
@@ -250,8 +284,10 @@ export async function handleNextVoiceTurn(
     };
   }
 
+  const configuredDefault =
+    getConfig().settings.voice.workerPollTimeoutMs ?? DEFAULT_POLL_MS;
   const timeoutMs = Math.min(
-    args.timeout_ms != null && args.timeout_ms > 0 ? args.timeout_ms : DEFAULT_POLL_MS,
+    args.timeout_ms != null && args.timeout_ms > 0 ? args.timeout_ms : configuredDefault,
     MAX_POLL_MS,
   );
 

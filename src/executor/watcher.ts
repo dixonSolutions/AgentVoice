@@ -232,7 +232,7 @@ export class Watcher {
         kind: 'job_started',
         text: `Cursor started working on ${this.projectName}.`,
       });
-      this.startCadenceTicks();
+      // No cadence TTS ticks — the voice agent narrates via get_agent_status.
       return;
     }
 
@@ -377,17 +377,12 @@ export class Watcher {
     }
   }
 
+  /**
+   * Formerly emitted count-only "Still working — read N files" TTS ticks.
+   * Disabled: voice agent owns spoken progress. Kept as a no-op so call sites stay safe.
+   */
   private startCadenceTicks(): void {
-    const tick = (): void => {
-      const s = this.getSummary();
-      const parts: string[] = [];
-      if (s.filesRead.length > 0) parts.push(`read ${s.filesRead.length} file${s.filesRead.length !== 1 ? 's' : ''}`);
-      if (s.filesWritten.length > 0) parts.push(`written ${s.filesWritten.length}`);
-      const detail = parts.length > 0 ? ` — ${parts.join(', ')} so far` : '';
-      this.emit({ kind: 'progress_tick', text: `Still working${detail}.` });
-      this.cadenceTimer = setTimeout(tick, this.cadenceMs);
-    };
-    this.cadenceTimer = setTimeout(tick, this.cadenceMs);
+    this.stopCadenceTicks();
   }
 
   private stopCadenceTicks(): void {

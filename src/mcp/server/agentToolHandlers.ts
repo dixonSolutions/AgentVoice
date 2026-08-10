@@ -28,6 +28,7 @@ import { submitJob, getAllActiveJobSummaries, getJobsHistory } from '../../execu
 import { resolveProject, getSessionState } from '../../state/registry.js';
 import { getJob, getJobEvents } from '../../state/jobs.js';
 import { getActiveVoiceAgent } from '../../executor/voiceAgent.js';
+import { voiceTurnQueue } from './turnQueue.js';
 import { revert } from '../../executor/git.js';
 import { dispatchTool } from '../handlers.js';
 
@@ -73,6 +74,10 @@ export interface ListAgentsResult {
     state: string;
   } | null;
   count: number;
+  /** Turns waiting in VoiceTurnQueue because the voice agent is mid-tool. */
+  pending_user_turns: number;
+  /** True when at least one next_voice_turn() poll is waiting. */
+  voice_agent_listening: boolean;
 }
 
 export interface GetAgentStatusArgs {
@@ -97,6 +102,8 @@ export interface AgentStatusResult {
   checkpoint?: string | null;
   started_at?: string;
   finished_at?: string | null;
+  /** Turns waiting for next_voice_turn — call it immediately when > 0. */
+  pending_user_turns?: number;
 }
 
 export interface GetAgentOutputArgs {
@@ -322,6 +329,8 @@ export function makeAgentHandlers(sessionKey: string): AgentToolHandlers {
             }
           : null,
         count: agents.length,
+        pending_user_turns: voiceTurnQueue.size,
+        voice_agent_listening: voiceTurnQueue.waitersCount > 0,
       };
     },
 
@@ -345,6 +354,7 @@ export function makeAgentHandlers(sessionKey: string): AgentToolHandlers {
           files_written: summary?.filesWritten ?? [],
           files_read: summary?.filesRead ?? [],
           shell_commands: summary?.shellCommands ?? [],
+          pending_user_turns: voiceTurnQueue.size,
         };
       }
 
@@ -365,6 +375,7 @@ export function makeAgentHandlers(sessionKey: string): AgentToolHandlers {
           files_written: summary?.filesWritten ?? [],
           files_read: summary?.filesRead ?? [],
           shell_commands: summary?.shellCommands ?? [],
+          pending_user_turns: voiceTurnQueue.size,
         };
       }
 

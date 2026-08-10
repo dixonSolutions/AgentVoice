@@ -87,6 +87,8 @@ export class Narrator {
   async receive(event: NarrationEvent): Promise<void> {
     const { settings } = getConfig();
     if (!settings.narratorEnabled) return;
+    // Count-only cadence ticks are reserved for get_agent_status — voice agent speaks milestones.
+    if (event.kind === 'progress_tick') return;
 
     if (this.session?.isReady) {
       await this.inject(event);
