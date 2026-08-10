@@ -222,12 +222,12 @@ in [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md).
 
 ### ADR-019 — Optimus UI + local appearance theming
 
-**Decision:** Use `@openng/optimus-ui` (MIT PrimeNG fork) for the PWA component
-library. Drive light/dark/system and primary tone through Optimus theming
-(`provideOptimus` + `updatePrimaryPalette`), persisted only in browser
-`localStorage` (`cv-appearance`) — never `config.json` / admin API. Browser TTS
-voice pickers use Optimus `p-select` with `virtualScroll` + lazy chunking so
-Firefox-scale remote voice lists stay responsive.
+**Decision:** Use stable `@openng/optimus-ui` / `@openng/optimus-ui-themes` **v1**
+(MIT PrimeNG fork; not RC) for the PWA component library. Drive light/dark/system
+and primary tone through Optimus theming (`provideOptimus` + `updatePrimaryPalette`),
+persisted only in browser `localStorage` (`cv-appearance`) — never `config.json` /
+admin API. Browser TTS voice pickers use Optimus `p-select` with `virtualScroll` +
+lazy chunking so Firefox-scale remote voice lists stay responsive.
 
 **Rejected:** Native `<select>` workaround; always-on dark via hardcoded
 `html.p-dark`; brand colors hardcoded in SCSS.
