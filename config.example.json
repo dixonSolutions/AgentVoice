@@ -46,7 +46,7 @@
         "start": "cursor listen",
         "end": "cursor send",
         "cancel": "cancel",
-        "sensitivity": "high"
+        "wakeConfidenceThreshold": 0.45
       },
       "turnSubmit": {
         "silenceMs": 1500,

@@ -15,7 +15,7 @@ import {
 } from './audio.js';
 import { getVoiceAudioMeter } from './voice-audio-meter.js';
 import type { SessionCallbacks, VoiceAgentStatusEvent, VoiceLogLevel, VoiceLogSubcategory } from './voice-session-types.js';
-import { type TurnSubmit, type WakeWords, textContainsWakePhrase } from './wake-words.js';
+import { type TurnSubmit, type WakeWords, resolveWakeConfidenceThreshold, textContainsWakePhrase } from './wake-words.js';
 import {
   cancelTtsFallback,
   stopAllTts,
@@ -395,7 +395,7 @@ export class LlmIntelligenceSession {
       const mic = this.sharedMicStream ?? (await this.ensureSharedMic());
       await this.startSpotter.start(start, {
         mediaStream: mic,
-        ...wakeSpotterOptions(this.wakeWords.sensitivity),
+        ...wakeSpotterOptions(resolveWakeConfidenceThreshold(this.wakeWords)),
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
