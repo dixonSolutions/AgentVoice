@@ -54,13 +54,17 @@ voiceTurnQueue.setApprovalsInterruptedHandler((aborted, turn) => {
 /**
  * Tracks whether the current voice turn produced any speak() calls.
  * Used by the voice-agent exit fallback so mute agents still get TTS.
- * Cleared only when a new user turn arrives — not on done() — otherwise a
- * normal speak→done turn looks silent at process exit and the fallback
- * speaks Cursor’s final assistant/process text a second time.
+ *
+ * Cleared when:
+ *   - a new voice-agent process is spawned, or
+ *   - next_voice_turn() delivers a real follow-up turn to the same process
+ * NOT cleared when a follow-up is merely queued while the agent is mid-turn /
+ * on done() — otherwise exit-fallback thinks the agent was silent and speaks
+ * Cursor’s internal assistant/planning text after a normal speak→done turn.
  */
 let spokeThisTurn = false;
 
-/** Reset at the start of each user turn (before the agent responds). */
+/** Reset at the start of a new agent-handled user turn. */
 export function resetTurnSpeakTracking(): void {
   spokeThisTurn = false;
 }
@@ -296,6 +300,9 @@ export async function handleNextVoiceTurn(
   if (!turn) {
     return { turn: null, is_interrupt: false, received_at: null, queue_depth: 0 };
   }
+
+  // New utterance handed to this agent process — re-arm mute-exit fallback.
+  resetTurnSpeakTracking();
 
   // Only signal thinking once a real user turn has arrived — not on every poll start.
   broadcastToVoiceSessions({ type: 'thinking', value: true });

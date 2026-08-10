@@ -103,10 +103,23 @@ function buildVoiceBootPrompt(project: Project, pendingTurn?: string): string {
     : `${cursorVoiceRuleBody()}${VOICE_BOOT_SUFFIX}${turnBlock}`;
 }
 
-/** First sentence(s) of assistant text for TTS when speak() was never called. */
+/**
+ * First sentence(s) of assistant text for TTS when speak() was never called.
+ * Skips internal planning / narration-of-intent (Cursor stream text that was
+ * never meant to be spoken aloud).
+ */
 function summarizeForSpeechFallback(text: string): string {
   const clean = text.replace(/\s+/g, ' ').trim();
   if (!clean) return '';
+  // Model thinking-out-loud often looks like this; speaking it is a hallucination.
+  if (
+    /^(i'?ll |i will |let me |i'?m going to |i need to |first[, ]|okay[, ]?i )/i.test(clean) &&
+    /\b(then |and then |acknowledge|dig into|take a (?:quick )?look|wrap up|confirm that)\b/i.test(
+      clean,
+    )
+  ) {
+    return '';
+  }
   const sentences = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) ?? [clean];
   const lead = sentences.slice(0, 2).join(' ').trim();
   const max = 320;

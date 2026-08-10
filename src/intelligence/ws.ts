@@ -207,8 +207,6 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
             intelSession.busy = true;
             send(socket, { type: 'thinking', value: true });
 
-            resetTurnSpeakTracking();
-
             const ttsInterrupt = parseTtsInterrupt(msg['tts_interrupt']);
             const phraseInterrupt = /\b(stop everything|abort|quit)\b/i.test(text);
             const isInterrupt =
@@ -230,6 +228,11 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
                 return;
               }
 
+              // New agent process — reset speak tracking and drop orphaned queue
+              // items from a previous run that never called next_voice_turn().
+              resetTurnSpeakTracking();
+              voiceTurnQueue.clear();
+
               project = refreshProjectForVoice(project);
               try {
                 spawnVoiceAgent(project, bridgeSession, text);
@@ -244,9 +247,10 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
                 return;
               }
             } else {
-              // A running voice agent receives follow-up turns through MCP polling.
-              // Initial turns are passed directly in the spawn prompt and must not
-              // also be queued, otherwise next_voice_turn() delivers them twice.
+              // Follow-up while the same agent is still alive: do NOT reset
+              // spokeThisTurn. Clearing it made exit-fallback think the agent
+              // never spoke and TTS Cursor's internal assistant/planning text.
+              // Tracking resets when next_voice_turn() actually delivers a turn.
               voiceTurnQueue.enqueue(text, { isInterrupt, ttsInterrupt });
             }
 
