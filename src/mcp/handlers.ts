@@ -138,8 +138,10 @@ async function route(
     case 'cursor_revert':
       return handleCursorRevert(a, activeProject);
     case 'cursor_agent_info':
+    case 'agent_info':
       return handleCursorAgentInfo();
     case 'cursor_agent_status':
+    case 'agent_status':
       return handleCursorAgentStatus();
     case 'cursor_mcp_list':
       return handleMcpList();
@@ -147,6 +149,10 @@ async function route(
       return handleMcpTools(a);
     case 'show_images':
       return handleShowImages(a);
+    case 'agent_list_models':
+      return handleListModels(a, getSessionState(sessionKey).activeModel);
+    case 'agent_set_model':
+      return handleSetModel(a, sessionKey);
     default: {
       const _exhaustive: never = name;
       throw new Error(`Unhandled tool: ${_exhaustive}`);

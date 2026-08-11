@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Cursor Voice — host setup (Linux)
+# AgentVoice — host setup (Linux)
 #
 # What this script does:
 #   1. Checks prerequisites (Node ≥ 20, npm, git, cursor-agent)
@@ -8,8 +8,8 @@
 #   3. Builds the project (backend + PWA)
 #   4. Creates .env with a generated APP_TOKEN if not already present
 #   5. Installs systemd user units:
-#        cursor-voice.service      — bridge process (auto-restart on crash)
-#        cursor-voice-watch.path   — restarts service when dist/index.js changes
+#        agentvoice.service      — bridge process (auto-restart on crash)
+#        agentvoice-watch.path   — restarts service when dist/index.js changes
 #   6. Configures tailscale serve (HTTPS proxy to the bridge)
 #   7. Opens UFW firewall port on the tailscale0 interface
 #   8. Prints a next-step checklist
@@ -125,12 +125,12 @@ fi
 
 # Detect the Node binary used by an existing service (if installed)
 SERVICE_NODE=""
-SERVICE_FILE="${HOME}/.config/systemd/user/cursor-voice.service"
+SERVICE_FILE="${HOME}/.config/systemd/user/agentvoice.service"
 if [[ -f "$SERVICE_FILE" ]]; then
   SERVICE_NODE=$(grep -oP '(?<=ExecStart=)\S+node' "$SERVICE_FILE" || true)
 fi
-if [[ -z "$SERVICE_NODE" && -f /etc/systemd/system/cursor-voice.service ]]; then
-  SERVICE_NODE=$(grep -oP '(?<=ExecStart=)\S+node' /etc/systemd/system/cursor-voice.service || true)
+if [[ -z "$SERVICE_NODE" && -f /etc/systemd/system/agentvoice.service ]]; then
+  SERVICE_NODE=$(grep -oP '(?<=ExecStart=)\S+node' /etc/systemd/system/agentvoice.service || true)
 fi
 NODE_BIN="${SERVICE_NODE:-$(command -v node 2>/dev/null || true)}"
 NPM_BIN="$(dirname "$NODE_BIN")/npm"
@@ -164,7 +164,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   fi
 
   cat > "$ENV_FILE" <<EOF
-# Cursor Voice — secrets + machine-specific paths
+# AgentVoice — secrets + machine-specific paths
 # chmod 600 this file and never commit it.
 
 APP_TOKEN=${APP_TOKEN}
@@ -236,11 +236,11 @@ SYSTEMD_DIR="${HOME}/.config/systemd/user"
 mkdir -p "$SYSTEMD_DIR"
 
 # ── Main service unit ──────────────────────────────────────────────────────
-SERVICE_FILE="${SYSTEMD_DIR}/cursor-voice.service"
+SERVICE_FILE="${SYSTEMD_DIR}/agentvoice.service"
 info "Writing ${SERVICE_FILE}..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Cursor Voice Bridge
+Description=AgentVoice Bridge
 After=network-online.target
 Wants=network-online.target
 
@@ -255,7 +255,7 @@ RestartSec=3
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=cursor-voice
+SyslogIdentifier=agentvoice
 
 [Install]
 WantedBy=default.target
@@ -263,16 +263,16 @@ EOF
 
 # ── Path watcher unit (auto-restart on new builds) ─────────────────────────
 # Whenever npm run build or restart.sh updates dist/index.js, systemd
-# automatically restarts cursor-voice.service — no manual restart needed.
-PATH_FILE="${SYSTEMD_DIR}/cursor-voice-watch.path"
+# automatically restarts agentvoice.service — no manual restart needed.
+PATH_FILE="${SYSTEMD_DIR}/agentvoice-watch.path"
 info "Writing ${PATH_FILE} (auto-restart on new builds)..."
 cat > "$PATH_FILE" <<EOF
 [Unit]
-Description=Watch Cursor Voice build output for changes
+Description=Watch AgentVoice build output for changes
 
 [Path]
 PathModified=${PROJECT_DIR}/dist/index.js
-Unit=cursor-voice.service
+Unit=agentvoice.service
 
 [Install]
 WantedBy=default.target
@@ -284,12 +284,12 @@ if command -v loginctl &>/dev/null; then
 fi
 
 systemctl --user daemon-reload
-systemctl --user enable cursor-voice.service cursor-voice-watch.path
-systemctl --user restart cursor-voice.service
-systemctl --user start cursor-voice-watch.path
+systemctl --user enable agentvoice.service agentvoice-watch.path
+systemctl --user restart agentvoice.service
+systemctl --user start agentvoice-watch.path
 
 ok "systemd units active."
-systemctl --user status cursor-voice.service --no-pager -l | head -12 || true
+systemctl --user status agentvoice.service --no-pager -l | head -12 || true
 
 # ── 7. Tailscale serve ────────────────────────────────────────────────────
 section "Tailscale HTTPS proxy"
@@ -343,7 +343,7 @@ else
 
   # Allow bridge port on Tailscale interface only
   _ufw allow in on tailscale0 to any port "${ACTUAL_PORT}" proto tcp \
-    comment "cursor-voice bridge"
+    comment "agentvoice bridge"
 
   # Ensure SSH on tailscale is allowed before enabling (prevents lockout)
   _ufw allow in on tailscale0 to any port 22 proto tcp \
@@ -369,7 +369,7 @@ TOKEN="$(grep '^APP_TOKEN=' "$ENV_FILE" | cut -d= -f2 | tr -d '[:space:]')"
 echo ""
 echo -e "${GRN}✔${NC}  Bridge running as a persistent systemd user service"
 echo -e "${GRN}✔${NC}  Auto-restarts on crash (Restart=on-failure)"
-echo -e "${GRN}✔${NC}  Auto-restarts on new build (cursor-voice-watch.path watches dist/index.js)"
+echo -e "${GRN}✔${NC}  Auto-restarts on new build (agentvoice-watch.path watches dist/index.js)"
 echo -e "${GRN}✔${NC}  UFW firewall allows port ${ACTUAL_PORT} on tailscale0"
 echo ""
 echo -e "${YEL}▶  Action required:${NC}"
@@ -388,5 +388,5 @@ echo ""
 echo "   4. To deploy new code: just run the build — the watcher restarts automatically."
 echo "      Or for a manual restart:  bash scripts/restart.sh"
 echo ""
-echo -e "${BLU}Logs:${NC}  journalctl --user -u cursor-voice -f"
+echo -e "${BLU}Logs:${NC}  journalctl --user -u agentvoice -f"
 echo ""

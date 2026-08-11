@@ -25,7 +25,7 @@ import PushKit
     }
 
     private func configureProvider() {
-        let config = CXProviderConfiguration(localizedName: "Cursor Voice")
+        let config = CXProviderConfiguration(localizedName: "AgentVoice")
         config.supportsVideo = false
         config.maximumCallsPerCallGroup = 1
         config.maximumCallGroups = 1
@@ -44,7 +44,7 @@ import PushKit
     public func startOutboundCall() {
         let uuid = UUID()
         activeCallUUID = uuid
-        let handle = CXHandle(type: .generic, value: "Cursor Voice")
+        let handle = CXHandle(type: .generic, value: "AgentVoice")
         let start = CXStartCallAction(call: uuid, handle: handle)
         start.isVideo = false
         let transaction = CXTransaction(action: start)
@@ -71,7 +71,7 @@ import PushKit
         let uuid = UUID()
         activeCallUUID = uuid
         let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .generic, value: "Cursor Voice")
+        update.remoteHandle = CXHandle(type: .generic, value: "AgentVoice")
         update.localizedCallerName = title
         update.hasVideo = false
         provider?.reportNewIncomingCall(with: uuid, update: update) { error in
@@ -121,7 +121,7 @@ import PushKit
 
     public func pushRegistry(_ registry: PKPushRegistry, didReceiveIncomingPushWith payload: PKPushPayload, for type: PKPushType, completion: @escaping () -> Void) {
         let data = payload.dictionaryPayload
-        let title = (data["title"] as? String) ?? "Cursor Voice"
+        let title = (data["title"] as? String) ?? "AgentVoice"
         let body = (data["body"] as? String) ?? "Agent needs your input"
         reportIncomingApprovalCall(title: title, body: body)
         completion()

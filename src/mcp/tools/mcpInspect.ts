@@ -2,7 +2,7 @@
  * MCP inspect tools — cursor_mcp_list, cursor_mcp_tools
  *
  * Informational tools for debugging the cursor-agent executor's MCP config.
- * These are NOT about Cursor Voice's own MCP server — they inspect what MCPs
+ * These are NOT about AgentVoice's own MCP server — they inspect what MCPs
  * cursor-agent itself has configured in .cursor/mcp.json.
  *
  * Backed by:

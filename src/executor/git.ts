@@ -155,7 +155,7 @@ export async function revert(
   }
 
   const changedFiles = status.files.map((f) => f.path);
-  await g.stash(['push', '-u', '-m', `cursor-voice revert ${new Date().toISOString()}`]);
+  await g.stash(['push', '-u', '-m', `agentvoice revert ${new Date().toISOString()}`]);
   log.info({ projectPath, files: changedFiles.length }, 'changes stashed');
 
   return { revertedTo: checkpointSha, files: changedFiles, method: 'stash' };

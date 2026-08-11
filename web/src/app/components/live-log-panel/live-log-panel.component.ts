@@ -214,7 +214,7 @@ export class LiveLogPanelComponent implements AfterViewInit, OnDestroy {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `cursor-voice-session-${stamp}.json`;
+    anchor.download = `agentvoice-session-${stamp}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
     this.toast.success('Exported JSON', undefined, false);

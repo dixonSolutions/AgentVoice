@@ -163,89 +163,24 @@ body {
   min-width: 0;
 }
 
-.cv-voice-picker-label {
-  font-size: 0.8125rem;
-  font-weight: 600;
-  color: var(--p-text-muted-color);
-}
-
-.cv-filterable-picker {
+.cv-voice-select-item {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
-  min-width: 0;
-}
-
-.cv-filterable-picker__filter {
-  width: 100%;
-}
-
-.cv-filterable-picker__list {
-  overflow-y: auto;
-  overflow-x: hidden;
-  border: 1px solid var(--p-content-border-color);
-  border-radius: 0.5rem;
-  background: var(--p-content-background);
-  -webkit-overflow-scrolling: touch;
-}
-
-.cv-filterable-picker__item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
   gap: 0.15rem;
-  width: 100%;
-  margin: 0;
-  padding: 0.55rem 0.7rem;
-  border: none;
-  border-bottom: 1px solid var(--p-content-border-color);
-  background: transparent;
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.cv-filterable-picker__item:last-child {
-  border-bottom: none;
-}
-
-.cv-filterable-picker__item--selected {
-  background: color-mix(in srgb, var(--p-primary-color) 22%, transparent);
-}
-
-.cv-filterable-picker__item:not(:disabled):hover {
-  background: color-mix(in srgb, var(--p-text-muted-color) 12%, transparent);
-}
-
-.cv-filterable-picker__item:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-
-.cv-filterable-picker__title {
-  font-weight: 600;
-  font-size: 0.875rem;
+  min-width: 0;
   line-height: 1.35;
-  overflow-wrap: anywhere;
 }
 
-.cv-filterable-picker__detail {
+.cv-voice-select-item .cv-cfg-muted {
   font-size: 0.75rem;
-  line-height: 1.4;
-  color: var(--p-text-muted-color);
   overflow-wrap: anywhere;
 }
 
-.cv-filterable-picker__empty {
-  margin: 0;
-  padding: 0.75rem;
-  font-size: 0.8125rem;
-  color: var(--p-text-muted-color);
-  text-align: center;
-}
-
-.cv-filterable-picker--disabled {
-  opacity: 0.7;
+.cv-cfg-serve-journal {
+  max-height: 22rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin-top: 0.75rem;
 }
 
 .cv-voice-accordion-heading {
@@ -1515,6 +1450,62 @@ body {
 .cv-cfg-serve-commit {
   font-size: 0.75rem;
   opacity: 0.85;
+}
+
+.cv-cfg-muted {
+  color: var(--p-text-muted-color);
+  font-size: 0.875rem;
+}
+
+/* ── Hosting provider (Network tab) ── */
+
+.cv-cfg-hosting-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.cv-cfg-hosting-detect {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin: 0.5rem 0 0.75rem;
+}
+
+.cv-cfg-hosting-log {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  background: var(--p-surface-ground);
+  font-family: monospace;
+  font-size: 0.8125rem;
+  max-height: 12rem;
+  overflow-y: auto;
+  margin-top: 0.75rem;
+}
+
+.cv-cfg-hosting-log-line {
+  line-height: 1.5;
+}
+
+.cv-cfg-hosting-doctor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.cv-cfg-hosting-doctor-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
 }
 
 .cv-cfg-serve-actions {

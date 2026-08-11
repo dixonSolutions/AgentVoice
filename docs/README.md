@@ -1,8 +1,8 @@
-# Cursor Voice — Documentation
+# AgentVoice — Documentation
 
-Voice-controlled coding agent: speak from an iPhone PWA, Cursor reasons with full
-project context, and a constrained MCP tool layer drives `cursor-agent` workers
-on projects hosted on a home machine.
+Voice-controlled coding agent: speak from an iPhone PWA, the active agent CLI
+(Cursor / Codex / Claude Code) reasons with full project context, and a constrained
+MCP tool layer drives worker agents on projects hosted on a home machine.
 
 > Status: **Implemented.** This folder is the source of truth for architecture and
 > behavior. Update these docs when the codebase changes (see `08-decisions-and-risks.md`).
@@ -31,18 +31,25 @@ on projects hosted on a home machine.
 | [`18-image-carousel.md`](./18-image-carousel.md) | `show_images` tool, carousel PWA, Browser snapshot workflow | UI review on phone |
 | [`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md) | Wake Lock, silent media session, auto-resume on mobile | Screen-off disconnects on phone |
 | [`20-native-callkit-shell.md`](./20-native-callkit-shell.md) | CallKit native app + push notifications | True call-style session + background alerts |
-| [`21-serve-self-hosting.md`](./21-serve-self-hosting.md) | Serve hub: auto-update, network, manual actions, event log | Self-hosting from Config tab |
+| [`21-serve-self-hosting.md`](./21-serve-self-hosting.md) | Serve hub: manual rebase/update, service logs, network | Self-hosting from Config tab |
 | [`22-split-host-tunnel.md`](./22-split-host-tunnel.md) | Incus container hosting + optional SSH tunnel for Tailscale Serve | Container DNS / tunnel 502 |
+| [`23-multi-agent-client.md`](./23-multi-agent-client.md) | Cursor / Codex / Claude Code CLI install, invocation flags, MCP registration | Installing or switching agent clients |
+| [`24-agent-providers.md`](./24-agent-providers.md) | `AgentProvider` abstraction: phone-driven auth, live model selection, generic MCP aliases | In-app sign-in, model picker, or adding a 4th CLI |
+| [`25-hosting-providers.md`](./25-hosting-providers.md) | `HostingProvider` abstraction: Tailscale, Cloudflare, ngrok, Dev Tunnels, LAN, local, manual | Choosing/switching how the bridge is exposed |
+| [`26-rename-agentvoice.md`](./26-rename-agentvoice.md) | Product rename from Cursor Voice → AgentVoice (what changed / what stayed) | Migrating an existing install after the rename |
 
 ## One-paragraph summary
 
 The **phone** (iPhone Safari PWA) captures speech with **browser STT** (WebKit or
 Amazon Transcribe) and plays replies with **WebKit TTS** or **Amazon Polly**.
 Utterances flow over **`/ws/intelligence`** to the bridge, which queues them for
-**Cursor IDE** via the **`cursor-voice` MCP server** (`next_voice_turn`, `speak`,
-`done`). Cursor is the conversational brain; coding work is delegated to **worker**
-`cursor-agent` processes via `spawn_agent`. Network access is private via
-**Tailscale**; every bridge request is validated with a **single app token**.
+the active coding agent (Cursor / Codex / Claude Code) via the **`cursor-voice`
+MCP server** (`next_voice_turn`, `speak`, `done` — registration key kept for
+compatibility; see [`26-rename-agentvoice.md`](./26-rename-agentvoice.md)). The
+agent is the conversational brain; coding work is delegated to **worker** CLI
+processes via `spawn_agent`. Networking defaults to **Tailscale** but is
+pluggable ([`25-hosting-providers.md`](./25-hosting-providers.md)); every bridge
+request is validated with a **single app token**.
 
 ## Workflows
 

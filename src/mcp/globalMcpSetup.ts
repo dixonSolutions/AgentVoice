@@ -166,7 +166,7 @@ function ensureGlobalCursorVoiceRule(onLog?: SessionLogCallback): void {
   const body = cursorVoiceRuleBody();
   const content = `---
 description: >
-  Cursor Voice — use only during an active phone/PWA voice session.
+  AgentVoice — use only during an active phone/PWA voice session.
   When a voice session is connected, all communication MUST go through cursor-voice MCP tools:
   speak() to talk, done() to re-arm the mic, next_voice_turn() to receive requests.
   If speak() returns NO_VOICE_SESSION, respond with normal IDE text instead.

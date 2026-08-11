@@ -44,6 +44,40 @@ export const AWS_ENV_KEYS: EnvKeyField[] = [
   { envVar: 'AWS_REGION', label: 'Region', minLength: 5, secret: false, optional: true },
 ];
 
+/**
+ * Auth credentials the agent providers can persist without a browser round-trip
+ * (API keys, long-lived tokens). Keys are never returned to the web app.
+ */
+export const AGENT_AUTH_ENV_KEYS: EnvKeyField[] = [
+  { envVar: 'CURSOR_API_KEY', label: 'Cursor API key', minLength: 8, secret: true, optional: true },
+  { envVar: 'OPENAI_API_KEY', label: 'Codex (OpenAI) API key', minLength: 8, secret: true, optional: true },
+  {
+    envVar: 'CLAUDE_CODE_OAUTH_TOKEN',
+    label: 'Claude Code setup-token',
+    minLength: 8,
+    secret: true,
+    optional: true,
+  },
+  { envVar: 'ANTHROPIC_API_KEY', label: 'Anthropic API key', minLength: 8, secret: true, optional: true },
+];
+
+/**
+ * HostingProvider secrets/paths persisted by the Serve/Network setup wizard —
+ * never in config.json since some of these grant tunnel access.
+ */
+export const HOSTING_ENV_KEYS: EnvKeyField[] = [
+  { envVar: 'NGROK_AUTHTOKEN', label: 'ngrok authtoken', minLength: 8, secret: true, optional: true },
+  {
+    envVar: 'CLOUDFLARE_TUNNEL_TOKEN',
+    label: 'Cloudflare tunnel token',
+    minLength: 8,
+    secret: true,
+    optional: true,
+  },
+  { envVar: 'HTTPS_CERT_PATH', label: 'TLS certificate path (lan provider)', minLength: 1, secret: false, optional: true },
+  { envVar: 'HTTPS_KEY_PATH', label: 'TLS private key path (lan provider)', minLength: 1, secret: false, optional: true },
+];
+
 /** Read raw .env file into a key→value map (does not merge process.env). */
 function parseEnvFile(filePath: string): Map<string, string> {
   const map = new Map<string, string>();
@@ -98,17 +132,18 @@ export function isAwsConfigured(env: Record<string, string | undefined>): boolea
 }
 
 /**
- * Update AWS env vars in `.env`.
- * Merges with existing file; preserves unrelated lines and comments.
+ * Merge `updates` into `.env` for the given allowed key set.
+ * Preserves unrelated lines and comments; empty values delete the key.
+ * Shared by updateAwsEnvKeys and updateAgentEnvKeys — one file-writing path.
  */
-export function updateAwsEnvKeys(updates: Record<string, string>): void {
-  const allowed = new Set(AWS_ENV_KEYS.map((k) => k.envVar));
+function writeEnvKeys(fields: EnvKeyField[], updates: Record<string, string>, auditTool: string): void {
+  const allowed = new Set(fields.map((k) => k.envVar));
 
   for (const key of Object.keys(updates)) {
     if (!allowed.has(key)) {
-      throw new Error(`Env var "${key}" is not a valid AWS key`);
+      throw new Error(`Env var "${key}" is not recognized here`);
     }
-    const field = AWS_ENV_KEYS.find((f) => f.envVar === key)!;
+    const field = fields.find((f) => f.envVar === key)!;
     const value = updates[key]?.trim() ?? '';
     if (value.length > 0 && value.length < field.minLength) {
       throw new Error(`${key} is too short (min ${field.minLength} characters)`);
@@ -163,12 +198,44 @@ export function updateAwsEnvKeys(updates: Record<string, string>): void {
   }
 
   writeFileSync(envPath, lines.join('\n').replace(/\n*$/, '\n'), { mode: 0o600 });
-  log.info({ keys: Object.keys(updates) }, 'AWS env keys updated');
+  log.info({ keys: Object.keys(updates) }, `${auditTool} updated`);
   writeAudit({
-    tool: 'aws_env_keys',
+    tool: auditTool,
     result: 'ok',
     reason: `updated: ${Object.keys(updates).join(', ')}`,
   });
 
   reloadConfig();
+}
+
+/**
+ * Update AWS env vars in `.env`.
+ * Merges with existing file; preserves unrelated lines and comments.
+ */
+export function updateAwsEnvKeys(updates: Record<string, string>): void {
+  writeEnvKeys(AWS_ENV_KEYS, updates, 'aws_env_keys');
+}
+
+/**
+ * Update agent-provider auth credentials (API keys / long-lived tokens) in `.env`.
+ * Used by the AgentProvider api-key / token-paste login flows.
+ */
+export function updateAgentEnvKeys(updates: Record<string, string>): void {
+  writeEnvKeys(AGENT_AUTH_ENV_KEYS, updates, 'agent_env_keys');
+}
+
+export function getAgentAuthKeyStatus(env: Record<string, string | undefined>): EnvKeyStatus[] {
+  return AGENT_AUTH_ENV_KEYS.map((field) => validateKeyField(field, env[field.envVar]));
+}
+
+/**
+ * Update hosting-provider secrets/paths (ngrok authtoken, Cloudflare tunnel
+ * token, lan TLS cert/key paths) in `.env`.
+ */
+export function updateHostingEnvKeys(updates: Record<string, string>): void {
+  writeEnvKeys(HOSTING_ENV_KEYS, updates, 'hosting_env_keys');
+}
+
+export function getHostingKeyStatus(env: Record<string, string | undefined>): EnvKeyStatus[] {
+  return HOSTING_ENV_KEYS.map((field) => validateKeyField(field, env[field.envVar]));
 }

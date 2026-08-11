@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "cursor-voice-web": {
+    "agentvoice-web": {
       "projectType": "application",
       "root": "web",
       "sourceRoot": "web/src",
@@ -80,10 +80,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "cursor-voice-web:build:production"
+              "buildTarget": "agentvoice-web:build:production"
             },
             "development": {
-              "buildTarget": "cursor-voice-web:build:development"
+              "buildTarget": "agentvoice-web:build:development"
             }
           },
           "options": {

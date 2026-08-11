@@ -14,6 +14,7 @@ import type {
   ServeStatus,
   ServeEvent,
   ServeActionId,
+  ServeServiceLogs,
   JobSettings,
   NarratorSettings,
   KeysStatus,
@@ -25,6 +26,10 @@ import type {
   AgentClientId,
   PollyVoiceInfo,
   TranscribeModelInfo,
+  HostingProviderId,
+  HostingProvidersResponse,
+  HostingSetupRunStatus,
+  HostingDoctorResult,
 } from '../models/admin-settings';
 
 @Injectable({ providedIn: 'root' })
@@ -69,6 +74,34 @@ export class AdminService {
     return this.patch('/api/admin/hosting', patch);
   }
 
+  // ── Pluggable hosting providers ───────────────────────────────────────────
+
+  getHostingProviders(): Promise<HostingProvidersResponse> {
+    return this.get('/api/admin/hosting-providers');
+  }
+
+  setActiveHostingProvider(
+    provider: HostingProviderId | null,
+  ): Promise<{ ok: boolean; active: HostingProviderId }> {
+    return this.patch('/api/admin/hosting-providers/active', { provider });
+  }
+
+  startHostingSetup(
+    provider: HostingProviderId,
+    opts: { hostname?: string; loginServer?: string } = {},
+  ): Promise<{ runId: string; provider: HostingProviderId }> {
+    return this.post('/api/admin/hosting-providers/setup', { provider, ...opts });
+  }
+
+  getHostingSetupRun(runId: string): Promise<HostingSetupRunStatus> {
+    return this.get(`/api/admin/hosting-providers/setup/${encodeURIComponent(runId)}`);
+  }
+
+  getHostingDoctor(provider?: HostingProviderId): Promise<HostingDoctorResult | { results: HostingDoctorResult[] }> {
+    const q = provider ? `?provider=${encodeURIComponent(provider)}` : '';
+    return this.get(`/api/admin/hosting-providers/doctor${q}`);
+  }
+
   // ── Serve ────────────────────────────────────────────────────────────────
 
   getServe(): Promise<{ serve: ServeSettings; status: ServeStatus }> {
@@ -93,6 +126,10 @@ export class AdminService {
 
   getServeEvents(limit = 50): Promise<{ entries: ServeEvent[] }> {
     return this.get(`/api/admin/serve/events?limit=${limit}`);
+  }
+
+  getServeLogs(lines = 80): Promise<ServeServiceLogs> {
+    return this.get(`/api/admin/serve/logs?lines=${lines}`);
   }
 
   installHosting(): Promise<{ ok: boolean; detail: string }> {

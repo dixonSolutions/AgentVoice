@@ -1,5 +1,5 @@
 /**
- * Cursor Voice — Service Worker
+ * AgentVoice — Service Worker
  *
  * Minimal PWA service worker. Caches the app shell so the UI loads
  * instantly even on a slow Tailscale connection. API calls are always
@@ -11,8 +11,8 @@
  * Cache is versioned — bump CACHE_NAME when deploying a new build.
  */
 
-const CACHE_NAME = 'cursor-voice-v4';
-const VOSK_CACHE_NAME = 'cursor-voice-vosk-v1';
+const CACHE_NAME = 'agentvoice-v4';
+const VOSK_CACHE_NAME = 'agentvoice-vosk-v1';
 const VOSK_MODEL_PATH = '/vosk/model.tar.gz';
 
 const APP_SHELL = [
@@ -105,9 +105,9 @@ self.addEventListener('push', (event) => {
     payload = { body: event.data.text() };
   }
   const p = payload;
-  const title = p.title || 'Cursor Voice';
+  const title = p.title || 'AgentVoice';
   const body = p.body || 'New update from Cursor';
-  const tag = p.tag || 'cursor-voice';
+  const tag = p.tag || 'agentvoice';
   const url = p.url || '/?tab=voice';
 
   event.waitUntil(

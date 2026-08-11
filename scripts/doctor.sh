@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Cursor Voice — connectivity doctor (Linux)
+# AgentVoice — connectivity doctor (Linux)
 #
 # Diagnoses why https://<machine>.ts.net might show "Server Not Found".
 # Run after setup.sh or when the PWA cannot be reached.
@@ -26,7 +26,7 @@ info() { echo -e "${BLU}→${NC}  $*"; }
 
 FAILURES=0
 
-echo -e "${BLD}Cursor Voice — connectivity doctor${NC}\n"
+echo -e "${BLD}AgentVoice — connectivity doctor${NC}\n"
 
 # ── 1. Local bridge ───────────────────────────────────────────────────────
 ENV_FILE="${PROJECT_DIR}/.env"
@@ -66,10 +66,10 @@ if [[ "$USE_NGINX_FRONT" == "1" && -n "$SERVE_WEB_PORT" ]] && \
   SERVE_UPSTREAM_PORT="$SERVE_WEB_PORT"
 fi
 
-if systemctl --user is-active --quiet cursor-voice.service 2>/dev/null; then
-  pass "systemd service cursor-voice is running"
+if systemctl --user is-active --quiet agentvoice.service 2>/dev/null; then
+  pass "systemd service agentvoice is running"
 else
-  fail "systemd service cursor-voice is not running"
+  fail "systemd service agentvoice is not running"
   info "Fix: bash scripts/restart.sh"
 fi
 
@@ -77,7 +77,7 @@ if curl -sf --max-time 8 "http://127.0.0.1:${BRIDGE_PORT}/healthz" >/dev/null 2>
   pass "Bridge responds on http://127.0.0.1:${BRIDGE_PORT}/healthz"
 else
   fail "Bridge not responding on http://127.0.0.1:${BRIDGE_PORT}/healthz"
-  info "Fix: journalctl --user -u cursor-voice -n 30"
+  info "Fix: journalctl --user -u agentvoice -n 30"
 fi
 
 # ── 2. Tailscale daemon ───────────────────────────────────────────────────
@@ -131,23 +131,23 @@ else
 fi
 
 # ── 5. Tailscale Serve ────────────────────────────────────────────────────
-TUNNEL_ENV="${HOME}/.config/cursor-voice/tunnel.env"
+TUNNEL_ENV="${HOME}/.config/agentvoice/tunnel.env"
 if [[ -f "$TUNNEL_ENV" ]]; then
   # shellcheck disable=SC1090
   source "$TUNNEL_ENV"
   SERVE_UPSTREAM_PORT="${LOCAL_BIND_PORT:-15671}"
   info "── SSH tunnel (split-host) ──"
-  if systemctl --user is-active --quiet cursor-voice-tunnel.service 2>/dev/null; then
-    pass "cursor-voice-tunnel systemd service is running"
+  if systemctl --user is-active --quiet agentvoice-tunnel.service 2>/dev/null; then
+    pass "agentvoice-tunnel systemd service is running"
   else
-    fail "cursor-voice-tunnel systemd service is not running"
+    fail "agentvoice-tunnel systemd service is not running"
     info "Fix: bash scripts/install-remote-tunnel.sh"
   fi
   if curl -sf --max-time 8 "http://127.0.0.1:${SERVE_UPSTREAM_PORT}/healthz" >/dev/null 2>&1; then
     pass "Tunnel upstream responds on http://127.0.0.1:${SERVE_UPSTREAM_PORT}/healthz"
   else
     fail "Tunnel upstream not responding on http://127.0.0.1:${SERVE_UPSTREAM_PORT}/healthz"
-    info "Fix: journalctl --user -u cursor-voice-tunnel -n 30"
+    info "Fix: journalctl --user -u agentvoice-tunnel -n 30"
   fi
 fi
 

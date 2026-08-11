@@ -1,102 +1,63 @@
 /**
- * System tools — cursor_agent_info, cursor_agent_status
+ * System tools — cursor_agent_info, cursor_agent_status (and their generic
+ * agent_info / agent_status aliases).
  *
- * Backed by cursor-agent about --format json and status --format json.
- * Used by the health endpoint and by the voice model when asked "what version?"
+ * Backed by the active AgentProvider's getAbout()/checkAuth() — works for
+ * Cursor, Codex, and Claude Code, not just cursor-agent.
  */
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import stripAnsi from 'strip-ansi';
-import { buildCursorAgentEnv } from '../../executor/cursorAgent.js';
 import { childLogger } from '../../log.js';
+import { getActiveProvider } from '../../providers/agents/registry.js';
 
-const execFileAsync = promisify(execFile);
 const log = childLogger('tool:system');
 
-// ── cursor_agent_info ─────────────────────────────────────────────────────
+// ── cursor_agent_info / agent_info ────────────────────────────────────────
 
 export interface AgentInfoResult {
+  provider: string;
+  displayName: string;
   cliVersion: string;
   model: string;
-  subscriptionTier: string | null;
   osPlatform: string;
   osArch: string;
-  userEmail: string | null;
 }
 
-/**
- * Wraps `cursor-agent about --format json`.
- * Live output shape (June 2026):
- * { cliVersion, model, subscriptionTier, osPlatform, osArch, userEmail, terminalProgram, shell, lastRequestId }
- */
+/** Wraps the active provider's `getAbout()` (version/model probe), if it has one. */
 export async function handleCursorAgentInfo(): Promise<AgentInfoResult> {
-  let stdout: string;
-  try {
-    ({ stdout } = await execFileAsync('cursor-agent', ['about', '--format', 'json'], {
-      timeout: 10_000,
-      env: buildCursorAgentEnv(),
-    }));
-  } catch (err) {
-    throw new Error(`cursor-agent about failed: ${String(err)}`);
+  const provider = getActiveProvider();
+  const about = provider.getAbout ? await provider.getAbout() : null;
+  if (!about) {
+    log.debug({ provider: provider.id }, 'provider has no about/version probe');
   }
-
-  const raw = stripAnsi(stdout).trim();
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    log.warn({ raw }, 'failed to parse cursor-agent about JSON');
-    throw new Error('cursor-agent about returned non-JSON output');
-  }
-
   return {
-    cliVersion: String(parsed['cliVersion'] ?? 'unknown'),
-    model: String(parsed['model'] ?? 'unknown'),
-    subscriptionTier: typeof parsed['subscriptionTier'] === 'string' ? parsed['subscriptionTier'] : null,
-    osPlatform: String(parsed['osPlatform'] ?? 'unknown'),
-    osArch: String(parsed['osArch'] ?? 'unknown'),
-    userEmail: typeof parsed['userEmail'] === 'string' ? parsed['userEmail'] : null,
+    provider: provider.id,
+    displayName: provider.displayName,
+    cliVersion: about?.cliVersion ?? 'unknown',
+    model: about?.model ?? 'unknown',
+    osPlatform: about?.osPlatform ?? 'unknown',
+    osArch: about?.osArch ?? 'unknown',
   };
 }
 
-// ── cursor_agent_status ───────────────────────────────────────────────────
+// ── cursor_agent_status / agent_status ────────────────────────────────────
 
 export interface AgentStatusResult {
+  provider: string;
+  displayName: string;
   authenticated: boolean;
   email: string | null;
   firstName: string | null;
 }
 
-/**
- * Wraps `cursor-agent status --format json`.
- * Live output shape (June 2026):
- * { status, isAuthenticated, hasAccessToken, hasRefreshToken, userInfo: { email, userId, firstName, lastName, createdAt } }
- */
+/** Wraps the active provider's `checkAuth()`. */
 export async function handleCursorAgentStatus(): Promise<AgentStatusResult> {
-  let stdout: string;
-  try {
-    ({ stdout } = await execFileAsync('cursor-agent', ['status', '--format', 'json'], {
-      timeout: 10_000,
-      env: buildCursorAgentEnv(),
-    }));
-  } catch (err) {
-    throw new Error(`cursor-agent status failed: ${String(err)}`);
-  }
-
-  const raw = stripAnsi(stdout).trim();
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    throw new Error('cursor-agent status returned non-JSON output');
-  }
-
-  const userInfo = (parsed['userInfo'] ?? {}) as Record<string, unknown>;
-
+  const provider = getActiveProvider();
+  const status = await provider.checkAuth();
   return {
-    authenticated: parsed['isAuthenticated'] === true,
-    email: typeof userInfo['email'] === 'string' ? userInfo['email'] : null,
-    firstName: typeof userInfo['firstName'] === 'string' ? userInfo['firstName'] : null,
+    provider: provider.id,
+    displayName: provider.displayName,
+    authenticated: status.authenticated,
+    email: status.email,
+    firstName: null,
   };
 }

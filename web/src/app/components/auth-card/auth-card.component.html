@@ -1,0 +1,284 @@
+@if (pending(); as req) {
+  <div class="auth-overlay">
+    <div class="auth-card">
+      <div class="auth-header">
+        <span class="auth-icon">🔐</span>
+        <span class="auth-title">{{ req.displayName }} needs you to sign in</span>
+        <button type="button" class="auth-close" aria-label="Dismiss" (click)="dismiss()">
+          <i class="pi pi-times" aria-hidden="true"></i>
+        </button>
+      </div>
+
+      @if (req.context) {
+        <p class="auth-context">{{ req.context }}</p>
+      }
+
+      <!-- ── Choose a flow ────────────────────────────────────── -->
+      @if (stage() === 'choose-flow') {
+        @if (req.flows.length === 0) {
+          <p class="auth-context">
+            This CLI has no in-app sign-in flow yet — check its own login command on the host.
+          </p>
+        } @else {
+          <div class="auth-flow-list">
+            @for (flow of req.flows; track flow.id) {
+              <button
+                type="button"
+                class="auth-flow-btn"
+                [disabled]="starting()"
+                (click)="chooseFlow(flow)">
+                <span class="auth-flow-label">{{ flow.label }}</span>
+                <span class="auth-flow-desc">{{ flow.description }}</span>
+              </button>
+            }
+          </div>
+        }
+      }
+
+      <!-- ── Paste a token / API key ─────────────────────────── -->
+      @if (stage() === 'paste' && selectedFlow(); as flow) {
+        <div class="auth-paste">
+          <label for="auth-paste-input">{{ flow.pasteLabel || 'Paste value' }}</label>
+          <input
+            pInputText
+            id="auth-paste-input"
+            type="password"
+            [(ngModel)]="pasteValue"
+            [placeholder]="flow.pastePlaceholder || ''"
+            (keyup.enter)="submitPaste()"
+            class="w-full"
+            autocomplete="off" />
+          <div class="auth-actions">
+            <p-button
+              label="Back"
+              severity="secondary"
+              [outlined]="true"
+              [disabled]="starting()"
+              (onClick)="backToChoices()" />
+            <p-button
+              label="Save & sign in"
+              icon="pi pi-check"
+              [loading]="starting()"
+              [disabled]="!pasteValue.trim()"
+              (onClick)="submitPaste()" />
+          </div>
+        </div>
+      }
+
+      <!-- ── Waiting on a browser-url / device-code flow ─────── -->
+      @if (stage() === 'waiting' && attempt(); as a) {
+        <div class="auth-waiting">
+          <p class="auth-context">{{ a.instructions }}</p>
+          @if (a.code) {
+            <div class="auth-code">{{ a.code }}</div>
+          }
+          @if (a.url) {
+            <p-button
+              label="Open sign-in link"
+              icon="pi pi-external-link"
+              (onClick)="openUrl()" />
+          }
+          <p class="auth-waiting-hint">
+            <i class="pi pi-spin pi-spinner" aria-hidden="true"></i>
+            Waiting for sign-in to complete…
+          </p>
+          <div class="auth-actions">
+            <p-button label="Cancel" severity="secondary" [outlined]="true" (onClick)="cancel()" />
+          </div>
+        </div>
+      }
+
+      <!-- ── Success ──────────────────────────────────────────── -->
+      @if (stage() === 'success') {
+        <div class="auth-result auth-result--success">
+          <i class="pi pi-check-circle" aria-hidden="true"></i>
+          <span>Signed in{{ successEmail() ? ' as ' + successEmail() : '' }}.</span>
+        </div>
+      }
+
+      <!-- ── Error ────────────────────────────────────────────── -->
+      @if (stage() === 'error') {
+        <div class="auth-result auth-result--error">
+          <i class="pi pi-times-circle" aria-hidden="true"></i>
+          <span>{{ errorMessage() }}</span>
+        </div>
+        <div class="auth-actions">
+          <p-button label="Try again" icon="pi pi-refresh" (onClick)="backToChoices()" />
+        </div>
+      }
+    </div>
+  </div>
+}
+
+<style>
+  .auth-overlay {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in srgb, var(--p-mask-background) 55%, transparent);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    z-index: 9100;
+    padding: 1rem;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0));
+  }
+
+  .auth-card {
+    background: var(--p-content-background);
+    border: 1px solid var(--p-content-border-color);
+    border-radius: 1rem;
+    padding: 1.25rem 1.5rem 1.5rem;
+    width: 100%;
+    max-width: 520px;
+    box-shadow: 0 -4px 40px color-mix(in srgb, var(--p-mask-background) 40%, transparent);
+    animation: authSlideUp 0.22s ease-out;
+  }
+
+  @keyframes authSlideUp {
+    from { transform: translateY(32px); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
+  }
+
+  .auth-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .auth-icon {
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  .auth-title {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--p-text-color);
+    flex: 1;
+  }
+
+  .auth-close {
+    background: none;
+    border: none;
+    color: var(--p-text-muted-color);
+    cursor: pointer;
+    padding: 0.25rem;
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .auth-context {
+    color: var(--p-text-muted-color);
+    font-size: 0.9rem;
+    line-height: 1.5;
+    margin: 0 0 1rem;
+  }
+
+  .auth-flow-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .auth-flow-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.2rem;
+    text-align: left;
+    background: var(--p-surface-ground);
+    border: 1px solid var(--p-content-border-color);
+    border-radius: 0.6rem;
+    padding: 0.65rem 0.85rem;
+    cursor: pointer;
+    min-height: 44px;
+    transition: background 0.15s ease;
+  }
+
+  .auth-flow-btn:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--p-primary-color) 8%, var(--p-surface-ground));
+  }
+
+  .auth-flow-btn:disabled {
+    opacity: 0.6;
+    cursor: default;
+  }
+
+  .auth-flow-label {
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--p-text-color);
+  }
+
+  .auth-flow-desc {
+    font-size: 0.8rem;
+    color: var(--p-text-muted-color);
+  }
+
+  .auth-paste,
+  .auth-waiting {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+
+  .auth-paste label {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--p-text-color);
+  }
+
+  .auth-code {
+    font-family: ui-monospace, monospace;
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-align: center;
+    background: var(--p-surface-ground);
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+    color: var(--p-text-color);
+  }
+
+  .auth-waiting-hint {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--p-text-muted-color);
+    margin: 0;
+  }
+
+  .auth-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .auth-actions .p-button {
+    min-height: 44px;
+    flex: 1 1 auto;
+  }
+
+  .auth-result {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .auth-result--success {
+    color: var(--p-green-600);
+    background: color-mix(in srgb, var(--p-green-500) 12%, transparent);
+  }
+
+  .auth-result--error {
+    color: var(--p-red-600);
+    background: color-mix(in srgb, var(--p-red-500) 12%, transparent);
+  }
+</style>

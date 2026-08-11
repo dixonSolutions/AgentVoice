@@ -1,23 +1,23 @@
 /**
- * Model tools — cursor_list_models, cursor_set_model
+ * Model tools — cursor_list_models / cursor_set_model (and their generic
+ * agent_list_models / agent_set_model aliases).
  *
- * Backed by cursor-agent models (CLI, parsed + cached in SQLite).
- * No model IDs are hardcoded — everything comes from the live CLI output.
+ * Backed by the active AgentProvider's listModels() — never hardcoded, and
+ * never locked to the Cursor CLI. The cache (state/models.ts) is keyed per
+ * provider so switching settings.agentClient can't serve a stale/mismatched
+ * list from a different CLI.
  */
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import stripAnsi from 'strip-ansi';
 import { getCachedModels, setModelCache, filterModels, isValidModelId, type ModelEntry } from '../../state/models.js';
 import { setActiveModel, persistDefaultActiveModel, setActiveModelForAllSessions, setModelForAllProjects } from '../../state/registry.js';
 import { childLogger } from '../../log.js';
-import { buildCursorAgentEnv } from '../../executor/cursorAgent.js';
+import { getActiveProvider } from '../../providers/agents/registry.js';
+import { notifyAuthRequired } from '../../providers/agents/authNotify.js';
 import { parseMisroutedExecutionMode } from './questionDetect.js';
 
-const execFileAsync = promisify(execFile);
 const log = childLogger('tool:model');
 
-// ── cursor_list_models ────────────────────────────────────────────────────
+// ── cursor_list_models / agent_list_models ────────────────────────────────
 
 export interface ListModelsArgs {
   query?: string;
@@ -28,24 +28,26 @@ export interface ListModelsResult {
   active_model: string;
   cached_at: string | null;
   total: number;
+  provider: string;
+  supports_selection: boolean;
 }
 
 /**
  * Return cached models (refreshing if stale), optionally filtered.
- * If the cache is empty, calls cursor-agent models and populates it.
+ * If the cache is empty, calls the active provider's CLI and populates it.
  */
 export async function handleListModels(
   args: ListModelsArgs,
   activeModel: string,
 ): Promise<ListModelsResult> {
-  let models = getCachedModels();
+  const provider = getActiveProvider();
+  let models = getCachedModels(provider.id);
   let cachedAt: string | null = null;
 
   if (!models) {
-    log.info('model cache miss — fetching from CLI');
+    log.info({ provider: provider.id }, 'model cache miss — fetching from CLI');
     models = await fetchAndCacheModels();
   } else {
-    // Pull cached_at timestamp for the response
     cachedAt = new Date().toISOString(); // approximate — good enough
   }
 
@@ -56,10 +58,12 @@ export async function handleListModels(
     active_model: activeModel,
     cached_at: cachedAt,
     total: filtered.length,
+    provider: provider.id,
+    supports_selection: provider.supportsModelSelection(),
   };
 }
 
-// ── cursor_set_model ──────────────────────────────────────────────────────
+// ── cursor_set_model / agent_set_model ─────────────────────────────────────
 
 export interface SetModelArgs {
   model_id: string;
@@ -82,6 +86,15 @@ export async function handleSetModel(
   args: SetModelArgs,
   sessionKey: string,
 ): Promise<SetModelResult> {
+  const provider = getActiveProvider();
+
+  if (!provider.supportsModelSelection()) {
+    throw new Error(
+      `${provider.displayName} chooses its model from its own config, not this app — ` +
+        `there is nothing to set here for the active provider.`,
+    );
+  }
+
   const misroutedMode = parseMisroutedExecutionMode(args.model_id);
   if (misroutedMode) {
     if (misroutedMode === 'ask') {
@@ -97,7 +110,7 @@ export async function handleSetModel(
     );
   }
 
-  let models = getCachedModels();
+  let models = getCachedModels(provider.id);
   if (!models) {
     models = await fetchAndCacheModels();
   }
@@ -123,7 +136,7 @@ export async function handleSetModel(
     const sessionsUpdated = setActiveModelForAllSessions(args.model_id);
     setModelForAllProjects(args.model_id);
     log.info(
-      { model: args.model_id, sessionsUpdated, scope },
+      { model: args.model_id, sessionsUpdated, scope, provider: provider.id },
       'model set globally (default + all sessions)',
     );
     return {
@@ -135,7 +148,7 @@ export async function handleSetModel(
     };
   }
 
-  log.info({ model: args.model_id, sessionKey, scope }, 'model set for session only');
+  log.info({ model: args.model_id, sessionKey, scope, provider: provider.id }, 'model set for session only');
   return {
     active_model: args.model_id,
     displayName: entry.displayName,
@@ -145,30 +158,20 @@ export async function handleSetModel(
 
 // ── Internal ──────────────────────────────────────────────────────────────
 
-async function fetchAndCacheModels(): Promise<ModelEntry[]> {
-  const { stdout } = await execFileAsync('cursor-agent', ['models'], {
-    timeout: 15_000,
-    env: buildCursorAgentEnv(),
-  });
-  const models = parseModelsOutput(stdout);
-  setModelCache(models);
-  return models;
-}
-
-function parseModelsOutput(raw: string): ModelEntry[] {
-  return stripAnsi(raw)
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(
-      (l) =>
-        l.includes(' - ') &&
-        !l.startsWith('Tip:') &&
-        !l.startsWith('Available models') &&
-        l.length > 0,
-    )
-    .map((l) => {
-      const dashIdx = l.indexOf(' - ');
-      return { id: l.slice(0, dashIdx).trim(), displayName: l.slice(dashIdx + 3).trim() };
-    })
-    .filter((m) => m.id.length > 0);
+export async function fetchAndCacheModels(): Promise<ModelEntry[]> {
+  const provider = getActiveProvider();
+  try {
+    const models = await provider.listModels();
+    setModelCache(provider.id, models);
+    return models;
+  } catch (err) {
+    const execErr = err as { code?: number; stderr?: string };
+    const stderr = typeof execErr.stderr === 'string' ? execErr.stderr : '';
+    const exitCode = typeof execErr.code === 'number' ? execErr.code : 1;
+    if (provider.isAuthError(exitCode, stderr)) {
+      void notifyAuthRequired('listing available models');
+      throw new Error(`${provider.displayName} needs you to sign in before models can be listed.`);
+    }
+    throw err;
+  }
 }

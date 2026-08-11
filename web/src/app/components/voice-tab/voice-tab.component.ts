@@ -6,14 +6,12 @@ import { Button } from '@openng/optimus-ui/button';
 import { Card } from '@openng/optimus-ui/card';
 import { Dialog } from '@openng/optimus-ui/dialog';
 import { Fluid } from '@openng/optimus-ui/fluid';
+import { IftaLabel } from '@openng/optimus-ui/iftalabel';
 import { Message } from '@openng/optimus-ui/message';
+import { PrimeTemplate } from '@openng/optimus-ui/api';
+import { Select } from '@openng/optimus-ui/select';
 import { Tag } from '@openng/optimus-ui/tag';
 import { Textarea } from '@openng/optimus-ui/textarea';
-
-import {
-  FilterableListPickerComponent,
-  type FilterableListOption,
-} from '../filterable-list-picker/filterable-list-picker.component';
 
 import { AppStateService } from '../../services/app-state.service';
 import {
@@ -23,22 +21,39 @@ import {
 } from '../../services/bridge.service';
 import { ToastService } from '../../services/toast.service';
 import { LogService } from '../../services/log.service';
+import { AgentProviderService } from '../../services/agent-provider.service';
 import { VoiceProvidersService } from '../../services/voice-providers.service';
 import { VoiceSessionService } from '../../services/voice-session.service';
 import { ApprovalPanelComponent } from '../approval-panel/approval-panel.component';
+import { AuthCardComponent } from '../auth-card/auth-card.component';
 import { ImageCarouselComponent } from '../image-carousel/image-carousel.component';
 import { LiveLogPanelComponent } from '../live-log-panel/live-log-panel.component';
 import { VoiceOrbComponent, type OrbColorMode } from '../voice-orb/voice-orb.component';
 
-interface ProjectOption extends FilterableListOption {
+interface ProjectOption {
+  value: string;
   name: string;
+  title: string;
   description: string;
+  detail?: string;
   label: string;
+  search: string;
 }
 
-interface SessionOption extends FilterableListOption {
+interface SessionOption {
+  value: string;
+  title: string;
+  detail?: string;
   label: string;
+  search: string;
   isNew?: boolean;
+}
+
+interface ModelOption {
+  value: string;
+  title: string;
+  label: string;
+  search: string;
 }
 
 @Component({
@@ -54,11 +69,14 @@ interface SessionOption extends FilterableListOption {
     Card,
     Dialog,
     Fluid,
+    IftaLabel,
     Message,
-    FilterableListPickerComponent,
+    PrimeTemplate,
+    Select,
     Tag,
     Textarea,
     ApprovalPanelComponent,
+    AuthCardComponent,
     ImageCarouselComponent,
     VoiceOrbComponent,
     LiveLogPanelComponent,
@@ -70,6 +88,7 @@ export class VoiceTabComponent {
   protected readonly appState = inject(AppStateService);
   protected readonly voiceSession = inject(VoiceSessionService);
   protected readonly voiceProviders = inject(VoiceProvidersService);
+  protected readonly agentProviders = inject(AgentProviderService);
   private readonly toast = inject(ToastService);
   private readonly logs = inject(LogService);
 
@@ -286,6 +305,29 @@ export class VoiceTabComponent {
     return model ? `Intelligence · ${model}` : 'Intelligence first';
   });
 
+  protected selectedModelId: string | null = null;
+
+  /** Live model list for the active agent CLI — never hardcoded. */
+  protected readonly modelOptions = computed<ModelOption[]>(() =>
+    this.agentProviders.models().map((m) => ({
+      value: m.id,
+      title: m.displayName,
+      label: m.displayName,
+      search: `${m.id} ${m.displayName}`,
+    })),
+  );
+
+  /** "Cursor · claude-4.5-sonnet" chip shown beside the workflow tag. */
+  protected readonly activeProviderChip = computed(() => {
+    const provider = this.agentProviders.activeProvider;
+    if (!provider) return null;
+    if (!provider.supportsModelSelection) return provider.displayName;
+    const modelId = this.agentProviders.activeModel();
+    const match = this.agentProviders.models().find((m) => m.id === modelId);
+    const modelLabel = match?.displayName ?? modelId;
+    return `${provider.displayName} · ${modelLabel}`;
+  });
+
   protected readonly visualizeUserSpeech = computed(() => {
     if (!this.voiceSession.voiceActivated()) return false;
     if (this.voiceSession.vadListening()) return true;
@@ -335,6 +377,8 @@ export class VoiceTabComponent {
     effect(() => {
       if (this.bridge.wsStatus() === 'connected') {
         void this.voiceProviders.refresh();
+        void this.agentProviders.refreshProviders();
+        void this.agentProviders.refreshModels();
       }
     });
     effect(() => {
@@ -348,6 +392,9 @@ export class VoiceTabComponent {
       if (this.bridge.wsStatus() === 'connected' && this.selectedProject) {
         void this.loadSessionsForProject(this.selectedProject);
       }
+    });
+    effect(() => {
+      this.selectedModelId = this.agentProviders.activeModel();
     });
   }
 
@@ -389,6 +436,18 @@ export class VoiceTabComponent {
       this.toast.error('Could not select session');
     });
     void this.loadSessionLogsForSelection(project, next);
+  }
+
+  protected onModelChange(modelId: string | null): void {
+    if (!modelId || modelId === this.selectedModelId) return;
+    this.selectedModelId = modelId;
+    void this.agentProviders
+      .setModel(modelId)
+      .then(() => this.toast.info('Model updated', modelId))
+      .catch(() => {
+        this.toast.error('Could not set model');
+        this.selectedModelId = this.agentProviders.activeModel();
+      });
   }
 
   protected handlePtt(): void {

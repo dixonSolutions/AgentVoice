@@ -1,6 +1,6 @@
 # 17 — Image Carousel (`show_images`)
 
-Push UI screenshots and reference images from the Cursor Voice brain to the user's
+Push UI screenshots and reference images from the AgentVoice brain to the user's
 PWA as a browsable carousel. Designed for hands-free users who can glance at their
 phone while the agent works on UI.
 

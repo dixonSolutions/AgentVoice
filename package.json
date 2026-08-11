@@ -1,7 +1,7 @@
 {
-  "name": "cursor-voice",
+  "name": "agentvoice",
   "version": "0.1.0",
-  "description": "Self-hosted voice bridge for cursor-agent",
+  "description": "Self-hosted voice bridge for Cursor, Codex, and Claude Code CLIs",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -9,9 +9,9 @@
   "scripts": {
     "build": "npm run build:backend && npm run build:web",
     "build:backend": "tsup",
-    "build:web": "ng build cursor-voice-web --configuration production",
+    "build:web": "ng build agentvoice-web --configuration production",
     "dev": "bash scripts/dev.sh",
-    "dev:web": "ng serve cursor-voice-web",
+    "dev:web": "ng serve agentvoice-web",
     "gen-icons": "node scripts/gen-icons.mjs",
     "gen-vapid-keys": "bash scripts/gen-vapid-keys.sh",
     "mobile:sync": "npm run build:web && cd mobile && npm install --legacy-peer-deps && npx cap sync",

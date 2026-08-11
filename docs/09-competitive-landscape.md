@@ -1,5 +1,10 @@
 # 09 — Competitive Landscape & Open Source vs Commercial
 
+> Historical snapshot — written before the August 2026 rename to **AgentVoice**
+> (see [`docs/26-rename-agentvoice.md`](./26-rename-agentvoice.md)). Left as
+> "Cursor Voice" throughout to preserve the point-in-time record; the third-party
+> `cursor-voice-cli` project mentioned below is unrelated to this repo either way.
+
 Research snapshot: **June 2026**. Purpose: assess whether Cursor Voice duplicates
 existing work, how mature alternatives are, and whether to pursue
 commercialization or open source.

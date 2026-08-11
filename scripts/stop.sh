@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Cursor Voice — stop script (Linux)
+# AgentVoice — stop script (Linux)
 #
-# Stops the production HOST bridge (the long-running cursor-voice service).
+# Stops the production HOST bridge (the long-running agentvoice service).
 #   1. Stops the systemd watch unit (so it won't auto-restart the service)
-#   2. Stops the cursor-voice.service systemd unit
+#   2. Stops the agentvoice.service systemd unit
 #   3. Falls back to killing the manual nohup process (data/.bridge.pid)
 #   4. Frees the host bridge port (PORT, default 8787) as a safety net
 #
@@ -57,33 +57,33 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 PORT="${PORT:-8787}"   # production host (serve) bridge port
 
-$QUIET || echo -e "${CYN}${BLD}Cursor Voice — stop host${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
+$QUIET || echo -e "${CYN}${BLD}AgentVoice — stop host${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
 
 # ── 1 + 2. Stop systemd units (user, then system) ───────────────────────────
 stopped_via_systemd=false
 
-if systemctl --user list-unit-files cursor-voice.service &>/dev/null && \
-   systemctl --user cat cursor-voice.service &>/dev/null; then
+if systemctl --user list-unit-files agentvoice.service &>/dev/null && \
+   systemctl --user cat agentvoice.service &>/dev/null; then
   section "Stopping systemd user units"
   # Stop the watch path first so it can't re-trigger the service.
-  if systemctl --user is-active --quiet cursor-voice-watch.path; then
-    systemctl --user stop cursor-voice-watch.path || warn "Could not stop cursor-voice-watch.path"
-    ok "cursor-voice-watch.path stopped."
+  if systemctl --user is-active --quiet agentvoice-watch.path; then
+    systemctl --user stop agentvoice-watch.path || warn "Could not stop agentvoice-watch.path"
+    ok "agentvoice-watch.path stopped."
   else
-    info "cursor-voice-watch.path already inactive."
+    info "agentvoice-watch.path already inactive."
   fi
-  if systemctl --user is-active --quiet cursor-voice.service; then
-    systemctl --user stop cursor-voice.service || warn "Could not stop cursor-voice.service"
-    ok "cursor-voice.service stopped."
+  if systemctl --user is-active --quiet agentvoice.service; then
+    systemctl --user stop agentvoice.service || warn "Could not stop agentvoice.service"
+    ok "agentvoice.service stopped."
   else
-    info "cursor-voice.service already inactive."
+    info "agentvoice.service already inactive."
   fi
   stopped_via_systemd=true
-elif systemctl cat cursor-voice.service &>/dev/null 2>&1; then
+elif systemctl cat agentvoice.service &>/dev/null 2>&1; then
   section "Stopping systemd system unit"
-  sudo systemctl stop cursor-voice-watch.path 2>/dev/null || true
-  sudo systemctl stop cursor-voice.service || warn "Could not stop system cursor-voice.service"
-  ok "system cursor-voice.service stopped."
+  sudo systemctl stop agentvoice-watch.path 2>/dev/null || true
+  sudo systemctl stop agentvoice.service || warn "Could not stop system agentvoice.service"
+  ok "system agentvoice.service stopped."
   stopped_via_systemd=true
 fi
 
@@ -126,4 +126,4 @@ free_port() {
 section "Freeing host port"
 free_port "$PORT" "host bridge"
 
-$QUIET || { echo ""; ok "Cursor Voice host stopped. Start it again with: npm run start:service"; echo ""; }
+$QUIET || { echo ""; ok "AgentVoice host stopped. Start it again with: npm run start:service"; echo ""; }

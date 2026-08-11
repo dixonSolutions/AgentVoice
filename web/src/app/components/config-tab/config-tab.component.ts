@@ -1,6 +1,7 @@
 import type { OnDestroy, OnInit } from '@angular/core';
 import { ChangeDetectorRef, Component, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import type { Subscription } from 'rxjs';
 
 import { Button } from '@openng/optimus-ui/button';
 import { Divider } from '@openng/optimus-ui/divider';
@@ -65,6 +66,10 @@ import type {
   TranscribeLanguageMode,
   TranscribeModelId,
   TranscribePartialStability,
+  HostingProviderId,
+  HostingProviderInfo,
+  HostingDoctorResult,
+  ServeServiceLogs,
 } from '../../models/admin-settings';
 // ── Section definition ─────────────────────────────────────────────────────
 
@@ -88,7 +93,7 @@ type BrowserVoiceOption = { label: string; value: string; disabled?: boolean };
 const BROWSER_VOICE_LAZY_CHUNK = 64;
 const BROWSER_VOICE_CURATED_MAX = 80;
 
-type ServeTabId = 'status' | 'actions' | 'network' | 'automation' | 'activity';
+type ServeTabId = 'status' | 'actions' | 'network' | 'activity';
 
 interface ConfigSection {
   id: SectionId;
@@ -191,6 +196,57 @@ const ALL_SECTIONS: ConfigSection[] = [
     keywords: ['debug', 'log', 'level', 'trace', 'json', 'config', 'raw', 'editor'],
   },
 ];
+
+// ── Hosting provider (Network tab) ─────────────────────────────────────────
+
+/** Providers with `autoSetup: false` (or that need no CLI) sort last — Hick's Law. */
+const HOSTING_PROVIDER_ORDER: HostingProviderId[] = [
+  'tailscale',
+  'cloudflare',
+  'ngrok',
+  'devtunnel',
+  'lan',
+  'local',
+  'manual',
+];
+
+interface HostnameFieldMeta {
+  label: string;
+  placeholder: string;
+  required: boolean;
+  hint: string;
+}
+
+/** Only providers whose setup() actually reads `opts.hostname` show the field. */
+const HOSTING_HOSTNAME_FIELD: Partial<Record<HostingProviderId, HostnameFieldMeta>> = {
+  tailscale: {
+    label: 'Device name (optional)',
+    placeholder: 'e.g. my-laptop',
+    required: false,
+    hint: '`tailscale up --hostname=` — leave blank to keep the current name.',
+  },
+  cloudflare: {
+    label: 'Stable hostname (optional)',
+    placeholder: 'voice.example.com',
+    required: false,
+    hint: 'Leave blank for a rotating *.trycloudflare.com quick tunnel.',
+  },
+  manual: {
+    label: 'Public URL',
+    placeholder: 'https://voice.example.com',
+    required: true,
+    hint: 'The HTTPS URL your own reverse proxy already serves.',
+  },
+};
+
+const HOSTING_LOGIN_SERVER_FIELD: Partial<Record<HostingProviderId, HostnameFieldMeta>> = {
+  tailscale: {
+    label: 'Headscale login server (optional)',
+    placeholder: 'https://headscale.example.com',
+    required: false,
+    hint: 'Leave blank to use Tailscale\u2019s own coordination server.',
+  },
+};
 
 // ── Component ──────────────────────────────────────────────────────────────
 
@@ -396,6 +452,8 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     }
     this.unsubBrowserVoices?.();
     this.unsubBrowserVoices = null;
+    if (this.hostingSetupPollTimer) clearTimeout(this.hostingSetupPollTimer);
+    this.hostingProgressSub?.unsubscribe();
   }
 
   private async loadSection(id: SectionId): Promise<void> {
@@ -955,7 +1013,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       return;
     }
     window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance('This is how Cursor Voice will sound on this browser.');
+    const utter = new SpeechSynthesisUtterance('This is how AgentVoice will sound on this browser.');
     utter.rate = Number(this.browserTtsRate) || 1;
     utter.pitch = Number(this.browserTtsPitch) || 1;
     utter.volume = Number(this.browserTtsVolume) || 1;
@@ -1315,6 +1373,8 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected runningBuild = false;
   protected runningRestart = false;
   protected runningHealth = false;
+  protected serviceLogs: ServeServiceLogs | null = null;
+  protected loadingServiceLogs = false;
 
   protected async loadServe(): Promise<void> {
     const seq = ++this.serveLoadSeq;
@@ -1341,14 +1401,13 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
         this.cdr.markForCheck();
       }
     }
+    void this.loadHostingProviders();
   }
 
   protected async onSaveServe(): Promise<void> {
-    if (!this.serveData) return;
     this.savingServe = true;
     try {
       const patch: Partial<ServeSettings> = {
-        ...this.serveData,
         branch: this.serveBranch.trim() || undefined,
         repoDir: this.serveRepoDir.trim() || undefined,
       };
@@ -1379,16 +1438,213 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     }
   }
 
+  // ── Hosting provider (pluggable tunnel/proxy) ────────────────────────────
+
+  protected hostingProviders: HostingProviderInfo[] = [];
+  protected detectedHostingProviderId: HostingProviderId | null = null;
+  protected selectedHostingProviderId: HostingProviderId = 'tailscale';
+  protected hostingHostnameInput = '';
+  protected hostingLoginServerInput = '';
+  protected settingUpHosting = false;
+  protected hostingSetupLog: string[] = [];
+  protected hostingSetupError: string | null = null;
+  protected hostingSetupPublicUrl: string | null = null;
+  private hostingSetupRunId: string | null = null;
+  private hostingSetupPollTimer: ReturnType<typeof setTimeout> | null = null;
+  private hostingProgressSub: Subscription | null = null;
+  protected hostingDoctorResults: HostingDoctorResult[] = [];
+  protected runningHostingDoctor = false;
+  protected clearingHostingOverride = false;
+
+  protected readonly hostingProviderOptions = HOSTING_PROVIDER_ORDER.map((id) => ({ id }));
+
+  protected hostingProviderInfo(id: HostingProviderId): HostingProviderInfo | null {
+    return this.hostingProviders.find((p) => p.id === id) ?? null;
+  }
+
+  protected hostingProviderLabel(id: HostingProviderId): string {
+    return this.hostingProviderInfo(id)?.displayName ?? id;
+  }
+
+  protected get selectedHostnameField(): HostnameFieldMeta | null {
+    return HOSTING_HOSTNAME_FIELD[this.selectedHostingProviderId] ?? null;
+  }
+
+  protected get selectedLoginServerField(): HostnameFieldMeta | null {
+    return HOSTING_LOGIN_SERVER_FIELD[this.selectedHostingProviderId] ?? null;
+  }
+
+  private async loadHostingProviders(): Promise<void> {
+    try {
+      const res = await this.admin.getHostingProviders();
+      this.hostingProviders = HOSTING_PROVIDER_ORDER.map((id) =>
+        res.providers.find((p) => p.id === id),
+      ).filter((p): p is HostingProviderInfo => !!p);
+      this.detectedHostingProviderId = res.active;
+      // Pre-select the currently active provider (Hick's Law — don't force a re-decision).
+      if (!this.hostingHostnameInput && !this.settingUpHosting) {
+        this.selectedHostingProviderId = res.active;
+      }
+      this.cdr.markForCheck();
+    } catch (err) {
+      this.toast.error('Could not load hosting providers', err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  protected onSelectHostingProvider(id: HostingProviderId): void {
+    this.selectedHostingProviderId = id;
+    this.hostingHostnameInput = '';
+    this.hostingLoginServerInput = '';
+    this.hostingSetupLog = [];
+    this.hostingSetupError = null;
+    this.hostingSetupPublicUrl = null;
+    this.hostingDoctorResults = [];
+  }
+
+  protected async onRunHostingSetup(): Promise<void> {
+    const field = this.selectedHostnameField;
+    if (field?.required && !this.hostingHostnameInput.trim()) {
+      this.toast.warn('Missing field', `${field.label} is required for this provider.`);
+      return;
+    }
+    this.settingUpHosting = true;
+    this.hostingSetupLog = [];
+    this.hostingSetupError = null;
+    this.hostingSetupPublicUrl = null;
+    try {
+      const { runId } = await this.admin.startHostingSetup(this.selectedHostingProviderId, {
+        hostname: this.hostingHostnameInput.trim() || undefined,
+        loginServer: this.hostingLoginServerInput.trim() || undefined,
+      });
+      this.hostingSetupRunId = runId;
+      this.subscribeToHostingProgress(runId);
+      this.pollHostingSetupRun(runId);
+    } catch (err) {
+      this.settingUpHosting = false;
+      this.hostingSetupError = err instanceof Error ? err.message : String(err);
+      this.toast.error('Could not start setup', this.hostingSetupError);
+    }
+  }
+
+  private subscribeToHostingProgress(runId: string): void {
+    this.hostingProgressSub?.unsubscribe();
+    this.hostingProgressSub = this.bridge.hostingSetupProgress$.subscribe((event) => {
+      if (event.runId !== runId) return;
+      if (event.message) this.hostingSetupLog = [...this.hostingSetupLog, event.message];
+      if (event.error) this.hostingSetupError = event.error;
+      if (event.result?.publicUrl) this.hostingSetupPublicUrl = event.result.publicUrl;
+      if (event.done) this.finishHostingSetup(runId, event.result?.ok !== false);
+      this.cdr.markForCheck();
+    });
+  }
+
+  /** WS-disconnect-safe fallback — polls until the run is marked done. */
+  private pollHostingSetupRun(runId: string): void {
+    if (this.hostingSetupPollTimer) clearTimeout(this.hostingSetupPollTimer);
+    const poll = async () => {
+      if (this.hostingSetupRunId !== runId) return;
+      try {
+        const status = await this.admin.getHostingSetupRun(runId);
+        const seenMessages = new Set(this.hostingSetupLog);
+        for (const event of status.events) {
+          if (event.message && !seenMessages.has(event.message)) {
+            this.hostingSetupLog = [...this.hostingSetupLog, event.message];
+            seenMessages.add(event.message);
+          }
+          if (event.error) this.hostingSetupError = event.error;
+        }
+        if (status.result?.publicUrl) this.hostingSetupPublicUrl = status.result.publicUrl;
+        this.cdr.markForCheck();
+        if (status.done) {
+          this.finishHostingSetup(runId, status.result?.ok !== false);
+          return;
+        }
+      } catch {
+        // Transient — keep polling until the run resolves or the component is destroyed.
+      }
+      this.hostingSetupPollTimer = setTimeout(() => void poll(), 1500);
+    };
+    this.hostingSetupPollTimer = setTimeout(() => void poll(), 1500);
+  }
+
+  private finishHostingSetup(runId: string, ok: boolean): void {
+    if (this.hostingSetupRunId !== runId) return;
+    this.settingUpHosting = false;
+    this.hostingSetupRunId = null;
+    if (this.hostingSetupPollTimer) {
+      clearTimeout(this.hostingSetupPollTimer);
+      this.hostingSetupPollTimer = null;
+    }
+    this.hostingProgressSub?.unsubscribe();
+    this.hostingProgressSub = null;
+    if (ok) {
+      this.toast.success('Hosting setup complete', this.hostingSetupPublicUrl ?? undefined);
+    } else {
+      this.toast.warn('Hosting setup finished with issues', this.hostingSetupError ?? undefined);
+    }
+    void this.loadHostingProviders();
+    this.cdr.markForCheck();
+  }
+
+  protected async onClearHostingOverride(): Promise<void> {
+    this.clearingHostingOverride = true;
+    try {
+      const res = await this.admin.setActiveHostingProvider(null);
+      this.detectedHostingProviderId = res.active;
+      this.toast.success('Back to auto-detect', `Now using ${this.hostingProviderLabel(res.active)}`);
+      await this.loadHostingProviders();
+    } catch (err) {
+      this.toast.error('Could not clear override', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.clearingHostingOverride = false;
+    }
+  }
+
+  protected async onRunHostingDoctor(): Promise<void> {
+    this.runningHostingDoctor = true;
+    this.hostingDoctorResults = [];
+    try {
+      const res = await this.admin.getHostingDoctor(this.selectedHostingProviderId);
+      this.hostingDoctorResults = [res as HostingDoctorResult];
+    } catch (err) {
+      this.toast.error('Doctor check failed', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.runningHostingDoctor = false;
+      this.cdr.markForCheck();
+    }
+  }
+
+  protected hostingDetectSeverity(active: boolean, installed: boolean): 'success' | 'warn' | 'secondary' {
+    if (active) return 'success';
+    if (!installed) return 'secondary';
+    return 'warn';
+  }
+
   protected async onRunServe(): Promise<void> {
     this.runningServe = true;
     try {
       const res = await this.admin.runServe();
-      this.toast.success('Full update started', `Run ${res.runId.slice(0, 8)}…`);
+      this.toast.success('Update started', `Run ${res.runId.slice(0, 8)}…`);
       window.setTimeout(() => void this.loadServe(), 3000);
     } catch (err) {
-      this.toast.error('Could not start full update', err instanceof Error ? err.message : String(err));
+      this.toast.error('Could not start update', err instanceof Error ? err.message : String(err));
     } finally {
       this.runningServe = false;
+    }
+  }
+
+  protected async onLoadServiceLogs(): Promise<void> {
+    this.loadingServiceLogs = true;
+    try {
+      this.serviceLogs = await this.admin.getServeLogs(120);
+      if (!this.serviceLogs.ok) {
+        this.toast.warn('Could not read service logs', this.serviceLogs.detail ?? 'journalctl failed');
+      }
+      this.cdr.markForCheck();
+    } catch (err) {
+      this.toast.error('Could not load service logs', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.loadingServiceLogs = false;
     }
   }
 

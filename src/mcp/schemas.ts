@@ -38,7 +38,7 @@ export const CursorManageProjectsSchema = z.object({
   action: z
     .enum(['describe', 'list', 'add', 'update', 'remove'])
     .describe(
-      'describe = what projects are in Cursor Voice; list = filter registry; add/update/remove = mutate config',
+      'describe = what projects are in AgentVoice; list = filter registry; add/update/remove = mutate config',
     ),
   query: z.string().optional().describe('For list: filter by name, alias, or description'),
   enabled: z.boolean().optional().describe('For list: filter by enabled flag'),
@@ -220,6 +220,13 @@ export const TOOL_SCHEMAS = {
   cursor_mcp_list: CursorMcpListSchema,
   cursor_mcp_tools: CursorMcpToolsSchema,
   show_images: ShowImagesSchema,
+  // ── Generic agent-provider aliases (identical handlers, CLI-neutral names) ──
+  // Added for multi-agent-client support (docs/24-agent-providers.md) — the
+  // cursor_* names above keep working unchanged for existing MCP configs.
+  agent_list_models: CursorListModelsSchema,
+  agent_set_model: CursorSetModelSchema,
+  agent_info: CursorAgentInfoSchema,
+  agent_status: CursorAgentStatusSchema,
 } as const;
 
 export type ToolName = keyof typeof TOOL_SCHEMAS;

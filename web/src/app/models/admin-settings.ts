@@ -95,13 +95,6 @@ export interface HostingSettings {
 // ── Serve ───────────────────────────────────────────────────────────────────
 
 export interface ServeSettings {
-  enabled: boolean;
-  intervalMs: number;
-  autoPull: boolean;
-  autoInstallDeps: boolean;
-  autoBuild: boolean;
-  autoRestart: boolean;
-  abortOnLocalChanges: boolean;
   branch?: string;
   repoDir?: string;
 }
@@ -112,7 +105,7 @@ export type ServeActionId = 'pull' | 'deps' | 'build' | 'restart' | 'health';
 
 export interface ServeRunResult {
   runId: string;
-  trigger: 'manual' | 'scheduled';
+  trigger: 'manual';
   startedAt: string;
   finishedAt: string;
   outcome: ServeOutcome;
@@ -130,9 +123,16 @@ export interface ServeGitSnapshot {
 
 export interface ServeStatus {
   running: boolean;
-  schedulerActive: boolean;
   lastRun: ServeRunResult | null;
   git: ServeGitSnapshot | null;
+}
+
+export interface ServeServiceLogs {
+  unit: string;
+  lines: number;
+  text: string;
+  ok: boolean;
+  detail?: string;
 }
 
 export interface ServeEvent {
@@ -220,6 +220,76 @@ export interface AgentClientInfo {
 export interface AgentClientSettings {
   active: AgentClientId;
   clients: AgentClientInfo[];
+}
+
+// ── Pluggable hosting/tunnel providers (distinct from HostingSettings above,
+//    which is only ports + runMode). See docs/25-hosting-providers.md. ──────
+
+export type HostingProviderId =
+  | 'tailscale'
+  | 'cloudflare'
+  | 'ngrok'
+  | 'devtunnel'
+  | 'lan'
+  | 'local'
+  | 'manual';
+
+export interface HostingCapabilities {
+  autoSetup: boolean;
+  providesTls: boolean;
+  publicExposure: boolean;
+  cliRequired: boolean;
+}
+
+export interface HostingDetectResult {
+  active: boolean;
+  installed: boolean;
+  publicUrl: string | null;
+  detail?: string;
+}
+
+export interface HostingProviderInfo {
+  id: HostingProviderId;
+  displayName: string;
+  capabilities: HostingCapabilities;
+  detected: HostingDetectResult;
+}
+
+export interface HostingProvidersResponse {
+  active: HostingProviderId;
+  providers: HostingProviderInfo[];
+}
+
+export interface HostingSetupProgressEvent {
+  message: string;
+  done?: boolean;
+  error?: string;
+}
+
+export interface HostingSetupResult {
+  ok: boolean;
+  publicUrl: string | null;
+  detail: string;
+}
+
+export interface HostingSetupRunStatus {
+  runId: string;
+  provider: HostingProviderId;
+  events: HostingSetupProgressEvent[];
+  done: boolean;
+  result?: HostingSetupResult;
+}
+
+export interface HostingDoctorCheck {
+  label: string;
+  ok: boolean;
+  detail?: string;
+}
+
+export interface HostingDoctorResult {
+  provider?: HostingProviderId;
+  ok: boolean;
+  checks: HostingDoctorCheck[];
 }
 
 // ── Database ───────────────────────────────────────────────────────────────

@@ -1,4 +1,4 @@
-# Cursor Voice — Native mobile shell
+# AgentVoice — Native mobile shell
 
 Capacitor wrapper for **CallKit** (iOS) and foreground call notification (Android).
 

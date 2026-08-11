@@ -4,8 +4,8 @@
     {
       "name": "cursorvoice",
       "relativePath": "SideProjects/CursorVoice",
-      "aliases": ["cursor voice", "the voice project"],
-      "description": "Cursor Voice — self-hosted voice bridge for driving Cursor's coding agent from a phone or PWA."
+      "aliases": ["agent voice", "agentvoice", "cursor voice", "the voice project"],
+      "description": "AgentVoice — self-hosted voice bridge for driving Cursor, Codex, or Claude Code from a phone or PWA."
     },
     {
       "name": "bambamofficeboy",

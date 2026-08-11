@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Cursor Voice — start script (Linux)
+# AgentVoice — start script (Linux)
 #
 # Starts the production HOST bridge back up after `npm run stop`.
 # Counterpart to scripts/stop.sh. (The local dev server `npm run dev` runs on a
 # separate port — default 5089 — and is managed independently.)
-#   1. Starts the cursor-voice.service systemd unit
-#   2. Starts the cursor-voice-watch.path unit (auto-restart on rebuilds)
+#   1. Starts the agentvoice.service systemd unit
+#   2. Starts the agentvoice-watch.path unit (auto-restart on rebuilds)
 #   3. Falls back to a manual nohup process when no systemd unit exists
 #   4. Runs a /healthz check to confirm startup
 #
@@ -48,7 +48,7 @@ if [[ "$(uname -s)" != "Linux" ]]; then
   err "This script is Linux-only. Use start.ps1 on Windows."
 fi
 
-echo -e "${CYN}${BLD}Cursor Voice — start${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
+echo -e "${CYN}${BLD}AgentVoice — start${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
 
 # ── Load .env for PORT ──────────────────────────────────────────────────────
 ENV_FILE="${PROJECT_DIR}/.env"
@@ -65,26 +65,26 @@ fi
 DIST_FILE="${PROJECT_DIR}/dist/index.js"
 
 # ── Start systemd units (user, then system), else manual nohup ──────────────
-if systemctl --user cat cursor-voice.service &>/dev/null; then
+if systemctl --user cat agentvoice.service &>/dev/null; then
   section "Starting systemd user units"
-  systemctl --user start cursor-voice.service
-  systemctl --user start cursor-voice-watch.path 2>/dev/null || \
-    warn "cursor-voice-watch.path not started (auto-restart on rebuild disabled)."
+  systemctl --user start agentvoice.service
+  systemctl --user start agentvoice-watch.path 2>/dev/null || \
+    warn "agentvoice-watch.path not started (auto-restart on rebuild disabled)."
   sleep 1
-  if systemctl --user is-active --quiet cursor-voice.service; then
-    ok "cursor-voice.service started."
+  if systemctl --user is-active --quiet agentvoice.service; then
+    ok "agentvoice.service started."
   else
-    warn "Service may have failed. Check: journalctl --user -u cursor-voice -n 30"
-    systemctl --user status cursor-voice.service --no-pager -l | tail -15
+    warn "Service may have failed. Check: journalctl --user -u agentvoice -n 30"
+    systemctl --user status agentvoice.service --no-pager -l | tail -15
   fi
 
-elif systemctl cat cursor-voice.service &>/dev/null 2>&1; then
+elif systemctl cat agentvoice.service &>/dev/null 2>&1; then
   section "Starting systemd system unit"
-  sudo systemctl start cursor-voice.service
-  sudo systemctl start cursor-voice-watch.path 2>/dev/null || true
+  sudo systemctl start agentvoice.service
+  sudo systemctl start agentvoice-watch.path 2>/dev/null || true
   sleep 1
-  systemctl status cursor-voice.service --no-pager -l | head -12
-  ok "system cursor-voice.service started."
+  systemctl status agentvoice.service --no-pager -l | head -12
+  ok "system agentvoice.service started."
 
 else
   section "Starting bridge manually (no systemd unit)"
@@ -118,10 +118,10 @@ fi
 if $TAIL_LOGS; then
   echo ""
   info "Tailing logs (Ctrl-C to stop)..."
-  journalctl --user -u cursor-voice -f --no-pager
+  journalctl --user -u agentvoice -f --no-pager
 fi
 
 echo ""
 ok "Done."
-echo -e "  ${BLU}Logs:${NC} journalctl --user -u cursor-voice -f"
+echo -e "  ${BLU}Logs:${NC} journalctl --user -u agentvoice -f"
 echo ""

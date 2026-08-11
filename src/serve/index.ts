@@ -1,10 +1,9 @@
 /**
- * Serve — self-hosting auto-update sector.
+ * Serve — manual self-hosting maintenance (no auto-update scheduler).
  *
- * Optional scheduled (or manual) git pull → npm install → build → restart,
- * with every step logged to SQLite and pino. Disabled by default.
- *
- * See docs/21-serve-self-hosting.md
+ * In-app actions: force pull+rebase onto main (or configured branch), install
+ * deps, build, restart, health check, full "update service" pipeline, and
+ * journalctl service logs. See docs/21-serve-self-hosting.md
  */
 
 import { randomUUID } from 'node:crypto';
@@ -23,7 +22,8 @@ import {
 
 const log = childLogger('serve');
 
-export type ServeTrigger = 'manual' | 'scheduled';
+/** Default branch for force rebase when settings.serve.branch is unset. */
+const DEFAULT_TRACK_BRANCH = 'main';
 
 export type ServeOutcome = 'ok' | 'skipped' | 'no_changes' | 'error';
 
@@ -31,7 +31,7 @@ export type ServeActionId = 'pull' | 'deps' | 'build' | 'restart' | 'health';
 
 export interface ServeRunResult {
   runId: string;
-  trigger: ServeTrigger;
+  trigger: 'manual';
   startedAt: string;
   finishedAt: string;
   outcome: ServeOutcome;
@@ -55,18 +55,28 @@ export interface ServeGitSnapshot {
 
 export interface ServeStatus {
   running: boolean;
-  schedulerActive: boolean;
   lastRun: ServeRunResult | null;
   git: ServeGitSnapshot | null;
 }
 
+export interface ServeServiceLogs {
+  unit: string;
+  lines: number;
+  text: string;
+  ok: boolean;
+  detail?: string;
+}
+
 let _running = false;
-let _schedulerTimer: ReturnType<typeof setInterval> | null = null;
 let _lastRun: ServeRunResult | null = null;
 let _lastGit: ServeGitSnapshot | null = null;
 
 function resolveRepoDir(settings: ServeSettings): string {
   return resolve(settings.repoDir?.trim() || process.cwd());
+}
+
+function trackBranch(settings: ServeSettings, fallback?: string): string {
+  return settings.branch?.trim() || fallback?.trim() || DEFAULT_TRACK_BRANCH;
 }
 
 function hashLockfile(repoDir: string): string | null {
@@ -156,7 +166,7 @@ async function isWatchPathActive(): Promise<boolean> {
     const { code } = await runCommand(process.cwd(), 'systemctl', [
       '--user',
       'is-active',
-      'cursor-voice-watch.path',
+      'agentvoice-watch.path',
     ]);
     return code === 0;
   } catch {
@@ -187,7 +197,7 @@ async function healthCheck(port: number): Promise<{ ok: boolean; detail?: string
 async function triggerRestart(repoDir: string, runId: string): Promise<ServeOutcome> {
   const watchActive = await isWatchPathActive();
   if (watchActive) {
-    recordStep(runId, 'restart', 'skip', 'cursor-voice-watch.path will restart on dist change');
+    recordStep(runId, 'restart', 'skip', 'agentvoice-watch.path will restart on dist change');
     return 'skipped';
   }
   const script = join(repoDir, 'scripts/restart.sh');
@@ -219,66 +229,112 @@ function assertRepoDir(repoDir: string, runId: string): boolean {
   return true;
 }
 
-async function stepGitPull(
+/**
+ * Fetch origin and rebase onto origin/<branch> (default main).
+ * Dirty trees are stashed before rebase and popped after.
+ */
+async function stepGitRebase(
   repoDir: string,
   hb: ServeSettings,
   runId: string,
-  force = false,
-): Promise<{ outcome: ServeOutcome; detail: string; pulled: boolean }> {
+): Promise<{ outcome: ServeOutcome; detail: string; rebased: boolean }> {
   const git = simpleGit({ baseDir: repoDir });
   let snapshot = await probeGit(repoDir, hb.branch);
   _lastGit = snapshot;
+  const branch = trackBranch(hb, snapshot.branch);
   recordStep(
     runId,
     'git_status',
     snapshot.dirty ? 'warn' : 'ok',
-    `branch=${snapshot.branch} ahead=${snapshot.ahead} behind=${snapshot.behind} dirty=${snapshot.dirty}`,
+    `branch=${snapshot.branch} track=${branch} ahead=${snapshot.ahead} behind=${snapshot.behind} dirty=${snapshot.dirty}`,
   );
-
-  if (snapshot.dirty && hb.abortOnLocalChanges && !force) {
-    recordStep(runId, 'git_pull', 'skip', 'local changes detected — abortOnLocalChanges');
-    return { outcome: 'skipped', detail: 'Skipped pull — local changes in working tree', pulled: false };
-  }
 
   try {
     await git.fetch('origin');
-    recordStep(runId, 'git_fetch', 'ok');
+    recordStep(runId, 'git_fetch', 'ok', `origin/${branch}`);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     recordStep(runId, 'git_fetch', 'error', detail);
-    return { outcome: 'error', detail: `Git fetch failed — ${detail}`, pulled: false };
+    return { outcome: 'error', detail: `Git fetch failed — ${detail}`, rebased: false };
   }
 
   snapshot = await probeGit(repoDir, hb.branch);
   _lastGit = snapshot;
 
-  if (snapshot.behind === 0) {
-    recordStep(runId, 'git_pull', 'skip', 'already up to date with upstream');
-    return { outcome: 'no_changes', detail: 'Already up to date with upstream', pulled: false };
+  const upstreamRef = `origin/${branch}`;
+  let upstreamCommit: string | null = null;
+  try {
+    upstreamCommit = (await git.revparse([upstreamRef])).trim();
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    recordStep(runId, 'git_rebase', 'error', `missing ${upstreamRef}: ${detail}`);
+    return {
+      outcome: 'error',
+      detail: `Upstream ${upstreamRef} not found — set settings.serve.branch or push main`,
+      rebased: false,
+    };
   }
 
-  if (!hb.autoPull && !force) {
-    recordStep(runId, 'git_pull', 'skip', `behind=${snapshot.behind} but autoPull is disabled`);
-    return { outcome: 'skipped', detail: 'Pull skipped — autoPull disabled', pulled: false };
+  if (snapshot.currentCommit && upstreamCommit && snapshot.currentCommit === upstreamCommit && !snapshot.ahead) {
+    recordStep(runId, 'git_rebase', 'skip', `already at ${upstreamRef}`);
+    return { outcome: 'no_changes', detail: `Already up to date with ${upstreamRef}`, rebased: false };
+  }
+
+  let stashed = false;
+  if (snapshot.dirty) {
+    try {
+      await git.stash(['push', '-u', '-m', `agentvoice serve rebase ${new Date().toISOString()}`]);
+      stashed = true;
+      recordStep(runId, 'git_stash', 'ok', 'stashed local changes before rebase');
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      recordStep(runId, 'git_stash', 'error', detail);
+      return { outcome: 'error', detail: `Could not stash dirty tree — ${detail}`, rebased: false };
+    }
   }
 
   try {
-    const branch = hb.branch?.trim() || snapshot.branch;
-    await git.pull('origin', branch);
-    recordStep(runId, 'git_pull', 'ok', `pulled origin/${branch}`);
-    _lastGit = await probeGit(repoDir, hb.branch);
-    return { outcome: 'ok', detail: `Pulled origin/${branch}`, pulled: true };
+    await git.rebase([upstreamRef]);
+    recordStep(runId, 'git_rebase', 'ok', `rebased onto ${upstreamRef}`);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    recordStep(runId, 'git_pull', 'error', detail);
-    return { outcome: 'error', detail: `Git pull failed — ${detail}`, pulled: false };
+    try {
+      await git.rebase(['--abort']);
+    } catch {
+      // already clean or no rebase in progress
+    }
+    recordStep(runId, 'git_rebase', 'error', detail);
+    if (stashed) {
+      try {
+        await git.stash(['pop']);
+        recordStep(runId, 'git_stash_pop', 'ok', 'restored stash after failed rebase');
+      } catch (popErr) {
+        const popDetail = popErr instanceof Error ? popErr.message : String(popErr);
+        recordStep(runId, 'git_stash_pop', 'warn', popDetail);
+      }
+    }
+    _lastGit = await probeGit(repoDir, hb.branch);
+    return { outcome: 'error', detail: `Git rebase failed — ${detail}`, rebased: false };
   }
+
+  if (stashed) {
+    try {
+      await git.stash(['pop']);
+      recordStep(runId, 'git_stash_pop', 'ok', 'restored local stash after rebase');
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      recordStep(runId, 'git_stash_pop', 'warn', detail);
+    }
+  }
+
+  _lastGit = await probeGit(repoDir, hb.branch);
+  return { outcome: 'ok', detail: `Rebased onto ${upstreamRef}`, rebased: true };
 }
 
 async function stepInstallDeps(
   repoDir: string,
   runId: string,
-  force = false,
+  reason: string,
 ): Promise<{ outcome: ServeOutcome; detail: string }> {
   try {
     const { code, stderr } = await runCommand(repoDir, 'npm', [
@@ -291,7 +347,6 @@ async function stepInstallDeps(
       recordStep(runId, 'npm_install', 'error', detail);
       return { outcome: 'error', detail: 'npm install failed' };
     }
-    // Native modules (better-sqlite3) must match the Node binary used by systemd.
     const rebuild = await runCommand(repoDir, 'npm', ['rebuild']);
     if (rebuild.code !== 0) {
       const detail = rebuild.stderr.slice(0, 500) || `exit ${rebuild.code}`;
@@ -299,7 +354,7 @@ async function stepInstallDeps(
       return { outcome: 'error', detail: 'npm rebuild failed' };
     }
     recordStep(runId, 'npm_rebuild', 'ok');
-    recordStep(runId, 'npm_install', 'ok', force ? 'manual' : 'lockfile changed');
+    recordStep(runId, 'npm_install', 'ok', reason);
     return { outcome: 'ok', detail: 'Dependencies installed and rebuilt' };
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
@@ -355,7 +410,6 @@ export async function refreshGitSnapshot(): Promise<ServeGitSnapshot> {
 export function getServeStatus(): ServeStatus {
   return {
     running: _running,
-    schedulerActive: _schedulerTimer !== null,
     lastRun: _lastRun,
     git: _lastGit,
   };
@@ -366,11 +420,11 @@ export async function serveGitPull(): Promise<ServeActionResult> {
   const hb = settings.serve;
   const repoDir = resolveRepoDir(hb);
 
-  return withServeLock('manual:pull', async (runId) => {
+  return withServeLock('manual:pull-rebase', async (runId) => {
     if (!assertRepoDir(repoDir, runId)) {
       return { runId, outcome: 'error' as const, detail: 'Invalid repo directory' };
     }
-    const result = await stepGitPull(repoDir, hb, runId, true);
+    const result = await stepGitRebase(repoDir, hb, runId);
     recordStep(runId, 'finish', result.outcome === 'error' ? 'error' : 'ok', result.detail);
     return { runId, outcome: result.outcome, detail: result.detail };
   });
@@ -384,7 +438,7 @@ export async function serveInstallDeps(): Promise<ServeActionResult> {
     if (!assertRepoDir(repoDir, runId)) {
       return { runId, outcome: 'error' as const, detail: 'Invalid repo directory' };
     }
-    const result = await stepInstallDeps(repoDir, runId, true);
+    const result = await stepInstallDeps(repoDir, runId, 'manual');
     recordStep(runId, 'finish', result.outcome === 'error' ? 'error' : 'ok', result.detail);
     return { runId, ...result };
   });
@@ -467,26 +521,14 @@ export async function runServeAction(action: ServeActionId): Promise<ServeAction
   }
 }
 
-export async function runServe(trigger: ServeTrigger): Promise<ServeRunResult> {
+/** Full manual update: rebase → deps (if lock changed) → build → restart → health. */
+export async function runServe(): Promise<ServeRunResult> {
   if (_running) {
     throw new Error('Serve is already running');
   }
 
   const { settings, env } = getConfig();
   const hb = settings.serve;
-
-  if (trigger === 'scheduled' && !hb.enabled) {
-    const skipped: ServeRunResult = {
-      runId: randomUUID(),
-      trigger,
-      startedAt: new Date().toISOString(),
-      finishedAt: new Date().toISOString(),
-      outcome: 'skipped',
-      summary: 'Scheduled tick skipped — serve disabled in config',
-    };
-    _lastRun = skipped;
-    return skipped;
-  }
 
   _running = true;
   const runId = randomUUID();
@@ -496,53 +538,43 @@ export async function runServe(trigger: ServeTrigger): Promise<ServeRunResult> {
   let summary = 'Serve completed';
   const lockBefore = hashLockfile(repoDir);
 
-  recordStep(runId, 'start', 'ok', `${trigger} — repo ${repoDir}`);
+  recordStep(runId, 'start', 'ok', `manual update — repo ${repoDir}`);
 
   try {
     if (!assertRepoDir(repoDir, runId)) {
       outcome = 'error';
       summary = 'Invalid repo directory — package.json missing';
-      return finishRun(runId, trigger, startedAt, outcome, summary);
+      return finishRun(runId, startedAt, outcome, summary);
     }
 
-    const pullResult = await stepGitPull(repoDir, hb, runId);
-    if (pullResult.outcome === 'error') {
-      return finishRun(runId, trigger, startedAt, 'error', pullResult.detail);
-    }
-    if (pullResult.outcome === 'skipped' && pullResult.detail.includes('local changes')) {
-      return finishRun(runId, trigger, startedAt, 'skipped', pullResult.detail);
+    const rebaseResult = await stepGitRebase(repoDir, hb, runId);
+    if (rebaseResult.outcome === 'error') {
+      return finishRun(runId, startedAt, 'error', rebaseResult.detail);
     }
 
     const lockAfter = hashLockfile(repoDir);
     const lockChanged = lockBefore !== null && lockAfter !== null && lockBefore !== lockAfter;
 
-    if (lockChanged && hb.autoInstallDeps) {
-      const depsResult = await stepInstallDeps(repoDir, runId);
-      if (depsResult.outcome === 'error') {
-        return finishRun(runId, trigger, startedAt, 'error', depsResult.detail);
+    if (lockChanged || rebaseResult.rebased) {
+      // Always reinstall when we moved commits or the lockfile changed.
+      if (lockChanged) {
+        const depsResult = await stepInstallDeps(repoDir, runId, 'lockfile changed');
+        if (depsResult.outcome === 'error') {
+          return finishRun(runId, startedAt, 'error', depsResult.detail);
+        }
+      } else {
+        recordStep(runId, 'npm_install', 'skip', 'lockfile unchanged');
       }
-    } else if (lockChanged) {
-      recordStep(runId, 'npm_install', 'skip', 'lockfile changed but autoInstallDeps disabled');
     } else {
-      recordStep(runId, 'npm_install', 'skip', 'lockfile unchanged');
+      recordStep(runId, 'npm_install', 'skip', 'no rebase and lockfile unchanged');
     }
 
-    let built = false;
-    if (hb.autoBuild) {
-      const buildResult = await stepBuild(repoDir, runId);
-      if (buildResult.outcome === 'error') {
-        return finishRun(runId, trigger, startedAt, 'error', buildResult.detail);
-      }
-      built = true;
-    } else {
-      recordStep(runId, 'npm_build', 'skip', 'autoBuild disabled');
+    const buildResult = await stepBuild(repoDir, runId);
+    if (buildResult.outcome === 'error') {
+      return finishRun(runId, startedAt, 'error', buildResult.detail);
     }
 
-    if (built && hb.autoRestart) {
-      await triggerRestart(repoDir, runId);
-    } else if (built) {
-      recordStep(runId, 'restart', 'skip', 'autoRestart disabled');
-    }
+    await triggerRestart(repoDir, runId);
 
     const health = await healthCheck(env.PORT);
     recordStep(
@@ -552,22 +584,20 @@ export async function runServe(trigger: ServeTrigger): Promise<ServeRunResult> {
       health.detail ?? 'ok',
     );
 
-    const snapshot = _lastGit ?? (await probeGit(repoDir, hb.branch));
-    if (pullResult.outcome === 'no_changes' && !built && !lockChanged) {
+    if (rebaseResult.outcome === 'no_changes' && !lockChanged) {
       outcome = 'no_changes';
-      summary = 'No updates — repository already up to date';
-    } else if (snapshot.behind === 0 && !built && !lockChanged) {
-      outcome = 'no_changes';
-      summary = 'No updates — repository already up to date';
+      summary = 'No git updates — rebuilt and restarted anyway';
+    } else {
+      summary = rebaseResult.detail;
     }
 
-    return finishRun(runId, trigger, startedAt, outcome, summary);
+    return finishRun(runId, startedAt, outcome, summary);
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     recordStep(runId, 'fatal', 'error', detail);
     outcome = 'error';
     summary = detail;
-    return finishRun(runId, trigger, startedAt, outcome, summary);
+    return finishRun(runId, startedAt, outcome, summary);
   } finally {
     _running = false;
   }
@@ -575,14 +605,13 @@ export async function runServe(trigger: ServeTrigger): Promise<ServeRunResult> {
 
 function finishRun(
   runId: string,
-  trigger: ServeTrigger,
   startedAt: string,
   outcome: ServeOutcome,
   summary: string,
 ): ServeRunResult {
   const result: ServeRunResult = {
     runId,
-    trigger,
+    trigger: 'manual',
     startedAt,
     finishedAt: new Date().toISOString(),
     outcome,
@@ -593,36 +622,49 @@ function finishRun(
   return result;
 }
 
-export function stopServeScheduler(): void {
-  if (_schedulerTimer) {
-    clearInterval(_schedulerTimer);
-    _schedulerTimer = null;
-    log.info('serve scheduler stopped');
+/** Fixed unit name — never interpolated from user input. */
+const SERVICE_UNIT = 'agentvoice.service';
+
+/**
+ * Read recent systemd user journal lines for the bridge service.
+ * argv is fixed; only `lines` is clamped server-side.
+ */
+export async function getServeServiceLogs(lines = 80): Promise<ServeServiceLogs> {
+  const n = Math.min(Math.max(Math.floor(lines) || 80, 1), 500);
+  try {
+    const { code, stdout, stderr } = await runCommand(process.cwd(), 'journalctl', [
+      '--user',
+      '-u',
+      SERVICE_UNIT,
+      '-n',
+      String(n),
+      '--no-pager',
+      '-o',
+      'short-iso',
+    ]);
+    if (code !== 0) {
+      const detail = (stderr || stdout).trim().slice(0, 400) || `exit ${code}`;
+      return { unit: SERVICE_UNIT, lines: n, text: '', ok: false, detail };
+    }
+    return { unit: SERVICE_UNIT, lines: n, text: stdout.trimEnd(), ok: true };
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : String(err);
+    return { unit: SERVICE_UNIT, lines: n, text: '', ok: false, detail };
   }
 }
 
-export function reconcileServeScheduler(): void {
-  stopServeScheduler();
-  const { settings } = getConfig();
-  if (!settings.serve.enabled) {
-    return;
-  }
-  const intervalMs = settings.serve.intervalMs;
-  _schedulerTimer = setInterval(() => {
-    void runServe('scheduled').catch((err) => {
-      log.error({ err }, 'scheduled serve failed');
-    });
-  }, intervalMs);
-  log.info({ intervalMs }, 'serve scheduler started');
-}
-
-export async function startServeScheduler(): Promise<void> {
+/** Refresh git snapshot on boot (no scheduler). */
+export async function startServe(): Promise<void> {
   try {
     await refreshGitSnapshot();
   } catch (err) {
     log.warn({ err }, 'initial git snapshot failed');
   }
-  reconcileServeScheduler();
+}
+
+/** @deprecated No-op — scheduler removed. Kept so call sites compile during migration. */
+export function stopServeScheduler(): void {
+  // intentionally empty
 }
 
 export function spawnInstallSystemd(repoDir: string): { ok: boolean; detail: string } {
