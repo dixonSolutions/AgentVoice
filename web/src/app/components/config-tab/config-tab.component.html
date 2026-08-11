@@ -207,7 +207,7 @@
 
         <p-fieldset legend="Speech output">
           <p-message severity="secondary" variant="simple"
-            text="Choose how Cursor Voice speaks replies. Browser voices come from this device’s speechSynthesis API (not a hard-coded Chrome/Safari list). Amazon Polly voices are loaded from AWS for the selected engine." />
+            text="Choose how AgentVoice speaks replies. Browser voices come from this device’s speechSynthesis API (not a hard-coded Chrome/Safari list). Amazon Polly voices are loaded from AWS for the selected engine." />
 
           <p-iftalabel>
             <p-select id="cfg-tts-provider" [(ngModel)]="ttsProvider"
@@ -873,7 +873,6 @@
               <p-tab value="status">Status</p-tab>
               <p-tab value="actions">Actions</p-tab>
               <p-tab value="network">Network</p-tab>
-              <p-tab value="automation">Automation</p-tab>
               <p-tab value="activity">Activity</p-tab>
             </p-tablist>
 
@@ -888,11 +887,6 @@
                         <p-tag value="Running" severity="info" />
                       } @else {
                         <p-tag value="Idle" severity="secondary" />
-                      }
-                      @if (serveStatus.schedulerActive) {
-                        <p-tag value="Scheduler on" severity="success" />
-                      } @else {
-                        <p-tag value="Scheduler off" severity="secondary" />
                       }
                       @if (serveStatus.lastRun; as last) {
                         <p-tag
@@ -938,21 +932,44 @@
                     }
                   </div>
                 }
+
+                <p-fieldset legend="Repository">
+                  <p-message severity="secondary" variant="simple"
+                    text="Force pull &amp; rebase targets origin/&lt;branch&gt; (default main). Leave directory blank to use the bridge working directory." />
+                  <p-iftalabel>
+                    <input pInputText id="cfg-serve-branch"
+                      [(ngModel)]="serveBranch"
+                      placeholder="main"
+                      [disabled]="!canUseApi()" />
+                    <label for="cfg-serve-branch">Track branch</label>
+                  </p-iftalabel>
+                  <p-iftalabel>
+                    <input pInputText id="cfg-serve-repo"
+                      [(ngModel)]="serveRepoDir"
+                      placeholder="/path/to/agentvoice"
+                      [disabled]="!canUseApi()" />
+                    <label for="cfg-serve-repo">Repository directory (optional)</label>
+                  </p-iftalabel>
+                  <p-button label="Save" icon="pi pi-save"
+                    [loading]="savingServe"
+                    [disabled]="!canUseApi()"
+                    (onClick)="onSaveServe()" />
+                </p-fieldset>
               </p-tabpanel>
 
               <!-- Actions -->
               <p-tabpanel value="actions">
                 <p-message severity="secondary" variant="simple"
-                  text="Run the full update pipeline or trigger individual steps. Actions are blocked while a run is in progress." />
+                  text="Manual only — no scheduled auto-update. Update service runs rebase → deps (if needed) → build → restart. Force pull &amp; rebase stashes dirty changes, rebases onto origin/main (or your track branch), then restores the stash." />
 
                 <div class="cv-cfg-serve-actions">
-                  <p-button label="Run full update" icon="pi pi-sync"
+                  <p-button label="Update service" icon="pi pi-sync"
                     [loading]="runningServe"
                     [disabled]="!canUseApi() || serveBusy()"
                     (onClick)="onRunServe()" />
 
                   <div class="cv-cfg-serve-action-grid">
-                    <p-button label="Git pull" icon="pi pi-download"
+                    <p-button label="Force pull &amp; rebase" icon="pi pi-download"
                       severity="secondary" [outlined]="true"
                       [loading]="runningPull"
                       [disabled]="!canUseApi() || serveBusy()"
@@ -989,6 +1006,122 @@
               <!-- Network -->
               <p-tabpanel value="network">
                 @if (hostingData) {
+                  <p-fieldset legend="Hosting provider">
+                    <p-message severity="secondary" variant="simple"
+                      text="Choose how the bridge is reachable from your phone. Tailscale is pre-selected when detected — advanced providers stay collapsed until you pick one." />
+
+                    <div class="cv-cfg-hosting-status">
+                      <span class="cv-cfg-muted">Currently active</span>
+                      <p-tag [value]="hostingProviderLabel(detectedHostingProviderId ?? 'manual')" severity="info" />
+                      <p-button label="Reset to auto-detect" icon="pi pi-undo"
+                        severity="secondary" [text]="true" size="small"
+                        [loading]="clearingHostingOverride"
+                        [disabled]="!isBridgeConnected()"
+                        (onClick)="onClearHostingOverride()" />
+                    </div>
+
+                    <p-iftalabel>
+                      <p-select id="cfg-hosting-provider"
+                        [options]="hostingProviderOptions" optionLabel="id" optionValue="id"
+                        [ngModel]="selectedHostingProviderId"
+                        (ngModelChange)="onSelectHostingProvider($event)"
+                        [disabled]="!isBridgeConnected() || settingUpHosting">
+                        <ng-template let-opt pTemplate="item">
+                          {{ hostingProviderLabel(opt.id) }}
+                          @if (hostingProviderInfo(opt.id)?.detected?.active) {
+                            <span class="cv-cfg-muted"> · active</span>
+                          } @else if (!hostingProviderInfo(opt.id)?.detected?.installed) {
+                            <span class="cv-cfg-muted"> · not installed</span>
+                          }
+                        </ng-template>
+                        <ng-template let-opt pTemplate="selectedItem">
+                          {{ hostingProviderLabel(opt.id) }}
+                        </ng-template>
+                      </p-select>
+                      <label for="cfg-hosting-provider">Provider</label>
+                    </p-iftalabel>
+
+                    @if (hostingProviderInfo(selectedHostingProviderId); as info) {
+                      <div class="cv-cfg-hosting-detect">
+                        <p-tag
+                          [value]="info.detected.active ? 'Active' : info.detected.installed ? 'Installed' : 'Not installed'"
+                          [severity]="hostingDetectSeverity(info.detected.active, info.detected.installed)" />
+                        @if (info.detected.publicUrl) {
+                          <code class="cv-cfg-serve-commit">{{ info.detected.publicUrl }}</code>
+                        }
+                        @if (info.detected.detail) {
+                          <span class="cv-cfg-muted">{{ info.detected.detail }}</span>
+                        }
+                      </div>
+                    }
+
+                    @if (selectedHostnameField; as field) {
+                      <p-iftalabel>
+                        <input pInputText id="cfg-hosting-hostname"
+                          [(ngModel)]="hostingHostnameInput"
+                          [placeholder]="field.placeholder"
+                          [disabled]="!isBridgeConnected() || settingUpHosting" />
+                        <label for="cfg-hosting-hostname">{{ field.label }}</label>
+                      </p-iftalabel>
+                      <p-message severity="secondary" variant="simple" [text]="field.hint" />
+                    }
+
+                    @if (selectedLoginServerField; as field) {
+                      <p-iftalabel>
+                        <input pInputText id="cfg-hosting-login-server"
+                          [(ngModel)]="hostingLoginServerInput"
+                          [placeholder]="field.placeholder"
+                          [disabled]="!isBridgeConnected() || settingUpHosting" />
+                        <label for="cfg-hosting-login-server">{{ field.label }}</label>
+                      </p-iftalabel>
+                      <p-message severity="secondary" variant="simple" [text]="field.hint" />
+                    }
+
+                    <div class="cv-cfg-row-actions">
+                      <p-button label="Run setup" icon="pi pi-bolt"
+                        [loading]="settingUpHosting"
+                        [disabled]="!isBridgeConnected()"
+                        (onClick)="onRunHostingSetup()" />
+                      <p-button label="Check health" icon="pi pi-stethoscope"
+                        severity="secondary" [outlined]="true"
+                        [loading]="runningHostingDoctor"
+                        [disabled]="!isBridgeConnected()"
+                        (onClick)="onRunHostingDoctor()" />
+                    </div>
+
+                    @if (hostingSetupLog.length > 0 || settingUpHosting) {
+                      <div class="cv-cfg-hosting-log">
+                        @for (line of hostingSetupLog; track $index) {
+                          <div class="cv-cfg-hosting-log-line">{{ line }}</div>
+                        }
+                        @if (settingUpHosting) {
+                          <div class="cv-cfg-hosting-log-line cv-cfg-muted">Working…</div>
+                        }
+                      </div>
+                    }
+                    @if (hostingSetupPublicUrl) {
+                      <p-message severity="success" variant="simple"
+                        [text]="'Public URL: ' + hostingSetupPublicUrl" />
+                    }
+                    @if (hostingSetupError) {
+                      <p-message severity="warn" variant="simple" [text]="hostingSetupError" />
+                    }
+
+                    @for (result of hostingDoctorResults; track result.provider) {
+                      <div class="cv-cfg-hosting-doctor">
+                        @for (check of result.checks; track check.label) {
+                          <div class="cv-cfg-hosting-doctor-row">
+                            <p-tag [value]="check.ok ? 'OK' : 'Issue'" [severity]="check.ok ? 'success' : 'warn'" />
+                            <span>{{ check.label }}</span>
+                            @if (check.detail) {
+                              <span class="cv-cfg-muted">{{ check.detail }}</span>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
+                  </p-fieldset>
+
                   <p-fieldset legend="Run mode">
                     <p-iftalabel>
                       <p-select id="cfg-run-mode"
@@ -1046,107 +1179,51 @@
                 }
               </p-tabpanel>
 
-              <!-- Automation -->
-              <p-tabpanel value="automation">
-                <p-fieldset legend="Scheduler">
-                  <div class="cv-cfg-toggle-row">
-                    <p-toggleSwitch id="cfg-serve-enabled"
-                      [(ngModel)]="serveData.enabled"
-                      [disabled]="!canUseApi()" />
-                    <label for="cfg-serve-enabled">Enable scheduled updates</label>
-                  </div>
-                  <p-iftalabel>
-                    <p-inputNumber id="cfg-serve-interval"
-                      [(ngModel)]="serveData.intervalMs"
-                      [min]="60000" [step]="60000" suffix=" ms"
-                      [disabled]="!canUseApi()" />
-                    <label for="cfg-serve-interval">Interval (minimum 60s)</label>
-                  </p-iftalabel>
-                  <p-message severity="secondary" variant="simple"
-                    text="Manual actions are always available. Scheduled ticks are skipped when disabled." />
-                </p-fieldset>
-
-                <p-fieldset legend="Pipeline steps">
-                  <div class="cv-cfg-toggle-row">
-                    <p-toggleSwitch id="cfg-serve-pull"
-                      [(ngModel)]="serveData.autoPull"
-                      [disabled]="!canUseApi()" />
-                    <label for="cfg-serve-pull">Auto pull latest changes from origin</label>
-                  </div>
-                  <div class="cv-cfg-toggle-row">
-                    <p-toggleSwitch id="cfg-serve-deps"
-                      [(ngModel)]="serveData.autoInstallDeps"
-                      [disabled]="!canUseApi()" />
-                    <label for="cfg-serve-deps">Auto install dependencies when lockfile changes</label>
-                  </div>
-                  <div class="cv-cfg-toggle-row">
-                    <p-toggleSwitch id="cfg-serve-build"
-                      [(ngModel)]="serveData.autoBuild"
-                      [disabled]="!canUseApi()" />
-                    <label for="cfg-serve-build">Auto build (npm run build)</label>
-                  </div>
-                  <div class="cv-cfg-toggle-row">
-                    <p-toggleSwitch id="cfg-serve-restart"
-                      [(ngModel)]="serveData.autoRestart"
-                      [disabled]="!canUseApi()" />
-                    <label for="cfg-serve-restart">Auto restart service after build</label>
-                  </div>
-                  <div class="cv-cfg-toggle-row">
-                    <p-toggleSwitch id="cfg-serve-abort-dirty"
-                      [(ngModel)]="serveData.abortOnLocalChanges"
-                      [disabled]="!canUseApi()" />
-                    <label for="cfg-serve-abort-dirty">Abort when local git changes are detected</label>
-                  </div>
-                </p-fieldset>
-
-                <p-fieldset legend="Repository">
-                  <p-iftalabel>
-                    <input pInputText id="cfg-serve-branch"
-                      [(ngModel)]="serveBranch"
-                      placeholder="Leave empty for current branch"
-                      [disabled]="!canUseApi()" />
-                    <label for="cfg-serve-branch">Git branch (optional)</label>
-                  </p-iftalabel>
-                  <p-iftalabel>
-                    <input pInputText id="cfg-serve-repo"
-                      [(ngModel)]="serveRepoDir"
-                      placeholder="/path/to/cursor-voice"
-                      [disabled]="!canUseApi()" />
-                    <label for="cfg-serve-repo">Repository directory (optional)</label>
-                  </p-iftalabel>
-                </p-fieldset>
-
-                <p-button label="Save automation settings" icon="pi pi-save"
-                  [loading]="savingServe"
-                  [disabled]="!canUseApi()"
-                  (onClick)="onSaveServe()" />
-              </p-tabpanel>
-
               <!-- Activity -->
               <p-tabpanel value="activity">
-                @if (serveEvents.length > 0) {
-                  <div class="cv-cfg-audit-list">
-                    @for (entry of serveEvents; track entry.id) {
-                      <div class="cv-cfg-audit-row">
-                        <div class="cv-cfg-audit-meta">
-                          <code class="cv-cfg-audit-tool">{{ entry.step }}</code>
-                          <p-tag
-                            [value]="entry.status"
-                            [severity]="eventStatusSeverity(entry.status)" />
-                          @if (entry.detail) {
-                            <div class="cv-cfg-audit-reason">{{ entry.detail }}</div>
-                          }
-                        </div>
-                        <div class="cv-cfg-audit-time">{{ entry.ts }}</div>
-                      </div>
+                <p-fieldset legend="Service logs (journalctl)">
+                  <p-message severity="secondary" variant="simple"
+                    text="Reads journalctl --user -u agentvoice.service (fixed unit name — no shell input)." />
+                  <p-button label="Load service logs" icon="pi pi-book"
+                    severity="secondary" [outlined]="true"
+                    [loading]="loadingServiceLogs"
+                    [disabled]="!canUseApi()"
+                    (onClick)="onLoadServiceLogs()" />
+                  @if (serviceLogs) {
+                    @if (serviceLogs.ok) {
+                      <pre class="cv-cfg-hosting-log cv-cfg-serve-journal">{{ serviceLogs.text || '(no lines)' }}</pre>
+                    } @else {
+                      <p-message severity="warn" variant="simple"
+                        [text]="serviceLogs.detail ?? 'Could not read journal'" />
                     }
-                  </div>
-                } @else {
-                  <div class="cv-cfg-empty">
-                    <i class="pi pi-history"></i>
-                    <span>No serve activity yet — run an update or action to populate the log.</span>
-                  </div>
-                }
+                  }
+                </p-fieldset>
+
+                <p-fieldset legend="Update step log">
+                  @if (serveEvents.length > 0) {
+                    <div class="cv-cfg-audit-list">
+                      @for (entry of serveEvents; track entry.id) {
+                        <div class="cv-cfg-audit-row">
+                          <div class="cv-cfg-audit-meta">
+                            <code class="cv-cfg-audit-tool">{{ entry.step }}</code>
+                            <p-tag
+                              [value]="entry.status"
+                              [severity]="eventStatusSeverity(entry.status)" />
+                            @if (entry.detail) {
+                              <div class="cv-cfg-audit-reason">{{ entry.detail }}</div>
+                            }
+                          </div>
+                          <div class="cv-cfg-audit-time">{{ entry.ts }}</div>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <div class="cv-cfg-empty">
+                      <i class="pi pi-history"></i>
+                      <span>No serve activity yet — run an update or action to populate the log.</span>
+                    </div>
+                  }
+                </p-fieldset>
               </p-tabpanel>
 
             </p-tabpanels>

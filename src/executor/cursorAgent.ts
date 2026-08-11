@@ -1,161 +1,72 @@
 /**
- * cursor-agent executor — spawn, parse, kill.
- *
- * This module is the ONLY place cursor-agent CLI knowledge lives.
- * When the CLI changes, this is the one-file fix.
+ * Agent executor — spawn, parse, kill. CLI-neutral: delegates every CLI-specific
+ * decision (binary path, env, argv, auth-error detection) to the active
+ * AgentProvider (src/providers/agents/). This module owns only the shared
+ * process lifecycle: spawn, NDJSON stdout parsing, stderr capture, kill.
  *
  * Key design rules from docs/03-security.md and docs/05:
  *   - `shell: false` always — no shell interpolation.
- *   - `--workspace` comes from the registry, never from the caller.
+ *   - `--workspace` / `--cd` comes from the registry, never from the caller.
  *   - The prompt string is the ONLY caller-controlled argv element.
  *   - `strip-ansi` run defensively before JSON.parse.
  *   - Session IDs captured from structured output, not TTY scraping.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import stripAnsi from 'strip-ansi';
-import { AGENT_CLIENTS, getConfig, type AgentClient } from '../config.js';
+import { AGENT_CLIENTS, type AgentClient } from '../config.js';
 import { childLogger } from '../log.js';
-import type { Project } from '../state/registry.js';
-import type { SessionState } from '../state/registry.js';
-import { buildAgentPrompt, buildAskPrompt } from './agentPrompt.js';
+import { getActiveProvider, getProvider } from '../providers/agents/registry.js';
+import { cursorProvider } from '../providers/agents/cursor.js';
+import type { SpawnOptions } from '../providers/agents/types.js';
 import type { StreamJsonEvent } from './watcher.js';
 
 export { AGENT_CLIENTS };
-export type { AgentClient };
+export type { AgentClient, SpawnOptions };
 
-const log = childLogger('cursor-agent');
+const log = childLogger('executor');
 
-/** Env for cursor-agent subprocesses — HOME is required by the CLI wrapper (set -u). */
+/**
+ * Env for Cursor CLI subprocesses specifically — used by the Cursor-only
+ * diagnostic tools (cursor_mcp_list, cursor_mcp_tools, cursor_new_session's
+ * create-chat) and the /healthz version probe, which always target the
+ * Cursor CLI regardless of the active agentClient.
+ */
 export function buildCursorAgentEnv(): NodeJS.ProcessEnv {
-  return {
-    ...process.env,
-    HOME: process.env.HOME ?? homedir(),
-    OPENAI_API_KEY: undefined,
-    GEMINI_API_KEY: undefined,
-  };
+  return cursorProvider.env(process.env);
 }
 
-let cachedCursorAgentPath: string | null = null;
-
-/** Resolve cursor-agent binary — systemd user units often have a minimal PATH. */
 export function resolveCursorAgentPath(): string {
-  if (cachedCursorAgentPath && existsSync(cachedCursorAgentPath)) {
-    return cachedCursorAgentPath;
-  }
-
-  const fromEnv = process.env.CURSOR_AGENT_PATH?.trim();
-  if (fromEnv && existsSync(fromEnv)) {
-    cachedCursorAgentPath = fromEnv;
-    return fromEnv;
-  }
-
-  const home = homedir();
-  for (const candidate of [
-    join(home, '.local/bin/cursor-agent'),
-    join(home, '.cursor/bin/cursor-agent'),
-    '/usr/local/bin/cursor-agent',
-  ]) {
-    if (existsSync(candidate)) {
-      cachedCursorAgentPath = candidate;
-      return candidate;
-    }
-  }
-
-  return 'cursor-agent';
+  return cursorProvider.resolveBin();
 }
 
 export function isCursorAgentAvailable(): boolean {
-  const path = resolveCursorAgentPath();
-  return path !== 'cursor-agent' || existsSync(path);
+  return cursorProvider.isInstalled();
 }
 
-let cachedCodexPath: string | null = null;
-
-/** Resolve the codex CLI binary path. */
 export function resolveCodexPath(): string {
-  if (cachedCodexPath && existsSync(cachedCodexPath)) {
-    return cachedCodexPath;
-  }
-
-  const fromEnv = process.env.CODEX_PATH?.trim();
-  if (fromEnv && existsSync(fromEnv)) {
-    cachedCodexPath = fromEnv;
-    return fromEnv;
-  }
-
-  const home = homedir();
-  for (const candidate of [
-    join(home, '.local/bin/codex'),
-    join(home, '.codex/bin/codex'),
-    '/usr/local/bin/codex',
-  ]) {
-    if (existsSync(candidate)) {
-      cachedCodexPath = candidate;
-      return candidate;
-    }
-  }
-
-  return 'codex';
+  return getProvider('codex').resolveBin();
 }
 
-let cachedClaudeCodePath: string | null = null;
-
-/** Resolve the claude CLI binary path (Claude Code). */
 export function resolveClaudeCodePath(): string {
-  if (cachedClaudeCodePath && existsSync(cachedClaudeCodePath)) {
-    return cachedClaudeCodePath;
-  }
-
-  const fromEnv = process.env.CLAUDE_CODE_PATH?.trim();
-  if (fromEnv && existsSync(fromEnv)) {
-    cachedClaudeCodePath = fromEnv;
-    return fromEnv;
-  }
-
-  const home = homedir();
-  for (const candidate of [
-    join(home, '.local/bin/claude'),
-    join(home, '.claude/bin/claude'),
-    '/usr/local/bin/claude',
-  ]) {
-    if (existsSync(candidate)) {
-      cachedClaudeCodePath = candidate;
-      return candidate;
-    }
-  }
-
-  return 'claude';
+  return getProvider('claude-code').resolveBin();
 }
 
 /** Resolve the binary path for the given agent client. */
 export function resolveAgentBin(client: AgentClient): string {
-  switch (client) {
-    case 'cursor':
-      return resolveCursorAgentPath();
-    case 'codex':
-      return resolveCodexPath();
-    case 'claude-code':
-      return resolveClaudeCodePath();
-  }
+  return getProvider(client).resolveBin();
 }
 
 /** Check whether a given agent client binary is available on the system. */
 export function isAgentClientAvailable(client: AgentClient): boolean {
-  const bin = resolveAgentBin(client);
-  const fallback = client === 'cursor' ? 'cursor-agent' : client === 'codex' ? 'codex' : 'claude';
-  return bin !== fallback || existsSync(bin);
+  return getProvider(client).isInstalled();
 }
 
 /** Return the resolved binary path if found, or null if only the fallback name is available. */
 export function resolvedAgentBinPath(client: AgentClient): string | null {
-  const bin = resolveAgentBin(client);
-  const fallback = client === 'cursor' ? 'cursor-agent' : client === 'codex' ? 'codex' : 'claude';
-  return bin !== fallback ? bin : null;
+  const provider = getProvider(client);
+  return provider.isInstalled() ? provider.resolveBin() : null;
 }
 
 /** Prevent spawn ENOENT/EACCES from becoming an uncaught exception (crashes the bridge). */
@@ -164,35 +75,19 @@ export function attachCursorAgentSpawnGuard(
   context?: Record<string, unknown>,
 ): void {
   child.on('error', (err) => {
-    log.error({ err, ...context }, 'cursor-agent process error');
+    log.error({ err, ...context }, 'agent process error');
   });
 }
 
-export function cursorAgentSpawnErrorMessage(): string {
+export function cursorAgentSpawnErrorMessage(client: AgentClient = 'cursor'): string {
+  const provider = getProvider(client);
   return (
-    'cursor-agent not found — install the Cursor CLI (cursor-agent on PATH) ' +
-    'or set CURSOR_AGENT_PATH in .env'
+    `${provider.displayName} CLI not found — install it and make sure it's on PATH, ` +
+    'or set the *_PATH override in .env (see docs/23-multi-agent-client.md)'
   );
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
-
-export interface SpawnOptions {
-  project: Project;
-  session: SessionState;
-  prompt: string;
-  mode?: 'agent' | 'plan' | 'ask' | 'debug';
-  /** If true, use --output-format json (one-shot, for cursor_ask). */
-  oneShot?: boolean;
-  /**
-   * If set, run in an isolated git worktree at ~/.cursor/worktrees/<worktree>.
-   * Enables parallel agents on the same project without working-tree conflicts.
-   * CLI flag: -w <name>
-   */
-  worktree?: string;
-  /** Append browser snapshot instructions to the worker prompt. */
-  browser?: boolean;
-}
 
 export interface AgentHandle {
   pid: number;
@@ -209,147 +104,21 @@ export interface AgentResult {
   sessionId: string | null;
   summary: string | null;
   error: string | null;
-}
-
-// ── Flag builders ─────────────────────────────────────────────────────────
-
-/**
- * Builds cursor-agent CLI arguments.
- * Shell interpolation is impossible here — this is an array, not a string.
- */
-function buildCursorArgs(opts: SpawnOptions): string[] {
-  const { project, session, prompt, mode = 'agent', oneShot = false, worktree, browser } = opts;
-  const { settings } = getConfig();
-
-  const args: string[] = [
-    '-p', // print / headless mode
-    '--output-format',
-    oneShot ? 'json' : 'stream-json',
-    '--workspace',
-    project.path, // ONLY from registry — never from caller
-  ];
-
-  if (worktree) {
-    args.push('-w', worktree);
-  }
-
-  if (session.activeModel && session.activeModel !== 'auto') {
-    args.push('--model', session.activeModel);
-  }
-
-  if (project.resumeId && !oneShot && mode !== 'ask' && !worktree) {
-    args.push('--resume', project.resumeId);
-  }
-
-  if (mode === 'plan') {
-    args.push('--mode', 'plan');
-  } else if (mode === 'ask') {
-    args.push('--mode', 'ask');
-  }
-
-  for (const flag of settings.preRunFlags) {
-    args.push(flag);
-  }
-
-  if (mode === 'ask') {
-    args.push(buildAskPrompt(prompt));
-  } else {
-    args.push(buildAgentPrompt(prompt, { browser }));
-  }
-
-  return args;
-}
-
-/**
- * Builds Codex CLI (`codex exec`) arguments for headless non-interactive use.
- *
- * Codex flags used:
- *   exec                              — non-interactive subcommand
- *   --json                            — JSONL event stream on stdout
- *   --sandbox workspace-write         — grant write access inside workspace
- *   --cd <path>                       — set working directory
- *   resume <SESSION_ID>               — optional resume subcommand
- *
- * Model selection is handled by Codex's own config; no --model flag in exec.
- * preRunFlags from config are NOT forwarded (Codex uses different flags).
- */
-function buildCodexArgs(opts: SpawnOptions): string[] {
-  const { project, prompt, mode = 'agent', oneShot = false } = opts;
-
-  const args: string[] = ['exec'];
-
-  // Resume: Codex uses `exec resume <id>` subcommand pattern.
-  if (project.resumeId && !oneShot && mode !== 'ask') {
-    args.push('resume', project.resumeId);
-  }
-
-  args.push('--json');
-  args.push('--sandbox', 'workspace-write');
-  args.push('--cd', project.path);
-
-  args.push(buildAgentPrompt(prompt, {}));
-
-  return args;
-}
-
-/**
- * Builds Claude Code CLI (`claude -p`) arguments for headless use.
- *
- * Claude Code flags used:
- *   -p / --print                      — non-interactive headless mode
- *   --output-format stream-json       — JSONL event stream
- *   --resume <id>                     — continue a prior conversation
- *
- * MCP servers are loaded from ~/.claude/settings.json (user-scope) which is
- * set up by ensureClientMcpSetup('claude-code'). We do NOT use --bare so that
- * the global MCP config is auto-discovered.
- * preRunFlags are NOT forwarded (Claude Code uses different flags).
- */
-function buildClaudeCodeArgs(opts: SpawnOptions): string[] {
-  const { project, prompt, mode = 'agent', oneShot = false } = opts;
-
-  const args: string[] = ['-p'];
-
-  args.push('--output-format', oneShot ? 'json' : 'stream-json');
-
-  if (project.resumeId && !oneShot && mode !== 'ask') {
-    args.push('--resume', project.resumeId);
-  }
-
-  args.push(buildAgentPrompt(prompt, {}));
-
-  return args;
-}
-
-/**
- * Builds the argument array for the configured agent client.
- * Shell interpolation is impossible here — this is an array, not a string.
- */
-export function buildArgs(opts: SpawnOptions): string[] {
-  const { settings } = getConfig();
-  switch (settings.agentClient) {
-    case 'codex':
-      return buildCodexArgs(opts);
-    case 'claude-code':
-      return buildClaudeCodeArgs(opts);
-    case 'cursor':
-    default:
-      return buildCursorArgs(opts);
-  }
+  /** True when the failure looks like an auth problem (per the active provider's heuristics). */
+  authRequired: boolean;
 }
 
 // ── Spawn ─────────────────────────────────────────────────────────────────
 
 /**
- * Spawn a cursor-agent process and return a handle for lifecycle management.
+ * Spawn the active provider's agent process and return a handle for lifecycle management.
  *
  * stdout: NDJSON events (readline), forwarded to event subscribers.
- * stderr: buffered for error capture.
+ * stderr: buffered for error capture + auth-failure classification.
  */
 export function spawnAgent(opts: SpawnOptions): AgentHandle {
-  const { settings } = getConfig();
-  const client = settings.agentClient;
-  const args = buildArgs(opts);
+  const provider = getActiveProvider();
+  const args = provider.buildWorkerArgs(opts);
 
   log.info(
     {
@@ -357,25 +126,25 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
       mode: opts.mode ?? 'agent',
       resume: opts.project.resumeId ?? 'none',
       model: opts.session.activeModel,
-      client,
+      client: provider.id,
     },
     'spawning agent',
   );
-  log.debug({ client, args }, 'agent args');
+  log.debug({ client: provider.id, args }, 'agent args');
 
-  const agentBin = resolveAgentBin(client);
+  const agentBin = provider.resolveBin();
   const child = spawn(agentBin, args, {
     cwd: opts.project.path,
     shell: false, // SECURITY: never true
-    env: buildCursorAgentEnv(),
+    env: provider.env(process.env),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  attachCursorAgentSpawnGuard(child, { project: opts.project.name, mode: opts.mode ?? 'agent', client });
+  attachCursorAgentSpawnGuard(child, { project: opts.project.name, mode: opts.mode ?? 'agent', client: provider.id });
 
   const pid = child.pid;
   if (!pid) {
-    throw new Error(`${client} agent failed to spawn (no pid) — check the binary is installed and on PATH`);
+    throw new Error(`${provider.displayName} agent failed to spawn (no pid) — check the binary is installed and on PATH`);
   }
 
   const eventListeners: Array<(event: StreamJsonEvent) => void> = [];
@@ -396,7 +165,7 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
     try {
       event = JSON.parse(clean) as Record<string, unknown>;
     } catch {
-      log.debug({ raw: clean }, 'non-JSON line from cursor-agent (ignored)');
+      log.debug({ raw: clean }, 'non-JSON line from agent (ignored)');
       return;
     }
 
@@ -462,10 +231,10 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
   let killTimer: ReturnType<typeof setTimeout> | null = null;
 
   function kill(): void {
-    log.info({ pid }, 'sending SIGTERM to cursor-agent');
+    log.info({ pid }, 'sending SIGTERM to agent');
     child.kill('SIGTERM');
     killTimer = setTimeout(() => {
-      log.warn({ pid }, 'cursor-agent did not exit after SIGTERM — sending SIGKILL');
+      log.warn({ pid }, 'agent did not exit after SIGTERM — sending SIGKILL');
       child.kill('SIGKILL');
     }, 5000);
   }
@@ -477,11 +246,12 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
 
       const exitCode = code ?? -1;
       const stderr = stripAnsi(Buffer.concat(stderrChunks).toString('utf-8')).trim();
+      const authRequired = exitCode !== 0 && provider.isAuthError(exitCode, stderr);
 
       if (exitCode !== 0) {
-        log.warn({ pid, exitCode, stderr: stderr.slice(0, 500) }, 'cursor-agent exited with error');
+        log.warn({ pid, exitCode, authRequired, stderr: stderr.slice(0, 500) }, 'agent exited with error');
       } else {
-        log.info({ pid, sessionId: capturedSessionId }, 'cursor-agent completed');
+        log.info({ pid, sessionId: capturedSessionId }, 'agent completed');
       }
 
       resolve({
@@ -489,6 +259,7 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
         sessionId: capturedSessionId,
         summary: capturedSummary,
         error: exitCode !== 0 ? (stderr || `Process exited with code ${exitCode}`) : null,
+        authRequired,
       });
     });
   });
@@ -501,18 +272,15 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
   };
 }
 
-// ── Model list parsing ────────────────────────────────────────────────────
+// ── Model list parsing (legacy Cursor-specific helpers — kept for callers
+// that inspect Cursor's own output shape directly; new code should use
+// getActiveProvider().listModels() / getAbout() instead). ─────────────────
 
 export interface ModelEntry {
   id: string;
   displayName: string;
 }
 
-/**
- * Parse the plain-text output of `cursor-agent models`.
- * Format: `<id> - <display name>` (one per line).
- * Strips the header "Available models" and the tip line.
- */
 export function parseModelsOutput(raw: string): ModelEntry[] {
   return raw
     .split('\n')
@@ -532,8 +300,6 @@ export function parseModelsOutput(raw: string): ModelEntry[] {
     })
     .filter((m) => m.id.length > 0 && m.displayName.length > 0);
 }
-
-// ── About / status JSON parsing ───────────────────────────────────────────
 
 export interface AgentAbout {
   cliVersion: string;

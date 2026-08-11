@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Cursor Voice — restart script (Linux)
+# AgentVoice — restart script (Linux)
 #
 # What this script does:
 #   1. Builds the project (backend + PWA)
@@ -54,7 +54,7 @@ if [[ "$(uname -s)" != "Linux" ]]; then
   err "This script is Linux-only. Use restart.ps1 on Windows."
 fi
 
-echo -e "${CYN}${BLD}Cursor Voice — restart${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
+echo -e "${CYN}${BLD}AgentVoice — restart${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
 
 # ── Load .env for PORT ────────────────────────────────────────────────────
 ENV_FILE="${PROJECT_DIR}/.env"
@@ -65,13 +65,13 @@ PORT="${PORT:-8787}"
 
 # Detect the Node binary used by the service (if installed)
 SERVICE_NODE=""
-SERVICE_FILE="${HOME}/.config/systemd/user/cursor-voice.service"
+SERVICE_FILE="${HOME}/.config/systemd/user/agentvoice.service"
 if [[ -f "$SERVICE_FILE" ]]; then
   SERVICE_NODE=$(grep -oP '(?<=ExecStart=)\S+node' "$SERVICE_FILE" || true)
 fi
 # Also check system-wide service
-if [[ -z "$SERVICE_NODE" && -f /etc/systemd/system/cursor-voice.service ]]; then
-  SERVICE_NODE=$(grep -oP '(?<=ExecStart=)\S+node' /etc/systemd/system/cursor-voice.service || true)
+if [[ -z "$SERVICE_NODE" && -f /etc/systemd/system/agentvoice.service ]]; then
+  SERVICE_NODE=$(grep -oP '(?<=ExecStart=)\S+node' /etc/systemd/system/agentvoice.service || true)
 fi
 NODE_BIN="${SERVICE_NODE:-node}"
 NPM_BIN="$(dirname "$NODE_BIN")/npm"
@@ -98,25 +98,25 @@ fi
 # ── 2. Restart service ────────────────────────────────────────────────────
 section "Restarting service"
 
-if systemctl --user is-enabled cursor-voice.service &>/dev/null; then
+if systemctl --user is-enabled agentvoice.service &>/dev/null; then
   # Normal path: systemd user unit installed by setup.sh
-  # Note: if cursor-voice-watch.path is running, a build alone would already
+  # Note: if agentvoice-watch.path is running, a build alone would already
   # trigger a restart. --no-build is the fast path for config-only changes.
-  systemctl --user restart cursor-voice.service
+  systemctl --user restart agentvoice.service
   sleep 1
-  if systemctl --user is-active --quiet cursor-voice.service; then
-    ok "cursor-voice.service restarted."
+  if systemctl --user is-active --quiet agentvoice.service; then
+    ok "agentvoice.service restarted."
   else
-    warn "Service may have failed. Check: journalctl --user -u cursor-voice -n 30"
-    systemctl --user status cursor-voice.service --no-pager -l | tail -15
+    warn "Service may have failed. Check: journalctl --user -u agentvoice -n 30"
+    systemctl --user status agentvoice.service --no-pager -l | tail -15
   fi
 
-elif systemctl is-enabled cursor-voice.service &>/dev/null 2>&1; then
+elif systemctl is-enabled agentvoice.service &>/dev/null 2>&1; then
   # System-wide service (e.g. installed as root)
-  sudo systemctl restart cursor-voice.service
+  sudo systemctl restart agentvoice.service
   sleep 1
-  systemctl status cursor-voice.service --no-pager -l | head -12
-  ok "System cursor-voice.service restarted."
+  systemctl status agentvoice.service --no-pager -l | head -12
+  ok "System agentvoice.service restarted."
 
 else
   # No service found — fallback to manual background process
@@ -156,10 +156,10 @@ fi
 if $TAIL_LOGS; then
   echo ""
   info "Tailing logs (Ctrl-C to stop)..."
-  journalctl --user -u cursor-voice -f --no-pager
+  journalctl --user -u agentvoice -f --no-pager
 fi
 
 echo ""
 ok "Done."
-echo -e "  ${BLU}Logs:${NC} journalctl --user -u cursor-voice -f"
+echo -e "  ${BLU}Logs:${NC} journalctl --user -u agentvoice -f"
 echo ""

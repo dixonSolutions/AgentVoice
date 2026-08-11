@@ -3,7 +3,7 @@
 #
 [Unit]
 Description=Fix container DNS (public resolvers)
-Before=network-online.target cursor-voice.service
+Before=network-online.target agentvoice.service
 DefaultDependencies=no
 
 [Service]

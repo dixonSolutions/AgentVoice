@@ -1,7 +1,7 @@
 {
-  "name": "Cursor Voice",
-  "short_name": "CursorVoice",
-  "description": "Voice control for cursor-agent — hands-free coding on your home machine",
+  "name": "AgentVoice",
+  "short_name": "AgentVoice",
+  "description": "Voice control for your coding agent — hands-free coding on your home machine",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#1a1a2e",

@@ -1,15 +1,15 @@
 [Unit]
-Description=Cursor Voice Bridge
+Description=AgentVoice Bridge
 After=network-online.target fix-dns.service tailscaled.service
 Wants=network-online.target fix-dns.service
 
 [Service]
 Type=simple
-User=cursorvoice
-WorkingDirectory=/opt/cursor-voice
-Environment=HOME=/home/cursorvoice
-EnvironmentFile=/opt/cursor-voice/.env
-ExecStart=/usr/bin/node /opt/cursor-voice/dist/index.js
+User=agentvoice
+WorkingDirectory=/opt/agentvoice
+Environment=HOME=/home/agentvoice
+EnvironmentFile=/opt/agentvoice/.env
+ExecStart=/usr/bin/node /opt/agentvoice/dist/index.js
 Restart=on-failure
 RestartSec=3
 
@@ -18,7 +18,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 # Adjust ReadWritePaths to include every allowlisted project workspace.
 # The bridge data dir and the project workspaces are the only writable locations.
-ReadWritePaths=/opt/cursor-voice/data /home/projects
+ReadWritePaths=/opt/agentvoice/data /home/projects
 PrivateTmp=true
 
 [Install]

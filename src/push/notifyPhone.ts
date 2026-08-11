@@ -28,7 +28,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
     case 'user_input_request': {
       const q = String(msg['question'] ?? 'Cursor needs your answer');
       return {
-        title: 'Cursor Voice',
+        title: 'AgentVoice',
         body: q.slice(0, 180),
         tag: `approval-${msg['request_id'] ?? 'input'}`,
         url: '/?tab=voice',
@@ -38,7 +38,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
     case 'plan_approval_request': {
       const title = String(msg['title'] ?? 'Plan ready for review');
       return {
-        title: 'Cursor Voice — Plan',
+        title: 'AgentVoice — Plan',
         body: title.slice(0, 180),
         tag: `plan-${msg['request_id'] ?? 'plan'}`,
         url: '/?tab=voice',
@@ -50,7 +50,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
       if (kind !== 'job_done' && kind !== 'job_error') return null;
       const text = String(msg['text'] ?? (kind === 'job_done' ? 'Job finished' : 'Job failed'));
       return {
-        title: kind === 'job_done' ? 'Cursor Voice — Done' : 'Cursor Voice — Error',
+        title: kind === 'job_done' ? 'AgentVoice — Done' : 'AgentVoice — Error',
         body: text.slice(0, 180),
         tag: `narration-${kind}`,
         url: '/?tab=voice',
@@ -60,11 +60,21 @@ function pushPayloadForType(msg: Record<string, unknown>): {
     case 'show_images': {
       const caption = msg['caption'] as string | undefined;
       return {
-        title: 'Cursor Voice',
+        title: 'AgentVoice',
         body: caption?.slice(0, 180) ?? 'New screenshots from Cursor',
         tag: `images-${msg['batch_id'] ?? 'batch'}`,
         url: '/?tab=voice',
         voip: false,
+      };
+    }
+    case 'auth_required': {
+      const displayName = String(msg['displayName'] ?? 'Your agent');
+      return {
+        title: 'AgentVoice — Sign-in needed',
+        body: `${displayName} needs you to sign in before it can keep working.`,
+        tag: 'auth-required',
+        url: '/?tab=voice',
+        voip: true,
       };
     }
     default:
@@ -100,7 +110,7 @@ export async function notifyPhone(payload: object): Promise<NotifyResult> {
 
   const type = msg['type'] as string | undefined;
   const alwaysPush =
-    type === 'user_input_request' || type === 'plan_approval_request';
+    type === 'user_input_request' || type === 'plan_approval_request' || type === 'auth_required';
 
   // Approvals always push (user may be on another app). Skip others if WS live.
   if (ws && isControlSocketOpen() && !alwaysPush) {

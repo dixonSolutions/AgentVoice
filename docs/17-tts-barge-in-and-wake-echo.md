@@ -176,7 +176,7 @@ Long-poll dequeue returns:
 }
 ```
 
-The voice system prompt (`prompts/cursor-voice/system.md`) instructs the agent
+The voice system prompt (`prompts/agentvoice/system.md`) instructs the agent
 how to use each field — especially not assuming the user heard a partial or
 unspoken line in full.
 

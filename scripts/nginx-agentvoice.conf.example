@@ -1,13 +1,13 @@
-# Cursor Voice — nginx frontend (split-port hosting)
+# AgentVoice — nginx frontend (split-port hosting)
 #
 # Serves the built PWA on webPort (default 5671) and proxies API/WS/MCP to backendPort (default 1234).
 # COOP/COEP headers are required for Vosk wake-word detection (SharedArrayBuffer).
 #
 # Install:
-#   cp scripts/nginx-cursor-voice.conf.example /etc/nginx/sites-available/cursor-voice
-#   sed -i "s|/root/Projects/CursorVoice|$(pwd)|g" /etc/nginx/sites-available/cursor-voice
-#   sed -i 's/listen 5671/listen YOUR_WEB_PORT/' /etc/nginx/sites-available/cursor-voice
-#   ln -sf /etc/nginx/sites-available/cursor-voice /etc/nginx/sites-enabled/cursor-voice
+#   cp scripts/nginx-agentvoice.conf.example /etc/nginx/sites-available/agentvoice
+#   sed -i "s|/root/Projects/AgentVoice|$(pwd)|g" /etc/nginx/sites-available/agentvoice
+#   sed -i 's/listen 5671/listen YOUR_WEB_PORT/' /etc/nginx/sites-available/agentvoice
+#   ln -sf /etc/nginx/sites-available/agentvoice /etc/nginx/sites-enabled/agentvoice
 #   nginx -t && systemctl reload nginx
 
 server {
@@ -15,7 +15,7 @@ server {
     listen [::]:5671;
     server_name _;
 
-    root /root/Projects/CursorVoice/web/dist;
+    root /root/Projects/AgentVoice/web/dist;
     index index.html;
 
     # Transcribe uploads PCM (up to ~45s @ 16 kHz ≈ 1.4 MB raw; JSON+base64 larger).

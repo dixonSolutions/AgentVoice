@@ -59,7 +59,7 @@ Loop: next_voice_turn() again
 
 | Spawn | Prompt passed to `cursor-agent -p` |
 | --- | --- |
-| **First session** (no `--resume`) | Full system prompt from `prompts/cursor-voice/system.md` + boot suffix |
+| **First session** (no `--resume`) | Full system prompt from `prompts/agentvoice/system.md` + boot suffix |
 | **Resume** (`--resume <id>`) | `@cursor-voice` rule reference + short boot line |
 
 On resume, Cursor injects the rule from `~/.cursor/rules/cursor-voice.mdc` (or project
@@ -71,10 +71,10 @@ Implementation: `src/executor/voiceAgent.ts` — `buildVoiceBootPrompt(project)`
 ## Process & module layout
 
 ```
-cursor-voice/
+agentvoice/
 ├── docs/
 ├── prompts/
-│   └── cursor-voice/          # Voice agent system + MCP instructions
+│   └── agentvoice/            # Voice agent system + MCP instructions
 ├── src/
 │   ├── server.ts              # Fastify: PWA, /api, /ws/intelligence, /mcp
 │   ├── config.ts              # .env + config.json (zod)

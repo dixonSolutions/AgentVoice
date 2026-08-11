@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Repair local Cursor Voice hosting: rebuild, restart, sync Tailscale Serve, verify.
+# Repair local AgentVoice hosting: rebuild, restart, sync Tailscale Serve, verify.
 #
 # Usage: bash scripts/fix-hosting.sh [--no-build]
 set -euo pipefail
@@ -27,7 +27,7 @@ fi
 
 bash "${SCRIPT_DIR}/sync-tailscale-serve.sh"
 
-if command -v nginx &>/dev/null && [[ -f /etc/nginx/sites-enabled/cursor-voice ]]; then
+if command -v nginx &>/dev/null && [[ -f /etc/nginx/sites-enabled/agentvoice ]]; then
   if nginx -t 2>/dev/null; then
     sudo nginx -s reload 2>/dev/null || true
   fi

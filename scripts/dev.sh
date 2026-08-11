@@ -13,13 +13,13 @@ NC='\033[0m'
 warn() { echo -e "${YEL}[warn]${NC}  $*"; }
 info() { echo -e "${BLU}[info]${NC}  $*"; }
 
-if systemctl --user is-active --quiet cursor-voice.service 2>/dev/null; then
-  warn "cursor-voice.service is running on :8787 (serve mode)."
+if systemctl --user is-active --quiet agentvoice.service 2>/dev/null; then
+  warn "agentvoice.service is running on :8787 (serve mode)."
   warn "Stopping it so npm run dev can use test ports (:5089 bridge, :4200 Angular)."
-  systemctl --user stop cursor-voice.service
+  systemctl --user stop agentvoice.service
 fi
 
 info "Dev: open http://localhost:4200 — API/WS proxy to bridge on :5089"
 exec env NODE_ENV=development npx concurrently -n web,server -c cyan,magenta \
-  "ng serve cursor-voice-web" \
+  "ng serve agentvoice-web" \
   "nodemon"

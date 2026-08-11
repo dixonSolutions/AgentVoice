@@ -1,12 +1,22 @@
-# Cursor Voice
+# AgentVoice
 
-Self-hosted voice bridge for driving [Cursor's coding agent](https://cursor.com/docs/cli)
-(`cursor-agent`) by **speech, from your phone**.
+_Formerly "Cursor Voice" — see [`docs/26-rename-agentvoice.md`](./docs/26-rename-agentvoice.md)._
 
-Speak from an iPhone **native app (CallKit)** or PWA; **Cursor IDE** is the reasoning layer via the
-**cursor-voice MCP server** (`speak`, `done`, `next_voice_turn`). Coding work is
+Self-hosted voice bridge for driving a coding agent CLI —
+[Cursor](https://cursor.com/docs/cli) (`cursor-agent`), [Codex](https://github.com/openai/codex),
+or [Claude Code](https://github.com/anthropics/claude-code) — by **speech, from your phone**.
+
+Speak from an iPhone **native app (CallKit)** or PWA; the active agent CLI is the reasoning
+layer via the **cursor-voice MCP server** (`speak`, `done`, `next_voice_turn`) — the MCP
+registration key stays `cursor-voice` for compatibility. Coding work is
 delegated to worker agents via `spawn_agent`. Audio uses browser STT/TTS with
-Amazon Polly/Transcribe fallback. Networking is private over Tailscale.
+Amazon Polly/Transcribe fallback. If the CLI needs you to sign in, the app prompts you
+in place — see [`docs/24-agent-providers.md`](./docs/24-agent-providers.md).
+
+Networking defaults to Tailscale but is pluggable — Cloudflare Tunnel, ngrok,
+Azure Dev Tunnels, plain LAN, or your own reverse proxy also work, one-click
+from Config → Serve → Network. See
+[`docs/25-hosting-providers.md`](./docs/25-hosting-providers.md).
 
 ## How it works
 
@@ -41,8 +51,9 @@ Prerequisites: [Node.js 20 LTS](https://nodejs.org), [Git](https://git-scm.com),
 
 ```powershell
 # 1. Clone the repo
-git clone https://github.com/dixonSolutions/Cursor-Voice.git
-cd Cursor-Voice
+git clone https://github.com/dixonSolutions/AgentVoice.git
+cd AgentVoice
+# Formerly Cursor-Voice — see docs/26-rename-agentvoice.md
 
 # 2. Run setup — installs Tailscale, builds the project, creates .env,
 #    installs a Windows Service (NSSM), and configures tailscale serve.
@@ -72,8 +83,9 @@ Prerequisites: Node.js 20 LTS, Git, Cursor IDE with `cursor-agent` on PATH.
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/dixonSolutions/Cursor-Voice.git
-cd Cursor-Voice
+git clone https://github.com/dixonSolutions/AgentVoice.git
+cd AgentVoice
+# Formerly Cursor-Voice — see docs/26-rename-agentvoice.md
 
 # 2. Run setup — installs Tailscale, builds, creates .env,
 #    installs a systemd user service, and configures tailscale serve.
@@ -129,6 +141,10 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 | [`16-mcp-server-cursor-as-brain.md`](./docs/16-mcp-server-cursor-as-brain.md) | Default Cursor voice workflow |
 | [`11-mcp-tool-surface.md`](./docs/11-mcp-tool-surface.md) | MCP tool inventory |
 | [`20-native-callkit-shell.md`](./docs/20-native-callkit-shell.md) | CallKit native app + push notifications |
+| [`23-multi-agent-client.md`](./docs/23-multi-agent-client.md) | Cursor / Codex / Claude Code CLI setup |
+| [`24-agent-providers.md`](./docs/24-agent-providers.md) | In-app auth, live model selection, generic MCP tools |
+| [`25-hosting-providers.md`](./docs/25-hosting-providers.md) | Tailscale, Cloudflare, ngrok, Dev Tunnels, LAN, manual |
+| [`26-rename-agentvoice.md`](./docs/26-rename-agentvoice.md) | Cursor Voice → AgentVoice rename notes |
 
 ## Stack
 
@@ -136,8 +152,8 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 - **Web app:** Angular PWA + vanilla TS voice modules (Vosk, Silero VAD)
 - **Voice I/O:** WebKit STT/TTS; Amazon Polly/Transcribe fallback
 - **Reasoning:** Cursor IDE (`cursor_native`) or Bedrock Claude (`llm_intelligence`)
-- **Executor:** `cursor-agent` CLI
-- **Network:** Tailscale
+- **Executor:** Cursor, Codex, or Claude Code CLI (`settings.agentClient`, see [`docs/24-agent-providers.md`](./docs/24-agent-providers.md))
+- **Network:** Tailscale by default; Cloudflare Tunnel, ngrok, Azure Dev Tunnels, LAN, or manual (see [`docs/25-hosting-providers.md`](./docs/25-hosting-providers.md))
 
 ## Configuration
 

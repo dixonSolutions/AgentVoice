@@ -75,33 +75,98 @@
             <div class="cv-voice-setup-body">
               <div class="cv-voice-pickers">
                 <div class="cv-voice-picker-block">
-                  <label class="cv-voice-picker-label" for="project-picker">Project</label>
-                  <cv-filterable-list-picker
-                    inputId="project-picker"
-                    ariaLabel="Project"
-                    filterPlaceholder="Filter projects…"
-                    emptyMessage="No projects match"
-                    [options]="projectOptions()"
-                    [value]="selectedProject"
-                    [disabled]="projectOptions().length === 0 || !isBridgeConnected()"
-                    (valueChange)="onProjectChange($event)" />
+                  <p-iftalabel>
+                    <p-select id="project-picker"
+                      [options]="projectOptions()"
+                      optionLabel="label"
+                      optionValue="value"
+                      [ngModel]="selectedProject"
+                      (ngModelChange)="onProjectChange($event)"
+                      [filter]="true"
+                      filterBy="search"
+                      filterPlaceholder="Filter projects…"
+                      [virtualScroll]="true"
+                      [virtualScrollItemSize]="42"
+                      appendTo="body"
+                      scrollHeight="280px"
+                      emptyFilterMessage="No projects match"
+                      placeholder="Select project"
+                      [disabled]="projectOptions().length === 0 || !isBridgeConnected()">
+                      <ng-template let-opt pTemplate="item">
+                        <div class="cv-voice-select-item">
+                          <span>{{ opt.label }}</span>
+                          @if (opt.detail) {
+                            <span class="cv-cfg-muted">{{ opt.detail }}</span>
+                          }
+                        </div>
+                      </ng-template>
+                    </p-select>
+                    <label for="project-picker">Project</label>
+                  </p-iftalabel>
                 </div>
 
                 <div class="cv-voice-picker-block">
-                  <label class="cv-voice-picker-label" for="session-picker">Cursor session</label>
                   @if (loadingSessions() || loadingSessionLogs()) {
                     <p-message severity="secondary" variant="simple" text="Loading sessions…" />
                   }
-                  <cv-filterable-list-picker
-                    inputId="session-picker"
-                    ariaLabel="Cursor session"
-                    filterPlaceholder="Filter sessions…"
-                    emptyMessage="No sessions match"
-                    [options]="sessionOptions()"
-                    [value]="selectedSessionId"
-                    [disabled]="!selectedProject || !isBridgeConnected() || loadingSessions()"
-                    (valueChange)="onSessionChange($event)" />
+                  <p-iftalabel>
+                    <p-select id="session-picker"
+                      [options]="sessionOptions()"
+                      optionLabel="label"
+                      optionValue="value"
+                      [ngModel]="selectedSessionId"
+                      (ngModelChange)="onSessionChange($event)"
+                      [filter]="true"
+                      filterBy="search"
+                      filterPlaceholder="Filter sessions…"
+                      [virtualScroll]="true"
+                      [virtualScrollItemSize]="48"
+                      appendTo="body"
+                      scrollHeight="280px"
+                      emptyFilterMessage="No sessions match"
+                      placeholder="Select session"
+                      [disabled]="!selectedProject || !isBridgeConnected() || loadingSessions()">
+                      <ng-template let-opt pTemplate="item">
+                        <div class="cv-voice-select-item">
+                          <span>{{ opt.label }}</span>
+                          @if (opt.detail) {
+                            <span class="cv-cfg-muted">{{ opt.detail }}</span>
+                          }
+                        </div>
+                      </ng-template>
+                    </p-select>
+                    <label for="session-picker">Cursor session</label>
+                  </p-iftalabel>
                 </div>
+
+                @if (agentProviders.activeProvider?.supportsModelSelection) {
+                  <div class="cv-voice-picker-block">
+                    @if (agentProviders.loadingModels()) {
+                      <p-message severity="secondary" variant="simple" text="Loading models…" />
+                    } @else if (agentProviders.modelsError(); as modelsErr) {
+                      <p-message severity="warn" variant="simple" [text]="modelsErr" />
+                    }
+                    <p-iftalabel>
+                      <p-select id="model-picker"
+                        [options]="modelOptions()"
+                        optionLabel="label"
+                        optionValue="value"
+                        [ngModel]="selectedModelId"
+                        (ngModelChange)="onModelChange($event)"
+                        [filter]="true"
+                        filterBy="search"
+                        filterPlaceholder="Filter models…"
+                        [virtualScroll]="true"
+                        [virtualScrollItemSize]="38"
+                        appendTo="body"
+                        scrollHeight="280px"
+                        emptyFilterMessage="No models match"
+                        placeholder="Select model"
+                        [disabled]="!isBridgeConnected() || agentProviders.loadingModels()" />
+                      <label for="model-picker">Model</label>
+                    </p-iftalabel>
+                  </div>
+                }
               </div>
 
               <p-message severity="secondary" variant="simple" [text]="sessionHint()" />
@@ -112,6 +177,9 @@
                   <p-tag [value]="label" severity="info" />
                   @if (audioBackendLabel(); as audio) {
                     <p-tag [value]="audio" severity="secondary" />
+                  }
+                  @if (activeProviderChip(); as chip) {
+                    <p-tag [value]="chip" severity="contrast" />
                   }
                 </div>
               } @else {
@@ -165,4 +233,5 @@
 </p-dialog>
 
 <cv-approval-panel />
+<cv-auth-card />
 <cv-image-carousel />

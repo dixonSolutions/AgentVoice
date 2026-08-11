@@ -1,8 +1,8 @@
 {
-  "name": "cursor-voice-mobile",
+  "name": "agentvoice-mobile",
   "version": "0.1.0",
   "private": true,
-  "description": "Capacitor native shell for Cursor Voice (CallKit + push)",
+  "description": "Capacitor native shell for AgentVoice (CallKit + push)",
   "scripts": {
     "sync": "cap sync",
     "ios": "cap open ios",
@@ -13,7 +13,7 @@
     "@capacitor/core": "^7.2.0",
     "@capacitor/ios": "^7.2.0",
     "@capacitor/push-notifications": "^7.0.1",
-    "@cursor-voice/call-session": "file:./plugins/call-session"
+    "@agentvoice/call-session": "file:./plugins/call-session"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

@@ -46,6 +46,17 @@ const EnvSchema = z.object({
   /** Override paths for alternative agent client binaries */
   CODEX_PATH: z.string().optional(),
   CLAUDE_CODE_PATH: z.string().optional(),
+  /** Agent-provider auth credentials — set by the in-app login flow or manually. */
+  CURSOR_API_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
+  ANTHROPIC_API_KEY: z.string().optional(),
+  /** HostingProvider secrets — never in config.json since they grant tunnel access. */
+  NGROK_AUTHTOKEN: z.string().optional(),
+  CLOUDFLARE_TUNNEL_TOKEN: z.string().optional(),
+  /** Optional TLS material for the `lan` hosting provider (e.g. mkcert-issued). */
+  HTTPS_CERT_PATH: z.string().optional(),
+  HTTPS_KEY_PATH: z.string().optional(),
 });
 
 // ── Voice settings (config.json) ─────────────────────────────────────────────
@@ -211,24 +222,73 @@ export const WorkflowSettingsSchema = z.object({
   llmIntelligence: LlmIntelligenceWorkflowSchema.default({}),
 });
 
-// ── Serve (self-hosting / auto-update) ────────────────────────────────────────
+// ── Serve (manual self-hosting maintenance — no auto-update) ─────────────────
 
 export const ServeSettingsSchema = z.object({
-  /** Master switch for scheduled serve ticks. Manual runs always allowed. */
-  enabled: z.boolean().default(false),
-  /** Interval between scheduled runs (ms). Minimum 60s. */
-  intervalMs: z.number().int().min(60_000).max(86_400_000).default(900_000),
-  autoPull: z.boolean().default(true),
-  autoInstallDeps: z.boolean().default(true),
-  autoBuild: z.boolean().default(true),
-  autoRestart: z.boolean().default(true),
-  /** When true, abort before pull if the working tree has local changes. */
-  abortOnLocalChanges: z.boolean().default(true),
-  /** Git branch to track (defaults to current branch at runtime). */
+  /**
+   * Branch to force-rebase onto (origin/<branch>). Defaults to `main` at runtime
+   * when unset. See docs/21-serve-self-hosting.md.
+   */
   branch: z.string().min(1).max(128).optional(),
   /** Repository root (defaults to process working directory). */
   repoDir: z.string().min(1).optional(),
 });
+
+// ── Hosting (pluggable tunnel / reverse-proxy providers) ────────────────────
+
+export const HOSTING_PROVIDERS = [
+  'tailscale',
+  'cloudflare',
+  'ngrok',
+  'devtunnel',
+  'lan',
+  'local',
+  'manual',
+] as const;
+export type HostingProviderId = (typeof HOSTING_PROVIDERS)[number];
+
+export const HostingSettingsSchema = z
+  .object({
+    /**
+     * Explicit override. Undefined = auto-detect: an existing `*.ts.net`
+     * runModes.serve.publicBaseUrl implies Tailscale (zero-touch migration for
+     * current users); otherwise falls back to "manual". See registry.ts.
+     */
+    provider: z.enum(HOSTING_PROVIDERS).optional(),
+    tailscale: z
+      .object({
+        /** `tailscale up --hostname=` — device name shown in the tailnet. */
+        hostname: z.string().min(1).max(63).optional(),
+        /** Headscale control-server URL; omit for the default coordination server. */
+        loginServer: z.string().url().optional(),
+      })
+      .default({}),
+    cloudflare: z
+      .object({
+        /** Named tunnel (stable hostname); omit to use a throwaway quick tunnel. */
+        tunnelName: z.string().min(1).optional(),
+        hostname: z.string().min(1).optional(),
+      })
+      .default({}),
+    ngrok: z
+      .object({
+        /** Reserved domain (paid plans) for a stable URL; omit for a rotating one. */
+        domain: z.string().min(1).optional(),
+      })
+      .default({}),
+    devtunnel: z
+      .object({
+        tunnelId: z.string().min(1).optional(),
+      })
+      .default({}),
+    lan: z
+      .object({
+        /** Phone mic capture requires a secure context — enable a self-signed/mkcert cert. */
+        useTls: z.boolean().default(false),
+      })
+      .default({}),
+  })
+  .default({});
 
 // ── config.json schema ───────────────────────────────────────────────────────
 
@@ -242,8 +302,10 @@ const SettingsSchema = z.object({
   /** Voice pipeline selection and per-workflow settings. See docs/15-llm-intelligence-workflow.md. */
   workflow: WorkflowSettingsSchema.default({}),
   voice: VoiceSettingsSchema,
-  /** Self-hosting auto-update sector. See docs/21-serve-self-hosting.md. */
+  /** Manual self-hosting maintenance (rebase / build / restart / logs). See docs/21-serve-self-hosting.md. */
   serve: ServeSettingsSchema.default({}),
+  /** Pluggable hosting/tunnel provider. See docs/25-hosting-providers.md. */
+  hosting: HostingSettingsSchema,
   defaultMode: z.enum(['agent', 'plan']).default('agent'),
   /** Default cursor-agent model for new sessions (cursor_set_model global scope). */
   defaultActiveModel: z.string().min(1).default('auto'),
@@ -300,6 +362,7 @@ export type RunModes = z.infer<typeof RunModesSchema>;
 export type LlmIntelligenceWorkflow = z.infer<typeof LlmIntelligenceWorkflowSchema>;
 export type WorkflowSettings = z.infer<typeof WorkflowSettingsSchema>;
 export type ServeSettings = z.infer<typeof ServeSettingsSchema>;
+export type HostingSettings = z.infer<typeof HostingSettingsSchema>;
 export type Settings = Omit<z.infer<typeof SettingsSchema>, 'voice' | 'workflow'> & {
   voice: VoiceSettings;
   workflow: WorkflowSettings;
@@ -404,16 +467,28 @@ function migrateRawConfig(raw: unknown): unknown {
     }
 
     if (!s['serve'] || typeof s['serve'] !== 'object') {
-      s['serve'] = {
-        enabled: false,
-        intervalMs: 900_000,
-        autoPull: true,
-        autoInstallDeps: true,
-        autoBuild: true,
-        autoRestart: true,
-        abortOnLocalChanges: true,
-      };
+      s['serve'] = {};
       log.info('Migrated config — added default settings.serve');
+    } else {
+      const serve = s['serve'] as Record<string, unknown>;
+      let stripped = false;
+      for (const key of [
+        'enabled',
+        'intervalMs',
+        'autoPull',
+        'autoInstallDeps',
+        'autoBuild',
+        'autoRestart',
+        'abortOnLocalChanges',
+      ]) {
+        if (key in serve) {
+          delete serve[key];
+          stripped = true;
+        }
+      }
+      if (stripped) {
+        log.info('Migrated config — removed settings.serve auto-update keys');
+      }
     }
 
     if (s['defaultActiveModel'] === undefined || String(s['defaultActiveModel']).trim() === '') {
@@ -424,6 +499,13 @@ function migrateRawConfig(raw: unknown): unknown {
     if (s['agentClient'] === undefined) {
       s['agentClient'] = 'cursor';
       log.info('Migrated config — added default settings.agentClient');
+    }
+
+    if (s['hosting'] === undefined) {
+      // No explicit provider — registry.ts auto-detects Tailscale from an
+      // existing *.ts.net publicBaseUrl, so current users need no edits here.
+      s['hosting'] = {};
+      log.info('Migrated config — added default settings.hosting (auto-detect)');
     }
 
     return raw;

@@ -1,10 +1,14 @@
 # 23 — Multi-Agent Client Support
 
-> Added: July 2026
+> Added: July 2026. See also [`24-agent-providers.md`](./24-agent-providers.md)
+> for the in-app auth, live model selection, and generic MCP tools built on
+> top of this.
 
-CursorVoice supports three AI coding agent clients that can be used interchangeably
+AgentVoice supports three AI coding agent clients that can be used interchangeably
 for both voice agent sessions and worker jobs. All three support the shared
-cursor-voice MCP server via their global configuration files.
+`cursor-voice` MCP server (registration key kept as-is through the rename — see
+[`docs/26-rename-agentvoice.md`](./26-rename-agentvoice.md)) via their global
+configuration files.
 
 ## Supported Clients
 

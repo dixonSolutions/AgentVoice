@@ -1,13 +1,13 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Cursor Voice — start script for Windows (production host)
+    AgentVoice — start script for Windows (production host)
 
 .DESCRIPTION
     Starts the production HOST bridge back up after stop.ps1.
     Counterpart to scripts\stop.ps1. (The local dev server `npm run dev` runs on a
     separate port — default 5089 — and is managed independently.)
-      1. Starts the CursorVoice Windows service (if installed)
+      1. Starts the AgentVoice Windows service (if installed)
       2. Falls back to a manual background process when no service exists
       3. Runs a /healthz check to confirm startup
 
@@ -41,7 +41,7 @@ function Test-Admin {
         [Security.Principal.WindowsBuiltinRole]::Administrator)
 }
 
-$ServiceName = 'CursorVoice'
+$ServiceName = 'AgentVoice'
 $EnvFile     = Join-Path $ProjectDir '.env'
 $LogFile     = Join-Path $ProjectDir 'logs\bridge.log'
 
@@ -52,7 +52,7 @@ if (Test-Path $EnvFile) {
     if ($portLine) { $ActualPort = [int]$portLine.Matches[0].Groups[1].Value.Trim() }
 }
 
-Write-Host "Cursor Voice — start (Windows)" -ForegroundColor Magenta
+Write-Host "AgentVoice — start (Windows)" -ForegroundColor Magenta
 Write-Host "  Project: $ProjectDir"
 
 # Guard: refuse to start if the host port is already taken.

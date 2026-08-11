@@ -89,7 +89,7 @@ export async function sendApnsPush(
       : {
           aps: {
             alert: {
-              title: (body as Record<string, unknown>)['title'] ?? 'Cursor Voice',
+              title: (body as Record<string, unknown>)['title'] ?? 'AgentVoice',
               body: (body as Record<string, unknown>)['body'] ?? 'New update',
             },
             sound: 'default',

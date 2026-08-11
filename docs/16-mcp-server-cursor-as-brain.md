@@ -125,9 +125,13 @@ every running agent session and makes it queryable via `get_agent_status()`.
 
 ## 6 — System Prompt & Boot Lifecycle
 
-Voice agent prompts live in `prompts/cursor-voice/system.md` (loaded by
+Voice agent prompts live in `prompts/agentvoice/system.md` (loaded by
 `src/mcp/loadCursorVoicePrompt.ts`). A matching Cursor rule exists at
-`.cursor/rules/cursor-voice.mdc` for `@cursor-voice` injection.
+`.cursor/rules/cursor-voice.mdc` for `@cursor-voice` injection — the prompt
+directory moved to `agentvoice/` in the rename (see
+[`docs/26-rename-agentvoice.md`](./26-rename-agentvoice.md)), but the MCP
+registration key and rule filename stay `cursor-voice` for compatibility with
+already-configured `~/.cursor/mcp.json`/`~/.cursor/rules/` on existing installs.
 
 ### First spawn (new session)
 
@@ -135,7 +139,7 @@ When no `resumeId` exists for the project, `spawnVoiceAgent()` passes the **full
 system prompt plus boot suffix to `cursor-agent -p`:
 
 ```
-<prompts/cursor-voice/system.md body>
+<prompts/agentvoice/system.md body>
 
 ---
 The cursor-voice MCP server is connected. Start the voice loop now — call next_voice_turn() immediately.
@@ -158,7 +162,7 @@ Implementation: `src/executor/voiceAgent.ts` — `buildVoiceBootPrompt(project)`
 
 ### MCP server instructions
 
-Separate from the agent boot prompt: `prompts/cursor-voice/mcp-instructions.md` is
+Separate from the agent boot prompt: `prompts/agentvoice/mcp-instructions.md` is
 returned as MCP server instructions when Cursor connects to `/mcp`.
 
 ---
@@ -312,7 +316,7 @@ See [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) and
 | `src/mcp/server/modeToolHandlers.ts` | `set_mode`, `execute_plan`, `cursor_diff`, `cursor_revert` |
 | `src/mcp/server/index.ts` | MCP `Server` using `@modelcontextprotocol/sdk`; tool dispatch |
 | `src/routes/mcpSse.ts` | Fastify SSE route (`GET /mcp/sse`) + post handler (`POST /mcp`) |
-| `prompts/cursor-voice/system.md` | System prompt for Cursor voice mode |
+| `prompts/agentvoice/system.md` | System prompt for Cursor voice mode |
 | `.cursor/mcp.json.example` | Example MCP registration file |
 
 ### Phase 2 — `cursor_native` Workflow ✅

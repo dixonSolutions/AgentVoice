@@ -3,10 +3,10 @@
 # Long-running — intended for systemd user service (Restart=always).
 set -euo pipefail
 
-CONFIG="${CURSOR_VOICE_TUNNEL_ENV:-${HOME}/.config/cursor-voice/tunnel.env}"
+CONFIG="${AGENTVOICE_TUNNEL_ENV:-${CURSOR_VOICE_TUNNEL_ENV:-${HOME}/.config/agentvoice/tunnel.env}}"
 
 if [[ ! -f "$CONFIG" ]]; then
-  echo "cursor-voice tunnel: missing config ${CONFIG}" >&2
+  echo "agentvoice tunnel: missing config ${CONFIG}" >&2
   echo "Run: bash scripts/install-remote-tunnel.sh" >&2
   exit 1
 fi

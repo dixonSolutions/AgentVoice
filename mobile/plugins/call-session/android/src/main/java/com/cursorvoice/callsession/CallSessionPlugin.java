@@ -48,7 +48,7 @@ public class CallSessionPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "Cursor Voice Session",
+                "AgentVoice Session",
                 NotificationManager.IMPORTANCE_LOW
             );
             channel.setDescription("Active voice session with home Cursor bridge");
@@ -61,7 +61,7 @@ public class CallSessionPlugin extends Plugin {
         );
 
         Notification notification = new NotificationCompat.Builder(ctx, CHANNEL_ID)
-            .setContentTitle("Cursor Voice")
+            .setContentTitle("AgentVoice")
             .setContentText("Voice session active")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(pi)

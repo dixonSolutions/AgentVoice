@@ -10,10 +10,7 @@
  *   - Keep in-memory map of active handles (cleared on completion).
  */
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import stripAnsi from 'strip-ansi';
-import { spawnAgent, buildCursorAgentEnv } from './cursorAgent.js';
+import { spawnAgent } from './cursorAgent.js';
 import {
   assertAgentAvailable,
   getActiveAgentActivity,
@@ -35,8 +32,8 @@ import { setProjectResumeId, getSessionState, type Project } from '../state/regi
 import { getConfig } from '../config.js';
 import { childLogger } from '../log.js';
 import type { AgentHandle } from './cursorAgent.js';
+import { notifyAuthRequired } from '../providers/agents/authNotify.js';
 
-const execFileAsync = promisify(execFile);
 const log = childLogger('job-manager');
 
 // ── In-memory active handles ──────────────────────────────────────────────
@@ -327,6 +324,10 @@ export async function submitJob(
       setProjectResumeId(project.name, result.sessionId);
       log.info({ jobId, project: project.name, sessionId: result.sessionId }, 'resume id persisted');
     }
+
+    if (result.authRequired) {
+      void notifyAuthRequired(`job ${jobId} on ${project.name}`);
+    }
   });
 
   log.info(
@@ -433,6 +434,9 @@ export async function askQuestion(
     const result = await handle.result;
 
     if (result.exitCode !== 0) {
+      if (result.authRequired) {
+        void notifyAuthRequired(`cursor_ask on ${project.name}`);
+      }
       throw new Error(result.error ?? `cursor-agent exited with code ${result.exitCode}`);
     }
 
@@ -447,39 +451,8 @@ export async function askQuestion(
   }
 }
 
-// ── Model list (cursor-agent models) ─────────────────────────────────────
-
-export interface ModelEntry {
-  id: string;
-  displayName: string;
-}
-
-/**
- * Fetch the model list directly from cursor-agent (bypasses the cache).
- * Use the model cache helpers in state/models.ts for cached access.
- */
-export async function fetchModelList(): Promise<ModelEntry[]> {
-  const { stdout } = await execFileAsync('cursor-agent', ['models'], {
-    timeout: 10_000,
-    env: buildCursorAgentEnv(),
-  });
-  return parseModelsOutput(stdout);
-}
-
-function parseModelsOutput(raw: string): ModelEntry[] {
-  return stripAnsi(raw)
-    .split('\n')
-    .map((l) => l.trim())
-    .filter(
-      (l) =>
-        l.includes(' - ') &&
-        !l.startsWith('Tip:') &&
-        !l.startsWith('Available models') &&
-        l.length > 0,
-    )
-    .map((l) => {
-      const dashIdx = l.indexOf(' - ');
-      return { id: l.slice(0, dashIdx).trim(), displayName: l.slice(dashIdx + 3).trim() };
-    })
-    .filter((m) => m.id.length > 0);
-}
+// ── Model list ────────────────────────────────────────────────────────────
+//
+// Live model fetching now lives on each AgentProvider (listModels()) — see
+// src/providers/agents/*.ts and src/mcp/tools/model.ts. This module only
+// spawns/tracks jobs; it no longer shells out to a hardcoded CLI for models.

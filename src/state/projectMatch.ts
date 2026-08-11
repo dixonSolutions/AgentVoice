@@ -13,6 +13,8 @@ const STT_WORD_FIXES: Array<[RegExp, string]> = [
   [/\bcursor\s+of\s+voice\b/gi, 'cursorvoice'],
   [/\bcurse\s*or\b/gi, 'cursor'],
   [/\bcursor\s+voice\b/gi, 'cursorvoice'],
+  [/\bagent\s+voice\b/gi, 'agentvoice'],
+  [/\bagentvoice\b/gi, 'agentvoice'],
 ];
 
 /** Collapse to lowercase alphanumeric for comparison. */

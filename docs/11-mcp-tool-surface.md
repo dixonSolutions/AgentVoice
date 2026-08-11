@@ -1,6 +1,6 @@
 # 11 — Complete MCP Tool Surface
 
-All tools exposed by the Cursor Voice bridge MCP server. Organised into groups.
+All tools exposed by the AgentVoice bridge MCP server. Organised into groups.
 Every tool is defined once in zod — the same schema emits both the MCP
 registration and the provider function-tool definition (DRY).
 
@@ -327,7 +327,7 @@ args:  (none)
 returns: { servers: [{ name, status }] }
 ```
 Wraps `cursor-agent mcp list`. Lists MCP servers configured in
-`.cursor/mcp.json` and their load status. Not related to Cursor Voice's own MCP
+`.cursor/mcp.json` and their load status. Not related to AgentVoice's own MCP
 server — this is about MCPs the executor agent itself may use.
 
 CLI output: plain text (`<name>: <status>`), parsed by the bridge.
@@ -350,7 +350,7 @@ executor MCP server. Informational; used for debugging.
 | `cursor-agent resume` (interactive) | Interactive TTY only. Resume is handled by the bridge via `--resume` flag on `cursor_submit`. |
 | `cursor-agent login` / `logout` | Operator-only setup via SSH/iSH; not part of the voice flow. |
 | `cursor-agent update` | Never auto-update the service. Manual only. |
-| `cursor-agent worker start` | Cloud worker feature; Cursor Voice uses local `cursor-agent -p`. |
+| `cursor-agent worker start` | Cloud worker feature; AgentVoice uses local `cursor-agent -p`. |
 | `cursor-agent generate-rule` | Interactive TTY only. |
 | `cursor-agent install-shell-integration` | Setup only. |
 | `cursor-agent acp` | Evaluated and deliberately rejected in favour of `--print`; see ADR-017 in `08`. |

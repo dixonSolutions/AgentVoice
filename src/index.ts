@@ -1,5 +1,5 @@
 /**
- * Cursor Voice — bridge entry point.
+ * AgentVoice — bridge entry point.
  *
  * Boot sequence:
  *   1. Load .env (dotenv)
@@ -20,14 +20,12 @@ import { initLogger, getLogger } from './log.js';
 import { getDb, closeDb } from './state/db.js';
 import { reconcileRegistry } from './state/registry.js';
 import { markOrphanedJobs, markOrphanedVoiceAgentRuns } from './state/jobs.js';
-import { isCursorAgentAvailable, resolveCursorAgentPath } from './executor/cursorAgent.js';
+import { getActiveProvider } from './providers/agents/registry.js';
+import { getActiveHostingProvider } from './providers/hosting/registry.js';
 import { killActiveAgent } from './executor/agentSingleton.js';
 import { killVoiceAgent } from './executor/voiceAgent.js';
 import { buildServer, startServer } from './server.js';
-import {
-  startServeScheduler,
-  stopServeScheduler,
-} from './serve/index.js';
+import { startServe, stopServeScheduler } from './serve/index.js';
 
 async function main(): Promise<void> {
   // 1. Config (must be first — everything else depends on it)
@@ -37,15 +35,16 @@ async function main(): Promise<void> {
   initLogger(config.settings.logLevel);
   const log = getLogger();
 
-  log.info('cursor-voice bridge starting');
+  log.info('agentvoice bridge starting');
 
-  const cursorAgentPath = resolveCursorAgentPath();
-  if (isCursorAgentAvailable()) {
-    log.info({ cursorAgentPath }, 'cursor-agent binary resolved');
+  const provider = getActiveProvider();
+  const agentBinPath = provider.resolveBin();
+  if (provider.isInstalled()) {
+    log.info({ provider: provider.id, agentBinPath }, 'agent CLI resolved');
   } else {
     log.warn(
-      { cursorAgentPath },
-      'cursor-agent not found — voice turns will fail until the CLI is installed',
+      { provider: provider.id, agentBinPath },
+      'active agent CLI not found — voice turns will fail until it is installed',
     );
   }
 
@@ -70,9 +69,25 @@ async function main(): Promise<void> {
   const app = await buildServer();
   await startServer(app);
 
-  await startServeScheduler();
+  await startServe();
 
   const run = getRunModeInfo(config.settings);
+
+  // Re-point the active tunnel/proxy at this process's port, in case it
+  // changed since the last run (replaces the old sync-tailscale-serve.sh
+  // step for every hosting provider, not just Tailscale).
+  if (run.runMode === 'serve') {
+    const hosting = getActiveHostingProvider();
+    hosting
+      .sync()
+      .then(() => log.info({ hostingProvider: hosting.id }, 'hosting provider synced'))
+      .catch((err: unknown) =>
+        log.warn(
+          { hostingProvider: hosting.id, err: err instanceof Error ? err.message : String(err) },
+          'hosting provider sync failed — public URL may be stale',
+        ),
+      );
+  }
 
   log.info(
     {
@@ -82,7 +97,7 @@ async function main(): Promise<void> {
       webUrl: run.webUrl,
       defaultWorkflow: config.settings.workflow.default,
     },
-    'cursor-voice bridge ready',
+    'agentvoice bridge ready',
   );
 
   // ── Graceful shutdown ────────────────────────────────────────────────────

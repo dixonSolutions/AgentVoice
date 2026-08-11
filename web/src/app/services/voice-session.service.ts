@@ -338,7 +338,7 @@ export class VoiceSessionService {
           this.startMeterPoll();
           this.syncAppState();
           void this.keepalive.start({
-            title: 'Cursor Voice',
+            title: 'AgentVoice',
             artist: 'Voice session active',
           });
         }

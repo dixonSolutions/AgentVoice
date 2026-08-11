@@ -44,8 +44,17 @@ const MIGRATION_SQL = `
   );
 
   -- Cached model list from cursor-agent models. Single-row; id = 1 enforced.
+  -- Superseded by provider_model_cache (kept for migration only — see below).
   CREATE TABLE IF NOT EXISTS model_cache (
     id            INTEGER PRIMARY KEY CHECK (id = 1),
+    fetched_at    TEXT NOT NULL,
+    models_json   TEXT NOT NULL
+  );
+
+  -- Cached model list per agent provider (cursor / codex / claude-code), so
+  -- switching agentClient never clobbers another provider's cache.
+  CREATE TABLE IF NOT EXISTS provider_model_cache (
+    provider      TEXT PRIMARY KEY,
     fetched_at    TEXT NOT NULL,
     models_json   TEXT NOT NULL
   );
@@ -136,6 +145,20 @@ function migrateServeEventTable(db: Database.Database): void {
   }
 }
 
+/** Carry the legacy single-row model_cache (always Cursor) into provider_model_cache once. */
+function migrateProviderModelCache(db: Database.Database): void {
+  const legacy = db.prepare('SELECT fetched_at, models_json FROM model_cache WHERE id = 1').get() as
+    | { fetched_at: string; models_json: string }
+    | undefined;
+  if (!legacy) return;
+  const existing = db.prepare('SELECT 1 FROM provider_model_cache WHERE provider = ?').get('cursor');
+  if (existing) return;
+  db.prepare(
+    `INSERT INTO provider_model_cache (provider, fetched_at, models_json) VALUES ('cursor', @fetched_at, @models_json)`,
+  ).run(legacy);
+  log.info('migrated model_cache (cursor) → provider_model_cache');
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 /** Return the singleton DB, initialising on first call. */
@@ -156,6 +179,8 @@ export function getDb(): Database.Database {
 
   _db.exec(MIGRATION_SQL);
   _db.exec(INDEX_SQL);
+
+  migrateProviderModelCache(_db);
 
   log.info({ dbPath }, 'database ready');
 

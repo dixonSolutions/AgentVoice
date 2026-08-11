@@ -21,7 +21,7 @@ complementary mechanisms:
 | --- | --- | --- |
 | **Screen Wake Lock** | Prevents auto-lock while session is active | Android Chrome, iOS Safari 16.4+ |
 | **Silent looping audio** | Signals an active media session to the OS | Helps when display dims on iOS |
-| **Media Session API** | Lock-screen / Control Center metadata | Shows “Cursor Voice — listening” |
+| **Media Session API** | Lock-screen / Control Center metadata | Shows “AgentVoice — listening” |
 
 On `visibilitychange` (user returns to the app):
 

@@ -1,12 +1,13 @@
 /**
- * Serve admin routes — self-hosting / auto-update control.
+ * Serve admin routes — manual self-hosting maintenance (no auto-update).
  *
  * Routes:
  *   GET  /api/admin/serve         — config + live status
- *   PATCH /api/admin/serve        — update serve settings
- *   POST /api/admin/serve/run     — trigger full manual run (async)
- *   POST /api/admin/serve/action  — trigger single manual action
+ *   PATCH /api/admin/serve        — update serve settings (branch / repoDir)
+ *   POST /api/admin/serve/run     — full update: rebase → deps → build → restart
+ *   POST /api/admin/serve/action  — single action (pull=rebase, deps, build, restart, health)
  *   GET  /api/admin/serve/events  — recent step log
+ *   GET  /api/admin/serve/logs    — journalctl for agentvoice.service
  *   POST /api/admin/serve/install — spawn install-systemd.sh
  */
 
@@ -17,8 +18,8 @@ import { getConfig } from '../config.js';
 import { readConfigFile, writeConfigFile } from '../state/configFile.js';
 import { listServeEvents } from '../state/serveEvents.js';
 import {
+  getServeServiceLogs,
   getServeStatus,
-  reconcileServeScheduler,
   refreshGitSnapshot,
   runServe,
   runServeAction,
@@ -31,13 +32,6 @@ const log = childLogger('serveRoutes');
 
 const ServePatchSchema = z
   .object({
-    enabled: z.boolean().optional(),
-    intervalMs: z.number().int().min(60_000).max(86_400_000).optional(),
-    autoPull: z.boolean().optional(),
-    autoInstallDeps: z.boolean().optional(),
-    autoBuild: z.boolean().optional(),
-    autoRestart: z.boolean().optional(),
-    abortOnLocalChanges: z.boolean().optional(),
     branch: z.string().min(1).max(128).optional().or(z.literal('')),
     repoDir: z.string().min(1).optional().or(z.literal('')),
   })
@@ -90,8 +84,20 @@ export async function registerServeRoutes(app: FastifyInstance): Promise<void> {
       cfg.settings.serve,
       patch as Partial<typeof cfg.settings.serve>,
     );
+    // Drop legacy auto-update keys if still present in the on-disk object.
+    const serve = cfg.settings.serve as Record<string, unknown>;
+    for (const key of [
+      'enabled',
+      'intervalMs',
+      'autoPull',
+      'autoInstallDeps',
+      'autoBuild',
+      'autoRestart',
+      'abortOnLocalChanges',
+    ]) {
+      delete serve[key];
+    }
     writeConfigFile(cfg);
-    reconcileServeScheduler();
     log.info('serve settings updated');
 
     try {
@@ -114,7 +120,7 @@ export async function registerServeRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const runId = randomUUID();
-    void runServe('manual')
+    void runServe()
       .then((result) => {
         log.info({ runId: result.runId, outcome: result.outcome }, 'manual serve finished');
       })
@@ -157,6 +163,14 @@ export async function registerServeRoutes(app: FastifyInstance): Promise<void> {
     async (req) => {
       const limit = Math.min(Number(req.query.limit) || 50, 200);
       return { entries: listServeEvents(limit) };
+    },
+  );
+
+  app.get<{ Querystring: { lines?: string } }>(
+    '/api/admin/serve/logs',
+    async (req) => {
+      const lines = Math.min(Number(req.query.lines) || 80, 500);
+      return getServeServiceLogs(lines);
     },
   );
 

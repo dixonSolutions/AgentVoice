@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Cursor Voice — host setup for Windows
+    AgentVoice — host setup for Windows
 
 .DESCRIPTION
     What this script does:
@@ -167,7 +167,7 @@ if (-not (Test-Path $EnvFile)) {
     $AppToken = $AppToken.Substring(0, [Math]::Min(43, $AppToken.Length))
 
     $envContent = @"
-# Cursor Voice — secrets + machine-specific paths
+# AgentVoice — secrets + machine-specific paths
 # Keep this file private and never commit it.
 
 APP_TOKEN=$AppToken
@@ -247,7 +247,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $ProjectDir 'data') | Out-N
 # ── 6. Windows Service (NSSM) ─────────────────────────────────────────────
 Section "Windows Service"
 
-$ServiceName = 'CursorVoice'
+$ServiceName = 'AgentVoice'
 $NssmPath    = Join-Path $ProjectDir 'tools\nssm.exe'
 
 # Download NSSM if not present
@@ -288,7 +288,7 @@ if ($existingService) {
 Info "Installing '$ServiceName' as a Windows service..."
 & $NssmPath install $ServiceName $NodeExe "$ProjectDir\dist\index.js"
 & $NssmPath set $ServiceName AppDirectory $ProjectDir
-& $NssmPath set $ServiceName Description 'Cursor Voice Bridge — voice-controlled coding assistant'
+& $NssmPath set $ServiceName Description 'AgentVoice Bridge — voice-controlled coding assistant'
 & $NssmPath set $ServiceName Start SERVICE_AUTO_START
 & $NssmPath set $ServiceName AppRestartDelay 3000
 
@@ -319,7 +319,7 @@ Get-Service -Name $ServiceName | Select-Object Name, Status, StartType
 # ── 7. File watcher scheduled task (auto-restart on new builds) ───────────
 Section "Build watcher (auto-restart)"
 
-$WatcherTaskName   = 'CursorVoice-BuildWatcher'
+$WatcherTaskName   = 'AgentVoice-BuildWatcher'
 $WatcherScriptPath = Join-Path $ProjectDir 'scripts\_watcher.ps1'
 
 # Write the watcher helper script
@@ -329,7 +329,7 @@ $watcherContent = @"
 param([string]\$ProjectDir = '$ProjectDir')
 
 \$distFile = Join-Path \$ProjectDir 'dist\index.js'
-\$serviceName = 'CursorVoice'
+\$serviceName = 'AgentVoice'
 \$watcher = [System.IO.FileSystemWatcher]::new((Split-Path \$distFile), (Split-Path \$distFile -Leaf))
 \$watcher.NotifyFilter = [System.IO.NotifyFilters]::LastWrite
 \$watcher.EnableRaisingEvents = \$true
@@ -375,7 +375,7 @@ Register-ScheduledTask `
     -Trigger $trigger `
     -Settings $settings `
     -Principal $principal `
-    -Description 'Monitors dist\index.js and restarts CursorVoice service on new builds' `
+    -Description 'Monitors dist\index.js and restarts AgentVoice service on new builds' `
     -Force | Out-Null
 
 Start-ScheduledTask -TaskName $WatcherTaskName

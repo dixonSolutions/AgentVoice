@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Install fix-dns.service + timer — run INSIDE the incus/LXC container where
-# cursor-voice.service runs (not on the Tailscale tunnel machine).
+# agentvoice.service runs (not on the Tailscale tunnel machine).
 #
 # Required for AWS Transcribe/Polly/Bedrock when systemd-resolved stub breaks DNS.
 #

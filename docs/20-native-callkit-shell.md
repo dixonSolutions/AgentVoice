@@ -1,6 +1,6 @@
 # 20 — Native shell (CallKit) and push notifications
 
-Cursor Voice on iPhone needs a **native Capacitor app** for iOS to treat an active
+AgentVoice on iPhone needs a **native Capacitor app** for iOS to treat an active
 voice session as a **phone call** (CallKit). The PWA alone cannot do this.
 
 Push notifications reach your dad when the app is closed or backgrounded — for
@@ -29,7 +29,7 @@ agent approvals, job completion, and image carousels.
 
 | Event | Native behaviour |
 | --- | --- |
-| Orb tap / start session | `CXStartCallAction` — outbound call to "Cursor Voice" |
+| Orb tap / start session | `CXStartCallAction` — outbound call to "AgentVoice" |
 | Hang up | `CXEndCallAction` |
 | Screen lock / switch apps | Call stays active (green bar) while call is up |
 | Force-quit app | Call ends — session stops |
@@ -93,7 +93,7 @@ Requires **macOS + Xcode** and Apple Developer account ($99/yr).
 4. In Xcode → Signing & Capabilities, add:
    - **Background Modes**: Audio, Voice over IP
    - **Push Notifications**
-5. Set bundle ID `com.cursorvoice.app` (match `APNS_BUNDLE_ID`).
+5. Set bundle ID `com.cursorvoice.app` (unchanged by the rename — kept for APNs device-token continuity; match `APNS_BUNDLE_ID`).
 6. Create APNs Auth Key (.p8) in Apple Developer → Keys; add to `.env`:
    ```
    APNS_KEY_ID=...
@@ -108,7 +108,7 @@ Requires **macOS + Xcode** and Apple Developer account ($99/yr).
 
 ## Dad's workflow (native app)
 
-1. Open **Cursor Voice** (native app).
+1. Open **AgentVoice** (native app).
 2. Tap orb → iOS shows active call → speak command.
 3. Lock phone or use other apps → **call stays active**.
 4. Agent needs approval while app closed → **incoming call** or notification → tap → approve.

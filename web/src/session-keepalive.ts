@@ -141,13 +141,13 @@ export class SessionKeepAlive {
   private setupMediaSession(options: SessionKeepAliveOptions): void {
     if (!('mediaSession' in navigator)) return;
 
-    const title = options.title ?? 'Cursor Voice';
+    const title = options.title ?? 'AgentVoice';
     const artist = options.artist ?? 'Voice session active';
 
     navigator.mediaSession.metadata = new MediaMetadata({
       title,
       artist,
-      album: 'Cursor Voice',
+      album: 'AgentVoice',
       artwork: [
         { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
         { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },

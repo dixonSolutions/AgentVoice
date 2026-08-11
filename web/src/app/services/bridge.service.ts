@@ -120,6 +120,36 @@ export interface CarouselImage {
   caption?: string;
 }
 
+// ── Agent-provider auth push types ────────────────────────────────────────
+
+export type AuthFlowId = 'browser-url' | 'device-code' | 'token-paste' | 'api-key';
+
+export interface AuthFlowDescriptor {
+  id: AuthFlowId;
+  label: string;
+  description: string;
+  pasteLabel?: string;
+  pastePlaceholder?: string;
+}
+
+export interface AuthRequiredEvent {
+  provider: string;
+  displayName: string;
+  flows: AuthFlowDescriptor[];
+  context?: string;
+}
+
+// ── Hosting-provider setup push types ─────────────────────────────────────
+
+export interface HostingSetupProgressPush {
+  runId: string;
+  provider: string;
+  message: string;
+  done?: boolean;
+  error?: string;
+  result?: { ok: boolean; publicUrl: string | null; detail: string };
+}
+
 interface PendingCall {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
@@ -163,6 +193,12 @@ export class BridgeService {
 
   /** The currently pending approval request, if any (shown in ApprovalPanelComponent). */
   readonly pendingApproval = signal<ApprovalRequest | null>(null);
+
+  /** Set when the active agent CLI needs the user to sign in (shown in AuthCardComponent). */
+  readonly pendingAuthRequired = signal<AuthRequiredEvent | null>(null);
+
+  /** Emits streamed progress for an in-flight hosting-provider setup run (Config → Network). */
+  readonly hostingSetupProgress$ = new Subject<HostingSetupProgressPush>();
 
   // ── Image carousel signals ─────────────────────────────────────────────
 
@@ -578,6 +614,32 @@ export class BridgeService {
         };
         this.approvalRequest$.next(req);
         this.pendingApproval.set(req);
+        break;
+      }
+
+      case 'auth_required': {
+        const event: AuthRequiredEvent = {
+          provider: String(msg['provider'] ?? ''),
+          displayName: String(msg['displayName'] ?? 'Your agent'),
+          flows: Array.isArray(msg['flows']) ? (msg['flows'] as AuthFlowDescriptor[]) : [],
+          context: typeof msg['context'] === 'string' ? msg['context'] : undefined,
+        };
+        this.pendingAuthRequired.set(event);
+        break;
+      }
+
+      case 'hosting_setup_progress': {
+        this.hostingSetupProgress$.next({
+          runId: String(msg['runId'] ?? ''),
+          provider: String(msg['provider'] ?? ''),
+          message: String(msg['message'] ?? ''),
+          done: msg['done'] === true,
+          error: typeof msg['error'] === 'string' ? msg['error'] : undefined,
+          result:
+            typeof msg['result'] === 'object' && msg['result'] !== null
+              ? (msg['result'] as { ok: boolean; publicUrl: string | null; detail: string })
+              : undefined,
+        });
         break;
       }
 

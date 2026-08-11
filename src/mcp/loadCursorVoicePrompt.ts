@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { getConfig, getConfigPath } from '../config.js';
+import { getActiveProvider } from '../providers/agents/registry.js';
 
 /**
  * Returns the project root directory derived from the config file path.
@@ -19,16 +20,23 @@ export function readCursorVoicePrompt(relativePath: string): string {
   return readFileSync(join(getRepoRoot(), relativePath), 'utf-8').trim();
 }
 
-/** Substitute live config into prompt templates (e.g. worker poll timeout). */
+/**
+ * Substitute live config + active-provider identity into prompt templates
+ * (worker poll timeout, and the coding agent's display name — never hardcoded
+ * to "Cursor" so the same prompt reads correctly for Codex / Claude Code too).
+ */
 function applyVoicePromptVars(text: string): string {
   const ms = getConfig().settings.voice.workerPollTimeoutMs ?? 25_000;
-  return text.replaceAll('{{WORKER_POLL_TIMEOUT_MS}}', String(ms));
+  const agentDisplayName = getActiveProvider().displayName;
+  return text
+    .replaceAll('{{WORKER_POLL_TIMEOUT_MS}}', String(ms))
+    .replaceAll('{{AGENT_DISPLAY_NAME}}', agentDisplayName);
 }
 
 export function cursorVoiceMcpInstructions(): string {
-  return applyVoicePromptVars(readCursorVoicePrompt('prompts/cursor-voice/mcp-instructions.md'));
+  return applyVoicePromptVars(readCursorVoicePrompt('prompts/agentvoice/mcp-instructions.md'));
 }
 
 export function cursorVoiceRuleBody(): string {
-  return applyVoicePromptVars(readCursorVoicePrompt('prompts/cursor-voice/system.md'));
+  return applyVoicePromptVars(readCursorVoicePrompt('prompts/agentvoice/system.md'));
 }

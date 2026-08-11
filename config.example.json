@@ -82,13 +82,7 @@
     "logLevel": "info",
     "userName": "Alex",
     "serve": {
-      "enabled": false,
-      "intervalMs": 900000,
-      "autoPull": true,
-      "autoInstallDeps": true,
-      "autoBuild": true,
-      "autoRestart": true,
-      "abortOnLocalChanges": true
+      "branch": "main"
     }
   },
   "projects": [
@@ -96,10 +90,12 @@
       "name": "cursorvoice",
       "path": "/home/eva/Projects/SideProjects/CursorVoice",
       "aliases": [
+        "agent voice",
+        "agentvoice",
         "cursor voice",
         "the voice project"
       ],
-      "description": "Cursor Voice \u2014 self-hosted voice bridge",
+      "description": "AgentVoice \u2014 self-hosted voice bridge",
       "enabled": true
     }
   ],

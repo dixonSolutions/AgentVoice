@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.cursorvoice.app',
-  appName: 'Cursor Voice',
+  appName: 'AgentVoice',
   webDir: '../web/dist',
   server: {
     androidScheme: 'https',

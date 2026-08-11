@@ -18,6 +18,7 @@
  *   Session      — cursor_new_session, cursor_session_info
  *   Git          — cursor_diff, cursor_revert
  *   System       — cursor_agent_info, cursor_agent_status
+ *   Agent alias  — agent_info, agent_status, agent_list_models, agent_set_model (CLI-neutral names)
  *   MCP inspect  — cursor_mcp_list, cursor_mcp_tools
  *   User display — show_images
  *   User interact — request_user_input, submit_plan_for_approval
@@ -635,6 +636,59 @@ function buildMcpServer(sessionKey: string): McpServer {
     },
   );
 
+  // ── Generic agent-provider aliases (CLI-neutral names) ─────────────────
+  //
+  // Same handlers as the cursor_* tools above, routed through the active
+  // AgentProvider (settings.agentClient) instead of a hardcoded CLI. Use
+  // these when running under Codex or Claude Code, where "cursor_*" would
+  // be misleading. See docs/24-agent-providers.md.
+
+  server.tool(
+    'agent_info',
+    'Get CLI version, model, and account info from the active agent provider (Cursor, Codex, or Claude Code).',
+    {},
+    async () => {
+      const result = await dispatchTool('agent_info', {}, sessionKey);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    'agent_status',
+    'Check authentication status of the active agent provider. Returns authenticated, email, provider id.',
+    {},
+    async () => {
+      const result = await dispatchTool('agent_status', {}, sessionKey);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    'agent_list_models',
+    'List models for the active agent provider. Returns supports_selection: false for providers ' +
+      '(e.g. Codex, Claude Code) that choose their model from their own config, not this app.',
+    {
+      query: z.string().optional().describe('Filter by id or display name.'),
+    },
+    async ({ query }) => {
+      const result = await dispatchTool('agent_list_models', { query }, sessionKey);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    'agent_set_model',
+    'Set the model for the active agent provider (only when it supports_selection).',
+    {
+      model_id: z.string().describe('Exact model ID from agent_list_models.'),
+      scope: z.enum(['global', 'session']).optional().describe('global (default) or session.'),
+    },
+    async ({ model_id, scope }) => {
+      const result = await dispatchTool('agent_set_model', { model_id, scope }, sessionKey);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
   // ── MCP inspect ────────────────────────────────────────────────────────
 
   server.tool(
@@ -1024,5 +1078,5 @@ export function registerMcpServer(app: FastifyInstance): void {
     await reply.code(204).send();
   });
 
-  log.info('mcp server registered at /mcp (33 tools)');
+  log.info('mcp server registered at /mcp (37 tools)');
 }

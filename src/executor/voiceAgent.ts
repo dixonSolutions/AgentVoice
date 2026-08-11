@@ -11,12 +11,9 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import stripAnsi from 'strip-ansi';
-import { getConfig } from '../config.js';
-import {
-  attachCursorAgentSpawnGuard,
-  buildCursorAgentEnv,
-  resolveAgentBin,
-} from './cursorAgent.js';
+import { attachCursorAgentSpawnGuard } from './cursorAgent.js';
+import { getActiveProvider } from '../providers/agents/registry.js';
+import { notifyAuthRequired } from '../providers/agents/authNotify.js';
 import { childLogger } from '../log.js';
 import { cursorVoiceRuleBody } from '../mcp/loadCursorVoicePrompt.js';
 import {
@@ -41,12 +38,12 @@ import type { StreamJsonEvent } from './watcher.js';
 const log = childLogger('voice-agent');
 
 const VOICE_BOOT_SUFFIX =
-  '\n\n---\nThe cursor-voice MCP server is connected. ' +
+  '\n\n---\nThe cursor-voice MCP server (AgentVoice) is connected. ' +
   'Speak one sentence to greet or acknowledge the user first, then call next_voice_turn() to receive their request. ' +
   'Never start a session in silent tool mode.';
 
 const VOICE_RESUME_SUFFIX =
-  '\n\n---\n@cursor-voice\n\nThe cursor-voice MCP server is connected. ' +
+  '\n\n---\n@cursor-voice\n\nThe cursor-voice MCP server (AgentVoice) is connected. ' +
   'Speak one sentence to acknowledge the user first, then call next_voice_turn() immediately. ' +
   'If a worker is running, narrate its live progress via get_agent_status() — do not go silent.';
 
@@ -156,88 +153,19 @@ function extractAssistantText(event: Record<string, unknown>): string | null {
   return null;
 }
 
-function buildCursorVoiceArgs(
-  project: Project,
-  session: SessionState,
-  pendingTurn?: string,
-): string[] {
-  const { settings } = getConfig();
-
-  const args: string[] = [
-    '-p',
-    '--output-format',
-    'stream-json',
-    '--workspace',
-    project.path,
-    '--approve-mcps',
-  ];
-
-  if (session.activeModel && session.activeModel !== 'auto') {
-    args.push('--model', session.activeModel);
-  }
-
-  if (project.resumeId) {
-    args.push('--resume', project.resumeId);
-  }
-
-  for (const flag of settings.preRunFlags) {
-    if (!args.includes(flag)) {
-      args.push(flag);
-    }
-  }
-
-  args.push(buildVoiceBootPrompt(project, pendingTurn));
-  return args;
-}
-
-function buildCodexVoiceArgs(
-  project: Project,
-  _session: SessionState,
-  pendingTurn?: string,
-): string[] {
-  const args: string[] = ['exec'];
-
-  if (project.resumeId) {
-    args.push('resume', project.resumeId);
-  }
-
-  args.push('--json');
-  args.push('--sandbox', 'workspace-write');
-  args.push('--cd', project.path);
-  args.push(buildVoiceBootPrompt(project, pendingTurn));
-  return args;
-}
-
-function buildClaudeCodeVoiceArgs(
-  project: Project,
-  _session: SessionState,
-  pendingTurn?: string,
-): string[] {
-  const args: string[] = ['-p', '--output-format', 'stream-json'];
-
-  if (project.resumeId) {
-    args.push('--resume', project.resumeId);
-  }
-
-  args.push(buildVoiceBootPrompt(project, pendingTurn));
-  return args;
-}
-
+/**
+ * Build the conversational voice-agent argv for the active provider.
+ * Every CLI-specific flag lives in the provider (providers/agents/*.ts) —
+ * this just supplies the boot prompt that's common across all three CLIs.
+ */
 function buildVoiceAgentArgs(
   project: Project,
   session: SessionState,
   pendingTurn?: string,
 ): string[] {
-  const { settings } = getConfig();
-  switch (settings.agentClient) {
-    case 'codex':
-      return buildCodexVoiceArgs(project, session, pendingTurn);
-    case 'claude-code':
-      return buildClaudeCodeVoiceArgs(project, session, pendingTurn);
-    case 'cursor':
-    default:
-      return buildCursorVoiceArgs(project, session, pendingTurn);
-  }
+  const provider = getActiveProvider();
+  const bootPrompt = buildVoiceBootPrompt(project, pendingTurn);
+  return provider.buildVoiceArgs(project, session, pendingTurn, bootPrompt);
 }
 
 /**
@@ -254,8 +182,8 @@ export function spawnVoiceAgent(
     );
   }
 
-  const { settings } = getConfig();
-  const client = settings.agentClient;
+  const provider = getActiveProvider();
+  const client = provider.id;
   const args = buildVoiceAgentArgs(project, session, pendingTurn);
   const runId = createVoiceAgentRun({ project: project.name });
 
@@ -271,11 +199,11 @@ export function spawnVoiceAgent(
   );
   log.debug({ client, args: args.slice(0, -1) }, 'voice agent args');
 
-  const agentBin = resolveAgentBin(client);
+  const agentBin = provider.resolveBin();
   const child = spawn(agentBin, args, {
     cwd: project.path,
     shell: false,
-    env: buildCursorAgentEnv(),
+    env: provider.env(process.env),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
@@ -283,7 +211,7 @@ export function spawnVoiceAgent(
 
   const pid = child.pid;
   if (!pid) {
-    throw new Error(`${client} voice agent failed to spawn (no pid) — check the binary is installed and on PATH`);
+    throw new Error(`${provider.displayName} voice agent failed to spawn (no pid) — check the binary is installed and on PATH`);
   }
 
   updateVoiceAgentRun(runId, { pid });
@@ -401,8 +329,10 @@ export function spawnVoiceAgent(
       sessionId: capturedSessionId,
     });
 
+    const authRequired = exitCode !== 0 && provider.isAuthError(exitCode, stderr);
+
     if (exitCode !== 0) {
-      log.warn({ pid, runId, exitCode, stderr: stderr.slice(0, 500) }, 'voice agent exited with error');
+      log.warn({ pid, runId, exitCode, authRequired, stderr: stderr.slice(0, 500) }, 'voice agent exited with error');
     } else {
       log.info({ pid, runId, sessionId: capturedSessionId }, 'voice agent completed');
     }
@@ -415,11 +345,17 @@ export function spawnVoiceAgent(
       project: project.name,
     });
 
+    if (authRequired) {
+      void notifyAuthRequired(`voice agent run ${runId} on ${project.name}`);
+    }
+
     // Safety net only when the agent never called speak() this user turn.
     // spokeThisTurn must survive done() — clearing it there made normal turns
     // look silent and TTS’d Cursor’s final process/summary text after exit.
     if (!hadSpeakThisTurn()) {
-      const fallback = summarizeForSpeechFallback(lastAssistantText);
+      const fallback = authRequired
+        ? `${provider.displayName} needs you to sign in — I sent a sign-in link to your phone.`
+        : summarizeForSpeechFallback(lastAssistantText);
       if (fallback) {
         log.warn(
           { runId, pid, textLen: fallback.length },
