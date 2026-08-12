@@ -101,7 +101,7 @@ export interface ServeSettings {
 
 export type ServeOutcome = 'ok' | 'skipped' | 'no_changes' | 'error';
 
-export type ServeActionId = 'pull' | 'deps' | 'build' | 'restart' | 'health';
+export type ServeActionId = 'pull' | 'restart' | 'health';
 
 export interface ServeRunResult {
   runId: string;
@@ -115,6 +115,8 @@ export interface ServeRunResult {
 export interface ServeGitSnapshot {
   repoDir: string;
   branch: string;
+  trackBranch: string;
+  defaultBranch: string | null;
   dirty: boolean;
   ahead: number;
   behind: number;

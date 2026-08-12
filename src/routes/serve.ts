@@ -1,34 +1,42 @@
 /**
- * Serve admin routes — manual self-hosting maintenance (no auto-update).
+ * Serve admin routes — manual self-hosting maintenance (no heartbeat / auto-update).
  *
  * Routes:
- *   GET  /api/admin/serve         — config + live status
- *   PATCH /api/admin/serve        — update serve settings (branch / repoDir)
- *   POST /api/admin/serve/run     — full update: rebase → deps → build → restart
- *   POST /api/admin/serve/action  — single action (pull=rebase, deps, build, restart, health)
- *   GET  /api/admin/serve/events  — recent step log
- *   GET  /api/admin/serve/logs    — journalctl for agentvoice.service
- *   POST /api/admin/serve/install — spawn install-systemd.sh
+ *   GET  /api/admin/serve              — config + live status
+ *   PATCH /api/admin/serve             — update serve settings (branch / repoDir)
+ *   POST /api/admin/serve/action       — rebase, restart, or health
+ *   GET  /api/admin/serve/events       — recent step log
+ *   GET  /api/admin/serve/logs         — journalctl snapshot
+ *   GET  /api/admin/serve/logs/stream  — live journalctl -f (SSE)
  */
 
-import type { FastifyInstance } from 'fastify';
-import { randomUUID } from 'node:crypto';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { getConfig } from '../config.js';
 import { readConfigFile, writeConfigFile } from '../state/configFile.js';
 import { listServeEvents } from '../state/serveEvents.js';
 import {
+  followServeServiceLogs,
   getServeServiceLogs,
   getServeStatus,
   refreshGitSnapshot,
-  runServe,
   runServeAction,
-  spawnInstallSystemd,
   type ServeActionId,
 } from '../serve/index.js';
+import { getRunModeInfo } from '../runMode.js';
 import { childLogger } from '../log.js';
 
 const log = childLogger('serveRoutes');
+
+const LEGACY_AUTO_KEYS = [
+  'enabled',
+  'intervalMs',
+  'autoPull',
+  'autoInstallDeps',
+  'autoBuild',
+  'autoRestart',
+  'abortOnLocalChanges',
+] as const;
 
 const ServePatchSchema = z
   .object({
@@ -39,7 +47,7 @@ const ServePatchSchema = z
 
 const ServeActionSchema = z
   .object({
-    action: z.enum(['pull', 'deps', 'build', 'restart', 'health']),
+    action: z.enum(['pull', 'restart', 'health']),
   })
   .strict();
 
@@ -52,6 +60,42 @@ function applyDeepPatch<T extends object>(target: T, patch: Partial<T>): T {
     }
   }
   return result;
+}
+
+function stripLegacyAutoKeys(serve: Record<string, unknown>): void {
+  for (const key of LEGACY_AUTO_KEYS) {
+    delete serve[key];
+  }
+}
+
+function writeSse(reply: FastifyReply, event: string, data: unknown): void {
+  reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+function sseHeaders(req: FastifyRequest): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  };
+
+  const { settings } = getConfig();
+  const run = getRunModeInfo(settings);
+  if (run.useDevWebServer) {
+    const origin = req.headers.origin;
+    const devOrigins = new Set([
+      run.webUrl,
+      `http://127.0.0.1:${run.webPort}`,
+      `http://localhost:${run.webPort}`,
+    ]);
+    if (origin && devOrigins.has(origin)) {
+      headers['Access-Control-Allow-Origin'] = origin;
+      headers['Vary'] = 'Origin';
+    }
+  }
+
+  return headers;
 }
 
 export async function registerServeRoutes(app: FastifyInstance): Promise<void> {
@@ -75,27 +119,26 @@ export async function registerServeRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ error: parsed.error.message });
     }
 
-    const patch = { ...parsed.data };
-    if (patch.branch === '') patch.branch = undefined;
-    if (patch.repoDir === '') patch.repoDir = undefined;
+    const hasBranch = Object.prototype.hasOwnProperty.call(parsed.data, 'branch');
+    const hasRepoDir = Object.prototype.hasOwnProperty.call(parsed.data, 'repoDir');
+    const branch = parsed.data.branch?.trim() || undefined;
+    const repoDir = parsed.data.repoDir?.trim() || undefined;
 
     const cfg = readConfigFile();
     cfg.settings.serve = applyDeepPatch(
       cfg.settings.serve,
-      patch as Partial<typeof cfg.settings.serve>,
+      {
+        ...(hasBranch && branch ? { branch } : {}),
+        ...(hasRepoDir && repoDir ? { repoDir } : {}),
+      },
     );
-    // Drop legacy auto-update keys if still present in the on-disk object.
-    const serve = cfg.settings.serve as Record<string, unknown>;
-    for (const key of [
-      'enabled',
-      'intervalMs',
-      'autoPull',
-      'autoInstallDeps',
-      'autoBuild',
-      'autoRestart',
-      'abortOnLocalChanges',
-    ]) {
-      delete serve[key];
+    stripLegacyAutoKeys(cfg.settings.serve as Record<string, unknown>);
+    // Empty field means "follow origin's default branch" / cwd — persist the clear.
+    if (hasBranch && !branch) {
+      delete (cfg.settings.serve as { branch?: string }).branch;
+    }
+    if (hasRepoDir && !repoDir) {
+      delete (cfg.settings.serve as { repoDir?: string }).repoDir;
     }
     writeConfigFile(cfg);
     log.info('serve settings updated');
@@ -111,24 +154,6 @@ export async function registerServeRoutes(app: FastifyInstance): Promise<void> {
       serve: getConfig().settings.serve,
       status: getServeStatus(),
     };
-  });
-
-  app.post('/api/admin/serve/run', async (_req, reply) => {
-    const status = getServeStatus();
-    if (status.running) {
-      return reply.code(409).send({ error: 'Serve is already running' });
-    }
-
-    const runId = randomUUID();
-    void runServe()
-      .then((result) => {
-        log.info({ runId: result.runId, outcome: result.outcome }, 'manual serve finished');
-      })
-      .catch((err) => {
-        log.error({ err, runId }, 'manual serve failed');
-      });
-
-    return { ok: true, started: true, runId };
   });
 
   app.post<{ Body: unknown }>('/api/admin/serve/action', async (req, reply) => {
@@ -174,9 +199,73 @@ export async function registerServeRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.post('/api/admin/serve/install', async () => {
-    const repoDir = getConfig().settings.serve.repoDir?.trim() || process.cwd();
-    const result = spawnInstallSystemd(repoDir);
-    return { ok: result.ok, detail: result.detail };
-  });
+  app.get<{ Querystring: { lines?: string } }>(
+    '/api/admin/serve/logs/stream',
+    async (req, reply) => {
+      const lines = Math.min(Number(req.query.lines) || 80, 200);
+      reply.hijack();
+      req.raw.setTimeout(0);
+      reply.raw.setTimeout(0);
+      reply.raw.writeHead(200, sseHeaders(req));
+
+      let closed = false;
+      let follow: { stop: () => void; unit: string } | null = null;
+      const keepalive: { id?: ReturnType<typeof setInterval> } = {};
+
+      const finish = (endPayload?: { code: number | null }): void => {
+        if (closed) return;
+        closed = true;
+        if (keepalive.id) clearInterval(keepalive.id);
+        follow?.stop();
+        follow = null;
+        try {
+          if (endPayload) writeSse(reply, 'end', endPayload);
+          reply.raw.end();
+        } catch {
+          // already closed
+        }
+      };
+
+      keepalive.id = setInterval(() => {
+        if (closed) {
+          if (keepalive.id) clearInterval(keepalive.id);
+          return;
+        }
+        try {
+          reply.raw.write(': keepalive\n\n');
+        } catch {
+          finish();
+        }
+      }, 15000);
+
+      req.raw.on('close', () => finish());
+      req.raw.on('error', () => finish());
+
+      try {
+        follow = await followServeServiceLogs({
+          lines,
+          onLine: (line) => {
+            if (closed) return;
+            writeSse(reply, 'log', { line });
+          },
+          onError: (detail) => {
+            if (closed) return;
+            writeSse(reply, 'error', { detail });
+          },
+          onClose: (code) => finish({ code }),
+        });
+        if (!closed) {
+          writeSse(reply, 'meta', { unit: follow.unit, live: true });
+        } else {
+          follow.stop();
+        }
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err);
+        if (!closed) {
+          writeSse(reply, 'error', { detail });
+        }
+        finish({ code: 1 });
+      }
+    },
+  );
 }

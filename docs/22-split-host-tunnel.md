@@ -128,4 +128,4 @@ The systemd user unit keeps it alive with `Restart=always` and SSH
 ## Related
 
 - [`07-data-and-deployment.md`](./07-data-and-deployment.md) — run modes and ports
-- [`21-serve-self-hosting.md`](./21-serve-self-hosting.md) — bridge auto-update on the remote host
+- [`21-serve-self-hosting.md`](./21-serve-self-hosting.md) — manual rebase / restart / live journal on the host

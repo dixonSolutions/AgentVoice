@@ -25,6 +25,15 @@ module.exports = {
     target,
     secure: false,
     logLevel: 'warn',
+    timeout: 0,
+    proxyTimeout: 0,
+    onProxyRes(proxyRes) {
+      const type = String(proxyRes.headers['content-type'] || '');
+      if (type.includes('text/event-stream')) {
+        proxyRes.headers['cache-control'] = 'no-cache, no-transform';
+        proxyRes.headers['x-accel-buffering'] = 'no';
+      }
+    },
   },
   '/ws': {
     target: wsTarget,

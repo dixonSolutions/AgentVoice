@@ -233,12 +233,13 @@ export const WorkflowSettingsSchema = z.object({
   llmIntelligence: LlmIntelligenceWorkflowSchema.default({}),
 });
 
-// ── Serve (manual self-hosting maintenance — no auto-update) ─────────────────
+// ── Serve (manual self-hosting — rebase / restart / health / journal) ────────
 
 export const ServeSettingsSchema = z.object({
   /**
-   * Branch to force-rebase onto (origin/<branch>). Defaults to `main` at runtime
-   * when unset. See docs/21-serve-self-hosting.md.
+   * Branch to rebase onto (origin/<branch>). When unset, origin's default
+   * branch is used, then `main`. Saved choice is remembered across restarts.
+   * See docs/21-serve-self-hosting.md.
    */
   branch: z.string().min(1).max(128).optional(),
   /** Repository root (defaults to process working directory). */

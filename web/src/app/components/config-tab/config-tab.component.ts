@@ -1,5 +1,5 @@
-import type { OnDestroy, OnInit } from '@angular/core';
-import { ChangeDetectorRef, Component, computed, inject, signal } from '@angular/core';
+import type { ElementRef, OnDestroy, OnInit } from '@angular/core';
+import { ChangeDetectorRef, Component, computed, inject, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import type { Subscription } from 'rxjs';
 
@@ -69,7 +69,6 @@ import type {
   HostingProviderId,
   HostingProviderInfo,
   HostingDoctorResult,
-  ServeServiceLogs,
 } from '../../models/admin-settings';
 // ── Section definition ─────────────────────────────────────────────────────
 
@@ -93,7 +92,7 @@ type BrowserVoiceOption = { label: string; value: string; disabled?: boolean };
 const BROWSER_VOICE_LAZY_CHUNK = 64;
 const BROWSER_VOICE_CURATED_MAX = 80;
 
-type ServeTabId = 'status' | 'actions' | 'network' | 'activity';
+type ServeTabId = 'status' | 'network' | 'logs';
 
 interface ConfigSection {
   id: SectionId;
@@ -164,8 +163,8 @@ const ALL_SECTIONS: ConfigSection[] = [
     id: 'serve',
     label: 'Serve',
     icon: 'pi-server',
-    description: 'Deploy, auto-update, network, systemd, and activity log',
-    keywords: ['serve', 'host', 'port', 'url', 'tailscale', 'update', 'pull', 'build', 'deploy', 'systemd', 'restart', 'git', 'npm', 'network', 'health'],
+    description: 'Health check, live service logs, restart, and rebase onto origin',
+    keywords: ['serve', 'host', 'port', 'url', 'tailscale', 'rebase', 'restart', 'git', 'journal', 'journalctl', 'health', 'network', 'systemd'],
   },
   {
     id: 'jobs',
@@ -364,6 +363,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     this.loadingAgentClient = false;
     this.serveLoadSeq++;
     this.loadingServe = false;
+    this.stopJournalStream();
     this.jobsLoadSeq++;
     this.loadingJobs = false;
     this.narratorLoadSeq++;
@@ -377,6 +377,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected goBack(): void {
     this.activeSection.set(null);
     this.searchQuery.set('');
+    this.stopJournalStream();
   }
 
   // ── Select options ──────────────────────────────────────────────────────
@@ -454,6 +455,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     this.unsubBrowserVoices = null;
     if (this.hostingSetupPollTimer) clearTimeout(this.hostingSetupPollTimer);
     this.hostingProgressSub?.unsubscribe();
+    this.stopJournalStream();
   }
 
   private async loadSection(id: SectionId): Promise<void> {
@@ -1410,19 +1412,37 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   private serveLoadSeq = 0;
   protected savingServe = false;
   protected savingHosting = false;
-  protected runningServe = false;
-  protected installingHosting = false;
   protected serveBranch = '';
   protected serveRepoDir = '';
   protected pingResult: { ok: boolean; latencyMs: number; error?: string } | null = null;
   protected pingingHealth = false;
   protected runningPull = false;
-  protected runningDeps = false;
-  protected runningBuild = false;
   protected runningRestart = false;
   protected runningHealth = false;
-  protected serviceLogs: ServeServiceLogs | null = null;
-  protected loadingServiceLogs = false;
+  protected readonly journalEl = viewChild<ElementRef<HTMLPreElement>>('journalEl');
+  protected journalLines: string[] = [];
+  protected journalLive = false;
+  protected journalError: string | null = null;
+  protected journalUnit = 'agentvoice.service';
+  private journalAbort: AbortController | null = null;
+  private journalPollTimer: ReturnType<typeof setTimeout> | null = null;
+
+  protected get journalText(): string {
+    return this.journalLines.join('\n');
+  }
+
+  protected get serveTrackBranch(): string {
+    return (
+      this.serveBranch.trim() ||
+      this.serveStatus?.git?.trackBranch ||
+      this.serveStatus?.git?.defaultBranch ||
+      'main'
+    );
+  }
+
+  protected get serveBranchPlaceholder(): string {
+    return this.serveStatus?.git?.defaultBranch || 'main';
+  }
 
   protected async loadServe(): Promise<void> {
     const seq = ++this.serveLoadSeq;
@@ -1450,14 +1470,101 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       }
     }
     void this.loadHostingProviders();
+    if (this.serveTab() === 'logs' && !this.journalAbort) this.startJournalStream();
+  }
+
+  protected onServeTabChange(tab: ServeTabId): void {
+    this.serveTab.set(tab);
+    if (tab === 'logs') this.startJournalStream();
+    else this.stopJournalStream();
+  }
+
+  private startJournalStream(): void {
+    this.stopJournalStream();
+    const ac = new AbortController();
+    this.journalAbort = ac;
+    this.journalLines = [];
+    this.journalError = null;
+    this.journalLive = true;
+    this.cdr.markForCheck();
+
+    void this.admin
+      .streamServeLogs(
+        (event) => {
+          if (ac.signal.aborted) return;
+          if (event.type === 'log' && event.line) this.appendJournalLine(event.line);
+          if (event.type === 'meta' && event.unit) this.journalUnit = event.unit;
+          if (event.type === 'error') this.journalError = event.detail ?? 'journal error';
+          if (event.type === 'end') this.journalLive = false;
+          this.cdr.markForCheck();
+          this.scrollJournal();
+        },
+        ac.signal,
+      )
+      .catch((err: unknown) => {
+        if (ac.signal.aborted) return;
+        this.journalLive = false;
+        this.journalError = err instanceof Error ? err.message : String(err);
+        this.cdr.markForCheck();
+        this.startJournalPoll(ac.signal);
+      });
+  }
+
+  private startJournalPoll(signal: AbortSignal): void {
+    const poll = async (): Promise<void> => {
+      if (signal.aborted) return;
+      try {
+        const logs = await this.admin.getServeLogs(120);
+        if (signal.aborted) return;
+        this.journalLines = logs.text ? logs.text.split('\n') : [];
+        this.journalError = logs.ok ? null : (logs.detail ?? 'journalctl failed');
+        this.journalLive = logs.ok;
+        this.cdr.markForCheck();
+        this.scrollJournal();
+      } catch (err) {
+        if (signal.aborted) return;
+        this.journalError = err instanceof Error ? err.message : String(err);
+        this.journalLive = false;
+        this.cdr.markForCheck();
+      }
+      if (!signal.aborted) {
+        this.journalPollTimer = setTimeout(() => void poll(), 2000);
+      }
+    };
+    void poll();
+  }
+
+  private appendJournalLine(line: string): void {
+    this.journalLines = [...this.journalLines, line];
+    if (this.journalLines.length > 500) {
+      this.journalLines = this.journalLines.slice(-500);
+    }
+  }
+
+  private scrollJournal(): void {
+    const el = this.journalEl()?.nativeElement;
+    if (!el) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }
+
+  private stopJournalStream(): void {
+    this.journalAbort?.abort();
+    this.journalAbort = null;
+    if (this.journalPollTimer) {
+      clearTimeout(this.journalPollTimer);
+      this.journalPollTimer = null;
+    }
+    this.journalLive = false;
   }
 
   protected async onSaveServe(): Promise<void> {
     this.savingServe = true;
     try {
       const patch: Partial<ServeSettings> = {
-        branch: this.serveBranch.trim() || undefined,
-        repoDir: this.serveRepoDir.trim() || undefined,
+        branch: this.serveBranch.trim(),
+        repoDir: this.serveRepoDir.trim(),
       };
       const res = await this.admin.patchServe(patch);
       this.serveData = structuredClone(res.serve);
@@ -1668,45 +1775,11 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     return 'warn';
   }
 
-  protected async onRunServe(): Promise<void> {
-    this.runningServe = true;
-    try {
-      const res = await this.admin.runServe();
-      this.toast.success('Update started', `Run ${res.runId.slice(0, 8)}…`);
-      window.setTimeout(() => void this.loadServe(), 3000);
-    } catch (err) {
-      this.toast.error('Could not start update', err instanceof Error ? err.message : String(err));
-    } finally {
-      this.runningServe = false;
-    }
-  }
-
-  protected async onLoadServiceLogs(): Promise<void> {
-    this.loadingServiceLogs = true;
-    try {
-      this.serviceLogs = await this.admin.getServeLogs(120);
-      if (!this.serviceLogs.ok) {
-        this.toast.warn('Could not read service logs', this.serviceLogs.detail ?? 'journalctl failed');
-      }
-      this.cdr.markForCheck();
-    } catch (err) {
-      this.toast.error('Could not load service logs', err instanceof Error ? err.message : String(err));
-    } finally {
-      this.loadingServiceLogs = false;
-    }
-  }
-
   protected async onServeAction(action: ServeActionId): Promise<void> {
     const setLoading = (v: boolean): void => {
       switch (action) {
         case 'pull':
           this.runningPull = v;
-          break;
-        case 'deps':
-          this.runningDeps = v;
-          break;
-        case 'build':
-          this.runningBuild = v;
           break;
         case 'restart':
           this.runningRestart = v;
@@ -1718,6 +1791,12 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     };
     setLoading(true);
     try {
+      if (action === 'pull') {
+        await this.admin.patchServe({
+          branch: this.serveBranch.trim(),
+          repoDir: this.serveRepoDir.trim(),
+        });
+      }
       const res = await this.admin.serveAction(action);
       this.serveStatus = res.status;
       if (res.outcome === 'error') {
@@ -1730,23 +1809,6 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       this.toast.error('Action failed', err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
-    }
-  }
-
-  protected async onInstallHosting(): Promise<void> {
-    this.installingHosting = true;
-    try {
-      const res = await this.admin.installHosting();
-      if (res.ok) {
-        this.toast.success('Install started', res.detail);
-      } else {
-        this.toast.warn('Install failed', res.detail);
-      }
-      await this.loadServe();
-    } catch (err) {
-      this.toast.error('Install request failed', err instanceof Error ? err.message : String(err));
-    } finally {
-      this.installingHosting = false;
     }
   }
 
@@ -1765,16 +1827,14 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     }
   }
 
-  protected readonly serveBusy = computed(
-    () =>
-      this.runningServe ||
+  protected get serveBusy(): boolean {
+    return (
       this.runningPull ||
-      this.runningDeps ||
-      this.runningBuild ||
       this.runningRestart ||
       this.runningHealth ||
-      (this.serveStatus?.running ?? false),
-  );
+      (this.serveStatus?.running ?? false)
+    );
+  }
 
   protected serveStatusSeverity(
     outcome: string | undefined,
