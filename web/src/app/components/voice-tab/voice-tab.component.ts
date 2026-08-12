@@ -415,10 +415,12 @@ export class VoiceTabComponent {
       !this.voiceSession.submittingTurn(),
   );
 
-  /** Select overlays must sit above mobile tabbar (z-index 1200). */
+  /** Select overlays must sit above mobile tabbar (z-index 1200) and stay narrow. */
   protected readonly selectOverlayOptions = {
     baseZIndex: 1300,
   };
+
+  protected readonly selectPanelStyleClass = 'cv-voice-select-overlay';
 
   constructor() {
     effect(() => {

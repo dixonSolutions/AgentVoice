@@ -154,6 +154,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
+  width: 100%;
+  max-width: 22rem;
+  margin-inline: auto;
 }
 
 .cv-voice-picker-block {
@@ -161,6 +164,7 @@ body {
   flex-direction: column;
   gap: 0.35rem;
   min-width: 0;
+  width: 100%;
 }
 
 .cv-voice-select-item {
@@ -168,12 +172,36 @@ body {
   flex-direction: column;
   gap: 0.15rem;
   min-width: 0;
+  max-width: 100%;
   line-height: 1.35;
+}
+
+.cv-voice-select-item > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .cv-voice-select-item .cv-cfg-muted {
   font-size: 0.75rem;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Keep body-appended select panels as narrow as the triggers (mobile-friendly). */
+.cv-voice-select-overlay.p-select-overlay {
+  box-sizing: border-box;
+  width: min(22rem, calc(100vw - 2rem)) !important;
+  max-width: min(22rem, calc(100vw - 2rem)) !important;
+  min-width: 0 !important;
+}
+
+.cv-voice-select-overlay .p-select-list-container,
+.cv-voice-select-overlay .p-select-header,
+.cv-voice-select-overlay .p-select-option {
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .cv-cfg-serve-journal {
@@ -712,6 +740,9 @@ body {
   border-radius: 0.65rem;
   background: var(--p-content-background);
   overflow: hidden;
+  width: 100%;
+  max-width: 22rem;
+  margin-inline: auto;
 }
 
 .cv-voice-setup-accordion .p-accordionheader {
