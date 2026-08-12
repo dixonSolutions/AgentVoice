@@ -95,6 +95,15 @@ Select overlays use `appendTo="body"`, `baseZIndex: 1300` (above the mobile tabb
 at 1200), and virtual scroll only when the list is long. Item height must match
 multi-line project/session templates (~56px). The active model id (including
 `auto`) is always injected into options so the trigger never renders blank.
+
+Because the overlay renders in `body`, long option text would otherwise stretch
+the panel wider than its field. `onSelectShow()` measures the open
+`.p-select` trigger and publishes `--cv-select-panel-width` on
+`documentElement`; `.cv-voice-select-overlay` consumes it (with a
+`calc(100vw - 1.5rem)` ceiling) and `onSelectHide()` clears it. Width therefore
+follows whatever the layout gives the field at any viewport — no fixed caps on
+the picker column. Secondary option text clamps to two lines instead of being
+truncated to one.
 `<Provider> · <Model>`.
 
 ## Generic MCP tool aliases

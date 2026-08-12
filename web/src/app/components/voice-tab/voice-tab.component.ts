@@ -1,4 +1,4 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, effect, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { Accordion, AccordionContent, AccordionHeader, AccordionPanel } from '@openng/optimus-ui/accordion';
@@ -29,6 +29,8 @@ import { AuthCardComponent } from '../auth-card/auth-card.component';
 import { ImageCarouselComponent } from '../image-carousel/image-carousel.component';
 import { LiveLogPanelComponent } from '../live-log-panel/live-log-panel.component';
 import { VoiceOrbComponent, type OrbColorMode } from '../voice-orb/voice-orb.component';
+
+const SELECT_PANEL_WIDTH_VAR = '--cv-select-panel-width';
 
 interface ProjectOption {
   value: string;
@@ -415,12 +417,37 @@ export class VoiceTabComponent {
       !this.voiceSession.submittingTurn(),
   );
 
-  /** Select overlays must sit above mobile tabbar (z-index 1200) and stay narrow. */
+  /** Select overlays must sit above mobile tabbar (z-index 1200). */
   protected readonly selectOverlayOptions = {
     baseZIndex: 1300,
   };
 
   protected readonly selectPanelStyleClass = 'cv-voice-select-overlay';
+
+  /** Panels render in body, so their width is measured from the open trigger. */
+  protected onSelectShow(): void {
+    requestAnimationFrame(() => this.syncSelectPanelWidth());
+  }
+
+  protected onSelectHide(): void {
+    document.documentElement.style.removeProperty(SELECT_PANEL_WIDTH_VAR);
+  }
+
+  @HostListener('window:resize')
+  protected onWindowResize(): void {
+    this.syncSelectPanelWidth();
+  }
+
+  private syncSelectPanelWidth(): void {
+    const trigger = document.querySelector<HTMLElement>('.p-select.p-select-open');
+    const width = trigger?.getBoundingClientRect().width ?? 0;
+    const root = document.documentElement;
+    if (width > 0) {
+      root.style.setProperty(SELECT_PANEL_WIDTH_VAR, `${Math.round(width)}px`);
+    } else {
+      root.style.removeProperty(SELECT_PANEL_WIDTH_VAR);
+    }
+  }
 
   constructor() {
     effect(() => {
