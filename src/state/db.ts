@@ -108,7 +108,7 @@ const MIGRATION_SQL = `
     ended_at    TEXT
   );
 
-  -- Serve self-hosting run log (pull / build / restart steps).
+  -- Serve self-hosting run log (rebase / restart / health steps).
   CREATE TABLE IF NOT EXISTS serve_event (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,
     run_id  TEXT NOT NULL,

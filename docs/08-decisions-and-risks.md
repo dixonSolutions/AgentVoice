@@ -251,6 +251,21 @@ the default.
 `PATCH /api/voice/ui` persists the settings; PWA session honors `wakeWordsEnabled` from
 `auth_ok`.
 
+### ADR-021 — Serve is manual; no heartbeat or autonomous pull/restart
+
+**Decision:** Config → Serve has no scheduler. Heartbeat / interval auto-pull /
+auto-build / auto-restart are stripped on load. The hub is health check, live
+`journalctl` for `agentvoice.service`, restart via `scripts/restart.sh`, and
+rebase onto `origin/<branch>` (saved branch, else origin default, else `main`).
+Origin is trusted (`git fetch` + `git rebase -X ours origin/<branch>`).
+
+**Rationale:** Unattended pull+restart on a live voice bridge is too much blast
+radius (Hick / Tesler: keep the few actions that operators actually use). Restart
+script already owns deps+build; duplicating that pipeline in-process was bloat.
+
+**Consequence:** Documented in [`21-serve-self-hosting.md`](./21-serve-self-hosting.md).
+Removed `POST /api/admin/serve/run` and `/install`; actions are `pull` | `restart` | `health`.
+
 ## Open items / risks (to resolve during build)
 
 | ID | Item | Plan to resolve | Severity |

@@ -31,7 +31,7 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`18-image-carousel.md`](./18-image-carousel.md) | `show_images` tool, carousel PWA, Browser snapshot workflow | UI review on phone |
 | [`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md) | Wake Lock, silent media session, auto-resume on mobile | Screen-off disconnects on phone |
 | [`20-native-callkit-shell.md`](./20-native-callkit-shell.md) | CallKit native app + push notifications | True call-style session + background alerts |
-| [`21-serve-self-hosting.md`](./21-serve-self-hosting.md) | Serve hub: manual rebase/update, service logs, network | Self-hosting from Config tab |
+| [`21-serve-self-hosting.md`](./21-serve-self-hosting.md) | Serve hub: health, live journalctl, restart script, origin rebase | Self-hosting from Config tab |
 | [`22-split-host-tunnel.md`](./22-split-host-tunnel.md) | Incus container hosting + optional SSH tunnel for Tailscale Serve | Container DNS / tunnel 502 |
 | [`23-multi-agent-client.md`](./23-multi-agent-client.md) | Cursor / Codex / Claude Code CLI install, invocation flags, MCP registration | Installing or switching agent clients |
 | [`24-agent-providers.md`](./24-agent-providers.md) | `AgentProvider` abstraction: phone-driven auth, live model selection, generic MCP aliases | In-app sign-in, model picker, or adding a 4th CLI |

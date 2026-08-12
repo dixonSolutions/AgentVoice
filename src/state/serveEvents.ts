@@ -1,5 +1,5 @@
 /**
- * Persisted serve step log — one row per phase of a runServe() cycle or manual action.
+ * Persisted serve step log — one row per phase of a manual rebase / restart / health action.
  */
 
 import { getDb } from './db.js';

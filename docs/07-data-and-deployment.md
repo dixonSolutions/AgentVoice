@@ -163,9 +163,10 @@ different ports and can run **side by side** — no `EADDRINUSE` collision.
   (`agentvoice-watch.path`), then frees the host port (`8787`). Windows: `scripts\stop.ps1`.
 - `npm run start:service` — starts the host service back up, health-checked. Windows: `scripts\start.ps1`.
 
-**Serve** (manual self-hosting maintenance): Config tab → **Serve** — force pull &
-rebase onto `main` (or `settings.serve.branch`), update service (rebase → deps →
-build → restart), and read `journalctl` service logs. No scheduled auto-update.
+**Serve** (manual self-hosting maintenance): Config tab → **Serve** — health
+check, live `journalctl` logs, restart via `scripts/restart.sh`, and rebase onto
+`origin/main` (or a saved track branch / origin's default). No heartbeat or
+scheduled auto-update.
 See [`21-serve-self-hosting.md`](./21-serve-self-hosting.md).
 
 `GET /healthz` returns `runMode`, `backendUrl`, `webUrl`, `useDevWebServer`, plus

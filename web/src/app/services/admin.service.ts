@@ -114,10 +114,6 @@ export class AdminService {
     return this.patch('/api/admin/serve', patch);
   }
 
-  runServe(): Promise<{ ok: boolean; started: boolean; runId: string }> {
-    return this.post('/api/admin/serve/run');
-  }
-
   serveAction(
     action: ServeActionId,
   ): Promise<{ ok: boolean; outcome: string; detail: string; runId: string; status: ServeStatus }> {
@@ -132,8 +128,78 @@ export class AdminService {
     return this.get(`/api/admin/serve/logs?lines=${lines}`);
   }
 
-  installHosting(): Promise<{ ok: boolean; detail: string }> {
-    return this.post('/api/admin/serve/install');
+  /**
+   * Follow journalctl -f over SSE. Resolves when the stream ends or is aborted.
+   */
+  async streamServeLogs(
+    onEvent: (event: { type: 'meta' | 'log' | 'error' | 'end'; line?: string; detail?: string; unit?: string }) => void,
+    signal: AbortSignal,
+    lines = 120,
+  ): Promise<void> {
+    const res = await fetch(`/api/admin/serve/logs/stream?lines=${lines}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${this.bridge.appToken}`,
+        Accept: 'text/event-stream',
+      },
+      signal,
+    });
+
+    if (!res.ok) {
+      let detail = `${res.status} ${res.statusText}`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body.error) detail = body.error;
+      } catch {
+        // ignore
+      }
+      throw new Error(detail);
+    }
+
+    if (!res.body) {
+      throw new Error('Journal stream missing response body');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    const processBlock = (block: string): void => {
+      const linesInBlock = block.split('\n');
+      let eventName = 'message';
+      let dataLine = '';
+      for (const line of linesInBlock) {
+        if (line.startsWith(':')) continue;
+        if (line.startsWith('event:')) eventName = line.slice(6).trim();
+        else if (line.startsWith('data:')) dataLine += line.slice(5).trim();
+      }
+      if (!dataLine) return;
+      const payload = JSON.parse(dataLine) as { line?: string; detail?: string; unit?: string; code?: number };
+      if (eventName === 'log' && payload.line) {
+        onEvent({ type: 'log', line: payload.line });
+      } else if (eventName === 'meta') {
+        onEvent({ type: 'meta', unit: payload.unit });
+      } else if (eventName === 'error') {
+        onEvent({ type: 'error', detail: payload.detail });
+      } else if (eventName === 'end') {
+        onEvent({ type: 'end' });
+      }
+    };
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() ?? '';
+        for (const block of blocks) processBlock(block);
+      }
+      if (buffer.trim()) processBlock(buffer);
+    } catch (err) {
+      if (signal.aborted) return;
+      throw err;
+    }
   }
 
   // ── Jobs ─────────────────────────────────────────────────────────────────

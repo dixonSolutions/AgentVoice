@@ -25,7 +25,7 @@ import { getActiveHostingProvider } from './providers/hosting/registry.js';
 import { killActiveAgent } from './executor/agentSingleton.js';
 import { killVoiceAgent } from './executor/voiceAgent.js';
 import { buildServer, startServer } from './server.js';
-import { startServe, stopServeScheduler } from './serve/index.js';
+import { startServe } from './serve/index.js';
 
 async function main(): Promise<void> {
   // 1. Config (must be first — everything else depends on it)
@@ -104,7 +104,6 @@ async function main(): Promise<void> {
 
   async function shutdown(signal: string): Promise<void> {
     log.info({ signal }, 'shutdown signal received');
-    stopServeScheduler();
     killActiveAgent('bridge shutdown');
     killVoiceAgent('bridge shutdown');
     try {

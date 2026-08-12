@@ -904,12 +904,11 @@
       @if (serveData) {
         <p-fluid>
 
-          <p-tabs [value]="serveTab()" (valueChange)="serveTab.set($any($event))" styleClass="cv-cfg-serve-tabs">
+          <p-tabs [value]="serveTab()" (valueChange)="onServeTabChange($any($event))" styleClass="cv-cfg-serve-tabs">
             <p-tablist>
               <p-tab value="status">Status</p-tab>
-              <p-tab value="actions">Actions</p-tab>
               <p-tab value="network">Network</p-tab>
-              <p-tab value="activity">Activity</p-tab>
+              <p-tab value="logs">Logs</p-tab>
             </p-tablist>
 
             <p-tabpanels>
@@ -935,8 +934,12 @@
                     }
                     @if (serveStatus.git; as git) {
                       <div class="cv-cfg-serve-git">
-                        <span class="cv-cfg-muted">Branch</span>
+                        <span class="cv-cfg-muted">HEAD</span>
                         <strong>{{ git.branch }}</strong>
+                        <span class="cv-cfg-muted">track {{ git.trackBranch }}</span>
+                        @if (git.defaultBranch && git.defaultBranch !== git.trackBranch) {
+                          <span class="cv-cfg-muted">origin default {{ git.defaultBranch }}</span>
+                        }
                         <span class="cv-cfg-muted">ahead {{ git.ahead }} · behind {{ git.behind }}</span>
                         @if (git.dirty) {
                           <p-tag value="dirty" severity="warn" />
@@ -955,7 +958,7 @@
                       <p-button label="Health check" icon="pi pi-heart"
                         severity="secondary" [outlined]="true"
                         [loading]="runningHealth || pingingHealth"
-                        [disabled]="!canUseApi() || serveBusy()"
+                        [disabled]="!canUseApi() || serveBusy"
                         (onClick)="onServeAction('health')" />
                     </div>
                     @if (pingResult) {
@@ -971,11 +974,11 @@
 
                 <p-fieldset legend="Repository">
                   <p-message severity="secondary" variant="simple"
-                    text="Force pull &amp; rebase targets origin/&lt;branch&gt; (default main). Leave directory blank to use the bridge working directory." />
+                    [text]="'Rebase fetches origin and rebases onto origin/' + serveTrackBranch + '. Leave branch blank to follow origin default (' + serveBranchPlaceholder + '). Choice is saved.'" />
                   <p-iftalabel>
                     <input pInputText id="cfg-serve-branch"
                       [(ngModel)]="serveBranch"
-                      placeholder="main"
+                      [placeholder]="serveBranchPlaceholder"
                       [disabled]="!canUseApi()" />
                     <label for="cfg-serve-branch">Track branch</label>
                   </p-iftalabel>
@@ -991,52 +994,27 @@
                     [disabled]="!canUseApi()"
                     (onClick)="onSaveServe()" />
                 </p-fieldset>
-              </p-tabpanel>
 
-              <!-- Actions -->
-              <p-tabpanel value="actions">
-                <p-message severity="secondary" variant="simple"
-                  text="Manual only — no scheduled auto-update. Update service runs rebase → deps (if needed) → build → restart. Force pull &amp; rebase stashes dirty changes, rebases onto origin/main (or your track branch), then restores the stash." />
-
-                <div class="cv-cfg-serve-actions">
-                  <p-button label="Update service" icon="pi pi-sync"
-                    [loading]="runningServe"
-                    [disabled]="!canUseApi() || serveBusy()"
-                    (onClick)="onRunServe()" />
-
+                <p-fieldset legend="Actions">
+                  <p-message severity="secondary" variant="simple"
+                    text="Manual only — no heartbeat or scheduled pull. Restart runs scripts/restart.sh (build + systemd). Rebase trusts origin." />
                   <div class="cv-cfg-serve-action-grid">
-                    <p-button label="Force pull &amp; rebase" icon="pi pi-download"
-                      severity="secondary" [outlined]="true"
+                    <p-button [label]="'Rebase onto origin/' + serveTrackBranch" icon="pi pi-download"
                       [loading]="runningPull"
-                      [disabled]="!canUseApi() || serveBusy()"
+                      [disabled]="!canUseApi() || serveBusy"
                       (onClick)="onServeAction('pull')" />
-                    <p-button label="Install deps" icon="pi pi-box"
-                      severity="secondary" [outlined]="true"
-                      [loading]="runningDeps"
-                      [disabled]="!canUseApi() || serveBusy()"
-                      (onClick)="onServeAction('deps')" />
-                    <p-button label="Build" icon="pi pi-hammer"
-                      severity="secondary" [outlined]="true"
-                      [loading]="runningBuild"
-                      [disabled]="!canUseApi() || serveBusy()"
-                      (onClick)="onServeAction('build')" />
-                    <p-button label="Restart" icon="pi pi-replay"
+                    <p-button label="Restart service" icon="pi pi-replay"
                       severity="secondary" [outlined]="true"
                       [loading]="runningRestart"
-                      [disabled]="!canUseApi() || serveBusy()"
+                      [disabled]="!canUseApi() || serveBusy"
                       (onClick)="onServeAction('restart')" />
                     <p-button label="Health check" icon="pi pi-heart"
                       severity="secondary" [outlined]="true"
                       [loading]="runningHealth"
-                      [disabled]="!canUseApi() || serveBusy()"
+                      [disabled]="!canUseApi() || serveBusy"
                       (onClick)="onServeAction('health')" />
-                    <p-button label="Install hosting" icon="pi pi-server"
-                      severity="secondary" [outlined]="true"
-                      [loading]="installingHosting"
-                      [disabled]="!canUseApi() || serveBusy()"
-                      (onClick)="onInstallHosting()" />
                   </div>
-                </div>
+                </p-fieldset>
               </p-tabpanel>
 
               <!-- Network -->
@@ -1215,27 +1193,26 @@
                 }
               </p-tabpanel>
 
-              <!-- Activity -->
-              <p-tabpanel value="activity">
-                <p-fieldset legend="Service logs (journalctl)">
-                  <p-message severity="secondary" variant="simple"
-                    text="Reads journalctl --user -u agentvoice.service (fixed unit name — no shell input)." />
-                  <p-button label="Load service logs" icon="pi pi-book"
-                    severity="secondary" [outlined]="true"
-                    [loading]="loadingServiceLogs"
-                    [disabled]="!canUseApi()"
-                    (onClick)="onLoadServiceLogs()" />
-                  @if (serviceLogs) {
-                    @if (serviceLogs.ok) {
-                      <pre class="cv-cfg-hosting-log cv-cfg-serve-journal">{{ serviceLogs.text || '(no lines)' }}</pre>
+              <!-- Logs -->
+              <p-tabpanel value="logs">
+                <p-fieldset legend="Service journal (live)">
+                  <div class="cv-cfg-serve-status-row">
+                    @if (journalLive) {
+                      <p-tag value="Live" severity="success" />
                     } @else {
-                      <p-message severity="warn" variant="simple"
-                        [text]="serviceLogs.detail ?? 'Could not read journal'" />
+                      <p-tag value="Idle" severity="secondary" />
                     }
+                    <span class="cv-cfg-muted">{{ journalUnit }}</span>
+                  </div>
+                  <p-message severity="secondary" variant="simple"
+                    text="Follows journalctl -u agentvoice.service (user unit first, then system). Argv is fixed — no shell input." />
+                  @if (journalError) {
+                    <p-message severity="warn" variant="simple" [text]="journalError" />
                   }
+                  <pre #journalEl class="cv-cfg-hosting-log cv-cfg-serve-journal">{{ journalText || '(waiting for journal lines…)' }}</pre>
                 </p-fieldset>
 
-                <p-fieldset legend="Update step log">
+                <p-fieldset legend="Action log">
                   @if (serveEvents.length > 0) {
                     <div class="cv-cfg-audit-list">
                       @for (entry of serveEvents; track entry.id) {
@@ -1256,7 +1233,7 @@
                   } @else {
                     <div class="cv-cfg-empty">
                       <i class="pi pi-history"></i>
-                      <span>No serve activity yet — run an update or action to populate the log.</span>
+                      <span>No serve activity yet — rebase, restart, or health-check to populate this log.</span>
                     </div>
                   }
                 </p-fieldset>
