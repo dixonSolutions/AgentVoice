@@ -1,4 +1,12 @@
-import { Component, HostListener, computed, effect, inject, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { Accordion, AccordionContent, AccordionHeader, AccordionPanel } from '@openng/optimus-ui/accordion';
@@ -424,32 +432,40 @@ export class VoiceTabComponent {
 
   protected readonly selectPanelStyleClass = 'cv-voice-select-overlay';
 
-  /** Panels render in body, so their width is measured from the open trigger. */
-  protected onSelectShow(): void {
-    requestAnimationFrame(() => this.syncSelectPanelWidth());
-  }
+  private readonly pickersEl = viewChild<ElementRef<HTMLElement>>('pickers');
 
-  protected onSelectHide(): void {
-    document.documentElement.style.removeProperty(SELECT_PANEL_WIDTH_VAR);
-  }
+  /**
+   * Publish the picker column width so body-appended select panels can match it.
+   * This has to be current *before* a panel opens: the library positions the
+   * overlay from its rendered width, so measuring on show would leave a
+   * correctly sized panel sitting at the wrong offset.
+   */
+  private trackPickerWidth(): void {
+    effect((onCleanup) => {
+      const host = this.pickersEl()?.nativeElement;
+      const root = document.documentElement;
+      if (!host) {
+        root.style.removeProperty(SELECT_PANEL_WIDTH_VAR);
+        return;
+      }
 
-  @HostListener('window:resize')
-  protected onWindowResize(): void {
-    this.syncSelectPanelWidth();
-  }
+      const publish = () => {
+        const width = Math.round(host.getBoundingClientRect().width);
+        if (width > 0) root.style.setProperty(SELECT_PANEL_WIDTH_VAR, `${width}px`);
+      };
 
-  private syncSelectPanelWidth(): void {
-    const trigger = document.querySelector<HTMLElement>('.p-select.p-select-open');
-    const width = trigger?.getBoundingClientRect().width ?? 0;
-    const root = document.documentElement;
-    if (width > 0) {
-      root.style.setProperty(SELECT_PANEL_WIDTH_VAR, `${Math.round(width)}px`);
-    } else {
-      root.style.removeProperty(SELECT_PANEL_WIDTH_VAR);
-    }
+      publish();
+      const observer = new ResizeObserver(publish);
+      observer.observe(host);
+      onCleanup(() => {
+        observer.disconnect();
+        root.style.removeProperty(SELECT_PANEL_WIDTH_VAR);
+      });
+    });
   }
 
   constructor() {
+    this.trackPickerWidth();
     effect(() => {
       if (this.bridge.wsStatus() === 'connected') {
         void this.voiceProviders.refresh();

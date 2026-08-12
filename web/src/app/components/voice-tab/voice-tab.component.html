@@ -104,7 +104,7 @@
           </p-accordion-header>
           <p-accordion-content>
             <div class="cv-voice-setup-body">
-              <div class="cv-voice-pickers">
+              <div class="cv-voice-pickers" #pickers>
                 <div class="cv-voice-picker-block">
                   <p-iftalabel>
                     <p-select id="project-picker"
@@ -120,8 +120,6 @@
                       [virtualScrollItemSize]="56"
                       [overlayOptions]="selectOverlayOptions"
                       [panelStyleClass]="selectPanelStyleClass"
-                      (onShow)="onSelectShow()"
-                      (onHide)="onSelectHide()"
                       appendTo="body"
                       scrollHeight="280px"
                       emptyFilterMessage="No projects match"
@@ -158,8 +156,6 @@
                       [virtualScrollItemSize]="56"
                       [overlayOptions]="selectOverlayOptions"
                       [panelStyleClass]="selectPanelStyleClass"
-                      (onShow)="onSelectShow()"
-                      (onHide)="onSelectHide()"
                       appendTo="body"
                       scrollHeight="280px"
                       emptyFilterMessage="No sessions match"
@@ -199,8 +195,6 @@
                         [virtualScrollItemSize]="40"
                         [overlayOptions]="selectOverlayOptions"
                         [panelStyleClass]="selectPanelStyleClass"
-                        (onShow)="onSelectShow()"
-                        (onHide)="onSelectHide()"
                         appendTo="body"
                         scrollHeight="280px"
                         emptyFilterMessage="No models match"
