@@ -182,6 +182,40 @@ async function healthCheck(port: number): Promise<{ ok: boolean; detail?: string
 }
 
 /**
+ * Run a maintenance script that will stop this very service.
+ *
+ * A plain detached child stays inside the service cgroup, so systemd kills it
+ * the moment the unit stops — the bridge went down and never came back up.
+ * `systemd-run --user --scope` moves the script into its own transient unit so
+ * it survives. Plain spawn remains the fallback for non-systemd hosts.
+ */
+function spawnDetachedFromService(
+  repoDir: string,
+  scriptArgs: string[],
+): { ok: boolean; detail: string } {
+  const useScope = existsSync('/run/systemd/system');
+  const [command, args] = useScope
+    ? (['systemd-run', ['--user', '--scope', '--collect', 'bash', ...scriptArgs]] as const)
+    : (['bash', scriptArgs] as const);
+  try {
+    const child = spawn(command, [...args], {
+      cwd: repoDir,
+      detached: true,
+      stdio: 'ignore',
+    });
+    child.unref();
+    return {
+      ok: true,
+      detail: useScope
+        ? `spawned ${scriptArgs.join(' ')} in a transient scope`
+        : `spawned ${scriptArgs.join(' ')}`,
+    };
+  } catch (err) {
+    return { ok: false, detail: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
  * Restart is always spawned, even when agentvoice-watch.path is active: the
  * watch unit is best-effort and a missed trigger used to leave the old process
  * serving stale code with no signal that anything was wrong. A duplicate
@@ -193,20 +227,9 @@ async function triggerRestart(repoDir: string, runId: string): Promise<ServeOutc
     recordStep(runId, 'restart', 'warn', `restart script missing at ${script}`);
     return 'error';
   }
-  try {
-    const child = spawn('bash', [script, '--no-build'], {
-      cwd: repoDir,
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.unref();
-    recordStep(runId, 'restart', 'ok', 'spawned scripts/restart.sh --no-build');
-    return 'ok';
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    recordStep(runId, 'restart', 'error', detail);
-    return 'error';
-  }
+  const spawned = spawnDetachedFromService(repoDir, [script, '--no-build']);
+  recordStep(runId, 'restart', spawned.ok ? 'ok' : 'error', spawned.detail);
+  return spawned.ok ? 'ok' : 'error';
 }
 
 function assertRepoDir(repoDir: string, runId: string): boolean {
@@ -656,18 +679,7 @@ export function spawnInstallSystemd(repoDir: string): { ok: boolean; detail: str
     return { ok: false, detail: `Missing ${script}` };
   }
   const runId = randomUUID();
-  recordStep(runId, 'install_systemd', 'ok', 'spawning install-systemd.sh');
-  try {
-    const child = spawn('bash', [script], {
-      cwd: repoDir,
-      detached: true,
-      stdio: 'ignore',
-    });
-    child.unref();
-    return { ok: true, detail: 'install-systemd.sh started in background' };
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    recordStep(runId, 'install_systemd', 'error', detail);
-    return { ok: false, detail };
-  }
+  const spawned = spawnDetachedFromService(repoDir, [script]);
+  recordStep(runId, 'install_systemd', spawned.ok ? 'ok' : 'error', spawned.detail);
+  return { ok: spawned.ok, detail: spawned.detail };
 }

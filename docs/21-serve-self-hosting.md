@@ -88,6 +88,12 @@ the assumption that the unit would pick up the new `dist/index.js`. When that
 trigger silently failed, the old process kept serving while the UI reported
 success. Restart is now unconditional; a redundant restart is harmless.
 
+Both `restart` and `install hosting` shell out to scripts that stop the bridge
+itself. A plain detached child stays in the service cgroup and is killed the
+instant the unit stops, which took the bridge down permanently. They now run via
+`systemd-run --user --scope --collect` (plain spawn on non-systemd hosts) so the
+script outlives the process that launched it.
+
 Fresh builds are also served correctly without a restart: `@fastify/static` runs
 with `wildcard: true`, so files are resolved per request instead of from a
 boot-time listing (which used to make new asset hashes fall through to the SPA
