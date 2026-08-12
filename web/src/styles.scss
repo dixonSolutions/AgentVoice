@@ -206,6 +206,8 @@ body {
 .cv-voice-select-overlay .p-select-option {
   max-width: 100%;
   overflow: hidden;
+  /* The theme sets nowrap, which would defeat the two-line clamp on details. */
+  white-space: normal;
 }
 
 .cv-cfg-serve-journal {
