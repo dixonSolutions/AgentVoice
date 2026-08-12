@@ -29,7 +29,11 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
           "volume": 1,
           "lang": "en-US"
         }
-      }
+      },
+      "touchControls": "when_muted",
+      "wakeWordsEnabled": true,
+      "defaultMicMuted": false,
+      "workerPollTimeoutMs": 25000
     }
   }
 }
@@ -47,13 +51,20 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
 | `tts.errorSoundEnabled` | Play error earcon on voice pipeline failures |
 | `tts.errorSpeakEnabled` | Speak error messages aloud |
 | `tts.webkit.*` | Default browser TTS rate/pitch/volume/lang |
+| `touchControls` | On-screen Speak / Cancel visibility: `off` \| `when_muted` (default) \| `always` |
+| `wakeWordsEnabled` | When false, skip Vosk start/end/cancel — use on-screen Speak |
+| `defaultMicMuted` | Start each voice session muted |
+| `workerPollTimeoutMs` | Worker narration poll interval |
 
 Managed via Config tab or API:
 
-- `GET /api/voice/providers` — returns `{ wakeWords, turnSubmit, tts, userName? }`
+- `GET /api/voice/providers` — returns `{ wakeWords, turnSubmit, tts, touchControls, wakeWordsEnabled, defaultMicMuted, userName? }`
 - `PATCH /api/voice/wake-words` — update wake words and turn submit
 - `PATCH /api/voice/tts` — update cursor voice on/off, error feedback, WebKit defaults
+- `PATCH /api/voice/ui` — update `touchControls` / `wakeWordsEnabled` / `defaultMicMuted` / `touchOnlyPreset`
 - `PATCH /api/voice/user-name` — optional name the agent uses for the user
+
+On-screen controls and cancel-while-processing: [`27-touch-controls-and-cancel.md`](./27-touch-controls-and-cancel.md).
 
 Per-browser TTS voice selection is stored in PWA localStorage (not `config.json`).
 See [`06-voice-audio-webrtc.md`](./06-voice-audio-webrtc.md#browser-tts-options).

@@ -1,5 +1,7 @@
 /** Voice settings types — mirrors GET /api/voice/providers (no secrets). */
 
+export type TouchControlsMode = 'off' | 'when_muted' | 'always';
+
 export interface WakeWords {
   start: string;
   end: string;
@@ -30,6 +32,12 @@ export interface VoiceSettingsResponse {
   wakeWords: WakeWords;
   turnSubmit: TurnSubmit;
   tts: VoiceTtsSettings;
+  /** On-screen Speak / Cancel visibility (Cancel-processing always shows during submit). */
+  touchControls: TouchControlsMode;
+  /** When false, Vosk wake/end/cancel spotters are off — use on-screen Speak. */
+  wakeWordsEnabled: boolean;
+  /** Mute mic when a session starts. */
+  defaultMicMuted: boolean;
   /** next_voice_turn timeout while narrating workers (ms). */
   workerPollTimeoutMs: number;
   userName?: string;

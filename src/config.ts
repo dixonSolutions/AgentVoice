@@ -124,11 +124,22 @@ export const VoiceSettingsSchema = z.object({
   turnSubmit: TurnSubmitSchema.default({}),
   tts: VoiceTtsSchema,
   /**
+   * On-screen Speak / Cancel visibility while a session is live.
+   * Cancel-processing (during submit/transcribe) is always shown — not gated by this.
+   */
+  touchControls: z.enum(['off', 'when_muted', 'always']).default('when_muted'),
+  /** When false, skip Vosk start/end/cancel spotters — use on-screen Speak / Cancel. */
+  wakeWordsEnabled: z.boolean().default(true),
+  /** Apply this mute state when a voice session starts. */
+  defaultMicMuted: z.boolean().default(false),
+  /**
    * While a worker runs, the voice agent long-polls `next_voice_turn` for this many ms
    * before checking `get_agent_status` again. Speak only when there is a real milestone.
    */
   workerPollTimeoutMs: z.number().int().min(5_000).max(60_000).default(25_000),
 });
+
+export type TouchControlsMode = z.infer<typeof VoiceSettingsSchema>['touchControls'];
 
 // ── Run mode (test vs serve) ────────────────────────────────────────────────
 
@@ -419,6 +430,16 @@ function migrateRawConfig(raw: unknown): unknown {
         delete tts['interruptDeafenFactor'];
         log.info('Migrated config — removed legacy TTS interrupt deafen settings');
       }
+    }
+    if (voice['touchControls'] === undefined) {
+      voice['touchControls'] = 'when_muted';
+      log.info('Migrated config — added default settings.voice.touchControls=when_muted');
+    }
+    if (voice['wakeWordsEnabled'] === undefined) {
+      voice['wakeWordsEnabled'] = true;
+    }
+    if (voice['defaultMicMuted'] === undefined) {
+      voice['defaultMicMuted'] = false;
     }
     if (!voice['wakeWords'] || typeof voice['wakeWords'] !== 'object') {
       throw new Error(

@@ -122,6 +122,8 @@ Cancel resumes from the pause point; submit finalizes the heard snapshot.
 
 `bargeInDuringTts()` calls `ttsPile.pauseForBargeIn()`. The snapshot is assigned to
 `pendingTtsInterrupt` immediately. On cancel, `resumeAfterBargeInCancel()` restores the
+queue — same path for the spoken cancel phrase **and** the on-screen Cancel button
+(`cancelCurrentTurn()`). See [`27-touch-controls-and-cancel.md`](./27-touch-controls-and-cancel.md).
 queue; on submit, `finalizeBargeInOnSubmit()` clears it. The session enters utterance
 capture (wake → VAD/end phrase → STT).
 

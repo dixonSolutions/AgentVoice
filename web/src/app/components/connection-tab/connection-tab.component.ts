@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { Button } from '@openng/optimus-ui/button';
@@ -13,6 +13,12 @@ import { BridgeService } from '../../services/bridge.service';
 import { LogService } from '../../services/log.service';
 import { ToastService } from '../../services/toast.service';
 import { VoiceSessionService } from '../../services/voice-session.service';
+
+interface HealthzPayload {
+  appVersion?: string;
+  gitCommit?: string | null;
+  cliVersion?: string | null;
+}
 
 @Component({
   selector: 'cv-connection-tab',
@@ -36,8 +42,28 @@ export class ConnectionTabComponent implements OnInit {
   private readonly logs = inject(LogService);
 
   protected tokenInput = '';
+  private readonly healthz = signal<HealthzPayload | null>(null);
 
-  ngOnInit(): void {}
+  protected readonly versionLabel = computed(() => {
+    const h = this.healthz();
+    if (!h?.appVersion) return null;
+    const sha = h.gitCommit?.trim();
+    return sha ? `v${h.appVersion} · ${sha}` : `v${h.appVersion}`;
+  });
+
+  ngOnInit(): void {
+    void this.refreshHealthz();
+  }
+
+  private async refreshHealthz(): Promise<void> {
+    try {
+      const res = await fetch(`${this.bridge.bridgeBase}/healthz`, { cache: 'no-store' });
+      if (!res.ok) return;
+      this.healthz.set((await res.json()) as HealthzPayload);
+    } catch {
+      // offline / wrong origin — leave version blank
+    }
+  }
 
   protected wsStatusLabel(): string {
     switch (this.bridge.wsStatus()) {
@@ -70,12 +96,14 @@ export class ConnectionTabComponent implements OnInit {
     this.bridge.connect();
     this.logs.append('info', 'bridge', 'Credentials updated');
     this.toast.success('Saved', 'Connecting to bridge…');
+    void this.refreshHealthz();
   }
 
   protected onConnect(): void {
     this.bridge.connect();
     this.logs.append('info', 'bridge', 'Connect requested');
     this.toast.info('Connecting…');
+    void this.refreshHealthz();
   }
 
   protected onDisconnect(): void {

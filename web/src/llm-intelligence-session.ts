@@ -68,6 +68,7 @@ export interface IntelligenceAuthOk {
   wakeWords: WakeWords;
   turnSubmit: TurnSubmit;
   tts?: VoiceTtsSettings;
+  wakeWordsEnabled?: boolean;
   model: string;
   audio?: IntelligenceAudioConfig;
 }
@@ -129,6 +130,7 @@ export class LlmIntelligenceSession {
   /** True only between wake activation and turn submit — end Vosk must not run before this. */
   private listeningForEndPhrase = false;
   private micMuted = false;
+  private wakeWordsEnabled = true;
   private lastLoggedSttPartial = '';
   private sharedMicStream: MediaStream | null = null;
   private lastErrorFeedbackMessage = '';
@@ -173,6 +175,51 @@ export class LlmIntelligenceSession {
 
   isVoiceActivated(): boolean {
     return this.voiceActivated;
+  }
+
+  /**
+   * Discard the current capture or in-flight submit/transcribe.
+   * Works after VAD/end-phrase when voiceActivated is already false.
+   */
+  cancelCurrentTurn(): boolean {
+    if (this.closed) return false;
+    const inFlight =
+      this.voiceActivated ||
+      this.capturingUtterance ||
+      this.vadSpeechEndPending ||
+      this.endPhrasePending;
+    if (!inFlight) return false;
+
+    if (this.ttsPile.isBargeInPaused()) {
+      this.ttsPile.resumeAfterBargeInCancel();
+      this.pendingTtsInterrupt = null;
+      this.notifySpeakingState(this.ttsPile.isActive());
+      this.voiceLog('tts', 'info', 'TTS resumed', 'cancel after barge-in');
+    }
+
+    playVoiceCueNow('cancel');
+    this.clearEndSubmitTimer();
+    this.vadSpeechEndPending = false;
+    this.endPhrasePending = false;
+    if (this.stt instanceof AmazonSttSession) {
+      this.stt.cancelPendingFlush();
+    }
+    console.debug('[cancel] turn cancelled by user');
+    this.cb.onTurnCancelled?.(this.wakeWords.cancel?.trim() || 'cancel');
+    this.exitCapturePhase();
+    this.voiceActivated = false;
+    this.cb.onDeactivated?.();
+    void this.returnToWakeListen();
+    return true;
+  }
+
+  /** On-screen Speak — same as wake phrase without requiring Vosk. */
+  async activateFromTouch(): Promise<void> {
+    if (this.closed) return;
+    if (this.micMuted) {
+      this.setMicMuted(false);
+    }
+    await this.onVoskStartDetected('(touch)');
   }
 
   setMicMuted(muted: boolean): void {
@@ -346,6 +393,11 @@ export class LlmIntelligenceSession {
   private async startWakeWordPhase(): Promise<void> {
     await this.ensureSharedMic();
 
+    if (!this.wakeWordsEnabled) {
+      this.voiceLog('pipeline', 'info', 'Wake words off — use on-screen Speak');
+      return;
+    }
+
     if (!isCrossOriginIsolated()) {
       this.cb.onSttError?.(wakePhraseCoopError());
       return;
@@ -358,6 +410,7 @@ export class LlmIntelligenceSession {
   private ensureWakeListening(): void {
     if (
       this.closed ||
+      !this.wakeWordsEnabled ||
       this.voiceActivated ||
       this.capturingUtterance ||
       this.vadListening ||
@@ -375,6 +428,7 @@ export class LlmIntelligenceSession {
   }
 
   private async armStartSpotter(): Promise<void> {
+    if (!this.wakeWordsEnabled) return;
     const start = this.wakeWords.start.trim();
     if (!start) {
       this.cb.onSttError?.('No wake phrase configured — set wakeWords.start on the Voice tab.');
@@ -414,11 +468,14 @@ export class LlmIntelligenceSession {
     this.listeningForEndPhrase = false;
     void this.stopVadDetector();
     this.stopEndSpotter();
+    this.stopCancelSpotter();
     if (this.stt instanceof WebkitSttSession) {
       this.stt.pause();
     }
     this.cb.onDeactivated?.();
-    await this.armStartSpotter();
+    if (this.wakeWordsEnabled) {
+      await this.armStartSpotter();
+    }
   }
 
   /** Wake phrase heard while assistant TTS is playing — pause speech; agent keeps running. */
@@ -507,27 +564,11 @@ export class LlmIntelligenceSession {
   /** Vosk cancel phrase heard during capture — abort turn; resume paused TTS if any. */
   private onCancelDetected(): void {
     if (this.closed || !this.voiceActivated) return;
-    if (this.ttsPile.isBargeInPaused()) {
-      this.ttsPile.resumeAfterBargeInCancel();
-      this.pendingTtsInterrupt = null;
-      this.notifySpeakingState(this.ttsPile.isActive());
-      this.voiceLog('tts', 'info', 'TTS resumed', 'cancel after barge-in');
-    }
-    playVoiceCueNow('cancel');
-    console.debug('[cancel] turn cancelled by user');
-    this.cb.onTurnCancelled?.(this.wakeWords.cancel?.trim() || 'cancel');
-    this.exitCapturePhase();
-    this.voiceActivated = false;
-    this.capturingUtterance = false;
-    this.vadSpeechEndPending = false;
-    this.endPhrasePending = false;
-    this.turnBuffer?.dispose();
-    this.turnBuffer = null;
-    this.cb.onDeactivated?.();
-    void this.armStartSpotter();
+    this.cancelCurrentTurn();
   }
 
   private async armCancelSpotter(): Promise<void> {
+    if (!this.wakeWordsEnabled) return;
     const cancel = this.wakeWords.cancel?.trim();
     if (!cancel || !isCrossOriginIsolated()) return;
 
@@ -749,6 +790,7 @@ export class LlmIntelligenceSession {
   }
 
   private async armEndPhraseSpotter(): Promise<void> {
+    if (!this.wakeWordsEnabled) return;
     const end = this.wakeWords.end.trim();
     if (!end) {
       this.cb.onSttError?.(
@@ -1013,6 +1055,7 @@ export class LlmIntelligenceSession {
         this.wakeWords = wake ?? { start: '', end: 'send' };
         const submit = msg['turnSubmit'] as TurnSubmit | undefined;
         this.turnSubmit = submit ?? { silenceMs: 1500, vadEnabled: true };
+        this.wakeWordsEnabled = msg['wakeWordsEnabled'] !== false;
         if (msg['tts'] && typeof msg['tts'] === 'object') {
           this.ttsSettings = msg['tts'] as VoiceTtsSettings;
           this.resolvedWebkitTts = resolveBrowserTtsOptions(this.ttsSettings.webkit);

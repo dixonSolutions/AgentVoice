@@ -308,14 +308,24 @@ export class VoiceTabComponent {
   protected selectedModelId: string | null = null;
 
   /** Live model list for the active agent CLI — never hardcoded. */
-  protected readonly modelOptions = computed<ModelOption[]>(() =>
-    this.agentProviders.models().map((m) => ({
+  protected readonly modelOptions = computed<ModelOption[]>(() => {
+    const models = this.agentProviders.models().map((m) => ({
       value: m.id,
       title: m.displayName,
       label: m.displayName,
       search: `${m.id} ${m.displayName}`,
-    })),
-  );
+    }));
+    const active = this.agentProviders.activeModel();
+    if (active && !models.some((m) => m.value === active)) {
+      models.unshift({
+        value: active,
+        title: active === 'auto' ? 'Auto' : active,
+        label: active === 'auto' ? 'Auto' : active,
+        search: active,
+      });
+    }
+    return models;
+  });
 
   /** "Cursor · claude-4.5-sonnet" chip shown beside the workflow tag. */
   protected readonly activeProviderChip = computed(() => {
@@ -370,8 +380,45 @@ export class VoiceTabComponent {
 
   protected readonly liveSessionHint = computed(() => {
     if (!this.voiceSession.conversationActive()) return null;
+    const wakeOff = this.voiceProviders.data()?.wakeWordsEnabled === false;
+    if (wakeOff) {
+      return 'Wake words off — use Speak / Cancel on screen. Keep this app open.';
+    }
     return 'Keep this app open — voice pauses if you switch apps. Screen stays on while connected.';
   });
+
+  /** Speak / Cancel bar — when_muted (default), always, or off. */
+  protected readonly showTouchControls = computed(() => {
+    if (!this.voiceSession.conversationActive()) return false;
+    if (this.voiceSession.submittingTurn()) return false;
+    const mode = this.voiceProviders.data()?.touchControls ?? 'when_muted';
+    if (mode === 'off') return false;
+    if (mode === 'always') return true;
+    return this.voiceSession.micMuted();
+  });
+
+  protected readonly showCancelProcessing = computed(
+    () => this.voiceSession.conversationActive() && this.voiceSession.submittingTurn(),
+  );
+
+  protected readonly showCaptureCancel = computed(
+    () =>
+      this.showTouchControls() &&
+      this.voiceSession.voiceActivated() &&
+      !this.voiceSession.submittingTurn(),
+  );
+
+  protected readonly showTouchSpeak = computed(
+    () =>
+      this.showTouchControls() &&
+      !this.voiceSession.voiceActivated() &&
+      !this.voiceSession.submittingTurn(),
+  );
+
+  /** Select overlays must sit above mobile tabbar (z-index 1200). */
+  protected readonly selectOverlayOptions = {
+    baseZIndex: 1300,
+  };
 
   constructor() {
     effect(() => {
@@ -400,6 +447,22 @@ export class VoiceTabComponent {
 
   protected toggleMicMute(): void {
     this.voiceSession.toggleMicMute();
+  }
+
+  protected onTouchSpeak(): void {
+    void this.voiceSession.touchSpeak();
+  }
+
+  protected onTouchCancel(): void {
+    if (this.voiceSession.cancelCurrentTurn()) {
+      this.toast.info('Cancelled', 'Turn discarded.');
+    }
+  }
+
+  protected onCancelProcessing(): void {
+    if (this.voiceSession.cancelCurrentTurn()) {
+      this.toast.info('Cancelled', 'Processing stopped — turn discarded.');
+    }
   }
 
   protected onProjectChange(name: string | null): void {

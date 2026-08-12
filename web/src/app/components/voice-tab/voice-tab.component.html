@@ -58,9 +58,40 @@
           [severity]="voiceSession.micMuted() ? 'warn' : 'secondary'"
           [outlined]="true"
           (onClick)="toggleMicMute()" />
+
+        @if (showTouchSpeak() || showCaptureCancel()) {
+          <div class="cv-voice-touch-bar" role="group" aria-label="On-screen voice controls">
+            @if (showTouchSpeak()) {
+              <p-button
+                label="Speak"
+                icon="pi pi-microphone"
+                severity="success"
+                (onClick)="onTouchSpeak()" />
+            }
+            @if (showCaptureCancel()) {
+              <p-button
+                label="Cancel"
+                icon="pi pi-times"
+                severity="secondary"
+                [outlined]="true"
+                (onClick)="onTouchCancel()" />
+            }
+          </div>
+        }
+
         @if (liveSessionHint(); as hint) {
           <p class="cv-voice-orb-hint cv-voice-orb-hint--live">{{ hint }}</p>
         }
+      }
+
+      @if (showCancelProcessing()) {
+        <button
+          type="button"
+          class="cv-voice-cancel-processing"
+          aria-label="Cancel processing"
+          (click)="onCancelProcessing()">
+          Cancel
+        </button>
       }
     </div>
 
@@ -85,8 +116,9 @@
                       [filter]="true"
                       filterBy="search"
                       filterPlaceholder="Filter projects…"
-                      [virtualScroll]="true"
-                      [virtualScrollItemSize]="42"
+                      [virtualScroll]="projectOptions().length > 40"
+                      [virtualScrollItemSize]="56"
+                      [overlayOptions]="selectOverlayOptions"
                       appendTo="body"
                       scrollHeight="280px"
                       emptyFilterMessage="No projects match"
@@ -119,8 +151,9 @@
                       [filter]="true"
                       filterBy="search"
                       filterPlaceholder="Filter sessions…"
-                      [virtualScroll]="true"
-                      [virtualScrollItemSize]="48"
+                      [virtualScroll]="sessionOptions().length > 40"
+                      [virtualScrollItemSize]="56"
+                      [overlayOptions]="selectOverlayOptions"
                       appendTo="body"
                       scrollHeight="280px"
                       emptyFilterMessage="No sessions match"
@@ -156,8 +189,9 @@
                         [filter]="true"
                         filterBy="search"
                         filterPlaceholder="Filter models…"
-                        [virtualScroll]="true"
-                        [virtualScrollItemSize]="38"
+                        [virtualScroll]="modelOptions().length > 40"
+                        [virtualScrollItemSize]="40"
+                        [overlayOptions]="selectOverlayOptions"
                         appendTo="body"
                         scrollHeight="280px"
                         emptyFilterMessage="No models match"

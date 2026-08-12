@@ -101,6 +101,27 @@ export class VoiceSessionService {
 
   private meterRaf = 0;
 
+  private static readonly MIC_MUTE_PREF_KEY = 'cv_mic_muted_pref';
+
+  private readMicMutePref(): boolean | null {
+    try {
+      const raw = localStorage.getItem(VoiceSessionService.MIC_MUTE_PREF_KEY);
+      if (raw === '1') return true;
+      if (raw === '0') return false;
+    } catch {
+      // ignore
+    }
+    return null;
+  }
+
+  private writeMicMutePref(muted: boolean): void {
+    try {
+      localStorage.setItem(VoiceSessionService.MIC_MUTE_PREF_KEY, muted ? '1' : '0');
+    } catch {
+      // ignore
+    }
+  }
+
   isVoiceActivated(): boolean {
     return this._voiceActivated();
   }
@@ -108,9 +129,26 @@ export class VoiceSessionService {
   toggleMicMute(): void {
     const next = !this._micMuted();
     this._micMuted.set(next);
+    this.writeMicMutePref(next);
     if (this._session instanceof LlmIntelligenceSession) {
       this._session.setMicMuted(next);
     }
+  }
+
+  /** Discard capture or in-flight transcription without hanging up the session. */
+  cancelCurrentTurn(): boolean {
+    if (!(this._session instanceof LlmIntelligenceSession)) return false;
+    return this._session.cancelCurrentTurn();
+  }
+
+  /** On-screen Speak — unmute if needed and start capture. */
+  async touchSpeak(): Promise<void> {
+    if (!(this._session instanceof LlmIntelligenceSession)) return;
+    if (this._micMuted()) {
+      this._micMuted.set(false);
+      this.writeMicMutePref(false);
+    }
+    await this._session.activateFromTouch();
   }
 
   /** Apply updated per-browser TTS profile to an active session. */
@@ -149,7 +187,10 @@ export class VoiceSessionService {
     this.sessionPrepActive.set(true);
     this._voiceActivated.set(false);
     this._jobRunning.set(false);
-    this._micMuted.set(false);
+    const storedMute = this.readMicMutePref();
+    const defaultMuted =
+      storedMute ?? this.voiceProviders.data()?.defaultMicMuted === true;
+    this._micMuted.set(defaultMuted);
 
     // iOS Safari: unlock TTS in the user-gesture stack before any long await.
     await primeTtsPlaybackUnlock();
@@ -201,16 +242,24 @@ export class VoiceSessionService {
 
     try {
       await intelSession.start();
+      if (defaultMuted) {
+        intelSession.setMicMuted(true);
+      }
       this._audioBackends.set(intelSession.getAudioBackends());
       configureTranscriptTts({
         bridgeBase: this.bridge.bridgeBase,
         appToken: this.bridge.appToken,
         audio: intelSession.getAudioConfig(),
       });
+      const wakeOff = this.voiceProviders.data()?.wakeWordsEnabled === false;
       const startMsg =
         workflow === 'cursor_native'
-          ? 'Cursor voice session started — run the voice agent in Cursor IDE, then say the wake phrase'
-          : 'Intelligence session started — say wake phrase to activate';
+          ? wakeOff
+            ? 'Cursor voice session started — tap Speak (wake words off)'
+            : 'Cursor voice session started — run the voice agent in Cursor IDE, then say the wake phrase'
+          : wakeOff
+            ? 'Intelligence session started — tap Speak (wake words off)'
+            : 'Intelligence session started — say wake phrase to activate';
       this.logs.append('info', 'voice', startMsg);
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);

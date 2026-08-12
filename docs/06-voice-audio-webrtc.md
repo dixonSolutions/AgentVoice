@@ -26,8 +26,9 @@ Callback types: `web/src/voice-session-types.ts`.
 
 - **Start phrase** (`settings.voice.wakeWords.start`) — activates utterance capture.
 - **End phrase** (`settings.voice.wakeWords.end`) — optional submit when VAD is off.
+- **Cancel phrase** — aborts capture only; after VAD/end-phrase (while Transcribe runs), use the red **Cancel** button — see [`27-touch-controls-and-cancel.md`](./27-touch-controls-and-cancel.md).
 - Offline WASM grammar spotter — requires COOP/COEP headers (see `webDispatch.ts`).
-- Configure in Config tab or `PATCH /api/voice/wake-words`.
+- Configure in Config tab or `PATCH /api/voice/wake-words`. Set `wakeWordsEnabled: false` for touch-only.
 
 ## Turn submit
 
@@ -153,4 +154,5 @@ Limits and user guidance: [`19-mobile-session-keepalive.md`](./19-mobile-session
 - [`16-mcp-server-cursor-as-brain.md`](./16-mcp-server-cursor-as-brain.md) — Cursor voice loop
 - [`15-llm-intelligence-workflow.md`](./15-llm-intelligence-workflow.md) — Bedrock orchestrator
 - [`13-voice-providers.md`](./13-voice-providers.md) — wake word config
+- [`27-touch-controls-and-cancel.md`](./27-touch-controls-and-cancel.md) — on-screen Speak / Cancel and cancel during Transcribe
 - [`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md) — mobile screen-off / reconnect

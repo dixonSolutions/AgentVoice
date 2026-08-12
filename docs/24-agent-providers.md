@@ -90,6 +90,11 @@ push as a failed spawn — the PWA model picker shows the message inline
 
 The Voice tab shows a model picker (hidden entirely when
 `supportsModelSelection` is false) and an active-model chip:
+
+Select overlays use `appendTo="body"`, `baseZIndex: 1300` (above the mobile tabbar
+at 1200), and virtual scroll only when the list is long. Item height must match
+multi-line project/session templates (~56px). The active model id (including
+`auto`) is always injected into options so the trigger never renders blank.
 `<Provider> · <Model>`.
 
 ## Generic MCP tool aliases

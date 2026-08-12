@@ -45,6 +45,8 @@ export class AmazonSttSession {
   private pcmChunks: Int16Array[] = [];
   private transcribing = false;
   private flushInFlight: Promise<string> | null = null;
+  private flushAbort: AbortController | null = null;
+  private discardNextFinal = false;
 
   constructor(
     private readonly bridgeBase: string,
@@ -102,6 +104,19 @@ export class AmazonSttSession {
     this.recording = false;
     this.silenceFrames = 0;
     this.pcmChunks = [];
+  }
+
+  /**
+   * Abort in-flight Transcribe and discard buffered PCM.
+   * Safe to call during flush / "Transcribing…" — onFinal will not fire.
+   */
+  cancelPendingFlush(): void {
+    this.discardNextFinal = true;
+    this.flushAbort?.abort();
+    this.flushAbort = null;
+    this.endCapture();
+    this.utteranceFlushed = true;
+    this.transcribing = false;
   }
 
   stop(): void {
@@ -199,6 +214,7 @@ export class AmazonSttSession {
       throw new Error('Speech too short — speak your request after the wake phrase.');
     }
 
+    this.discardNextFinal = false;
     this.utteranceFlushed = true;
     this.pcmChunks = [];
     this.recording = false;
@@ -215,12 +231,23 @@ export class AmazonSttSession {
 
     try {
       const text = (await this.transcribe(pcm)).trim();
+      if (this.discardNextFinal) {
+        this.discardNextFinal = false;
+        return '';
+      }
       if (text) {
         this.cb.onFinal(text);
         return text;
       }
       throw new Error('Transcription returned no text — speak clearly after the wake phrase.');
     } catch (err) {
+      if (this.discardNextFinal) {
+        this.discardNextFinal = false;
+        return '';
+      }
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        return '';
+      }
       const message = err instanceof Error ? err.message : String(err);
       this.cb.onError?.(message);
       throw err;
@@ -233,35 +260,43 @@ export class AmazonSttSession {
     // Raw PCM body (not JSON+base64) — smaller upload; nginx default 1m was rejecting ~45s clips.
     const bytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
 
-    const res = await fetch(`${this.bridgeBase}/api/intelligence/transcribe`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${this.appToken}`,
-        'Content-Type': 'application/octet-stream',
-      },
-      body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
-      signal: AbortSignal.timeout(45_000),
-    });
+    this.flushAbort?.abort();
+    this.flushAbort = new AbortController();
+    const timeoutId = window.setTimeout(() => this.flushAbort?.abort(), 45_000);
 
-    if (!res.ok) {
-      let detail = `${res.status} ${res.statusText}`.trim();
-      try {
-        const body = (await res.json()) as { error?: string; message?: string };
-        if (body.error) detail = body.error;
-        else if (body.message) detail = body.message;
-      } catch {
-        // ignore
+    try {
+      const res = await fetch(`${this.bridgeBase}/api/intelligence/transcribe`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.appToken}`,
+          'Content-Type': 'application/octet-stream',
+        },
+        body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer,
+        signal: this.flushAbort.signal,
+      });
+
+      if (!res.ok) {
+        let detail = `${res.status} ${res.statusText}`.trim();
+        try {
+          const body = (await res.json()) as { error?: string; message?: string };
+          if (body.error) detail = body.error;
+          else if (body.message) detail = body.message;
+        } catch {
+          // ignore
+        }
+        if (res.status === 413) {
+          throw new Error(
+            'Recording too long to upload — say send sooner, or keep the request shorter.',
+          );
+        }
+        throw new Error(detail || `Transcribe failed (${res.status})`);
       }
-      if (res.status === 413) {
-        throw new Error(
-          'Recording too long to upload — say send sooner, or keep the request shorter.',
-        );
-      }
-      throw new Error(detail || `Transcribe failed (${res.status})`);
+
+      const data = (await res.json()) as { text?: string };
+      return (data.text ?? '').trim();
+    } finally {
+      window.clearTimeout(timeoutId);
     }
-
-    const data = (await res.json()) as { text?: string };
-    return (data.text ?? '').trim();
   }
 }
 

@@ -1,9 +1,9 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { BridgeService } from './bridge.service';
-import type { VoiceSettingsResponse } from '../models/voice-providers';
+import type { TouchControlsMode, VoiceSettingsResponse } from '../models/voice-providers';
 
 /**
- * Voice settings — wake words and turn-submit timing via /api/voice/*.
+ * Voice settings — wake words, turn-submit, TTS, and on-screen controls via /api/voice/*.
  */
 @Injectable({ providedIn: 'root' })
 export class VoiceProvidersService {
@@ -18,7 +18,12 @@ export class VoiceProvidersService {
     this.error.set(null);
     try {
       const res = await this.bridge.apiFetch<VoiceSettingsResponse>('/api/voice/providers');
-      this.data.set(res);
+      this.data.set({
+        ...res,
+        touchControls: res.touchControls ?? 'when_muted',
+        wakeWordsEnabled: res.wakeWordsEnabled !== false,
+        defaultMicMuted: res.defaultMicMuted === true,
+      });
     } catch (err) {
       this.error.set(String(err));
     } finally {
@@ -63,12 +68,29 @@ export class VoiceProvidersService {
     });
   }
 
+  async updateVoiceUi(patch: {
+    touchControls?: TouchControlsMode;
+    wakeWordsEnabled?: boolean;
+    defaultMicMuted?: boolean;
+    touchOnlyPreset?: boolean;
+  }): Promise<void> {
+    await this.mutate('/api/voice/ui', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
   private async mutate(path: string, opts: RequestInit): Promise<void> {
     this.loading.set(true);
     this.error.set(null);
     try {
       const res = await this.bridge.apiFetch<VoiceSettingsResponse>(path, opts);
-      this.data.set(res);
+      this.data.set({
+        ...res,
+        touchControls: res.touchControls ?? 'when_muted',
+        wakeWordsEnabled: res.wakeWordsEnabled !== false,
+        defaultMicMuted: res.defaultMicMuted === true,
+      });
     } catch (err) {
       this.error.set(String(err));
       throw err;

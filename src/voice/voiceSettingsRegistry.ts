@@ -1,5 +1,5 @@
 /**
- * Voice settings registry — wake words and turn-submit timing.
+ * Voice settings registry — wake words, turn-submit, TTS, and on-screen controls.
  *
  * Persisted in config.json under settings.voice.
  */
@@ -8,6 +8,7 @@ import { z } from 'zod';
 import {
   LEGACY_WAKE_SENSITIVITY_THRESHOLD,
   getConfig,
+  type TouchControlsMode,
   type TurnSubmit,
   type VoiceSettings,
   type VoiceSettingsInput,
@@ -24,6 +25,9 @@ export interface VoiceSettingsResponse {
   wakeWords: WakeWords;
   turnSubmit: TurnSubmit;
   tts: VoiceTtsSettings;
+  touchControls: TouchControlsMode;
+  wakeWordsEnabled: boolean;
+  defaultMicMuted: boolean;
   workerPollTimeoutMs: number;
   userName?: string;
 }
@@ -42,12 +46,23 @@ function persistVoiceUpdate(
 
 export function getVoiceSettingsView(): VoiceSettingsResponse {
   const settings = getConfig().settings;
-  const { wakeWords, turnSubmit, tts, workerPollTimeoutMs } = settings.voice;
+  const {
+    wakeWords,
+    turnSubmit,
+    tts,
+    workerPollTimeoutMs,
+    touchControls,
+    wakeWordsEnabled,
+    defaultMicMuted,
+  } = settings.voice;
   const { userName } = settings;
   return {
     wakeWords,
     turnSubmit,
     tts,
+    touchControls: touchControls ?? 'when_muted',
+    wakeWordsEnabled: wakeWordsEnabled !== false,
+    defaultMicMuted: defaultMicMuted === true,
     workerPollTimeoutMs: workerPollTimeoutMs ?? 25_000,
     ...(userName ? { userName } : {}),
   };
@@ -88,6 +103,14 @@ const VoiceTtsBodySchema = z.object({
       lang: z.string().min(2).max(16).optional(),
     })
     .optional(),
+});
+
+const VoiceUiBodySchema = z.object({
+  touchControls: z.enum(['off', 'when_muted', 'always']).optional(),
+  wakeWordsEnabled: z.boolean().optional(),
+  defaultMicMuted: z.boolean().optional(),
+  /** Convenience: always + wakeWordsEnabled false */
+  touchOnlyPreset: z.boolean().optional(),
 });
 
 export function setUserName(raw: unknown): VoiceSettingsResponse {
@@ -161,6 +184,33 @@ export function setVoiceTts(raw: unknown): VoiceSettingsResponse {
       },
     };
   }, 'voice TTS settings updated');
+
+  return getVoiceSettingsView();
+}
+
+export function setVoiceUi(raw: unknown): VoiceSettingsResponse {
+  const parsed = VoiceUiBodySchema.safeParse(raw);
+  if (!parsed.success) throw new Error('Invalid on-screen control settings');
+
+  const data = parsed.data;
+  if (
+    data.touchControls === undefined &&
+    data.wakeWordsEnabled === undefined &&
+    data.defaultMicMuted === undefined &&
+    data.touchOnlyPreset === undefined
+  ) {
+    throw new Error('Provide touchControls, wakeWordsEnabled, defaultMicMuted, and/or touchOnlyPreset');
+  }
+
+  persistVoiceUpdate((voice) => {
+    if (data.touchOnlyPreset === true) {
+      voice.touchControls = 'always';
+      voice.wakeWordsEnabled = false;
+    }
+    if (data.touchControls !== undefined) voice.touchControls = data.touchControls;
+    if (data.wakeWordsEnabled !== undefined) voice.wakeWordsEnabled = data.wakeWordsEnabled;
+    if (data.defaultMicMuted !== undefined) voice.defaultMicMuted = data.defaultMicMuted;
+  }, 'voice UI / touch controls updated');
 
   return getVoiceSettingsView();
 }

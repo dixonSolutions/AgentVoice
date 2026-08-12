@@ -54,5 +54,9 @@
       [outlined]="true"
       [fluid]="true"
       (onClick)="onClearAppCredentials()" />
+
+    @if (versionLabel(); as ver) {
+      <p class="cv-cfg-muted cv-connection-version" aria-label="App version">{{ ver }}</p>
+    }
   </p-fluid>
 </p-card>

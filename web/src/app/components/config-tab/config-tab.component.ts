@@ -120,10 +120,10 @@ const ALL_SECTIONS: ConfigSection[] = [
   },
   {
     id: 'voice',
-    label: 'Voice & Wake Words',
+    label: 'Voice & Controls',
     icon: 'pi-microphone',
-    description: 'Activation phrases, VAD, silence threshold, sound effects, TTS',
-    keywords: ['wake', 'phrase', 'vad', 'silence', 'start', 'end', 'cancel', 'audio', 'sound', 'cue', 'tts', 'voice', 'interrupt', 'browser', 'polly', 'transcribe', 'sfm', 'speech', 'stt'],
+    description: 'Wake words, on-screen controls, turn submit, TTS, and transcription',
+    keywords: ['wake', 'phrase', 'vad', 'silence', 'start', 'end', 'cancel', 'audio', 'sound', 'cue', 'tts', 'voice', 'interrupt', 'browser', 'polly', 'transcribe', 'sfm', 'speech', 'stt', 'touch', 'mute', 'speak'],
   },
   {
     id: 'personal',
@@ -508,6 +508,16 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected workerPollTimeoutMs = 25_000;
   protected savingVoice = false;
 
+  protected touchControls: 'off' | 'when_muted' | 'always' = 'when_muted';
+  protected wakeWordsEnabled = true;
+  protected defaultMicMuted = false;
+  protected savingTouchUi = false;
+  protected readonly touchControlsOptions: Array<{ label: string; value: 'off' | 'when_muted' | 'always' }> = [
+    { label: 'When muted', value: 'when_muted' },
+    { label: 'Always', value: 'always' },
+    { label: 'Off', value: 'off' },
+  ];
+
   protected cursorVoiceEnabled = true;
   protected errorSoundEnabled = true;
   protected errorSpeakEnabled = true;
@@ -652,6 +662,44 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       this.webkitPitch = data.tts.webkit.pitch;
       this.webkitVolume = data.tts.webkit.volume;
       this.webkitLang = data.tts.webkit.lang;
+    }
+    this.touchControls = data?.touchControls ?? 'when_muted';
+    this.wakeWordsEnabled = data?.wakeWordsEnabled !== false;
+    this.defaultMicMuted = data?.defaultMicMuted === true;
+  }
+
+  protected async onSaveTouchUi(): Promise<void> {
+    this.savingTouchUi = true;
+    try {
+      await this.voiceProviders.updateVoiceUi({
+        touchControls: this.touchControls,
+        wakeWordsEnabled: this.wakeWordsEnabled,
+        defaultMicMuted: this.defaultMicMuted,
+      });
+      this.syncVoiceForm();
+      this.toast.success(
+        'On-screen controls saved',
+        this.voiceSession.conversationActive()
+          ? 'Hang up and restart the session to apply wake-word changes.'
+          : 'Applies the next time you tap the orb.',
+      );
+    } catch (err) {
+      this.toast.error('Could not save controls', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.savingTouchUi = false;
+    }
+  }
+
+  protected async onTouchOnlyPreset(): Promise<void> {
+    this.savingTouchUi = true;
+    try {
+      await this.voiceProviders.updateVoiceUi({ touchOnlyPreset: true });
+      this.syncVoiceForm();
+      this.toast.success('Touch-only preset', 'On-screen controls always on; wake words off.');
+    } catch (err) {
+      this.toast.error('Could not apply preset', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.savingTouchUi = false;
     }
   }
 

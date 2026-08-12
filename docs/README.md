@@ -37,6 +37,7 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`24-agent-providers.md`](./24-agent-providers.md) | `AgentProvider` abstraction: phone-driven auth, live model selection, generic MCP aliases | In-app sign-in, model picker, or adding a 4th CLI |
 | [`25-hosting-providers.md`](./25-hosting-providers.md) | `HostingProvider` abstraction: Tailscale, Cloudflare, ngrok, Dev Tunnels, LAN, local, manual | Choosing/switching how the bridge is exposed |
 | [`26-rename-agentvoice.md`](./26-rename-agentvoice.md) | Product rename from Cursor Voice → AgentVoice (what changed / what stayed) | Migrating an existing install after the rename |
+| [`27-touch-controls-and-cancel.md`](./27-touch-controls-and-cancel.md) | On-screen Speak / Cancel, cancel-while-processing, touch-only preset | Mute UX, no wake words, or cancel during Transcribe |
 
 ## One-paragraph summary
 

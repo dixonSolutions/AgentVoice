@@ -46,6 +46,24 @@ Each update step writes a row to `serve_event` and an audit entry.
 
 Hosting run mode / ports remain at `/api/admin/hosting` and are edited in the Serve hub **Network** tab.
 
+## Health check & version
+
+`GET /healthz` (unauthenticated) returns:
+
+| Field | Meaning |
+| --- | --- |
+| `status` / `db` / `projects` | Bridge health |
+| `cliVersion` | Cursor CLI version (cached) |
+| `appVersion` | `package.json` version |
+| `gitCommit` | Short git SHA of the running repo |
+| `runMode` / URLs | Hosting endpoints |
+
+After **Update service**, hard-refresh the PWA. Confirm deploy via:
+
+1. Config → Connection — muted `v0.1.0 · abc1234` footer
+2. Config → Serve → Status — git `currentCommit`
+3. `curl https://your-host/healthz` — `appVersion` + `gitCommit` match
+
 ## Config tab
 
 Open **Config → Serve**:

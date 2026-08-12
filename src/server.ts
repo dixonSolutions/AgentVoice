@@ -22,6 +22,7 @@ import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { requireAuth, verifyWsToken, parseWsAuthMessage } from './auth.js';
 import { getDb } from './state/db.js';
+import { getAppVersionInfo } from './state/appVersion.js';
 import {
   listProjects,
   resolveProject,
@@ -159,11 +160,14 @@ export async function buildServer(): Promise<FastifyInstance> {
     const cliVersion = cachedCliVersion;
     const { settings } = getConfig();
     const run = getRunModeInfo(settings);
+    const { appVersion, gitCommit } = getAppVersionInfo();
     return {
       status: db.open ? 'ok' : 'degraded',
       db: db.open ? 'ok' : 'error',
       projects: projects.length,
       cliVersion,
+      appVersion,
+      gitCommit,
       runMode: run.runMode,
       backendUrl: run.backendUrl,
       webUrl: run.webUrl,

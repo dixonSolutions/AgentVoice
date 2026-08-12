@@ -105,32 +105,66 @@
         <p-message
           severity="secondary"
           variant="simple"
-          text="Wake phrase activates the mic (Vosk). Choose Silero VAD or a separate end phrase to finish a turn." />
+          text="Hands-free wake phrases (Vosk) plus optional on-screen Speak / Cancel. Red Cancel during processing always appears — spoken cancel only works while capturing." />
 
         <p-fieldset legend="Activation">
           <p-iftalabel>
             <input pInputText id="cfg-wake-start" [(ngModel)]="wakeStart"
-              placeholder="cursor listen" [disabled]="!isBridgeConnected()" />
+              placeholder="cursor listen" [disabled]="!isBridgeConnected() || !wakeWordsEnabled" />
             <label for="cfg-wake-start">Start phrase (wake)</label>
           </p-iftalabel>
           <p-iftalabel>
             <input pInputText id="cfg-wake-cancel" [(ngModel)]="wakeCancel"
-              placeholder="cancel" [disabled]="!isBridgeConnected()" />
+              placeholder="cancel" [disabled]="!isBridgeConnected() || !wakeWordsEnabled" />
             <label for="cfg-wake-cancel">Cancel phrase</label>
           </p-iftalabel>
           <p-iftalabel>
             <p-inputNumber id="cfg-wake-confidence" [(ngModel)]="wakeConfidencePercent"
-              [min]="0" [max]="100" [step]="5" suffix="%" [disabled]="!isBridgeConnected()" />
+              [min]="0" [max]="100" [step]="5" suffix="%" [disabled]="!isBridgeConnected() || !wakeWordsEnabled" />
             <label for="cfg-wake-confidence">Wake confidence threshold</label>
           </p-iftalabel>
           <p-iftalabel>
             <p-select id="cfg-wake-confidence-presets" [(ngModel)]="wakeConfidencePercent"
               [options]="wakeConfidencePresets" optionLabel="label" optionValue="value"
-              placeholder="Choose preset" [disabled]="!isBridgeConnected()" />
+              placeholder="Choose preset" [disabled]="!isBridgeConnected() || !wakeWordsEnabled" />
             <label for="cfg-wake-confidence-presets">Presets</label>
           </p-iftalabel>
           <p-message severity="secondary" variant="simple"
             text="Minimum Vosk word confidence (0–100%) to accept the wake phrase. Below 55% also enables partial recognition for faster response; higher values reduce false activations." />
+        </p-fieldset>
+
+        <p-fieldset legend="On-screen controls">
+          <p-message severity="secondary" variant="simple"
+            text="Default is When muted: unmute uses wake words; mute shows Speak / Cancel. Cancel-processing (red button while transcribing) always shows. Touch-only turns wake words off and keeps buttons always on." />
+
+          <p-iftalabel>
+            <p-select id="cfg-touch-controls" [(ngModel)]="touchControls"
+              [options]="touchControlsOptions" optionLabel="label" optionValue="value"
+              [disabled]="!isBridgeConnected()" />
+            <label for="cfg-touch-controls">Speak / Cancel visibility</label>
+          </p-iftalabel>
+
+          <div class="cv-cfg-toggle-row">
+            <p-toggleSwitch id="cfg-wake-enabled" [(ngModel)]="wakeWordsEnabled"
+              [disabled]="!isBridgeConnected()" />
+            <label for="cfg-wake-enabled">Wake words enabled</label>
+          </div>
+
+          <div class="cv-cfg-toggle-row">
+            <p-toggleSwitch id="cfg-default-mute" [(ngModel)]="defaultMicMuted"
+              [disabled]="!isBridgeConnected()" />
+            <label for="cfg-default-mute">Start sessions muted</label>
+          </div>
+
+          <div class="cv-cfg-row-actions">
+            <p-button label="Save controls" icon="pi pi-check"
+              [loading]="savingTouchUi" [disabled]="!isBridgeConnected()"
+              (onClick)="onSaveTouchUi()" />
+            <p-button label="Touch-only preset" icon="pi pi-mobile"
+              severity="secondary" [outlined]="true"
+              [loading]="savingTouchUi" [disabled]="!isBridgeConnected()"
+              (onClick)="onTouchOnlyPreset()" />
+          </div>
         </p-fieldset>
 
         <p-fieldset legend="Turn submit">
@@ -707,6 +741,8 @@
           </p-fieldset>
 
           <p-fieldset legend="Audio (STT / region)">
+            <p-message severity="secondary" variant="simple"
+              text="Polly voice, Transcribe language, and speech backends are configured under Voice &amp; Controls. This section only keeps Bedrock audio region / prefer-WebKit for the intelligence workflow." />
             <p-message severity="secondary" variant="simple"
               text="Speech output and Transcribe SFM options live under Voice. Here: browser STT preference and AWS audio region." />
             <div class="cv-cfg-toggle-row">

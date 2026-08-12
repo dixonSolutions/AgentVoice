@@ -235,6 +235,22 @@ lazy chunking so Firefox-scale remote voice lists stay responsive.
 **Consequence:** Templates keep `p-*` selectors. App CSS is structural and uses
 `--p-*` tokens only. Dark mode class is `.app-dark` on `<html>`.
 
+### ADR-020 — On-screen controls default `when_muted`; Cancel-processing always visible
+
+**Decision:** Default `settings.voice.touchControls` to `when_muted`. Hands-free wake
+words remain primary when unmuted; mute reveals Speak / Cancel. A separate mid-bottom
+red **Cancel** during `submittingTurn` / Transcribe is **always** shown — spoken cancel
+cannot work in that window (`voiceActivated` is already false). Touch-only
+(`touchControls=always` + `wakeWordsEnabled=false`) is an explicit Config preset, not
+the default.
+
+**Rationale:** Preserve eyes-free UX (Hick / clutter); match call mute semantics
+(Jakob); never hide the only escape hatch during processing.
+
+**Consequence:** Documented in [`27-touch-controls-and-cancel.md`](./27-touch-controls-and-cancel.md).
+`PATCH /api/voice/ui` persists the settings; PWA session honors `wakeWordsEnabled` from
+`auth_ok`.
+
 ## Open items / risks (to resolve during build)
 
 | ID | Item | Plan to resolve | Severity |

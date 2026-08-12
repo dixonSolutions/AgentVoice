@@ -63,6 +63,9 @@
           "lang": "en-US"
         }
       },
+      "touchControls": "when_muted",
+      "wakeWordsEnabled": true,
+      "defaultMicMuted": false,
       "workerPollTimeoutMs": 25000
     },
     "defaultMode": "agent",

@@ -168,7 +168,8 @@ rebase onto `main` (or `settings.serve.branch`), update service (rebase → deps
 build → restart), and read `journalctl` service logs. No scheduled auto-update.
 See [`21-serve-self-hosting.md`](./21-serve-self-hosting.md).
 
-`GET /healthz` returns `runMode`, `backendUrl`, `webUrl`, and `useDevWebServer` for quick sanity checks.
+`GET /healthz` returns `runMode`, `backendUrl`, `webUrl`, `useDevWebServer`, plus
+`appVersion` and `gitCommit` for quick sanity checks.
 
 ### Example `config.json`
 

@@ -157,6 +157,7 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
             wakeWords: voice.wakeWords,
             turnSubmit: voice.turnSubmit,
             tts: voice.tts,
+            wakeWordsEnabled: voice.wakeWordsEnabled !== false,
             model: workflowId === 'cursor_native' ? 'cursor' : llm.model,
             audio: {
               preferWebkit: audio.preferWebkit,
