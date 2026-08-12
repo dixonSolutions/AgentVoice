@@ -892,8 +892,16 @@ body {
   }
 
   .cv-main {
-    padding: 0.75rem;
+    padding: 0.5rem;
     padding-bottom: 0.5rem;
+    padding-left: max(0.5rem, env(safe-area-inset-left, 0));
+    padding-right: max(0.5rem, env(safe-area-inset-right, 0));
+  }
+
+  /* Nested card + accordion padding stacks up; keep phone gutters slim so the
+     fields stay comfortably tappable instead of losing a quarter of the width. */
+  .cv-voice-setup-accordion .p-accordioncontent-content {
+    padding: 0 0.5rem 0.5rem;
   }
 
   .cv-main--fullscreen {
