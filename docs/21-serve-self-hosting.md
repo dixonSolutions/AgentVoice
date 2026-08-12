@@ -26,7 +26,7 @@ See [config.example.json](../config.example.json).
 | **Force pull & rebase** | Stash dirty tree if needed, `git fetch` + `git rebase origin/<branch>`, restore stash |
 | **Install deps** | `npm install` + `npm rebuild` |
 | **Build** | `npm run build` |
-| **Restart** | Prefer `agentvoice-watch.path`; else detached `scripts/restart.sh --no-build` |
+| **Restart** | Always spawns detached `scripts/restart.sh --no-build` |
 | **Health check** | GET `/healthz` on configured `PORT` |
 | **Service logs** | `journalctl --user -u agentvoice.service` (fixed unit name) |
 
@@ -80,6 +80,18 @@ Open **Config → Serve**:
 - Subprocess argv is fixed (`npm`, `bash`, `systemctl`, `journalctl`); only numeric `lines` is accepted for logs
 - Failures are logged; the bridge process is not terminated on serve errors
 - Only one serve operation at a time (409 if busy)
+
+## Why restart never defers to the watch unit
+
+Restart used to report `skipped` whenever `agentvoice-watch.path` was active, on
+the assumption that the unit would pick up the new `dist/index.js`. When that
+trigger silently failed, the old process kept serving while the UI reported
+success. Restart is now unconditional; a redundant restart is harmless.
+
+Fresh builds are also served correctly without a restart: `@fastify/static` runs
+with `wildcard: true`, so files are resolved per request instead of from a
+boot-time listing (which used to make new asset hashes fall through to the SPA
+handler and return `index.html` with a `text/html` type for `.js` and `.css`).
 
 ## Code
 

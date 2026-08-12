@@ -161,19 +161,6 @@ async function probeGit(repoDir: string, branchHint?: string): Promise<ServeGitS
   };
 }
 
-async function isWatchPathActive(): Promise<boolean> {
-  try {
-    const { code } = await runCommand(process.cwd(), 'systemctl', [
-      '--user',
-      'is-active',
-      'agentvoice-watch.path',
-    ]);
-    return code === 0;
-  } catch {
-    return false;
-  }
-}
-
 async function healthCheck(port: number): Promise<{ ok: boolean; detail?: string }> {
   const url = `http://127.0.0.1:${port}/healthz`;
   try {
@@ -194,12 +181,13 @@ async function healthCheck(port: number): Promise<{ ok: boolean; detail?: string
   }
 }
 
+/**
+ * Restart is always spawned, even when agentvoice-watch.path is active: the
+ * watch unit is best-effort and a missed trigger used to leave the old process
+ * serving stale code with no signal that anything was wrong. A duplicate
+ * restart is cheap; systemd serialises them.
+ */
 async function triggerRestart(repoDir: string, runId: string): Promise<ServeOutcome> {
-  const watchActive = await isWatchPathActive();
-  if (watchActive) {
-    recordStep(runId, 'restart', 'skip', 'agentvoice-watch.path will restart on dist change');
-    return 'skipped';
-  }
   const script = join(repoDir, 'scripts/restart.sh');
   if (!existsSync(script)) {
     recordStep(runId, 'restart', 'warn', `restart script missing at ${script}`);
@@ -464,12 +452,7 @@ export async function serveRestart(): Promise<ServeActionResult> {
 
   return withServeLock('manual:restart', async (runId) => {
     const outcome = await triggerRestart(repoDir, runId);
-    const detail =
-      outcome === 'ok'
-        ? 'Restart spawned'
-        : outcome === 'skipped'
-          ? 'Watch path will handle restart'
-          : 'Restart failed';
+    const detail = outcome === 'ok' ? 'Restart spawned' : 'Restart failed';
     recordStep(runId, 'finish', outcome === 'error' ? 'error' : 'ok', detail);
     return { runId, outcome, detail };
   });

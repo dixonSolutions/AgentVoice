@@ -103,10 +103,14 @@ export async function registerProductionWeb(
     return;
   }
 
+  // `wildcard: true` resolves files per request. With `false`, routes are
+  // registered from a boot-time directory listing, so a rebuild's new asset
+  // hashes fall through to the SPA handler (index.html served as .js/.css)
+  // until the process restarts.
   await app.register(fastifyStatic, {
     root: webDistPath,
     prefix: '/',
-    wildcard: false,
+    wildcard: true,
   });
 
   app.setNotFoundHandler((req, reply) => {
