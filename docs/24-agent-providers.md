@@ -97,13 +97,17 @@ multi-line project/session templates (~56px). The active model id (including
 `auto`) is always injected into options so the trigger never renders blank.
 
 Because the overlay renders in `body`, long option text would otherwise stretch
-the panel wider than its field. `onSelectShow()` measures the open
-`.p-select` trigger and publishes `--cv-select-panel-width` on
-`documentElement`; `.cv-voice-select-overlay` consumes it (with a
-`calc(100vw - 1.5rem)` ceiling) and `onSelectHide()` clears it. Width therefore
-follows whatever the layout gives the field at any viewport — no fixed caps on
-the picker column. Secondary option text clamps to two lines instead of being
-truncated to one.
+the panel wider than its field. A `ResizeObserver` on the picker column
+publishes its width as `--cv-select-panel-width` on `documentElement`, and
+`.cv-voice-select-overlay` consumes it (with a `calc(100vw - 1.5rem)` ceiling).
+
+The observer matters more than it looks: the value must be current *before* a
+panel opens. Measuring in `onShow` sized the panel correctly but the library had
+already positioned it from its content width, leaving a correct-width panel
+pinned to the viewport edge. Width now follows whatever the layout gives the
+field at any viewport — no fixed caps on the picker column. Option detail text
+wraps to two lines (`white-space: normal` is required; the theme sets `nowrap`
+on options).
 `<Provider> · <Model>`.
 
 ## Generic MCP tool aliases
