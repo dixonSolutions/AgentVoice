@@ -1503,8 +1503,12 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       )
       .catch((err: unknown) => {
         if (ac.signal.aborted) return;
-        this.journalLive = false;
         this.journalError = err instanceof Error ? err.message : String(err);
+        this.cdr.markForCheck();
+      })
+      .then(() => {
+        if (ac.signal.aborted) return;
+        this.journalLive = false;
         this.cdr.markForCheck();
         this.startJournalPoll(ac.signal);
       });

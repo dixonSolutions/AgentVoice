@@ -509,7 +509,9 @@ async function journalctlUnitArgs(): Promise<string[]> {
       '1',
       '--no-pager',
     ]);
-    if (probe.code === 0) return userArgs;
+    const text = probe.stdout.trim();
+    // journalctl exits 0 for missing/empty units and prints "-- No entries --".
+    if (probe.code === 0 && text && text !== '-- No entries --') return userArgs;
   } catch {
     // fall through to system unit
   }
