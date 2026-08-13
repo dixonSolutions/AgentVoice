@@ -135,12 +135,13 @@ Preview uses `speechSynthesis.speak()` directly from the Config tab (no bridge r
 
 ## Mobile session keepalive
 
-While a voice session is active on a phone, `web/src/session-keepalive.ts` keeps the app
+While a voice session is active on a **PWA**, `web/src/session-keepalive.ts` keeps the app
 in a foreground media session (Screen Wake Lock + silent looping audio + Media Session API).
-If the OS suspends the intelligence WebSocket while backgrounded, the session auto-reconnects
-when the user returns.
+The **native CallKit app** skips Wake Lock so the display can sleep. Orb visualization
+pauses while the screen is off. If the OS suspends the intelligence WebSocket while
+backgrounded, the session auto-reconnects when the user returns.
 
-Limits and user guidance: [`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md).
+Limits, battery notes, and user guidance: [`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md).
 
 ## Audio processing
 

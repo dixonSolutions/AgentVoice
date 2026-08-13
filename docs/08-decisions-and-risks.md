@@ -266,6 +266,23 @@ script already owns deps+build; duplicating that pipeline in-process was bloat.
 **Consequence:** Documented in [`21-serve-self-hosting.md`](./21-serve-self-hosting.md).
 Removed `POST /api/admin/serve/run` and `/install`; actions are `pull` | `restart` | `health`.
 
+### ADR-022 — Native CallKit must not hold a screen wake lock
+
+**Decision:** Safari/PWA sessions still request Screen Wake Lock + silent looping
+audio (otherwise iOS kills the tab). The **native Capacitor app** skips both once
+CallKit (iOS) or the call-category foreground service (Android) is up. Orb FFT /
+canvas pause while `document.hidden`. Vosk wake-word spotting stays running.
+
+**Rationale:** A cellular call turns the display off and uses dedicated DSP.
+AgentVoice was draining more than Phone.app mainly because Wake Lock kept the
+**screen on for the whole session** — on top of WebView + Vosk WASM. CallKit
+already keeps the audio session alive with the screen locked.
+
+**Consequence:** Native Voice-tab copy tells dad to lock the phone and hang up
+when done. PWA copy still says the screen stays on. See
+[`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md) and
+[`20-native-callkit-shell.md`](./20-native-callkit-shell.md).
+
 ## Open items / risks (to resolve during build)
 
 | ID | Item | Plan to resolve | Severity |

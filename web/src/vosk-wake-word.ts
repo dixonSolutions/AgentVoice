@@ -138,7 +138,8 @@ export class VoskGrammarSpotter {
     }
 
     this.source = ctx.createMediaStreamSource(this.mediaStream);
-    this.processor = ctx.createScriptProcessor(1024, 1, 1);
+    // 4096 ≈ 85 ms at 48 kHz — fewer main-thread wakeups than 1024; still fine for wake words.
+    this.processor = ctx.createScriptProcessor(4096, 1, 1);
     this.processor.onaudioprocess = (event) => {
       if (!this.running || this.paused || !this.recognizer) return;
       try {

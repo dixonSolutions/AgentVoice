@@ -29,7 +29,7 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`16-mcp-server-cursor-as-brain.md`](./16-mcp-server-cursor-as-brain.md) | **Default** `cursor_native` workflow — Cursor as reasoning layer | Primary voice path |
 | [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) | TTS interrupt snapshot, `tts_interrupt` delivery, wake-word echo filter | Barge-in bugs or agent heard/not-heard context |
 | [`18-image-carousel.md`](./18-image-carousel.md) | `show_images` tool, carousel PWA, Browser snapshot workflow | UI review on phone |
-| [`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md) | Wake Lock, silent media session, auto-resume on mobile | Screen-off disconnects on phone |
+| [`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md) | Wake Lock (PWA only), silent media, auto-resume; why native battery ≠ a phone call | Screen-off disconnects; iPhone battery drain |
 | [`20-native-callkit-shell.md`](./20-native-callkit-shell.md) | CallKit native app + push notifications | True call-style session + background alerts |
 | [`21-serve-self-hosting.md`](./21-serve-self-hosting.md) | Serve hub: health, live journalctl, restart script, origin rebase | Self-hosting from Config tab |
 | [`22-split-host-tunnel.md`](./22-split-host-tunnel.md) | Incus container hosting + optional SSH tunnel for Tailscale Serve | Container DNS / tunnel 502 |

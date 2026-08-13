@@ -2,8 +2,9 @@
  * Foreground session keepalive for mobile PWAs.
  *
  * While a voice session is active:
- * - Screen Wake Lock — delays auto-lock (screen stays on)
- * - Silent looping HTML audio — signals an active media session to iOS/Android
+ * - Screen Wake Lock — delays auto-lock (screen stays on). Skip on native CallKit.
+ * - Silent looping HTML audio — signals an active media session to iOS/Android.
+ *   Skip on native CallKit (the call audio session already keeps the process alive).
  * - Media Session API — lock-screen / Control Center metadata
  *
  * Does not grant background mic or VoIP privileges. See docs/19-mobile-session-keepalive.md.
@@ -18,6 +19,16 @@ const SILENT_WAV_DATA_URI =
 export interface SessionKeepAliveOptions {
   title?: string;
   artist?: string;
+  /**
+   * Keep the display from auto-locking. Default true (required for Safari PWA).
+   * Native CallKit should pass false — the screen is the largest battery cost.
+   */
+  holdScreen?: boolean;
+  /**
+   * Loop silent HTML audio so the OS treats the tab as a media session.
+   * Default true. Native CallKit should pass false.
+   */
+  silentAudio?: boolean;
 }
 
 export class SessionKeepAlive {
@@ -25,11 +36,19 @@ export class SessionKeepAlive {
   private audio: HTMLAudioElement | null = null;
   private active = false;
   private visibilityBound = false;
+  private holdScreen = true;
+  private silentAudio = true;
   private onVisibleCallback: (() => void) | null = null;
+  private onHiddenCallback: (() => void) | null = null;
 
   /** Called when the page becomes visible again (reconnect wake lock, resume silent audio). */
   onVisible(callback: () => void): void {
     this.onVisibleCallback = callback;
+  }
+
+  /** Called when the page is hidden (screen lock / app switch) — pause visuals. */
+  onHidden(callback: () => void): void {
+    this.onHiddenCallback = callback;
   }
 
   get isActive(): boolean {
@@ -46,6 +65,8 @@ export class SessionKeepAlive {
       return;
     }
     this.active = true;
+    this.holdScreen = options.holdScreen !== false;
+    this.silentAudio = options.silentAudio !== false;
     this.bindVisibility();
     this.setupMediaSession(options);
     await Promise.all([this.requestWakeLock(), this.startSilentAudio()]);
@@ -78,13 +99,16 @@ export class SessionKeepAlive {
   }
 
   private readonly handleVisibilityChange = (): void => {
-    if (document.hidden) return;
+    if (document.hidden) {
+      this.onHiddenCallback?.();
+      return;
+    }
     void this.refresh();
     this.onVisibleCallback?.();
   };
 
   private async requestWakeLock(): Promise<void> {
-    if (!this.wakeLockSupported || !this.active) return;
+    if (!this.holdScreen || !this.wakeLockSupported || !this.active) return;
     try {
       if (this.wakeLock && !this.wakeLock.released) return;
       this.wakeLock = await navigator.wakeLock.request('screen');
@@ -102,7 +126,7 @@ export class SessionKeepAlive {
   }
 
   private async startSilentAudio(): Promise<void> {
-    if (!this.active || typeof document === 'undefined') return;
+    if (!this.silentAudio || !this.active || typeof document === 'undefined') return;
 
     await unlockAudioContext();
 

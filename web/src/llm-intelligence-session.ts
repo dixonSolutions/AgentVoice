@@ -389,6 +389,18 @@ export class LlmIntelligenceSession {
     }
   }
 
+  /** Drop the viz-only filter graph while the display is off (wake-word Vosk stays up). */
+  pauseVisualMeter(): void {
+    this.meterMicChain?.dispose();
+    this.meterMicChain = null;
+  }
+
+  /** Re-attach the orb meter after the screen is on again. */
+  resumeVisualMeter(): void {
+    if (this.closed) return;
+    void this.ensureMicMeter();
+  }
+
   /** Idle phase — Vosk only; no STT pipeline (no Transcribe cost). */
   private async startWakeWordPhase(): Promise<void> {
     await this.ensureSharedMic();

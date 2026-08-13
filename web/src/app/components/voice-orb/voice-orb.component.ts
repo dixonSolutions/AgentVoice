@@ -178,6 +178,7 @@ export class VoiceOrbComponent implements OnDestroy {
 
   private readonly canvasRef = viewChild<ElementRef<HTMLCanvasElement>>('canvas');
   private rafId = 0;
+  private lastDrawTs = 0;
   private displayLevel = 0;
   private displayMic = 0;
   private displayOut = 0;
@@ -192,6 +193,9 @@ export class VoiceOrbComponent implements OnDestroy {
       this.resizeCanvas();
       this.loop();
     });
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', this.onVisibility);
+    }
 
     effect(() => {
       if (this.canvasRef()) this.resizeCanvas();
@@ -212,25 +216,36 @@ export class VoiceOrbComponent implements OnDestroy {
     el.height = Math.round(size * dpr);
   }
 
-  private loop = (): void => {
-    const el = this.canvasRef()?.nativeElement;
-    if (el) {
-      const viz = this.visualizeUserSpeech();
-      const { mic, out, bins } = this.spectrum();
-      const targetMic = viz ? mic : 0;
-      const targetOut = viz ? out : 0;
-      const targetLevel = viz ? mic : 0;
-      const rise = targetLevel > this.displayLevel ? 0.55 : 0.22;
-      this.displayLevel += (targetLevel - this.displayLevel) * rise;
-      this.displayMic += (targetMic - this.displayMic) * 0.35;
-      this.displayOut += (targetOut - this.displayOut) * 0.35;
-      for (let i = 0; i < VIZ_BINS; i++) {
-        const v = viz ? (bins[i] ?? 0) : 0;
-        this.displayBins[i] += (v - this.displayBins[i]!) * (viz ? 0.4 : 0.28);
-      }
-      this.draw(el);
+  private readonly onVisibility = (): void => {
+    if (typeof document !== 'undefined' && document.hidden) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = 0;
+      return;
     }
+    if (!this.rafId) this.loop();
+  };
+
+  private loop = (ts = 0): void => {
     this.rafId = requestAnimationFrame(this.loop);
+    if (typeof document !== 'undefined' && document.hidden) return;
+    if (ts - this.lastDrawTs < 1000 / 30) return;
+    this.lastDrawTs = ts;
+    const el = this.canvasRef()?.nativeElement;
+    if (!el) return;
+    const viz = this.visualizeUserSpeech();
+    const { mic, out, bins } = this.spectrum();
+    const targetMic = viz ? mic : 0;
+    const targetOut = viz ? out : 0;
+    const targetLevel = viz ? mic : 0;
+    const rise = targetLevel > this.displayLevel ? 0.55 : 0.22;
+    this.displayLevel += (targetLevel - this.displayLevel) * rise;
+    this.displayMic += (targetMic - this.displayMic) * 0.35;
+    this.displayOut += (targetOut - this.displayOut) * 0.35;
+    for (let i = 0; i < VIZ_BINS; i++) {
+      const v = viz ? (bins[i] ?? 0) : 0;
+      this.displayBins[i] += (v - this.displayBins[i]!) * (viz ? 0.4 : 0.28);
+    }
+    this.draw(el);
   };
 
   private themePalette(mode: OrbColorMode): {
@@ -439,6 +454,9 @@ export class VoiceOrbComponent implements OnDestroy {
 
   ngOnDestroy(): void {
     cancelAnimationFrame(this.rafId);
+    if (typeof document !== 'undefined') {
+      document.removeEventListener('visibilitychange', this.onVisibility);
+    }
   }
 }
 
