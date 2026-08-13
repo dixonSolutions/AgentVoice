@@ -391,6 +391,12 @@ export class VoiceTabComponent {
   protected readonly liveSessionHint = computed(() => {
     if (!this.voiceSession.conversationActive()) return null;
     const wakeOff = this.voiceProviders.data()?.wakeWordsEnabled === false;
+    if (this.voiceSession.nativeCallActive()) {
+      if (wakeOff) {
+        return 'Wake words off — use Speak / Cancel. You can lock the screen; the call stays active.';
+      }
+      return 'You can lock the screen — the call stays active and uses less battery. Hang up when you are done.';
+    }
     if (wakeOff) {
       return 'Wake words off — use Speak / Cancel on screen. Keep this app open.';
     }

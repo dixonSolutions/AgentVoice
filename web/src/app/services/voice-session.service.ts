@@ -63,6 +63,8 @@ export class VoiceSessionService {
   private keepaliveWired = false;
   /** Reconnect intelligence session after OS background suspend (not user hang-up). */
   private resumeOnVisible = false;
+  /** Native CallKit / foreground-call started for this session — screen may lock. */
+  private nativeCallStarted = false;
   private readonly _voiceActivated = signal(false);
   private readonly _speaking = signal(false);
   private readonly _jobRunning = signal(false);
@@ -78,6 +80,8 @@ export class VoiceSessionService {
   readonly speaking = this._speaking.asReadonly();
   readonly voiceActivated = this._voiceActivated.asReadonly();
   readonly micMuted = this._micMuted.asReadonly();
+  /** True when this session is backed by the native call shell (CallKit / Android FGS). */
+  readonly nativeCallActive = signal(false);
   /** Silero VAD active — listening for speech end to submit. */
   readonly vadListening = signal(false);
   /** Vosk end-phrase spotter active (say end word to submit). */
@@ -168,10 +172,14 @@ export class VoiceSessionService {
 
     this.ensureKeepAliveWiring();
     this.resumeOnVisible = false;
+    this.nativeCallStarted = false;
+    this.nativeCallActive.set(false);
 
     if (isNativeShell()) {
       try {
         await CallSession.startCall();
+        this.nativeCallStarted = true;
+        this.nativeCallActive.set(true);
       } catch {
         this.toast.warn('Call session', 'Could not start native call — voice may drop when screen locks.');
       }
@@ -304,6 +312,8 @@ export class VoiceSessionService {
     this.endPhraseArmed.set(false);
     this.submittingTurn.set(false);
     this._audioBackends.set(null);
+    this.nativeCallStarted = false;
+    this.nativeCallActive.set(false);
     clearTranscriptTts();
     cancelTtsFallback();
     stopAllTts();
@@ -342,7 +352,11 @@ export class VoiceSessionService {
   private ensureKeepAliveWiring(): void {
     if (this.keepaliveWired) return;
     this.keepaliveWired = true;
+    this.keepalive.onHidden(() => {
+      this.pauseForegroundVisuals();
+    });
     this.keepalive.onVisible(() => {
+      this.resumeForegroundVisuals();
       void this.tryResumeAfterBackground();
     });
     if (isNativeShell()) {
@@ -389,6 +403,10 @@ export class VoiceSessionService {
           void this.keepalive.start({
             title: 'AgentVoice',
             artist: 'Voice session active',
+            // CallKit / Android FGS keep audio alive with the screen off.
+            // Holding a screen wake lock is the largest iPhone battery cost.
+            holdScreen: !this.nativeCallStarted,
+            silentAudio: !this.nativeCallStarted,
           });
         }
         if (s === 'error') {
@@ -633,18 +651,42 @@ export class VoiceSessionService {
     }
   }
 
+  /** Orb FFT + canvas are wasted while the screen is off. Wake-word Vosk stays up. */
+  private pauseForegroundVisuals(): void {
+    this.pauseMeterPoll();
+    this._session?.pauseVisualMeter();
+  }
+
+  private resumeForegroundVisuals(): void {
+    if (!this.conversationActive()) return;
+    this._session?.resumeVisualMeter();
+    if (!this.meterRaf) this.startMeterPoll();
+  }
+
   private startMeterPoll(): void {
-    this.stopMeterPoll();
-    const tick = (): void => {
-      this._audioSpectrum.set(getVoiceAudioMeter().sample());
+    this.pauseMeterPoll();
+    let lastTs = 0;
+    const minFrameMs = 1000 / 30;
+    const tick = (ts: number): void => {
       this.meterRaf = requestAnimationFrame(tick);
+      if (typeof document !== 'undefined' && document.hidden) return;
+      if (ts - lastTs < minFrameMs) return;
+      lastTs = ts;
+      const next = getVoiceAudioMeter().sample();
+      const prev = this._audioSpectrum();
+      if (next.active < 0.01 && prev.active < 0.01) return;
+      this._audioSpectrum.set(next);
     };
     this.meterRaf = requestAnimationFrame(tick);
   }
 
-  private stopMeterPoll(): void {
+  private pauseMeterPoll(): void {
     if (this.meterRaf) cancelAnimationFrame(this.meterRaf);
     this.meterRaf = 0;
+  }
+
+  private stopMeterPoll(): void {
+    this.pauseMeterPoll();
     disposeVoiceAudioMeter();
     this._audioSpectrum.set({
       bins: new Array(32).fill(0),

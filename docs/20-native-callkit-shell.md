@@ -110,9 +110,16 @@ Requires **macOS + Xcode** and Apple Developer account ($99/yr).
 
 1. Open **AgentVoice** (native app).
 2. Tap orb → iOS shows active call → speak command.
-3. Lock phone or use other apps → **call stays active**.
+3. **Lock the phone** (or let Auto-Lock fire) — the green call bar stays; the screen
+   sleeping is what keeps battery reasonable. Using other apps is OK while the call is up.
 4. Agent needs approval while app closed → **incoming call** or notification → tap → approve.
 5. Job finishes → notification if he's away.
+6. **Hang up** (tap the orb) when you are done — leaving a live session runs the mic and
+   wake-word model continuously.
+
+A carrier voice call is cheap because the phone's radio/DSP do the work. AgentVoice is
+still a live WebView listening for a wake phrase, so it will never match Phone.app
+battery life — but holding the **display on** was the avoidable part.
 
 ## File map
 
