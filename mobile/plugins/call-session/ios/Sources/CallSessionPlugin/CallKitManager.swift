@@ -104,7 +104,8 @@ import PushKit
         do {
             try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .duckOthers])
             // Larger IO buffers = fewer CPU wakeups. Wake-word spotting does not need 5 ms VoIP latency.
-            try audioSession.setPreferredIOBufferDuration(0.02)
+            // Best-effort: unsupported hardware/routes must not skip setActive.
+            try? audioSession.setPreferredIOBufferDuration(0.02)
             try audioSession.setActive(true)
         } catch {
             NSLog("Audio session setup failed: \(error.localizedDescription)")
