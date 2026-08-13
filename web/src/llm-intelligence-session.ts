@@ -127,6 +127,8 @@ export class LlmIntelligenceSession {
   private turnCompletionPending = false;
   private pendingTtsInterrupt: TtsInterruptSnapshot | null = null;
   private meterMicChain: MicProcessingChain | null = null;
+  /** True while the display is off — skip rebuilding the viz-only Web Audio graph. */
+  private visualMeterPaused = false;
   private startSpotter: VoskGrammarSpotter | null = null;
   private vadDetector: SileroVadDetector | null = null;
   private endSpotter: VoskGrammarSpotter | null = null;
@@ -422,10 +424,13 @@ export class LlmIntelligenceSession {
   }
 
   private async attachMicMeter(stream?: MediaStream): Promise<void> {
+    if (this.visualMeterPaused) return;
     try {
       const mic = stream ?? (await this.ensureSharedMic());
+      if (this.visualMeterPaused) return;
       const ctx = getSharedAudioContext();
       if (ctx.state === 'suspended') await ctx.resume();
+      if (this.visualMeterPaused) return;
       this.meterMicChain = createMicProcessingChain(mic, { highPassHz: 120 });
       const tap = getVoiceAudioMeter().tapMic(ctx, this.meterMicChain.output);
       connectSilentSink(ctx, tap);
@@ -437,6 +442,7 @@ export class LlmIntelligenceSession {
 
   /** Drop the viz-only filter graph while the display is off (wake-word Vosk stays up). */
   pauseVisualMeter(): void {
+    this.visualMeterPaused = true;
     this.meterMicChain?.dispose();
     this.meterMicChain = null;
   }
@@ -444,6 +450,7 @@ export class LlmIntelligenceSession {
   /** Re-attach the orb meter after the screen is on again. */
   resumeVisualMeter(): void {
     if (this.closed) return;
+    this.visualMeterPaused = false;
     void this.ensureMicMeter();
   }
 
