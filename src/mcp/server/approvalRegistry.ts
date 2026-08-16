@@ -1,13 +1,18 @@
 /**
  * Approval Registry — stores pending agent-to-user requests as deferred promises.
  *
- * When Cursor's agent calls `request_user_input` or `submit_plan_for_approval`, the
- * MCP tool handler registers a deferred promise here. The tool call blocks (long-poll)
- * until the PWA user answers and POSTs back via the control WebSocket
- * `approval_response` message, which resolves the promise and unblocks the tool call.
+ * When the voice agent calls `request_user_input` or `submit_plan_for_approval`,
+ * the MCP tool handler registers a deferred promise here. The tool call blocks
+ * (long-poll) until the PWA user answers and POSTs back via the control
+ * WebSocket `approval_response` message, which resolves the promise and
+ * unblocks the tool call.
  *
  * A new voice/text turn can also resolve pending waits early with
- * `interrupted_by_voice_turn` so Cursor sees the utterance as tool output immediately.
+ * `interrupted_by_voice_turn` so the agent sees the utterance as tool output
+ * immediately. That interrupt is NOT wired here — it comes from AgentVoice's
+ * single interrupt hook (server/pendingWaits.ts), which every blocking
+ * AgentVoice tool registers with. This registry only owns the user-facing
+ * request/response lifecycle.
  *
  * Two request types share the same registry:
  *   - user_input  : free-text / yes-no / choice questions
@@ -17,6 +22,7 @@
 import { randomUUID } from 'node:crypto';
 import { childLogger } from '../../log.js';
 import type { TtsInterruptContext } from '../../voice/ttsInterrupt.js';
+import { registerResolveWait, releaseWait, type VoiceTurnAnnotation } from './pendingWaits.js';
 
 const log = childLogger('approval-registry');
 
@@ -67,17 +73,12 @@ export type ApprovalResponse =
   | PlanApprovalResponse
   | InterruptedByVoiceTurnResponse;
 
-export interface VoiceTurnInterruptPayload {
-  user_turn: string;
-  is_interrupt: boolean;
-  received_at: string;
-  tts_interrupt?: TtsInterruptContext;
-}
-
 interface Deferred {
   resolve: (value: ApprovalResponse) => void;
   reject: (reason: Error) => void;
   timeoutHandle: ReturnType<typeof setTimeout>;
+  /** Handle in the shared interrupt hook — released when this request settles. */
+  waitId: string;
 }
 
 // ── Registry ──────────────────────────────────────────────────────────────
@@ -97,17 +98,40 @@ export function registerRequest(
   const payload = requestFactory(request_id);
   pendingPayloads.set(request_id, payload);
 
+  // Register with the shared interrupt hook so a new user turn reaches this
+  // tool the same way it reaches any other blocking AgentVoice tool.
+  const { id: waitId, interrupted } = registerResolveWait({
+    tool: payload.kind === 'plan_approval' ? 'submit_plan_for_approval' : 'request_user_input',
+    meta: payload,
+  });
+
   const promise = new Promise<ApprovalResponse>((resolve, reject) => {
     const timeoutHandle = setTimeout(() => {
       if (pending.has(request_id)) {
-        pending.delete(request_id);
-        pendingPayloads.delete(request_id);
+        settle(request_id);
         log.warn({ request_id }, 'approval request timed out');
         reject(new Error(`User did not respond within ${Math.round(timeoutMs / 1000)}s`));
       }
     }, timeoutMs);
 
-    pending.set(request_id, { resolve, reject, timeoutHandle });
+    pending.set(request_id, { resolve, reject, timeoutHandle, waitId });
+
+    void interrupted.then((annotation: VoiceTurnAnnotation) => {
+      const deferred = pending.get(request_id);
+      if (!deferred) return;
+      settle(request_id);
+      log.info(
+        { request_id, kind: payload.kind, text: annotation.user_turn.slice(0, 80) },
+        'approval request interrupted by user turn',
+      );
+      deferred.resolve({
+        kind: 'interrupted_by_voice_turn',
+        user_turn: annotation.user_turn,
+        is_interrupt: annotation.is_interrupt,
+        received_at: annotation.received_at,
+        ...(annotation.tts_interrupt ? { tts_interrupt: annotation.tts_interrupt } : {}),
+      });
+    });
   });
 
   return { request_id, promise };
@@ -124,9 +148,7 @@ export function resolveRequest(request_id: string, response: ApprovalResponse): 
     log.warn({ request_id }, 'resolveRequest: no pending request for id');
     return false;
   }
-  clearTimeout(deferred.timeoutHandle);
-  pending.delete(request_id);
-  pendingPayloads.delete(request_id);
+  settle(request_id);
   deferred.resolve(response);
   log.info({ request_id, kind: response.kind }, 'approval request resolved');
   return true;
@@ -136,11 +158,19 @@ export function resolveRequest(request_id: string, response: ApprovalResponse): 
 export function cancelRequest(request_id: string, reason = 'Cancelled'): boolean {
   const deferred = pending.get(request_id);
   if (!deferred) return false;
-  clearTimeout(deferred.timeoutHandle);
-  pending.delete(request_id);
-  pendingPayloads.delete(request_id);
+  settle(request_id);
   deferred.reject(new Error(reason));
   return true;
+}
+
+/** Drop all bookkeeping for a request: timer, payload, and interrupt-hook entry. */
+function settle(request_id: string): void {
+  const deferred = pending.get(request_id);
+  if (!deferred) return;
+  clearTimeout(deferred.timeoutHandle);
+  releaseWait(deferred.waitId);
+  pending.delete(request_id);
+  pendingPayloads.delete(request_id);
 }
 
 /** Cancel all pending requests (e.g. on server shutdown). */
@@ -148,44 +178,6 @@ export function cancelAllRequests(reason = 'Bridge shutting down'): void {
   for (const [id] of pending) {
     cancelRequest(id, reason);
   }
-}
-
-/**
- * Resolve every pending approval/input wait with a voice-turn interrupt.
- * Used when the user speaks/types while Cursor is blocked in those MCP tools —
- * the tool returns immediately with the utterance as output (Cursor injects it
- * like any other tool result).
- *
- * Returns the aborted request payloads (for UI dismiss notifications).
- */
-export function interruptAllPendingWithVoiceTurn(
-  payload: VoiceTurnInterruptPayload,
-): ApprovalRequest[] {
-  if (pending.size === 0) return [];
-
-  const aborted: ApprovalRequest[] = [];
-  const response: InterruptedByVoiceTurnResponse = {
-    kind: 'interrupted_by_voice_turn',
-    user_turn: payload.user_turn,
-    is_interrupt: payload.is_interrupt,
-    received_at: payload.received_at,
-    tts_interrupt: payload.tts_interrupt,
-  };
-
-  for (const [id, deferred] of [...pending.entries()]) {
-    const req = pendingPayloads.get(id);
-    clearTimeout(deferred.timeoutHandle);
-    pending.delete(id);
-    pendingPayloads.delete(id);
-    deferred.resolve(response);
-    if (req) aborted.push(req);
-    log.info(
-      { request_id: id, kind: req?.kind, text: payload.user_turn.slice(0, 80) },
-      'approval request interrupted by voice turn',
-    );
-  }
-
-  return aborted;
 }
 
 export function pendingCount(): number {

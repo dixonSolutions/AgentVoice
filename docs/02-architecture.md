@@ -7,7 +7,7 @@
 | **Phone PWA** | Angular + vanilla TS modules | Mic capture, Vosk wake words, Silero VAD, STT, TTS playback, orb UI |
 | **Bridge** | Node 20+, TypeScript, Fastify | Serves PWA, `/ws/intelligence`, MCP HTTP server, spawns voice + worker agents, SQLite state |
 | **MCP server** | `@modelcontextprotocol/sdk` | Voice I/O (`speak`, `done`, `next_voice_turn`) + agent control tools |
-| **Voice agent** | `cursor-agent -p` / `codex exec` / `claude -p` | Conversational loop for `cursor_native`; calls MCP voice tools |
+| **Voice agent** | `cursor-agent -p` / `codex exec` / `claude -p` | Conversational loop for `agent_native`; calls MCP voice tools |
 | **Worker agents** | Same as voice agent | Coding tasks spawned via `spawn_agent` |
 | **Agent client** | `cursor` (default) \| `codex` \| `claude-code` | Selectable via `config.json` `agentClient` or PWA config tab; see [docs/23-multi-agent-client.md](./23-multi-agent-client.md) |
 | **AWS (optional)** | Polly, Transcribe, Bedrock Converse | TTS/STT fallback and `llm_intelligence` orchestrator |
@@ -31,11 +31,11 @@
 [ cursor-agent workers ] --> [ allowlisted project workspaces ] --> git
 ```
 
-- **Audio reasoning** happens in Cursor (`cursor_native`) or Bedrock Claude (`llm_intelligence`).
+- **Audio reasoning** happens in Cursor (`agent_native`) or Bedrock Claude (`llm_intelligence`).
 - **Tool execution** never happens on the phone.
 - **AWS IAM keys** stay on the bridge — Polly/Transcribe audio is proxied via `/api/intelligence/*`.
 
-## End-to-end sequence (`cursor_native`)
+## End-to-end sequence (`agent_native`)
 
 ```
 User taps orb → PWA opens /ws/intelligence
@@ -60,9 +60,9 @@ Loop: next_voice_turn() again
 | Spawn | Prompt passed to `cursor-agent -p` |
 | --- | --- |
 | **First session** (no `--resume`) | Full system prompt from `prompts/agentvoice/system.md` + boot suffix |
-| **Resume** (`--resume <id>`) | `@cursor-voice` rule reference + short boot line |
+| **Resume** (`--resume <id>`) | `@agent-voice` rule reference + short boot line |
 
-On resume, Cursor injects the rule from `~/.cursor/rules/cursor-voice.mdc` (or project
+On resume, Cursor injects the rule from `~/.cursor/rules/agent-voice.mdc` (or project
 `.cursor/rules/`). Conversation history is preserved via `--resume`; the full system
 prompt is not resent.
 

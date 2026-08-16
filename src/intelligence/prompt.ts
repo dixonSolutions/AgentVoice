@@ -2,7 +2,7 @@
  * System prompt assembly for the llm_intelligence orchestrator.
  *
  * Prompt text is inlined here — editable prompt files under prompts/ are
- * reserved for the cursor_native workflow only.
+ * reserved for the agent_native workflow only.
  */
 
 import { listProjects, getSessionState } from '../state/registry.js';

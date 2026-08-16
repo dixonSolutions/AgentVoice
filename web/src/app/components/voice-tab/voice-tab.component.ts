@@ -106,10 +106,18 @@ export class VoiceTabComponent {
   protected selectedSessionId: string = NEW_CURSOR_SESSION_ID;
   protected typedMessage = '';
   protected textDialogVisible = false;
+
+  /** Typed-request dialog copy — follows the active agent, never hardcoded. */
+  protected readonly textDialogHeader = computed(
+    () => `Ask ${this.agentProviders.activeProviderName()}`,
+  );
+  protected readonly textDialogPlaceholder = computed(
+    () => `Describe what you want ${this.agentProviders.activeProviderName()} to do…`,
+  );
   protected readonly sessionHistoryLoaded = signal(false);
   protected readonly loadingSessionLogs = signal(false);
-  protected readonly cursorSessions = signal<CursorSessionEntry[]>([]);
-  protected readonly activeCursorSessionId = signal<string | null>(null);
+  protected readonly agentSessions = signal<CursorSessionEntry[]>([]);
+  protected readonly activeAgentSessionId = signal<string | null>(null);
   protected readonly loadingSessions = signal(false);
   protected readonly activationPhrase = computed(
     () => this.voiceProviders.data()?.wakeWords.start?.trim() || 'start',
@@ -142,18 +150,20 @@ export class VoiceTabComponent {
     const silence = this.silenceSubmitLabel();
     const cancelNote = `Say "${cancel}" to abort a turn without sending.`;
     if (this.vadEnabledEffective()) {
-      if (this.isCursorNative()) {
+      if (this.isAgentNative()) {
+        const agent = this.agentProviders.activeProviderName();
         return (
-          `Cursor-first voice: say "${start}" to activate, then pause ${silence} to send. ` +
-          `${cancelNote} The bridge auto-starts a Cursor agent when you speak — session id appears in logs.`
+          `Agent-first voice: say "${start}" to activate, then pause ${silence} to send. ` +
+          `${cancelNote} The bridge auto-starts ${agent} when you speak — session id appears in logs.`
         );
       }
       return `Say "${start}" to activate. After that, Silero VAD sends your turn when you pause ${silence}. ${cancelNote} Vosk detects the wake phrase offline. Type below to test without a mic.`;
     }
-    if (this.isCursorNative()) {
+    if (this.isAgentNative()) {
+      const agent = this.agentProviders.activeProviderName();
       return (
-        `Cursor-first voice: say "${start}" to activate, then pause ${silence} or say "${end}" to send. ` +
-        `${cancelNote} The bridge auto-starts a Cursor agent when you speak — session id appears in logs.`
+        `Agent-first voice: say "${start}" to activate, then pause ${silence} or say "${end}" to send. ` +
+        `${cancelNote} The bridge auto-starts ${agent} when you speak — session id appears in logs.`
       );
     }
     return `Say "${start}" to activate. After that, pause ${silence} or say "${end}" to send. ${cancelNote} Vosk detects start/end offline. Type below to test without a mic.`;
@@ -162,13 +172,13 @@ export class VoiceTabComponent {
   protected readonly sessionHint = computed(() => {
     const selected = this.selectedSessionId;
     if (!selected || selected === NEW_CURSOR_SESSION_ID) {
-      return 'New session — a fresh Cursor thread is created when you start voice.';
+      return `New session — a fresh ${this.agentProviders.activeProviderName()} thread is created when you start voice.`;
     }
-    const match = this.cursorSessions().find((s) => s.session_id === selected);
+    const match = this.agentSessions().find((s) => s.session_id === selected);
     if (match) {
       return `Continuing thread from ${this.formatSessionDate(match.last_run_at)}. Prompts resume in that session.`;
     }
-    return 'Selected session will be used for the next Cursor run.';
+    return `Selected session will be used for the next ${this.agentProviders.activeProviderName()} run.`;
   });
 
   protected readonly audioBackendLabel = computed(() => {
@@ -190,12 +200,12 @@ export class VoiceTabComponent {
   });
 
   protected readonly isCascadeWorkflow = computed(() => {
-    const workflow = this.bridge.settings()?.workflow.default ?? 'cursor_native';
-    return workflow === 'cursor_native' || workflow === 'llm_intelligence';
+    const workflow = this.bridge.settings()?.workflow.default ?? 'agent_native';
+    return workflow === 'agent_native' || workflow === 'llm_intelligence';
   });
 
-  protected readonly isCursorNative = computed(
-    () => (this.bridge.settings()?.workflow.default ?? 'cursor_native') === 'cursor_native',
+  protected readonly isAgentNative = computed(
+    () => (this.bridge.settings()?.workflow.default ?? 'agent_native') === 'agent_native',
   );
 
   protected readonly showTextInput = computed(
@@ -249,7 +259,7 @@ export class VoiceTabComponent {
   );
 
   protected readonly sessionOptions = computed<SessionOption[]>(() => {
-    const fromHistory = this.cursorSessions().map((s) => {
+    const fromHistory = this.agentSessions().map((s) => {
       const title = this.formatSessionTitle(s);
       const detail = this.truncatePrompt(s.last_prompt, 120);
       return {
@@ -264,7 +274,7 @@ export class VoiceTabComponent {
       {
         title: 'New session',
         value: NEW_CURSOR_SESSION_ID,
-        detail: 'Fresh Cursor thread on start',
+        detail: 'Fresh thread on start',
         label: 'New session',
         search: 'new session fresh thread',
         isNew: true,
@@ -281,7 +291,7 @@ export class VoiceTabComponent {
     let sessionPart = 'new session';
     const sid = this.selectedSessionId;
     if (sid && sid !== NEW_CURSOR_SESSION_ID) {
-      const match = this.cursorSessions().find((s) => s.session_id === sid);
+      const match = this.agentSessions().find((s) => s.session_id === sid);
       const idShort = sid.length > 10 ? `${sid.slice(0, 8)}…` : sid;
       const prompt = match ? this.truncatePrompt(match.last_prompt, 22) : '';
       sessionPart = prompt ? `${idShort} — ${prompt}` : idShort;
@@ -308,9 +318,13 @@ export class VoiceTabComponent {
     );
   });
 
+  /**
+   * Workflow tag. Names the *pipeline*, not the agent — the agent's own name
+   * belongs to activeProviderChip below, so it is never printed twice.
+   */
   protected readonly workflowLabel = computed(() => {
-    const workflow = this.bridge.settings()?.workflow.default ?? 'cursor_native';
-    if (workflow === 'cursor_native') return 'Cursor first';
+    const workflow = this.bridge.settings()?.workflow.default ?? 'agent_native';
+    if (workflow === 'agent_native') return 'Agent first';
     const model = this.bridge.settings()?.workflow.llmIntelligence.model;
     return model ? `Intelligence · ${model}` : 'Intelligence first';
   });
@@ -337,7 +351,11 @@ export class VoiceTabComponent {
     return models;
   });
 
-  /** "Cursor · claude-4.5-sonnet" chip shown beside the workflow tag. */
+  /**
+   * The single place the coding agent identifies itself in the UI, e.g.
+   * "Claude Code · sonnet". Everything else refers to the pipeline or to
+   * AgentVoice — see app/branding.ts.
+   */
   protected readonly activeProviderChip = computed(() => {
     const provider = this.agentProviders.activeProvider;
     if (!provider) return null;
@@ -636,11 +654,11 @@ export class VoiceTabComponent {
         this.bridge.clearStoredCursorSession(project);
       }
 
-      this.cursorSessions.set(sessions);
-      this.activeCursorSessionId.set(data.active_session_id);
+      this.agentSessions.set(sessions);
+      this.activeAgentSessionId.set(data.active_session_id);
       this.restoreSessionSelection(project, sessions, data.active_session_id);
     } catch {
-      this.cursorSessions.set([]);
+      this.agentSessions.set([]);
       this.selectedSessionId = NEW_CURSOR_SESSION_ID;
     } finally {
       this.loadingSessions.set(false);

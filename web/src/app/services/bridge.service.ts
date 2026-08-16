@@ -2,7 +2,7 @@ import { Injectable, signal } from '@angular/core';
 import { Subject } from 'rxjs';
 export type WsStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
-export type WorkflowId = 'cursor_native' | 'llm_intelligence';
+export type WorkflowId = 'agent_native' | 'llm_intelligence';
 
 export interface AppSettings {
   workflow: {
@@ -349,7 +349,7 @@ export class BridgeService {
 
   async loadCursorSessions(project: string): Promise<CursorSessionsResponse> {
     const q = new URLSearchParams({ project });
-    return this.apiFetch<CursorSessionsResponse>(`/api/cursor-sessions?${q}`);
+    return this.apiFetch<CursorSessionsResponse>(`/api/agent-sessions?${q}`);
   }
 
   async loadCursorSessionLogs(
@@ -357,11 +357,11 @@ export class BridgeService {
     sessionId: string,
   ): Promise<CursorSessionLogsResponse> {
     const q = new URLSearchParams({ project, session_id: sessionId });
-    return this.apiFetch<CursorSessionLogsResponse>(`/api/cursor-sessions/logs?${q}`);
+    return this.apiFetch<CursorSessionLogsResponse>(`/api/agent-sessions/logs?${q}`);
   }
 
   async selectCursorSession(project: string, sessionId: string): Promise<void> {
-    await this.apiFetch('/api/cursor-sessions/select', {
+    await this.apiFetch('/api/agent-sessions/select', {
       method: 'POST',
       body: JSON.stringify({ project, session_id: sessionId }),
     });
@@ -374,7 +374,7 @@ export class BridgeService {
     const result = await this.apiFetch<{
       active_session_id: string | null;
       message: string;
-    }>('/api/cursor-sessions/new', {
+    }>('/api/agent-sessions/new', {
       method: 'POST',
       body: JSON.stringify({ project }),
     });
@@ -402,7 +402,7 @@ export class BridgeService {
    * Apply the user's session choice before voice / submit work begins.
    * "New session" creates a fresh thread; otherwise resume_id is set on the project.
    */
-  async ensureCursorSessionReady(project: string): Promise<string | null> {
+  async ensureAgentSessionReady(project: string): Promise<string | null> {
     const stored = this.getStoredCursorSession(project);
     if (!stored || stored === NEW_CURSOR_SESSION_ID) {
       const created = await this.createNewCursorSession(project);

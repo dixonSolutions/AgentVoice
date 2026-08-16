@@ -20,7 +20,7 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
         "vadEnabled": true
       },
       "tts": {
-        "cursorVoiceEnabled": true,
+        "agentVoiceEnabled": true,
         "errorSoundEnabled": true,
         "errorSpeakEnabled": true,
         "webkit": {
@@ -47,7 +47,7 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
 | `wakeWords.wakeConfidenceThreshold` | Minimum mean Vosk word confidence (0–1) to accept the wake phrase; below 0.55 also enables partial recognition |
 | `turnSubmit.silenceMs` | Silence before auto-submit (500–30000 ms) |
 | `turnSubmit.vadEnabled` | Use Silero VAD for speech-end detection |
-| `tts.cursorVoiceEnabled` | Play MCP `speak()` lines aloud |
+| `tts.agentVoiceEnabled` | Play MCP `speak()` lines aloud |
 | `tts.errorSoundEnabled` | Play error earcon on voice pipeline failures |
 | `tts.errorSpeakEnabled` | Speak error messages aloud |
 | `tts.webkit.*` | Default browser TTS rate/pitch/volume/lang |
@@ -101,14 +101,14 @@ Set in `config.json`:
 
 ```json
 "workflow": {
-  "default": "cursor_native",
+  "default": "agent_native",
   "llmIntelligence": { ... }
 }
 ```
 
 | Workflow | AWS usage |
 | --- | --- |
-| `cursor_native` | Polly/Transcribe per `ttsProvider` / STT preference |
+| `agent_native` | Polly/Transcribe per `ttsProvider` / STT preference |
 | `llm_intelligence` | Bedrock Converse + Polly/Transcribe per audio settings |
 
 ### Speech output (`settings.workflow.llmIntelligence.audio`)

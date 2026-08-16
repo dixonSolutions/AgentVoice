@@ -26,15 +26,15 @@ const optionalProject = z.string().optional();
 
 // ── Group: Project ────────────────────────────────────────────────────────
 
-export const CursorListProjectsSchema = z.object({
+export const AgentListProjectsSchema = z.object({
   query: z.string().optional().describe('Filter projects by name, alias, or description'),
 });
 
-export const CursorSetProjectSchema = z.object({
+export const AgentSetProjectSchema = z.object({
   project: z.string().describe('Project name (or alias) to set as the active project'),
 });
 
-export const CursorManageProjectsSchema = z.object({
+export const AgentManageProjectsSchema = z.object({
   action: z
     .enum(['describe', 'list', 'add', 'update', 'remove'])
     .describe(
@@ -61,12 +61,12 @@ export const CursorManageProjectsSchema = z.object({
 
 // ── Group: Model ──────────────────────────────────────────────────────────
 
-export const CursorListModelsSchema = z.object({
+export const AgentListModelsSchema = z.object({
   query: z.string().optional().describe('Filter models by id or display name (e.g. "claude", "fast")'),
 });
 
-export const CursorSetModelSchema = z.object({
-  model_id: z.string().describe('Exact model ID to use (from cursor_list_models)'),
+export const AgentSetModelSchema = z.object({
+  model_id: z.string().describe('Exact model ID to use (from agent_list_models)'),
   scope: z
     .enum(['global', 'session'])
     .optional()
@@ -78,7 +78,7 @@ export const CursorSetModelSchema = z.object({
 
 // ── Group: Execute ────────────────────────────────────────────────────────
 
-export const CursorSubmitSchema = z.object({
+export const AgentSubmitSchema = z.object({
   prompt: promptString.describe("The user's intent — relay with minimal editing"),
   project: optionalProject.describe('Target project (defaults to active project)'),
   mode: z.enum(['agent', 'plan']).optional().describe('Execution mode (default: agent)'),
@@ -90,12 +90,12 @@ export const CursorSubmitSchema = z.object({
     ),
 });
 
-export const CursorAskSchema = z.object({
+export const AgentAskSchema = z.object({
   question: promptString.describe("The user's question, verbatim"),
   project: optionalProject.describe('Target project (defaults to active project)'),
 });
 
-export const CursorRecallAnswerSchema = z.object({
+export const AgentRecallAnswerSchema = z.object({
   format: z
     .enum(['brief', 'full'])
     .optional()
@@ -104,32 +104,32 @@ export const CursorRecallAnswerSchema = z.object({
 
 // ── Group: Job ────────────────────────────────────────────────────────────
 
-export const CursorStatusSchema = z.object({
+export const AgentJobStatusSchema = z.object({
   job_id: z.string().uuid('job_id must be a UUID').optional().describe('Defaults to active job'),
 });
 
-export const CursorStopSchema = z.object({
+export const AgentJobStopSchema = z.object({
   job_id: z.string().uuid('job_id must be a UUID').optional().describe('Defaults to active job'),
 });
 
 // ── Group: Session ────────────────────────────────────────────────────────
 
-export const CursorNewSessionSchema = z.object({
+export const AgentNewSessionSchema = z.object({
   project: optionalProject.describe('Project to clear session for (defaults to active project)'),
 });
 
-export const CursorSessionInfoSchema = z.object({
+export const AgentSessionInfoSchema = z.object({
   project: optionalProject.describe('Project to query (defaults to active project)'),
 });
 
 // ── Group: Git ────────────────────────────────────────────────────────────
 
-export const CursorDiffSchema = z.object({
+export const AgentDiffSchema = z.object({
   project: optionalProject,
   full_patch: z.boolean().optional().describe('Include full diff patch (default: false, stat only)'),
 });
 
-export const CursorRevertSchema = z.object({
+export const AgentRevertSchema = z.object({
   project: optionalProject,
   confirm: z
     .boolean()
@@ -141,15 +141,15 @@ export const CursorRevertSchema = z.object({
 
 // ── Group: System ─────────────────────────────────────────────────────────
 
-export const CursorAgentInfoSchema = z.object({});
-export const CursorAgentStatusSchema = z.object({});
+export const AgentInfoSchema = z.object({});
+export const AgentStatusSchema = z.object({});
 
 // ── Group: MCP Inspect ────────────────────────────────────────────────────
 
-export const CursorMcpListSchema = z.object({});
+export const AgentMcpListSchema = z.object({});
 
-export const CursorMcpToolsSchema = z.object({
-  server: z.string().describe('MCP server identifier (from cursor_mcp_list)'),
+export const AgentMcpToolsSchema = z.object({
+  server: z.string().describe('MCP server identifier (from agent_mcp_list)'),
 });
 
 // ── Group: User display ───────────────────────────────────────────────────
@@ -201,35 +201,65 @@ export const ShowImagesSchema = z.object({
 // ── Schema registry ───────────────────────────────────────────────────────
 
 export const TOOL_SCHEMAS = {
-  cursor_list_projects: CursorListProjectsSchema,
-  cursor_set_project: CursorSetProjectSchema,
-  cursor_manage_projects: CursorManageProjectsSchema,
-  cursor_list_models: CursorListModelsSchema,
-  cursor_set_model: CursorSetModelSchema,
-  cursor_submit: CursorSubmitSchema,
-  cursor_ask: CursorAskSchema,
-  cursor_recall_answer: CursorRecallAnswerSchema,
-  cursor_status: CursorStatusSchema,
-  cursor_stop: CursorStopSchema,
-  cursor_new_session: CursorNewSessionSchema,
-  cursor_session_info: CursorSessionInfoSchema,
-  cursor_diff: CursorDiffSchema,
-  cursor_revert: CursorRevertSchema,
-  cursor_agent_info: CursorAgentInfoSchema,
-  cursor_agent_status: CursorAgentStatusSchema,
-  cursor_mcp_list: CursorMcpListSchema,
-  cursor_mcp_tools: CursorMcpToolsSchema,
+  agent_list_projects: AgentListProjectsSchema,
+  agent_set_project: AgentSetProjectSchema,
+  agent_manage_projects: AgentManageProjectsSchema,
+  agent_list_models: AgentListModelsSchema,
+  agent_set_model: AgentSetModelSchema,
+  agent_submit: AgentSubmitSchema,
+  agent_ask: AgentAskSchema,
+  agent_recall_answer: AgentRecallAnswerSchema,
+  agent_job_status: AgentJobStatusSchema,
+  agent_job_stop: AgentJobStopSchema,
+  agent_new_session: AgentNewSessionSchema,
+  agent_session_info: AgentSessionInfoSchema,
+  agent_diff: AgentDiffSchema,
+  agent_revert: AgentRevertSchema,
+  agent_info: AgentInfoSchema,
+  agent_status: AgentStatusSchema,
+  agent_mcp_list: AgentMcpListSchema,
+  agent_mcp_tools: AgentMcpToolsSchema,
   show_images: ShowImagesSchema,
-  // ── Generic agent-provider aliases (identical handlers, CLI-neutral names) ──
-  // Added for multi-agent-client support (docs/24-agent-providers.md) — the
-  // cursor_* names above keep working unchanged for existing MCP configs.
-  agent_list_models: CursorListModelsSchema,
-  agent_set_model: CursorSetModelSchema,
-  agent_info: CursorAgentInfoSchema,
-  agent_status: CursorAgentStatusSchema,
 } as const;
 
 export type ToolName = keyof typeof TOOL_SCHEMAS;
 
 /** Infer the validated arg type for a given tool. */
 export type ToolArgs<T extends ToolName> = z.infer<(typeof TOOL_SCHEMAS)[T]>;
+
+/**
+ * Tool names shipped before the AgentVoice rename.
+ *
+ * They are accepted by `dispatchTool` (the control-WebSocket / intelligence
+ * relay path) so an in-flight session that still remembers the old vocabulary
+ * keeps working. They are deliberately NOT registered on the MCP server: the
+ * tool list is what the model reads on every turn, and 18 duplicate deprecated
+ * entries would cost context for no benefit — the system prompt and the CLI
+ * rule file always carry the canonical `agent_*` names.
+ */
+export const LEGACY_TOOL_ALIASES: Readonly<Record<string, ToolName>> = {
+  cursor_list_projects: 'agent_list_projects',
+  cursor_set_project: 'agent_set_project',
+  cursor_manage_projects: 'agent_manage_projects',
+  cursor_list_models: 'agent_list_models',
+  cursor_set_model: 'agent_set_model',
+  cursor_submit: 'agent_submit',
+  cursor_ask: 'agent_ask',
+  cursor_recall_answer: 'agent_recall_answer',
+  cursor_status: 'agent_job_status',
+  cursor_stop: 'agent_job_stop',
+  cursor_new_session: 'agent_new_session',
+  cursor_session_info: 'agent_session_info',
+  cursor_diff: 'agent_diff',
+  cursor_revert: 'agent_revert',
+  cursor_agent_info: 'agent_info',
+  cursor_agent_status: 'agent_status',
+  cursor_mcp_list: 'agent_mcp_list',
+  cursor_mcp_tools: 'agent_mcp_tools',
+} as const;
+
+/** Resolve a possibly-legacy tool name to its canonical form, or null. */
+export function canonicalToolName(name: string): ToolName | null {
+  if (name in TOOL_SCHEMAS) return name as ToolName;
+  return LEGACY_TOOL_ALIASES[name] ?? null;
+}

@@ -233,6 +233,6 @@ Also stop running workers on barge-in (`stop_agent`) before handling the new req
 ## Related docs
 
 - [`06-voice-audio-webrtc.md`](./06-voice-audio-webrtc.md) — audio pipeline overview
-- [`16-mcp-server-cursor-as-brain.md`](./16-mcp-server-cursor-as-brain.md) — §8.1 turn queue, §8.7 echo filter
+- [`16-mcp-server-agent-as-brain.md`](./16-mcp-server-agent-as-brain.md) — §8.1 turn queue, §8.7 echo filter
 - [`14-prompts.md`](./14-prompts.md) — barge-in instructions in system prompt
 - [`08-decisions-and-risks.md`](./08-decisions-and-risks.md) — ADR-018

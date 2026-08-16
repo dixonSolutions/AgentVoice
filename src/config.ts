@@ -110,10 +110,10 @@ export const WebkitTtsDefaultsSchema = z.object({
 
 export const VoiceTtsSchema = z.object({
   /** When false, MCP speak() lines are shown in UI but not played aloud. */
-  cursorVoiceEnabled: z.boolean().default(true),
+  agentVoiceEnabled: z.boolean().default(true),
   /** Play error earcon on TTS failures, disconnects, and other voice pipeline errors. */
   errorSoundEnabled: z.boolean().default(true),
-  /** Speak error messages aloud via TTS (independent of cursorVoiceEnabled). */
+  /** Speak error messages aloud via TTS (independent of agentVoiceEnabled). */
   errorSpeakEnabled: z.boolean().default(true),
   /** Server defaults for browser TTS — per-device overrides live in PWA localStorage. */
   webkit: WebkitTtsDefaultsSchema.default({}),
@@ -166,7 +166,12 @@ const RunModesSchema = z.object({
 
 // ── Workflow config ───────────────────────────────────────────────────────────
 
-export const WORKFLOW_IDS = ['cursor_native', 'llm_intelligence'] as const;
+/**
+ * `agent_native` — the coding CLI itself is the brain (renamed from
+ * `cursor_native`; migrated on read). `llm_intelligence` — a Bedrock model
+ * orchestrates and the CLI is a worker.
+ */
+export const WORKFLOW_IDS = ['agent_native', 'llm_intelligence'] as const;
 export type WorkflowId = (typeof WORKFLOW_IDS)[number];
 
 const LlmIntelligenceMemorySchema = z.object({
@@ -228,8 +233,8 @@ export const LlmIntelligenceWorkflowSchema = z.object({
 });
 
 export const WorkflowSettingsSchema = z.object({
-  /** Active voice pipeline — cursor_native (default) or llm_intelligence. */
-  default: z.enum(WORKFLOW_IDS).default('cursor_native'),
+  /** Active voice pipeline — agent_native (default) or llm_intelligence. */
+  default: z.enum(WORKFLOW_IDS).default('agent_native'),
   llmIntelligence: LlmIntelligenceWorkflowSchema.default({}),
 });
 
@@ -319,7 +324,7 @@ const SettingsSchema = z.object({
   /** Pluggable hosting/tunnel provider. See docs/25-hosting-providers.md. */
   hosting: HostingSettingsSchema,
   defaultMode: z.enum(['agent', 'plan']).default('agent'),
-  /** Default cursor-agent model for new sessions (cursor_set_model global scope). */
+  /** Default model for new sessions on the active CLI (agent_set_model global scope). */
   defaultActiveModel: z.string().min(1).default('auto'),
   maxConcurrentJobs: z.number().int().min(1).max(4).default(1),
   jobTimeoutMs: z.number().int().positive().default(600_000),
@@ -329,14 +334,14 @@ const SettingsSchema = z.object({
   narratorEnabled: z.boolean().default(true),
   narratorCadenceMs: z.number().int().positive().default(15_000),
   narratorMaxBufferEvents: z.number().int().positive().default(50),
-  /** Kill cursor-agent immediately if it tries to spawn Task/subagent sessions. */
+  /** Kill the worker immediately if it tries to spawn Task/subagent sessions. */
   ghostKillEnabled: z.boolean().default(true),
   logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
   /** Optional name the voice agent uses when addressing the user. */
   userName: z.string().min(1).max(64).optional(),
   /**
    * Active agent client for worker and voice agent spawning.
-   * All three clients support the cursor-voice global MCP server.
+   * Each client registers the agent-voice MCP server through its own provider.
    * See docs/23-multi-agent-client.md for installation and flag details.
    */
   agentClient: z.enum(AGENT_CLIENTS).default('cursor'),
@@ -415,7 +420,7 @@ function migrateRawConfig(raw: unknown): unknown {
     }
     if (!voice['tts'] || typeof voice['tts'] !== 'object') {
       voice['tts'] = {
-        cursorVoiceEnabled: true,
+        agentVoiceEnabled: true,
         errorSoundEnabled: true,
         errorSpeakEnabled: true,
         webkit: { rate: 1.02, pitch: 1, volume: 1, lang: 'en-US' },
@@ -423,6 +428,14 @@ function migrateRawConfig(raw: unknown): unknown {
       log.info('Migrated config — added default settings.voice.tts');
     } else {
       const tts = voice['tts'] as Record<string, unknown>;
+      // AgentVoice rename — the flag was never Cursor-specific.
+      if ('cursorVoiceEnabled' in tts) {
+        if (tts['agentVoiceEnabled'] === undefined) {
+          tts['agentVoiceEnabled'] = tts['cursorVoiceEnabled'];
+        }
+        delete tts['cursorVoiceEnabled'];
+        log.info('Migrated config — settings.voice.tts.cursorVoiceEnabled → agentVoiceEnabled');
+      }
       if (tts['errorSoundEnabled'] === undefined) tts['errorSoundEnabled'] = true;
       if (tts['errorSpeakEnabled'] === undefined) tts['errorSpeakEnabled'] = true;
       // Drop legacy barge-in volume ducking (deafen) — always full volume; wake pauses TTS.
@@ -455,13 +468,14 @@ function migrateRawConfig(raw: unknown): unknown {
     delete voice['systemPrompt'];
 
     if (!s['workflow']) {
-      s['workflow'] = { default: 'cursor_native' };
-      log.info('Migrated config — added default workflow cursor_native');
+      s['workflow'] = { default: 'agent_native' };
+      log.info('Migrated config — added default workflow agent_native');
     } else if (typeof s['workflow'] === 'object' && s['workflow'] !== null) {
       const wf = s['workflow'] as Record<string, unknown>;
-      if (wf['default'] === 's2s_voice') {
-        wf['default'] = 'cursor_native';
-        log.info('Migrated workflow default s2s_voice → cursor_native');
+      if (wf['default'] === 's2s_voice' || wf['default'] === 'cursor_native') {
+        const from = wf['default'];
+        wf['default'] = 'agent_native';
+        log.info({ from }, 'Migrated workflow default → agent_native');
       }
       delete wf['s2sVoice'];
       if (typeof wf['llmIntelligence'] === 'object' && wf['llmIntelligence'] !== null) {

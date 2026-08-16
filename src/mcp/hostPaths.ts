@@ -1,17 +1,17 @@
 /**
- * OS-aware paths for Cursor global MCP and cursor-voice user files.
+ * OS-aware host paths shared by the bridge and the agent providers.
  *
- * Cursor loads global MCP servers from ~/.cursor/mcp.json (all platforms).
- * User-scoped cursor-voice metadata prefers ~/Projects when that folder exists.
+ * Per-CLI config locations live in providers/agents/<client>.ts — this module
+ * only knows about the host itself (home dir, OS, bridge scratch dir).
  */
 
 import { existsSync } from 'node:fs';
 import { homedir, platform } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 
-export type CursorHostOs = 'windows' | 'macos' | 'linux' | 'unknown';
+export type HostOs = 'windows' | 'macos' | 'linux' | 'unknown';
 
-export function detectCursorHostOs(): CursorHostOs {
+export function detectHostOs(): HostOs {
   const p = platform();
   if (p === 'win32') return 'windows';
   if (p === 'darwin') return 'macos';
@@ -28,21 +28,21 @@ export function resolveUserHome(): string {
  * Preferred root for cursor-voice user files on this machine.
  * Uses ~/Projects when present, otherwise the user home directory.
  */
-export function resolveCursorVoiceUserRoot(): string {
+export function resolveUserProjectsRoot(): string {
   const home = resolveUserHome();
   const projectsDir = join(home, 'Projects');
   if (existsSync(projectsDir)) return projectsDir;
   return home;
 }
 
-/** Cursor IDE global MCP config path (~/.cursor/mcp.json). */
-export function resolveGlobalMcpJsonPath(): string {
-  return join(resolveUserHome(), '.cursor', 'mcp.json');
-}
-
-/** Optional directory for cursor-voice global metadata beside user projects. */
-export function resolveCursorVoiceMetaDir(): string {
-  return join(resolveCursorVoiceUserRoot(), '.cursor-voice');
+/**
+ * Bridge-owned scratch directory (next to the SQLite file) for generated files
+ * we hand to a CLI, such as Claude Code's `--mcp-config` JSON. Kept out of the
+ * user's home so a stale copy can never outlive an uninstall.
+ */
+export function resolveBridgeDataDir(): string {
+  const dbPath = process.env.DB_PATH ?? './data/state.db';
+  return resolve(dirname(dbPath));
 }
 
 /** Human-readable path label for logs (tilde when under home). */

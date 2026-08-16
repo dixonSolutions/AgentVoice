@@ -84,20 +84,20 @@ Parallel Agents capability exposed via voice.
 
 | Group | Tools | Source |
 | --- | --- | --- |
-| **Project** | `cursor_list_projects`, `cursor_set_project` | Custom (registry) |
-| **Model** | `cursor_list_models`, `cursor_set_model` | CLI: `cursor-agent models` |
-| **Execute** | `cursor_submit`, `cursor_ask`, `cursor_recall_answer` | CLI: `-p --output-format stream-json/json` (`cursor_submit` accepts optional `browser`) |
-| **Job** | `cursor_status`, `cursor_stop` | Bridge state (DB) |
-| **Session** | `cursor_new_session`, `cursor_session_info` | CLI: `create-chat`, registry |
-| **Git** | `cursor_diff`, `cursor_revert` | `simple-git` |
-| **System** | `cursor_agent_info`, `cursor_agent_status` | CLI: `about --format json`, `status --format json` |
-| **MCP inspect** | `cursor_mcp_list`, `cursor_mcp_tools` | CLI: `mcp list`, `mcp list-tools` |
+| **Project** | `agent_list_projects`, `agent_set_project` | Custom (registry) |
+| **Model** | `agent_list_models`, `agent_set_model` | CLI: `cursor-agent models` |
+| **Execute** | `agent_submit`, `agent_ask`, `agent_recall_answer` | CLI: `-p --output-format stream-json/json` (`agent_submit` accepts optional `browser`) |
+| **Job** | `agent_job_status`, `agent_job_stop` | Bridge state (DB) |
+| **Session** | `agent_new_session`, `agent_session_info` | CLI: `create-chat`, registry |
+| **Git** | `agent_diff`, `agent_revert` | `simple-git` |
+| **System** | `agent_info`, `agent_status` | CLI: `about --format json`, `status --format json` |
+| **MCP inspect** | `agent_mcp_list`, `agent_mcp_tools` | CLI: `mcp list`, `mcp list-tools` |
 
 ---
 
 ## Group: Project (custom — registry)
 
-### `cursor_list_projects`
+### `agent_list_projects`
 ```
 args:  { query?: string }
 returns: { projects: [{ name, description, aliases, enabled, active }] }
@@ -107,7 +107,7 @@ filters server-side (fuzzy contains on `name`, `aliases`, `description`).
 Used for discovery ("what can I work on?"), search, and disambiguation.
 The web-app dropdown uses `GET /api/projects` (same data, REST version).
 
-### `cursor_set_project`
+### `agent_set_project`
 ```
 args:  { project: string }
 returns: { active_project, description, path_hash }  // never the real path
@@ -121,7 +121,7 @@ Also available via `POST /api/active-project` from the web-app dropdown.
 
 ## Group: Model (CLI: `cursor-agent models`)
 
-### `cursor_list_models`
+### `agent_list_models`
 ```
 args:  { query?: string }
 returns: { models: [{ id, displayName }], active_model, cached_at }
@@ -136,7 +136,7 @@ case-insensitive contains on `id` or `displayName` ("claude", "thinking",
 > No native filter flag — bridge parses and filters in-process.
 > The tip line (`Tip: use --model ...`) and header (`Available models`) are stripped.
 
-### `cursor_set_model`
+### `agent_set_model`
 ```
 args:  { model_id: string }
 returns: { active_model, displayName }
@@ -144,19 +144,19 @@ returns: { active_model, displayName }
 Sets `session_state.active_model`. Validated against the model cache (must be a
 known ID). Default session value is `"auto"` (Cursor uses the account default).
 Fuzzy-match on displayName is done before the tool is called (by the voice model
-from `cursor_list_models` results); the tool receives the exact ID.
+from `agent_list_models` results); the tool receives the exact ID.
 
 ---
 
 ## Group: Execute (CLI: `cursor-agent -p`)
 
-### `cursor_submit`
+### `agent_submit`
 ```
 args:  { prompt: string, project?: string, mode?: "agent" | "plan" }
 returns: { job_id, session_id, status, project, model }
 ```
 Submits work to cursor-agent. Returns immediately with a `job_id`; track
-progress via `cursor_status`. Applies `session_state.active_project`,
+progress via `agent_job_status`. Applies `session_state.active_project`,
 `session_state.active_model`, and `config.preRunFlags`. Resumes the project's
 existing session via `--resume` if a `resume_id` is stored.
 
@@ -174,7 +174,7 @@ cursor-agent -p --output-format stream-json
 > **Note:** Prompt text is prepended with the standing instruction to proceed
 > without asking questions (steering, not a flag). See `05`.
 
-### `cursor_ask`
+### `agent_ask`
 ```
 args:  { question: string, project?: string }
 returns: { answer: string, has_more: boolean }
@@ -182,14 +182,14 @@ returns: { answer: string, has_more: boolean }
 Read-only repo Q&A. Hard-coded `--mode ask` — cannot write or run mutating
 commands regardless of `preRunFlags`. One-shot (no `--resume`); does not pollute
 the work session. The voice model's **only** route to repo facts. Long answers
-are truncated for voice; full text is cached for `cursor_recall_answer`.
+are truncated for voice; full text is cached for `agent_recall_answer`.
 
-### `cursor_recall_answer`
+### `agent_recall_answer`
 ```
 args:  { format?: "brief" | "full" }
 returns: { question, answer, project, completed_at, has_more? }
 ```
-Returns the last `cursor_ask` result without re-spawning cursor-agent. Use for
+Returns the last `agent_ask` result without re-spawning cursor-agent. Use for
 summarize / repeat / expand follow-ups.
 
 CLI equivalent:
@@ -206,7 +206,7 @@ cursor-agent -p --output-format json
 
 ## Group: Job (bridge state — SQLite)
 
-### `cursor_status`
+### `agent_job_status`
 ```
 args:  { job_id: string }
 returns: { status, progress: [{ ts, kind, text }], summary?, diffstat?, session_id, project, model }
@@ -215,34 +215,34 @@ Poll a running or completed job. `status ∈ running | done | error | stopped`.
 Progress is the streamed event log. Used for voice narration ("still working…")
 and final result retrieval.
 
-### `cursor_stop`
+### `agent_job_stop`
 ```
 args:  { job_id: string }
 returns: { status: "stopped" }
 ```
-SIGTERM → SIGKILL the cursor-agent process for a **cursor_submit** job only.
-Does not cancel in-flight `cursor_ask` questions — those must finish naturally.
+SIGTERM → SIGKILL the cursor-agent process for a **agent_submit** job only.
+Does not cancel in-flight `agent_ask` questions — those must finish naturally.
 Updates job status.
 
 ---
 
 ## Group: Session (CLI: `create-chat` + registry)
 
-### `cursor_new_session`
+### `agent_new_session`
 ```
 args:  { project?: string }
 returns: { session_id, project }
 ```
-Clears the project's stored `resume_id` so the next `cursor_submit` starts a
+Clears the project's stored `resume_id` so the next `agent_submit` starts a
 fresh thread. Optionally calls `cursor-agent create-chat` to pre-create a session
 ID before any prompt.
 
 > **CLI note:** `cursor-agent ls` requires an interactive TTY (raw mode) and
-> **cannot be used headlessly**. Session IDs are captured from `cursor_submit`
+> **cannot be used headlessly**. Session IDs are captured from `agent_submit`
 > output (the `session_id` field on `system:init` and `result` events) and
 > persisted to the registry — the bridge is the source of truth for resume IDs.
 
-### `cursor_session_info`
+### `agent_session_info`
 ```
 args:  { project?: string }
 returns: { project, resume_id, last_job_id, last_run_at }
@@ -254,7 +254,7 @@ narrate "you were last working on budget 20 minutes ago" without running the CLI
 
 ## Group: Git (`simple-git`)
 
-### `cursor_diff`
+### `agent_diff`
 ```
 args:  { project?: string, full_patch?: boolean }
 returns: { diffstat: string, patch?: string, clean: boolean }
@@ -263,12 +263,12 @@ Current uncommitted diff for the project workspace. `diffstat` is always
 returned (file summary); `full_patch` also returns the raw diff text. Used by the
 voice model to describe what changed.
 
-### `cursor_revert`
+### `agent_revert`
 ```
 args:  { project?: string, confirm?: boolean }
 returns: { reverted_to: string, files: string[], method: "stash" | "reset_hard" }
 ```
-Git-level undo. Restores the pre-job checkpoint recorded by `cursor_submit`.
+Git-level undo. Restores the pre-job checkpoint recorded by `agent_submit`.
 - Uncommitted changes → `git stash` (safe, reversible).
 - Agent-committed changes → `git reset --hard <checkpoint>` (destructive;
   requires `confirm: true`).
@@ -278,7 +278,7 @@ The voice model asks for confirmation before calling with `confirm: true`.
 
 ## Group: System (CLI: `about`, `status`)
 
-### `cursor_agent_info`
+### `agent_info`
 ```
 args:  (none)
 returns: { cliVersion, model, osPlatform, osArch, shell }
@@ -298,7 +298,7 @@ CLI output (JSON):
 }
 ```
 
-### `cursor_agent_status`
+### `agent_status`
 ```
 args:  (none)
 returns: { authenticated, email?, firstName? }
@@ -321,7 +321,7 @@ CLI output (JSON):
 
 These are informational — useful for debugging the executor's own MCP config.
 
-### `cursor_mcp_list`
+### `agent_mcp_list`
 ```
 args:  (none)
 returns: { servers: [{ name, status }] }
@@ -332,7 +332,7 @@ server — this is about MCPs the executor agent itself may use.
 
 CLI output: plain text (`<name>: <status>`), parsed by the bridge.
 
-### `cursor_mcp_tools`
+### `agent_mcp_tools`
 ```
 args:  { server: string }
 returns: { tools: [{ name, args }] }
@@ -346,8 +346,8 @@ executor MCP server. Informational; used for debugging.
 
 | Command | Why not ported |
 | --- | --- |
-| `cursor-agent ls` | **Requires interactive TTY** (raw mode error headlessly). Session IDs are captured from `cursor_submit` output instead. |
-| `cursor-agent resume` (interactive) | Interactive TTY only. Resume is handled by the bridge via `--resume` flag on `cursor_submit`. |
+| `cursor-agent ls` | **Requires interactive TTY** (raw mode error headlessly). Session IDs are captured from `agent_submit` output instead. |
+| `cursor-agent resume` (interactive) | Interactive TTY only. Resume is handled by the bridge via `--resume` flag on `agent_submit`. |
 | `cursor-agent login` / `logout` | Operator-only setup via SSH/iSH; not part of the voice flow. |
 | `cursor-agent update` | Never auto-update the service. Manual only. |
 | `cursor-agent worker start` | Cloud worker feature; AgentVoice uses local `cursor-agent -p`. |
@@ -376,29 +376,29 @@ executor MCP server. Informational; used for debugging.
 | 11 | `revert_agent` | Agents | `git.revert` via job checkpoint from DB |
 | 12 | `list_jobs_history` | Jobs | DB (`job` table) |
 | 13 | `set_mode` | Mode | Session-scoped `preferredModeMap` |
-| 14 | `execute_plan` | Mode | `dispatchTool('cursor_submit', ...)` |
+| 14 | `execute_plan` | Mode | `dispatchTool('agent_submit', ...)` |
 
 ### cursor-agent wrapper tools (exposed to Cursor via MCP — same as dispatchTool surface)
 
 | # | Tool | Group | Backed by |
 | --- | --- | --- | --- |
-| 15 | `cursor_list_projects` | Project | Registry (custom) |
-| 16 | `cursor_set_project` | Project | Registry (custom) |
-| 17 | `cursor_list_models` | Model | CLI: `cursor-agent models` |
-| 18 | `cursor_set_model` | Model | State (DB) |
-| 19 | `cursor_submit` | Execute | CLI: `-p --output-format stream-json` |
-| 20 | `cursor_ask` | Execute | CLI: `-p --output-format json --mode ask` |
-| 21 | `cursor_recall_answer` | Execute | Bridge cache (last ask) |
-| 22 | `cursor_status` | Job | DB (job rows + watcher events) |
-| 23 | `cursor_stop` | Job | `process.kill` → SIGTERM/SIGKILL |
-| 24 | `cursor_new_session` | Session | DB clear + CLI: `create-chat` |
-| 25 | `cursor_session_info` | Session | DB |
-| 26 | `cursor_diff` | Git | simple-git |
-| 27 | `cursor_revert` | Git | simple-git |
-| 28 | `cursor_agent_info` | System | CLI: `about --format json` |
-| 29 | `cursor_agent_status` | System | CLI: `status --format json` |
-| 30 | `cursor_mcp_list` | MCP inspect | CLI: `mcp list` |
-| 31 | `cursor_mcp_tools` | MCP inspect | CLI: `mcp list-tools` |
+| 15 | `agent_list_projects` | Project | Registry (custom) |
+| 16 | `agent_set_project` | Project | Registry (custom) |
+| 17 | `agent_list_models` | Model | CLI: `cursor-agent models` |
+| 18 | `agent_set_model` | Model | State (DB) |
+| 19 | `agent_submit` | Execute | CLI: `-p --output-format stream-json` |
+| 20 | `agent_ask` | Execute | CLI: `-p --output-format json --mode ask` |
+| 21 | `agent_recall_answer` | Execute | Bridge cache (last ask) |
+| 22 | `agent_job_status` | Job | DB (job rows + watcher events) |
+| 23 | `agent_job_stop` | Job | `process.kill` → SIGTERM/SIGKILL |
+| 24 | `agent_new_session` | Session | DB clear + CLI: `create-chat` |
+| 25 | `agent_session_info` | Session | DB |
+| 26 | `agent_diff` | Git | simple-git |
+| 27 | `agent_revert` | Git | simple-git |
+| 28 | `agent_info` | System | CLI: `about --format json` |
+| 29 | `agent_status` | System | CLI: `status --format json` |
+| 30 | `agent_mcp_list` | MCP inspect | CLI: `mcp list` |
+| 31 | `agent_mcp_tools` | MCP inspect | CLI: `mcp list-tools` |
 
 > Tools 15–31 are also accessible via the control WebSocket (`dispatchTool`) for the
 > `llm_intelligence` workflow. Tools 1–14 are MCP-server-only (Cursor's self-management surface).
@@ -418,20 +418,20 @@ src/mcp/
 │   │                         # set_mode, execute_plan
 │   └── turnQueue.ts          # VoiceTurnQueue long-poll bridge
 ├── tools/
-│   ├── project.ts            # cursor_list_projects, cursor_set_project
-│   ├── model.ts              # cursor_list_models, cursor_set_model
-│   ├── execute.ts            # cursor_submit, cursor_ask
-│   ├── job.ts                # cursor_status, cursor_stop
-│   ├── session.ts            # cursor_new_session, cursor_session_info
-│   ├── gitTools.ts           # cursor_diff, cursor_revert
-│   ├── system.ts             # cursor_agent_info, cursor_agent_status
-│   └── mcpInspect.ts         # cursor_mcp_list, cursor_mcp_tools
+│   ├── project.ts            # agent_list_projects, agent_set_project
+│   ├── model.ts              # agent_list_models, agent_set_model
+│   ├── execute.ts            # agent_submit, agent_ask
+│   ├── job.ts                # agent_job_status, agent_job_stop
+│   ├── session.ts            # agent_new_session, agent_session_info
+│   ├── gitTools.ts           # agent_diff, agent_revert
+│   ├── system.ts             # agent_info, agent_status
+│   └── mcpInspect.ts         # agent_mcp_list, agent_mcp_tools
 ├── schemas.ts                # zod schemas for dispatchTool tools (17 tools)
 ├── handlers.ts               # dispatchTool security boundary
 └── functionTools.ts          # generates provider function-tool defs from schemas
 
 src/executor/
-├── cursorAgent.ts       # spawn (supports --worktree, --mode plan|ask|debug)
+├── agentProcess.ts       # spawn (supports --worktree, --mode plan|ask|debug)
 ├── agentSingleton.ts    # singleton + worktree worker pool, getAllActiveRuns()
 ├── jobManager.ts        # submitJob (worktree), getAllActiveJobSummaries(), getJobsHistory()
 ├── watcher.ts           # stream-json event classifier → NarrationEvents

@@ -10,16 +10,21 @@
 
 import type { AgentClient } from '../../config.js';
 import type { Project, SessionState } from '../../state/registry.js';
+import type { AgentStreamEvent } from './events.js';
+import type { McpRegistrationContext, McpRegistrationResult } from './mcpRegistration.js';
 
 export type { AgentClient };
+export type { AgentStreamEvent };
 
-// ── Spawn contract (shared with executor/cursorAgent.ts) ──────────────────
+// ── Spawn contract (shared with executor/agentProcess.ts) ─────────────────
+
+export type AgentMode = 'agent' | 'plan' | 'ask' | 'debug';
 
 export interface SpawnOptions {
   project: Project;
   session: SessionState;
   prompt: string;
-  mode?: 'agent' | 'plan' | 'ask' | 'debug';
+  mode?: AgentMode;
   /** If true, use one-shot JSON output (no streaming) — for ask/oneshot calls. */
   oneShot?: boolean;
   /** Run in an isolated git worktree (parallel agents on the same project). */
@@ -116,15 +121,44 @@ export interface AgentProvider {
   /** False when the CLI manages its own model choice (no --model flag to pass). */
   supportsModelSelection(): boolean;
 
-  /** Build headless worker argv (jobManager / cursor_ask). */
+  /** Build headless worker argv (jobManager / agent_ask). */
   buildWorkerArgs(opts: SpawnOptions): string[];
   /**
    * Build the conversational voice-agent argv. `bootPrompt` is the fully
-   * assembled system/boot text from voiceAgent.ts (cursor-voice rule body +
+   * assembled system/boot text from voiceAgent.ts (AgentVoice system prompt +
    * pending-turn block) — providers just place it as the final prompt arg.
    */
   buildVoiceArgs(project: Project, session: SessionState, pendingTurn: string | undefined, bootPrompt: string): string[];
 
+  /**
+   * Execution modes this CLI can actually enforce.
+   *
+   * `agent` is mandatory. A provider that cannot enforce `ask` must say so —
+   * `agent_ask` then refuses rather than silently running a *writing* agent
+   * against the user's repo under a read-only-sounding tool name.
+   */
+  supportedModes(): readonly AgentMode[];
+
+  /**
+   * Translate one raw NDJSON stdout line into normalized events.
+   * Returns `[]` for lines this provider does not care about.
+   * See providers/agents/events.ts for why this exists.
+   */
+  parseStreamEvent(raw: Record<string, unknown>): AgentStreamEvent[];
+
+  /**
+   * Register the AgentVoice MCP server with this CLI's own configuration.
+   * Called on every voice-session prepare — must be idempotent, and must strip
+   * `ctx.legacyServerNames` so a stale entry can't register a second server.
+   */
+  ensureMcpRegistration(ctx: McpRegistrationContext): Promise<McpRegistrationResult>;
+
   /** Optional `about`/version probe — not every CLI has an equivalent. */
   getAbout?(): Promise<AgentAbout | null>;
+
+  /**
+   * Pre-create a fresh conversation thread and return its id, if the CLI can.
+   * When absent (or resolving null) `agent_new_session` just clears resume_id.
+   */
+  createSession?(project: Project): Promise<string | null>;
 }

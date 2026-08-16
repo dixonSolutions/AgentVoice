@@ -168,7 +168,7 @@ async function setup(
     }
 
     report('Named tunnel requested — checking for an existing Cloudflare login...');
-    const tunnelName = `cursor-voice-${hostname.replace(/[^a-z0-9-]/gi, '-')}`;
+    const tunnelName = `agent-voice-${hostname.replace(/[^a-z0-9-]/gi, '-')}`;
     await execFileAsync(resolver.resolve(), ['tunnel', 'create', tunnelName], { timeout: 30_000 }).catch(
       (err) => log.debug({ err: String(err) }, 'tunnel create (may already exist)'),
     );

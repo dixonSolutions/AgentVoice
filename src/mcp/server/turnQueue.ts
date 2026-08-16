@@ -1,26 +1,29 @@
 /**
- * Voice turn queue — bridges incoming STT transcripts to Cursor's `next_voice_turn()` polls.
+ * Voice turn queue — bridges incoming STT transcripts to the agent's
+ * `next_voice_turn()` polls.
  *
- * Architecture: MCP is a pull protocol. The bridge cannot push voice turns to Cursor;
- * instead, incoming turns are enqueued here and Cursor calls `next_voice_turn()` to dequeue.
+ * Architecture: MCP is a pull protocol. The bridge cannot push voice turns to
+ * the agent; incoming turns are enqueued here and the agent calls
+ * `next_voice_turn()` to dequeue.
  *
- * Long-poll pattern: if no turn is ready, `dequeue()` suspends until one arrives or the
- * timeout elapses. This keeps latency low (Cursor hears the turn immediately) without
- * busy-polling.
+ * Long-poll pattern: if no turn is ready, `dequeue()` suspends until one
+ * arrives or the timeout elapses. Latency stays low without busy-polling.
  *
- * When Cursor is blocked in `request_user_input` / `submit_plan_for_approval` (no
- * `next_voice_turn` waiter), enqueue aborts those waits and delivers the utterance as
- * that tool's result — the same inject-as-tool-output path Cursor uses for other tools.
+ * Delivery order for one incoming turn:
+ *   1. a waiting `next_voice_turn()` poll, else
+ *   2. AgentVoice's interrupt hook (server/pendingWaits.ts) — whichever of OUR
+ *      tools the agent is currently blocked in, else
+ *   3. the buffer, for the agent's next poll.
  *
- * See docs/16-mcp-server-cursor-as-brain.md § 8.1 / § 8.4.
+ * Step 2 is protocol-level, so it works identically on Cursor, Codex and
+ * Claude Code — nothing here depends on a particular CLI.
+ *
+ * See docs/16-mcp-server-agent-as-brain.md § 8.1 / § 8.4.
  */
 
 import { childLogger } from '../../log.js';
 import type { TtsInterruptContext } from '../../voice/ttsInterrupt.js';
-import {
-  interruptAllPendingWithVoiceTurn,
-  type ApprovalRequest,
-} from './approvalRegistry.js';
+import { interruptPendingWaits, type PendingWait } from './pendingWaits.js';
 
 const log = childLogger('mcp:server:turnQueue');
 
@@ -41,7 +44,8 @@ export interface EnqueueVoiceTurnOptions {
 
 export type EnqueueDelivery =
   | { kind: 'waiter' }
-  | { kind: 'approval_interrupt'; aborted: ApprovalRequest[] }
+  /** Delivered through a blocking AgentVoice tool instead of a poll. */
+  | { kind: 'tool_interrupt'; aborted: PendingWait[]; annotated: PendingWait[] }
   | { kind: 'queued'; queueLen: number };
 
 interface PendingWaiter {
@@ -67,28 +71,31 @@ class VoiceTurnQueue {
   private readonly waiters: PendingWaiter[] = [];
   private interruptFlag = false;
   private interruptFlagAt = 0;
-  /** Fired when a turn is buffered because Cursor is not currently in next_voice_turn(). */
+  /** Fired when a turn is buffered because the agent is not in next_voice_turn(). */
   private onQueuedWithoutWaiter: ((queueLen: number) => void) | null = null;
-  /** Fired when pending approval/input waits were resolved by this turn. */
-  private onApprovalsInterrupted:
-    | ((aborted: ApprovalRequest[], turn: VoiceTurn) => void)
+  /** Fired when in-flight AgentVoice tool calls received this turn. */
+  private onToolsInterrupted:
+    | ((delivery: { aborted: PendingWait[]; annotated: PendingWait[] }, turn: VoiceTurn) => void)
     | null = null;
 
   setQueuedWithoutWaiterHandler(fn: ((queueLen: number) => void) | null): void {
     this.onQueuedWithoutWaiter = fn;
   }
 
-  setApprovalsInterruptedHandler(
-    fn: ((aborted: ApprovalRequest[], turn: VoiceTurn) => void) | null,
+  setToolsInterruptedHandler(
+    fn:
+      | ((delivery: { aborted: PendingWait[]; annotated: PendingWait[] }, turn: VoiceTurn) => void)
+      | null,
   ): void {
-    this.onApprovalsInterrupted = fn;
+    this.onToolsInterrupted = fn;
   }
 
   /**
    * Push a transcribed turn from the PWA into the queue.
    * If a waiter is already blocking on `dequeue()`, it is woken immediately.
-   * Else if approval/input tools are waiting, they are resolved with this turn
-   * (not queued — delivered as MCP tool output).
+   * Else if any AgentVoice tool call is in flight, the turn is delivered
+   * through it (resolving user-facing waits, riding along on working ones) —
+   * running work is never stopped just because the user spoke.
    * Otherwise the turn is buffered for a later `next_voice_turn()`.
    */
   enqueue(text: string, options?: EnqueueVoiceTurnOptions): EnqueueDelivery {
@@ -121,20 +128,31 @@ class VoiceTurnQueue {
       return { kind: 'waiter' };
     }
 
-    // No next_voice_turn waiter — inject into blocking approval/input tools if any.
-    const aborted = interruptAllPendingWithVoiceTurn({
+    // No next_voice_turn waiter — hand the turn to whichever AgentVoice tool
+    // the agent is sitting in right now.
+    const delivery = interruptPendingWaits({
       user_turn: turn.text,
       is_interrupt: turn.isInterrupt,
       received_at: turn.receivedAt,
       tts_interrupt: turn.ttsInterrupt,
     });
-    if (aborted.length > 0) {
+    if (delivery.aborted.length > 0 || delivery.annotated.length > 0) {
       log.info(
-        { aborted: aborted.length, text: turn.text.slice(0, 80) },
-        'turn delivered by interrupting approval wait(s)',
+        {
+          aborted: delivery.aborted.map((w) => w.tool),
+          annotated: delivery.annotated.map((w) => w.tool),
+          text: turn.text.slice(0, 80),
+        },
+        'turn delivered through in-flight AgentVoice tool(s)',
       );
-      this.onApprovalsInterrupted?.(aborted, turn);
-      return { kind: 'approval_interrupt', aborted };
+      this.onToolsInterrupted?.(delivery, turn);
+      // Annotated tools keep working; the turn still needs to be dequeueable if
+      // the agent polls before that work finishes.
+      if (delivery.aborted.length === 0) {
+        this.queue.push(turn);
+        this.onQueuedWithoutWaiter?.(this.queue.length);
+      }
+      return { kind: 'tool_interrupt', ...delivery };
     }
 
     this.queue.push(turn);
@@ -146,7 +164,7 @@ class VoiceTurnQueue {
 
   /**
    * Dequeue the next voice turn, waiting up to `timeoutMs` ms.
-   * Returns `null` on timeout (Cursor should call again).
+   * Returns `null` on timeout (the agent should call again).
    */
   dequeue(timeoutMs = 30_000): Promise<VoiceTurn | null> {
     if (this.queue.length > 0) {
@@ -172,12 +190,12 @@ class VoiceTurnQueue {
     return v;
   }
 
-  /** Number of turns currently buffered (not yet consumed by Cursor). */
+  /** Number of turns currently buffered (not yet consumed by the agent). */
   get size(): number {
     return this.queue.length;
   }
 
-  /** Number of Cursor polls currently suspended waiting for a turn. */
+  /** Number of agent polls currently suspended waiting for a turn. */
   get waitersCount(): number {
     return this.waiters.length;
   }

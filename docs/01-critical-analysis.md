@@ -76,9 +76,9 @@ handling**, and **safety of autonomous execution** — all addressable.
 
 ## 5. MCP server / tools — ✅ This is the heart of the safety model
 
-- ✅ Exposing a **small, constrained tool set** (`cursor_submit`,
-  `cursor_status`, `cursor_stop`, `cursor_revert`, `cursor_new_session`,
-  `cursor_diff`) is exactly right. **This — not raw shell access — is the safety
+- ✅ Exposing a **small, constrained tool set** (`agent_submit`,
+  `agent_job_status`, `agent_job_stop`, `agent_revert`, `agent_new_session`,
+  `agent_diff`) is exactly right. **This — not raw shell access — is the safety
   boundary.** The voice model can only do what these tools allow.
 - ⚠️ Each tool must **validate inputs at the API level**: `project` must be in an
   **allowlist registry** (never an arbitrary path), and the tool must run
@@ -106,7 +106,7 @@ handling**, and **safety of autonomous execution** — all addressable.
   interface from day one.
 - ✅ **New capabilities help us:** native **remote MCP support** and
   **async function calling** (the conversation keeps going — "give me a
-  second…" — while a long `cursor_submit` runs). Async function calling is the
+  second…" — while a long `agent_submit` runs). Async function calling is the
   clean answer to the "cursor-agent jobs are slow" problem.
 - ✅ **Provider independence** from the model `cursor-agent` uses is correct and
   important — two separate accounts/keys/billing. Keep the provider behind an
@@ -156,12 +156,12 @@ agent's blast radius is bounded by:
 
 1. **Tool surface** — only the small, fixed set of constrained tools exists.
 2. **Project allowlist** — `cursor-agent` only ever runs inside known workspaces.
-3. **Git revert** — `cursor_revert` is a fast, reliable undo for any edit.
+3. **Git revert** — `agent_revert` is a fast, reliable undo for any edit.
 4. **Token auth** — only the authenticated phone can invoke tools at all.
 
 Residual risk: a *valid* tool call can still ask the agent to do something
 destructive *within* an allowlisted project (e.g., "delete all tests"). Mitigated
-by git revert + (optional, recommended) plan-mode-first for `cursor_submit` so
+by git revert + (optional, recommended) plan-mode-first for `agent_submit` so
 the model can describe intent before applying. Documented as a config toggle.
 
 ---

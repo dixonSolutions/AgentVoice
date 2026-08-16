@@ -89,9 +89,9 @@ const INTELLIGENCE_ALIAS_TOOLS = [
 
 /** Map intelligence alias names to cursor_* MCP tools. */
 export const INTELLIGENCE_TOOL_ALIASES: Record<string, string> = {
-  get_status: 'cursor_status',
-  launch_agent: 'cursor_submit',
-  read_output: 'cursor_status',
+  get_status: 'agent_job_status',
+  launch_agent: 'agent_submit',
+  read_output: 'agent_job_status',
 };
 
 /** All tools exposed to Claude in the intelligence workflow. */

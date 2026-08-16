@@ -25,13 +25,13 @@ Cursor's native context window, model, and reasoning do the work.
 ## 2 — How Cursor Discovers the MCP Server
 
 The bridge exposes an **MCP HTTP server** at `/mcp`. On voice session start the
-bridge ensures **global** `~/.cursor/mcp.json` registers `cursor-voice` so
+bridge ensures **global** `~/.cursor/mcp.json` registers `agent-voice` so
 Cursor loads it in **every workspace** (not per-project):
 
 ```json
 {
   "mcpServers": {
-    "cursor-voice": {
+    "agent-voice": {
       "url": "https://<tailscale-hostname>:8787/mcp",
       "transport": "http",
       "headers": { "Authorization": "Bearer <app-token>" }
@@ -42,7 +42,7 @@ Cursor loads it in **every workspace** (not per-project):
 
 Restart Cursor after the first global install. The bridge exposes the tool
 manifest over HTTP. From that point Cursor's conversational agent has the full
-`cursor-voice` tool surface.
+`agent-voice` tool surface.
 
 ---
 
@@ -105,8 +105,8 @@ controls.
 | --- | --- | --- |
 | `set_mode` | `(id: string, mode: 'ask'\|'agent'\|'debug'\|'plan')` | Change mode of a specific agent session |
 | `execute_plan` | `(id: string)` | Trigger execution on a plan-mode agent |
-| `cursor_diff` | `(id?: string)` | Current git diff for a session's working directory |
-| `cursor_revert` | `(id?: string)` | Revert uncommitted changes |
+| `agent_diff` | `(id?: string)` | Current git diff for a session's working directory |
+| `agent_revert` | `(id?: string)` | Revert uncommitted changes |
 
 ---
 
@@ -126,11 +126,11 @@ every running agent session and makes it queryable via `get_agent_status()`.
 ## 6 — System Prompt & Boot Lifecycle
 
 Voice agent prompts live in `prompts/agentvoice/system.md` (loaded by
-`src/mcp/loadCursorVoicePrompt.ts`). A matching Cursor rule exists at
-`.cursor/rules/cursor-voice.mdc` for `@cursor-voice` injection — the prompt
+`src/mcp/agentVoicePrompt.ts`). A matching Cursor rule exists at
+`.cursor/rules/agent-voice.mdc` for `@agent-voice` injection — the prompt
 directory moved to `agentvoice/` in the rename (see
 [`docs/26-rename-agentvoice.md`](./26-rename-agentvoice.md)), but the MCP
-registration key and rule filename stay `cursor-voice` for compatibility with
+registration key and rule filename stay `agent-voice` for compatibility with
 already-configured `~/.cursor/mcp.json`/`~/.cursor/rules/` on existing installs.
 
 ### First spawn (new session)
@@ -142,7 +142,7 @@ system prompt plus boot suffix to `cursor-agent -p`:
 <prompts/agentvoice/system.md body>
 
 ---
-The cursor-voice MCP server is connected. Start the voice loop now — call next_voice_turn() immediately.
+The agent-voice MCP server is connected. Start the voice loop now — call next_voice_turn() immediately.
 ```
 
 ### Resume (existing session)
@@ -150,12 +150,12 @@ The cursor-voice MCP server is connected. Start the voice loop now — call next
 When the project has a persisted `resumeId`, only a **short** prompt is sent:
 
 ```
-@cursor-voice
+@agent-voice
 
-The cursor-voice MCP server is connected. Resume the voice loop — call next_voice_turn() immediately.
+The agent-voice MCP server is connected. Resume the voice loop — call next_voice_turn() immediately.
 ```
 
-The `@cursor-voice` mention causes Cursor to inject the rule file. Conversation
+The `@agent-voice` mention causes Cursor to inject the rule file. Conversation
 history comes from `--resume <session_id>`; the full system prompt is **not** resent.
 
 Implementation: `src/executor/voiceAgent.ts` — `buildVoiceBootPrompt(project)`.
@@ -200,7 +200,7 @@ Cursor's agent model and may interfere with normal coding use.
 
 **Resolution adopted:** Keep the current `llm_intelligence` workflow (Claude on
 Bedrock) as the **default** runtime. The MCP SSE server is additive; users opt
-into the Cursor-as-brain mode by setting `workflow.default: "cursor_native"` in
+into the Cursor-as-brain mode by setting `workflow.default: "agent_native"` in
 `config.json` and activating the conversational agent manually.
 
 Long-term, an activation hook (e.g., a background task or Cursor rule) could
@@ -273,7 +273,7 @@ GET request. Cursor supports custom headers in `mcp.json`:
 ```json
 {
   "mcpServers": {
-    "cursor-voice": {
+    "agent-voice": {
       "url": "https://host:3000/mcp/sse",
       "transport": "sse",
       "headers": { "Authorization": "Bearer <token>" }
@@ -313,15 +313,15 @@ See [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) and
 | `src/mcp/server/turnQueue.ts` | Thread-safe voice turn queue with long-poll `dequeue()` |
 | `src/mcp/server/voiceToolHandlers.ts` | `speak`, `done`, `next_voice_turn` implementations |
 | `src/mcp/server/agentToolHandlers.ts` | `list_agents`, `get_agent_status`, `spawn_agent`, `stop_agent`, `inject` |
-| `src/mcp/server/modeToolHandlers.ts` | `set_mode`, `execute_plan`, `cursor_diff`, `cursor_revert` |
+| `src/mcp/server/modeToolHandlers.ts` | `set_mode`, `execute_plan`, `agent_diff`, `agent_revert` |
 | `src/mcp/server/index.ts` | MCP `Server` using `@modelcontextprotocol/sdk`; tool dispatch |
 | `src/routes/mcpSse.ts` | Fastify SSE route (`GET /mcp/sse`) + post handler (`POST /mcp`) |
 | `prompts/agentvoice/system.md` | System prompt for Cursor voice mode |
 | `.cursor/mcp.json.example` | Example MCP registration file |
 
-### Phase 2 — `cursor_native` Workflow ✅
+### Phase 2 — `agent_native` Workflow ✅
 
-- `workflow.default: "cursor_native"` in config.
+- `workflow.default: "agent_native"` in config.
 - Intelligence WebSocket routes turns to `VoiceTurnQueue`.
 - Bridge auto-spawns conversational `cursor-agent` via `src/executor/voiceAgent.ts`.
 - `done()` triggers `{ type: "turn_complete" }` to the PWA.
@@ -334,13 +334,13 @@ See [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) and
 
 - Voice agent spawns automatically on first `user_turn` when none is running.
 - MCP session bound on first `/mcp` connect (`bindVoiceAgentMcpSession`).
-- Boot prompt: full system prompt on first spawn; `@cursor-voice` on resume.
+- Boot prompt: full system prompt on first spawn; `@agent-voice` on resume.
 
 ### Voice session MCP prepare (implemented)
 
 Before the mic opens, the bridge runs `ensureGlobalMcpSetup()` — **not** per-project:
 
-1. Check **global** `~/.cursor/mcp.json` for `cursor-voice` entry
+1. Check **global** `~/.cursor/mcp.json` for `agent-voice` entry
    (Windows: `%USERPROFILE%\.cursor\mcp.json`)
 2. Install if missing; update if `cursorVoice.version` is older than bridge
 3. Set `enabled: true` and write bridge URL + Bearer token
@@ -368,7 +368,7 @@ Template: `config/global-mcp.json.example` → copy to `~/.cursor/mcp.json`.
 
 | Mode | Who reasons | Bridge role |
 | --- | --- | --- |
-| `cursor_native` (default) | Cursor agent via MCP | Routes turns to `VoiceTurnQueue`; handles `speak()` |
+| `agent_native` (default) | Cursor agent via MCP | Routes turns to `VoiceTurnQueue`; handles `speak()` |
 | `llm_intelligence` | Claude on Bedrock | Routes turns to Bedrock orchestrator; handles `speak()` |
 
 The MCP server runs regardless of workflow so Cursor can call bridge tools from any project.

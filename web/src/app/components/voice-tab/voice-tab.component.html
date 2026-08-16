@@ -170,7 +170,7 @@
                         </div>
                       </ng-template>
                     </p-select>
-                    <label for="session-picker">Cursor session</label>
+                    <label for="session-picker">Agent session</label>
                   </p-iftalabel>
                 </div>
 
@@ -235,7 +235,7 @@
 </p-card>
 
 <p-dialog
-  header="Ask Cursor"
+  [header]="textDialogHeader()"
   [(visible)]="textDialogVisible"
   [modal]="true"
   [draggable]="false"
@@ -249,7 +249,7 @@
       [(ngModel)]="typedMessage"
       rows="14"
       [autoResize]="false"
-      placeholder="Describe what you want Cursor to do…"
+      [placeholder]="textDialogPlaceholder()"
       (keydown)="handleEditorKeydown($event)"></textarea>
     <small>Markdown supported · Ctrl/⌘ + Enter to send</small>
   </div>

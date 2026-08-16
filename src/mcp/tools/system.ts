@@ -1,6 +1,5 @@
 /**
- * System tools — cursor_agent_info, cursor_agent_status (and their generic
- * agent_info / agent_status aliases).
+ * System tools — agent_info, agent_status.
  *
  * Backed by the active AgentProvider's getAbout()/checkAuth() — works for
  * Cursor, Codex, and Claude Code, not just cursor-agent.
@@ -11,7 +10,7 @@ import { getActiveProvider } from '../../providers/agents/registry.js';
 
 const log = childLogger('tool:system');
 
-// ── cursor_agent_info / agent_info ────────────────────────────────────────
+// ── agent_info ────────────────────────────────────────────────────────────────────
 
 export interface AgentInfoResult {
   provider: string;
@@ -39,7 +38,7 @@ export async function handleCursorAgentInfo(): Promise<AgentInfoResult> {
   };
 }
 
-// ── cursor_agent_status / agent_status ────────────────────────────────────
+// ── agent_status ──────────────────────────────────────────────────────────────
 
 export interface AgentStatusResult {
   provider: string;

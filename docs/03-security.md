@@ -91,7 +91,7 @@ Full design: [`18-image-carousel.md`](./18-image-carousel.md).
 `cursor-agent` interprets the prompt as a task, not as host shell. We never build
 a shell command from it (`shell: false`, args array). The agent's own actions are
 bounded by the workspace and recoverable via git. Optional hardening:
-`--sandbox enabled` and/or **plan-mode-first** (`--mode plan`) so `cursor_submit`
+`--sandbox enabled` and/or **plan-mode-first** (`--mode plan`) so `agent_submit`
 returns a *proposed plan* the model can confirm with the user before a second
 apply call.
 
@@ -113,7 +113,7 @@ default.)
   workspaces — not as root, not as your primary user.
 - `spawn(cmd, argsArray, { shell: false, cwd: registryPath })`.
 - Resource guards: per-job timeout, max concurrent jobs, kill-on-stop
-  (`cursor_stop`), reap zombies.
+  (`agent_job_stop`), reap zombies.
 - `--trust` is scoped to the allowlisted workspace only.
 - Pin the CLI version; the CLI is beta and flags may change.
 
@@ -137,14 +137,14 @@ commands unless explicitly denied."*
   voice model and dad cannot edit them.
 - Note this is a *second* layer: the primary boundary is still the constrained
   MCP tool surface + project allowlist. The deny list bounds what the agent can
-  do *inside* an allowlisted workspace once a valid `cursor_submit` is running.
+  do *inside* an allowlisted workspace once a valid `agent_submit` is running.
 
-### `cursor_ask` is read-only by construction
+### `agent_ask` is read-only by construction
 
 The voice model has **no direct repo access**; its only context path is
-`cursor_ask`, which the bridge runs **exclusively in `--mode ask`** (read-only
+`agent_ask`, which the bridge runs **exclusively in `--mode ask`** (read-only
 exploration — searches/reads, never edits or runs mutating commands). The handler
-hard-codes ask mode; the model cannot escalate a `cursor_ask` into a writing run.
+hard-codes ask mode; the model cannot escalate a `agent_ask` into a writing run.
 Still subject to the same project allowlist (resolves `project → path`) and audit
 logging. This lets the "dumb" voice model gather grounded context without
 widening the write surface.
@@ -167,6 +167,6 @@ widening the write surface.
 | Token leak | Rotate via `.env`; short ephemeral provider TTL limits provider abuse |
 | Path traversal / arbitrary workspace | Registry allowlist; runtime path from registry only (admin may register any absolute host path) |
 | Shell injection via prompt | `shell:false` + args array; prompt is a task, not a command |
-| Destructive but valid agent action | `cursor_revert` (git); optional plan-mode-first |
-| Runaway/zombie agent process | Timeouts, concurrency cap, `cursor_stop`, reaping |
+| Destructive but valid agent action | `agent_revert` (git); optional plan-mode-first |
+| Runaway/zombie agent process | Timeouts, concurrency cap, `agent_job_stop`, reaping |
 | Public exposure | No Funnel by default; tailnet-only |

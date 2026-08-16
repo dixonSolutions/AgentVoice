@@ -1,14 +1,20 @@
 /**
- * Execute tools — cursor_submit, cursor_ask
+ * Execute tools — agent_submit, agent_ask
  *
- * cursor_submit: async job submission (returns job_id immediately).
- * cursor_ask:    synchronous read-only Q&A (hard-coded --mode ask).
+ * agent_submit: async job submission (returns job_id immediately).
+ * agent_ask:    synchronous read-only Q&A (read-only mode, provider-enforced).
  *
  * Both resolve the project from the registry. The model controls the
  * prompt/question text only — workspace path comes from the registry.
+ *
+ * `agent_ask` can block for minutes, so it runs under AgentVoice's interrupt
+ * hook: if the user speaks mid-research the work is NOT cancelled — the
+ * utterance rides back on this tool's own result.
  */
 
 import { submitJob, askQuestion } from '../../executor/jobManager.js';
+import { getActiveProvider } from '../../providers/agents/registry.js';
+import { withVoiceInterrupt } from '../server/pendingWaits.js';
 import { childLogger } from '../../log.js';
 import { resolveProjectOrThrow } from './project.js';
 import {
@@ -23,7 +29,7 @@ import { getLastAsk, setLastAsk, truncateForVoice } from '../../state/lastAsk.js
 
 const log = childLogger('tool:execute');
 
-// ── cursor_submit ─────────────────────────────────────────────────────────
+// ── agent_submit ─────────────────────────────────────────────────────────
 
 export interface SubmitArgs {
   prompt: string;
@@ -38,15 +44,15 @@ export interface SubmitResult {
   project: string;
   model?: string;
   message: string;
-  /** Present when a question was misrouted to submit — answered via cursor_ask instead. */
+  /** Present when a question was misrouted to submit — answered via agent_ask instead. */
   routed?: 'ask';
   answer?: string;
   has_more?: boolean;
 }
 
 /**
- * Submit work to cursor-agent (async).
- * Returns immediately with a job_id. Track progress with cursor_status.
+ * Submit work to the active agent CLI (async).
+ * Returns immediately with a job_id. Track progress with agent_job_status.
  */
 export async function handleCursorSubmit(
   args: SubmitArgs,
@@ -58,7 +64,7 @@ export async function handleCursorSubmit(
   if (looksLikeReadOnlyQuestion(args.prompt) || isReadOnlyResearchIntent(args.prompt)) {
     log.info(
       { project: project.name, prompt: args.prompt.slice(0, 100) },
-      'cursor_submit redirected to cursor_ask (read-only question)',
+      'agent_submit redirected to agent_ask (read-only question)',
     );
     const ask = await handleCursorAsk(
       { question: normalizeAskQuestion(args.prompt), project: args.project },
@@ -83,11 +89,11 @@ export async function handleCursorSubmit(
     status: 'running',
     project: result.project,
     model: result.model,
-    message: `Job started (${result.jobId}). The user can ask what's happening anytime — use cursor_status without job_id.`,
+    message: `Job started (${result.jobId}). The user can ask what's happening anytime — use agent_job_status without job_id.`,
   };
 }
 
-// ── cursor_ask ────────────────────────────────────────────────────────────
+// ── agent_ask ─────────────────────────────────────────────────────────────
 
 export interface AskArgs {
   question: string;
@@ -102,8 +108,9 @@ export interface AskResult {
 }
 
 /**
- * Read-only repo Q&A. Always runs in --mode ask (cannot write or mutate).
- * One-shot — does not resume or persist a session.
+ * Read-only repo Q&A. Always runs in ask mode (cannot write or mutate) — the
+ * active provider enforces that with its own flags, and refuses outright if it
+ * cannot. One-shot: does not resume or persist a session.
  * This is the voice model's ONLY route to repo facts.
  */
 export async function handleCursorAsk(
@@ -117,7 +124,7 @@ export async function handleCursorAsk(
 
   if (looksLikeMutationRequest(question)) {
     throw new Error(
-      'This request changes the repo (commit, PR, merge, implement, etc.) — use cursor_submit, not cursor_ask.',
+      'This request changes the repo (commit, PR, merge, implement, etc.) — use agent_submit, not agent_ask.',
     );
   }
 
@@ -130,7 +137,7 @@ export async function handleCursorAsk(
         project: last.project,
         has_more: voiceAnswer.length < last.answer.length,
         message:
-          'The user likely heard TTS echo — do not ask Cursor about setting up agents. ' +
+          'The user likely heard TTS echo — do not ask the coding agent about setting up agents. ' +
           'Summarize the previous answer about implementation steps instead.',
       };
     }
@@ -143,7 +150,8 @@ export async function handleCursorAsk(
     const active = getActiveAgentRun();
     if (active?.kind === 'ask') {
       throw new Error(
-        'Cursor is still researching your question. Use cursor_status for live progress — do not call cursor_ask again yet.',
+        `${getActiveProvider().displayName} is still researching your question. ` +
+          'Use agent_job_status for live progress — do not call agent_ask again yet.',
       );
     }
   }
@@ -152,7 +160,7 @@ export async function handleCursorAsk(
   if (last && last.question.trim().toLowerCase() === qKey) {
     const ageMs = Date.now() - new Date(last.completedAt).getTime();
     if (ageMs < 5 * 60_000) {
-      log.info({ sessionKey, question: question.slice(0, 80) }, 'cursor_ask cache hit');
+      log.info({ sessionKey, question: question.slice(0, 80) }, 'agent_ask cache hit');
       const voiceAnswer = truncateForVoice(last.answer);
       return {
         answer: voiceAnswer,
@@ -164,21 +172,27 @@ export async function handleCursorAsk(
     }
   }
 
-  const fullAnswer = await askQuestion(project, sessionKey, question);
+  // Research can run for minutes. Registering the call with the interrupt hook
+  // means a mid-research utterance comes back attached to THIS result instead
+  // of waiting for the next poll — and the research still completes.
+  return withVoiceInterrupt('agent_ask', async () => {
+    const fullAnswer = await askQuestion(project, sessionKey, question);
 
-  setLastAsk(sessionKey, {
-    question,
-    answer: fullAnswer,
-    project: project.name,
+    setLastAsk(sessionKey, {
+      question,
+      answer: fullAnswer,
+      project: project.name,
+    });
+
+    const voiceAnswer = truncateForVoice(fullAnswer);
+    return {
+      answer: voiceAnswer,
+      project: project.name,
+      has_more: voiceAnswer.length < fullAnswer.length,
+      message:
+        `${getActiveProvider().displayName} finished. You MUST speak now: summarize the answer field in ` +
+        '3–5 short sentences for the user. Do not stay silent. If they later ask to summarize or repeat, ' +
+        'use agent_recall_answer.',
+    };
   });
-
-  const voiceAnswer = truncateForVoice(fullAnswer);
-  return {
-    answer: voiceAnswer,
-    project: project.name,
-    has_more: voiceAnswer.length < fullAnswer.length,
-    message:
-      'Cursor finished. You MUST speak now: summarize the answer field in 3–5 short sentences for the user. ' +
-      'Do not stay silent. If they later ask to summarize or repeat, use cursor_recall_answer.',
-  };
 }

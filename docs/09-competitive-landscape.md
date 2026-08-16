@@ -3,7 +3,7 @@
 > Historical snapshot — written before the August 2026 rename to **AgentVoice**
 > (see [`docs/26-rename-agentvoice.md`](./26-rename-agentvoice.md)). Left as
 > "Cursor Voice" throughout to preserve the point-in-time record; the third-party
-> `cursor-voice-cli` project mentioned below is unrelated to this repo either way.
+> `agent-voice-cli` project mentioned below is unrelated to this repo either way.
 
 Research snapshot: **June 2026**. Purpose: assess whether Cursor Voice duplicates
 existing work, how mature alternatives are, and whether to pursue
@@ -45,7 +45,7 @@ Most alternatives hit **1–2** of these, not all six.
 | --- | --- | --- | --- |
 | **[OpenClaw Nerve](https://github.com/daggerhashimoto/openclaw-nerve)** | ~833 ⭐, active, polished docs | Voice (Talk Mode), WebRTC, OpenAI/Gemini realtime, **Tailscale Serve for iPhone mic**, push-to-talk, MCP/agent orchestration, kanban, workspace control | **OpenClaw ecosystem**, not `cursor-agent`. Much broader "agent fleet cockpit." Heavier install. Targets power users, not a non-technical parent. |
 | **[mobile-computer-use](https://github.com/peytontolbert/mobile-computer-use)** | ~2 ⭐, App Store, early | iPhone/Android app, **`cursor-agent` CLI**, Codex, voice button (STT), local bridge, pairing | **Text chat + dictation**, not speech-to-speech. Developer UX. No MCP safety wrapper, no project registry, no Tailscale-first docs. |
-| **[cursor-voice-cli](https://github.com/theDavidCoen/cursor-voice-cli)** | 0 ⭐, May 2026, very early | Voice + **`cursor-agent`**, wake word, continuous conversation, barge-in | **Linux desktop overlay** driving interactive TUI in tmux — not iPhone, not headless MCP, not remote. |
+| **[agent-voice-cli](https://github.com/theDavidCoen/agent-voice-cli)** | 0 ⭐, May 2026, very early | Voice + **`cursor-agent`**, wake word, continuous conversation, barge-in | **Linux desktop overlay** driving interactive TUI in tmux — not iPhone, not headless MCP, not remote. |
 
 ### Tier B — Voice layer for Cursor (IDE-side, not phone remote)
 
@@ -166,7 +166,7 @@ Reasons:
 
 If open sourcing:
 
-- **License:** MIT or Apache 2.0 (matches similar projects: cursor-voice-cli, terminal-bridge, Nerve).
+- **License:** MIT or Apache 2.0 (matches similar projects: agent-voice-cli, terminal-bridge, Nerve).
 - **Positioning:** *"Self-hosted voice bridge for cursor-agent — built for hands-free and non-technical operators."*
 - **Optional later:** accept sponsorships or paid "setup call" — not a full SaaS on day one.
 

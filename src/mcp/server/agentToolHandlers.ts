@@ -12,7 +12,7 @@
  *   Jobs       — list_jobs_history
  *   Mode       — set_mode, execute_plan
  *
- * See docs/16-mcp-server-cursor-as-brain.md § 4 (full tool surface).
+ * See docs/16-mcp-server-agent-as-brain.md § 4 (full tool surface).
  */
 
 import { childLogger } from '../../log.js';
@@ -676,7 +676,7 @@ export function makeAgentHandlers(sessionKey: string): AgentToolHandlers {
     async handleExecutePlan(args: ExecutePlanArgs): Promise<ExecutePlanResult> {
       try {
         const result = await dispatchTool(
-          'cursor_submit',
+          'agent_submit',
           { prompt: 'Execute the proposed plan and apply the changes.' },
           sessionKey,
         );

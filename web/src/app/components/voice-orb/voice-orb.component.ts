@@ -8,12 +8,21 @@ import {
   viewChild,
 } from '@angular/core';
 import type { AudioSpectrum } from '../../../voice-audio-meter.js';
+import { APPEARANCE_CHANGED_EVENT } from '../../services/appearance.service';
 
 const TAU = Math.PI * 2;
 const SILENT = 0.028;
 const VIZ_BINS = 32;
 
-/** Semantic orb states — colors come from Optimus `--p-primary-*` tokens. */
+/**
+ * Semantic orb states.
+ *
+ * Every colour comes from the APP theme (`--p-primary-*`, set by
+ * AppearanceService from Config → Appearance). The orb must never take its hue
+ * from the coding agent's brand — switching agent client changes what runs the
+ * work, not what the app looks like. If you are tempted to tint per provider,
+ * add a state to OrbColorMode instead.
+ */
 export type OrbColorMode = 'idle' | 'ready' | 'listening';
 
 /** @deprecated Prefer OrbColorMode; kept for any stray imports. */
@@ -23,6 +32,13 @@ interface Rgb {
   r: number;
   g: number;
   b: number;
+}
+
+interface ThemePalette {
+  highlight: Rgb;
+  mid: Rgb;
+  deep: Rgb;
+  accent: Rgb;
 }
 
 @Component({
@@ -188,6 +204,15 @@ export class VoiceOrbComponent implements OnDestroy {
       ? document.createElement('canvas').getContext('2d')
       : null;
 
+  /**
+   * Theme tokens are read via getComputedStyle, which forces style resolution.
+   * Doing that inside draw() cost a full recalc on every animation frame (30/s,
+   * for the whole session). The palette only changes when the user changes
+   * theme, so resolve it once per mode and drop the cache when AppearanceService
+   * announces a change.
+   */
+  private readonly paletteCache = new Map<OrbColorMode, ThemePalette>();
+
   constructor() {
     afterNextRender(() => {
       this.resizeCanvas();
@@ -195,6 +220,7 @@ export class VoiceOrbComponent implements OnDestroy {
     });
     if (typeof document !== 'undefined') {
       document.addEventListener('visibilitychange', this.onVisibility);
+      document.addEventListener(APPEARANCE_CHANGED_EVENT, this.onAppearanceChanged);
     }
 
     effect(() => {
@@ -215,6 +241,10 @@ export class VoiceOrbComponent implements OnDestroy {
     el.width = Math.round(size * dpr);
     el.height = Math.round(size * dpr);
   }
+
+  private readonly onAppearanceChanged = (): void => {
+    this.paletteCache.clear();
+  };
 
   private readonly onVisibility = (): void => {
     if (typeof document !== 'undefined' && document.hidden) {
@@ -248,12 +278,15 @@ export class VoiceOrbComponent implements OnDestroy {
     this.draw(el);
   };
 
-  private themePalette(mode: OrbColorMode): {
-    highlight: Rgb;
-    mid: Rgb;
-    deep: Rgb;
-    accent: Rgb;
-  } {
+  private themePalette(mode: OrbColorMode): ThemePalette {
+    const cached = this.paletteCache.get(mode);
+    if (cached) return cached;
+    const palette = this.resolveThemePalette(mode);
+    this.paletteCache.set(mode, palette);
+    return palette;
+  }
+
+  private resolveThemePalette(mode: OrbColorMode): ThemePalette {
     const root = getComputedStyle(document.documentElement);
     const primary = this.cssToRgb(root.getPropertyValue('--p-primary-color')) ?? { r: 139, g: 92, b: 246 };
     const light =
@@ -456,6 +489,7 @@ export class VoiceOrbComponent implements OnDestroy {
     cancelAnimationFrame(this.rafId);
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', this.onVisibility);
+      document.removeEventListener(APPEARANCE_CHANGED_EVENT, this.onAppearanceChanged);
     }
   }
 }

@@ -6,7 +6,7 @@
  *
  * Key design rules from docs/03-security.md and docs/05:
  *   - `shell: false` always — no shell interpolation.
- *   - `--workspace` / `--cd` comes from the registry, never from the caller.
+ *   - `--workspace` / `--cd` / cwd come from the registry, never from the caller.
  *   - The prompt string is the ONLY caller-controlled argv element.
  *   - `strip-ansi` run defensively before JSON.parse.
  *   - Session IDs captured from structured output, not TTY scraping.
@@ -18,40 +18,13 @@ import stripAnsi from 'strip-ansi';
 import { AGENT_CLIENTS, type AgentClient } from '../config.js';
 import { childLogger } from '../log.js';
 import { getActiveProvider, getProvider } from '../providers/agents/registry.js';
-import { cursorProvider } from '../providers/agents/cursor.js';
 import type { SpawnOptions } from '../providers/agents/types.js';
-import type { StreamJsonEvent } from './watcher.js';
+import type { AgentStreamEvent } from '../providers/agents/events.js';
 
 export { AGENT_CLIENTS };
 export type { AgentClient, SpawnOptions };
 
 const log = childLogger('executor');
-
-/**
- * Env for Cursor CLI subprocesses specifically — used by the Cursor-only
- * diagnostic tools (cursor_mcp_list, cursor_mcp_tools, cursor_new_session's
- * create-chat) and the /healthz version probe, which always target the
- * Cursor CLI regardless of the active agentClient.
- */
-export function buildCursorAgentEnv(): NodeJS.ProcessEnv {
-  return cursorProvider.env(process.env);
-}
-
-export function resolveCursorAgentPath(): string {
-  return cursorProvider.resolveBin();
-}
-
-export function isCursorAgentAvailable(): boolean {
-  return cursorProvider.isInstalled();
-}
-
-export function resolveCodexPath(): string {
-  return getProvider('codex').resolveBin();
-}
-
-export function resolveClaudeCodePath(): string {
-  return getProvider('claude-code').resolveBin();
-}
 
 /** Resolve the binary path for the given agent client. */
 export function resolveAgentBin(client: AgentClient): string {
@@ -95,8 +68,8 @@ export interface AgentHandle {
   result: Promise<AgentResult>;
   /** Kill the process (SIGTERM → SIGKILL after 5 s). */
   kill(): void;
-  /** Subscribe to parsed stream-json events (called for each line). */
-  onEvent: (cb: (event: StreamJsonEvent) => void) => void;
+  /** Subscribe to normalized agent events (see providers/agents/events.ts). */
+  onEvent: (cb: (event: AgentStreamEvent) => void) => void;
 }
 
 export interface AgentResult {
@@ -134,7 +107,9 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
 
   const agentBin = provider.resolveBin();
   const child = spawn(agentBin, args, {
-    cwd: opts.project.path,
+    // Worktree runs must start inside the worktree: only Cursor takes a
+    // worktree flag, so cwd is what keeps Codex/Claude Code off the main tree.
+    cwd: opts.worktree ?? opts.project.path,
     shell: false, // SECURITY: never true
     env: provider.env(process.env),
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -147,9 +122,14 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
     throw new Error(`${provider.displayName} agent failed to spawn (no pid) — check the binary is installed and on PATH`);
   }
 
-  const eventListeners: Array<(event: StreamJsonEvent) => void> = [];
+  const eventListeners: Array<(event: AgentStreamEvent) => void> = [];
 
   // ── stdout readline parser ─────────────────────────────────────────────
+  //
+  // Raw NDJSON is handed straight to the provider: each CLI speaks its own
+  // dialect and only the provider knows how to read it. Everything below works
+  // on normalized events, so session capture and narration behave identically
+  // for Cursor, Codex and Claude Code.
 
   let capturedSessionId: string | null = null;
   let capturedSummary: string | null = null;
@@ -161,61 +141,35 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
     const clean = stripAnsi(raw).trim();
     if (!clean) return;
 
-    let event: Record<string, unknown>;
+    let parsed: Record<string, unknown>;
     try {
-      event = JSON.parse(clean) as Record<string, unknown>;
+      parsed = JSON.parse(clean) as Record<string, unknown>;
     } catch {
-      log.debug({ raw: clean }, 'non-JSON line from agent (ignored)');
+      log.debug({ raw: clean.slice(0, 200) }, 'non-JSON line from agent (ignored)');
       return;
     }
 
-    // Capture session_id wherever it appears (system:init or result).
-    if (typeof event['session_id'] === 'string') {
-      capturedSessionId = event['session_id'];
+    let events: AgentStreamEvent[];
+    try {
+      events = provider.parseStreamEvent(parsed);
+    } catch (err) {
+      log.warn({ err, client: provider.id }, 'provider failed to parse stream event');
+      return;
     }
 
-    // Capture summary from result event (field name varies by CLI version).
-    if (event['type'] === 'result') {
-      if (typeof event['result'] === 'string' && event['result'].trim()) {
-        capturedSummary = event['result'];
-      } else {
-        const msg = event['message'];
-        if (typeof msg === 'string') {
-          capturedSummary = msg;
-        } else if (
-          typeof msg === 'object' &&
-          msg !== null &&
-          'content' in msg &&
-          Array.isArray((msg as { content: unknown[] }).content)
-        ) {
-          const textPart = (msg as { content: Array<{ text?: string }> }).content.find(
-            (c) => typeof c.text === 'string',
-          );
-          if (textPart?.text) capturedSummary = textPart.text;
-        }
+    for (const event of events) {
+      if (event.kind === 'session') {
+        capturedSessionId = event.sessionId;
+      } else if (event.kind === 'result' && event.text) {
+        capturedSummary = event.text;
+      } else if (event.kind === 'assistant_text') {
+        // Fallback summary: the last thing the agent actually said.
+        capturedSummary = event.text;
       }
-    }
 
-    // Fallback: last assistant text turn (stream-json ask/agent).
-    if (event['type'] === 'assistant') {
-      const msg = event['message'];
-      if (
-        typeof msg === 'object' &&
-        msg !== null &&
-        'content' in msg &&
-        Array.isArray((msg as { content: unknown[] }).content)
-      ) {
-        const textPart = (msg as { content: Array<{ text?: string }> }).content.find(
-          (c) => typeof c.text === 'string',
-        );
-        if (textPart?.text?.trim()) capturedSummary = textPart.text;
+      for (const cb of eventListeners) {
+        cb(event);
       }
-    }
-
-    // Forward the typed event to all subscribers.
-    const typed = event as StreamJsonEvent;
-    for (const cb of eventListeners) {
-      cb(typed);
     }
   });
 
@@ -270,55 +224,4 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
     kill,
     onEvent: (cb) => eventListeners.push(cb),
   };
-}
-
-// ── Model list parsing (legacy Cursor-specific helpers — kept for callers
-// that inspect Cursor's own output shape directly; new code should use
-// getActiveProvider().listModels() / getAbout() instead). ─────────────────
-
-export interface ModelEntry {
-  id: string;
-  displayName: string;
-}
-
-export function parseModelsOutput(raw: string): ModelEntry[] {
-  return raw
-    .split('\n')
-    .map((line) => stripAnsi(line).trim())
-    .filter(
-      (line) =>
-        line.includes(' - ') &&
-        !line.startsWith('Tip:') &&
-        !line.startsWith('Available models'),
-    )
-    .map((line) => {
-      const dashIdx = line.indexOf(' - ');
-      return {
-        id: line.slice(0, dashIdx).trim(),
-        displayName: line.slice(dashIdx + 3).trim(),
-      };
-    })
-    .filter((m) => m.id.length > 0 && m.displayName.length > 0);
-}
-
-export interface AgentAbout {
-  cliVersion: string;
-  model: string;
-  osPlatform: string;
-  osArch: string;
-}
-
-export function parseAboutJson(raw: string): AgentAbout | null {
-  try {
-    const parsed = JSON.parse(stripAnsi(raw).trim()) as Partial<AgentAbout>;
-    if (!parsed.cliVersion) return null;
-    return {
-      cliVersion: parsed.cliVersion ?? '',
-      model: parsed.model ?? '',
-      osPlatform: parsed.osPlatform ?? '',
-      osArch: parsed.osArch ?? '',
-    };
-  } catch {
-    return null;
-  }
 }

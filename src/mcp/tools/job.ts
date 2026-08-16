@@ -1,12 +1,12 @@
 /**
- * Job tools — cursor_status, cursor_stop
+ * Job tools — agent_job_status, agent_job_stop
  *
  * Backed by SQLite job rows + in-memory job handles.
  */
 
 import { getJob, getJobEvents } from '../../state/jobs.js';
 import {
-  getActiveCursorActivity,
+  getActiveAgentJobActivity,
   getActiveJobIdForSession,
   getJobRunAgeMs,
   JOB_STOP_GRACE_MS,
@@ -18,7 +18,7 @@ import { childLogger } from '../../log.js';
 
 const log = childLogger('tool:job');
 
-// ── cursor_status ─────────────────────────────────────────────────────────
+// ── agent_job_status ─────────────────────────────────────────────────────────
 
 export interface StatusArgs {
   job_id?: string;
@@ -89,7 +89,7 @@ export function handleCursorStatus(args: StatusArgs, sessionKey: string): Status
     }
     const session = getSessionState(sessionKey);
     const activity =
-      getActiveCursorActivity(sessionKey) ?? 'Cursor is researching your question.';
+      getActiveAgentJobActivity(sessionKey) ?? 'Cursor is researching your question.';
     const progress = (active.watcher?.getRecentProgress() ?? []).map((e) => ({
       ts: e.ts,
       kind: e.kind,
@@ -119,7 +119,7 @@ export function handleCursorStatus(args: StatusArgs, sessionKey: string): Status
   if (!jobId) {
     return syntheticStatus(
       'idle',
-      'Nothing is running. cursor_ask and cursor_submit both report live progress while active.',
+      'Nothing is running. agent_ask and agent_submit both report live progress while active.',
     );
   }
   const job = getJob(jobId);
@@ -149,7 +149,7 @@ export function handleCursorStatus(args: StatusArgs, sessionKey: string): Status
   });
 
   const activity =
-    job.status === 'running' ? getActiveCursorActivity(sessionKey) : null;
+    job.status === 'running' ? getActiveAgentJobActivity(sessionKey) : null;
 
   return {
     job_id: job.id,
@@ -167,7 +167,7 @@ export function handleCursorStatus(args: StatusArgs, sessionKey: string): Status
   };
 }
 
-// ── cursor_stop ───────────────────────────────────────────────────────────
+// ── agent_job_stop ───────────────────────────────────────────────────────────
 
 export interface StopArgs {
   job_id?: string;
@@ -203,14 +203,14 @@ export function handleCursorStop(args: StopArgs, sessionKey: string): StopResult
         job_id: jobId,
         message:
           `Job started ${Math.round(runAgeMs / 1000)}s ago — not cancelled. ` +
-          'The wake phrase "cursor stop" is NOT cursor_stop. ' +
+          'The wake phrase "cursor stop" is NOT agent_job_stop. ' +
           'Wait for the job or ask the user to explicitly say "cancel the job".',
       };
     }
 
     const stopped = stopJob(jobId);
     if (stopped) {
-      log.info({ jobId, sessionKey }, 'cursor_stop invoked — job killed');
+      log.info({ jobId, sessionKey }, 'agent_job_stop invoked — job killed');
     }
     return {
       status: stopped ? 'stopped' : 'not_running',
@@ -226,7 +226,7 @@ export function handleCursorStop(args: StopArgs, sessionKey: string): StopResult
       job_id: 'ask',
       message:
         'A read-only question is in progress — wait for the answer. ' +
-        'cursor_stop only cancels background jobs from cursor_submit, not cursor_ask.',
+        'agent_job_stop only cancels background jobs from agent_submit, not agent_ask.',
     };
   }
 

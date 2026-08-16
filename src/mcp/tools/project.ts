@@ -1,11 +1,11 @@
 /**
- * Project tools — cursor_list_projects, cursor_set_project, cursor_manage_projects
+ * Project tools — agent_list_projects, agent_set_project, agent_manage_projects
  *
  * Own-bridge tools backed by the project registry (not the cursor-agent CLI).
  * These are the voice model's window into which codebases exist.
  *
  * Security: paths are NEVER returned to the phone/voice model on list/set.
- * cursor_manage_projects add/update may return path to the admin agent only.
+ * agent_manage_projects add/update may return path to the admin agent only.
  */
 
 import {
@@ -24,7 +24,7 @@ import {
 } from '../../state/projectsConfig.js';
 import { readConfigFile } from '../../state/configFile.js';
 
-// ── cursor_list_projects ──────────────────────────────────────────────────
+// ── agent_list_projects ──────────────────────────────────────────────────
 
 export interface ListProjectsArgs {
   query?: string;
@@ -54,7 +54,7 @@ export function handleListProjects(
   return listProjectSummaries(args, activeProject);
 }
 
-// ── cursor_set_project ────────────────────────────────────────────────────
+// ── agent_set_project ────────────────────────────────────────────────────
 
 export interface SetProjectArgs {
   project: string;
@@ -133,7 +133,7 @@ export function resolveProjectOrThrow(
   return resolved;
 }
 
-// ── cursor_manage_projects ────────────────────────────────────────────────
+// ── agent_manage_projects ────────────────────────────────────────────────
 
 export type ManageProjectsAction = 'describe' | 'list' | 'add' | 'update' | 'remove';
 
@@ -228,7 +228,7 @@ export function handleManageProjects(args: ManageProjectsArgs): ManageProjectsRe
   }
 }
 
-/** Public-safe project summaries for cursor_list_projects (no paths). */
+/** Public-safe project summaries for agent_list_projects (no paths). */
 export function listProjectSummaries(
   args: ListProjectsArgs,
   activeProject: string | null,

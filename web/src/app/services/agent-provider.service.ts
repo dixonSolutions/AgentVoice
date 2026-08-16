@@ -1,4 +1,5 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, computed, inject, signal } from '@angular/core';
+import { FALLBACK_AGENT_NAME } from '../branding';
 import { BridgeService, type AuthFlowDescriptor, type AuthFlowId } from './bridge.service';
 
 export interface ProviderSummary {
@@ -47,9 +48,9 @@ export interface AuthPollResponse {
 }
 
 /**
- * Live agent-provider state — active model view/selection and phone-driven
- * login flows for whichever CLI (Cursor / Codex / Claude Code) is active.
- * See docs/24-agent-providers.md.
+ * Live agent-provider state — active model view/selection, the agent's display
+ * name for the UI, and phone-driven login flows for whichever CLI
+ * (Cursor / Codex / Claude Code) is active. See docs/24-agent-providers.md.
  */
 @Injectable({ providedIn: 'root' })
 export class AgentProviderService {
@@ -66,6 +67,19 @@ export class AgentProviderService {
   get activeProvider(): ProviderSummary | null {
     return this.providers().find((p) => p.id === this.activeProviderId()) ?? null;
   }
+
+  /**
+   * Display name of the coding agent currently in use.
+   *
+   * The single source for every user-facing mention of the agent. Nothing in
+   * the UI may hardcode "Cursor": the name has to follow settings.agentClient
+   * or a Claude Code user reads Cursor's name on every log line.
+   */
+  readonly activeProviderName = computed(() => {
+    const id = this.activeProviderId();
+    const match = this.providers().find((p) => p.id === id);
+    return match?.displayName ?? FALLBACK_AGENT_NAME;
+  });
 
   async refreshProviders(): Promise<void> {
     const res = await this.bridge.apiGet<ProvidersResponse>('/api/providers');

@@ -31,18 +31,6 @@ body {
   z-index: 1;
 }
 
-.cv-topbar-brand,
-.cv-dialog-brand {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-}
-
-.cv-dialog-brand {
-  font-size: 1.125rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
 
 .cv-tabnav {
   display: flex;
@@ -909,7 +897,8 @@ body {
     padding: 0;
   }
 
-  .cv-brand-tag {
+  /* Phone top bar is tight — keep the mark, drop the wordmark. */
+  cv-brand .cv-brand-name {
     display: none;
   }
 

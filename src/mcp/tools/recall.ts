@@ -1,5 +1,5 @@
 /**
- * cursor_recall_answer — return the last cursor_ask result without re-querying Cursor.
+ * agent_recall_answer — return the last agent_ask result without re-querying Cursor.
  */
 
 import { getLastAsk, truncateForVoice } from '../../state/lastAsk.js';
@@ -24,7 +24,7 @@ export function handleCursorRecallAnswer(
   const last = getLastAsk(sessionKey);
   if (!last) {
     throw new Error(
-      'No previous Cursor answer to recall. Ask a question with cursor_ask first.',
+      'No previous Cursor answer to recall. Ask a question with agent_ask first.',
     );
   }
 

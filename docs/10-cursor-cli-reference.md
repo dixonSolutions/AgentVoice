@@ -2,7 +2,7 @@
 
 Live-verified against `cursor-agent 2026.06.04-5fd875e` (June 2026, Ultra account).
 The CLI is **beta** — flags and output may change between releases.
-All CLI interaction is isolated in `src/executor/cursorAgent.ts`.
+All CLI interaction is isolated in `src/executor/agentProcess.ts`.
 
 > Binary name: `cursor-agent` (also aliased as `agent`). On PATH after install.
 
@@ -103,7 +103,7 @@ All AgentVoice executor calls use this path.
 | --- | --- |
 | `-p, --print` | Always required for headless. |
 | `--output-format stream-json` | **Preferred** — NDJSON, events during run. |
-| `--output-format json` | Single JSON at completion (used for `cursor_ask`). |
+| `--output-format json` | Single JSON at completion (used for `agent_ask`). |
 | `--model <id>` | From `session_state.active_model`. |
 | `--workspace <dir>` | **Always** from registry path — never from caller. |
 | `--force` / `--yolo` | Auto-run + apply; deny list still applies. |
@@ -137,7 +137,7 @@ cursor-agent about --format json
 }
 ```
 
-Used by the health endpoint and the `cursor_agent_info` MCP tool.
+Used by the health endpoint and the `agent_info` MCP tool.
 
 ---
 
@@ -164,7 +164,7 @@ cursor-agent status --format json
 }
 ```
 
-Used by the health endpoint and the `cursor_agent_status` MCP tool.
+Used by the health endpoint and the `agent_status` MCP tool.
 
 ---
 
@@ -178,7 +178,7 @@ cursor-agent mcp disable <identifier>     # disable (won't load or prompt)
 cursor-agent mcp login <identifier>       # authenticate with an MCP server
 ```
 
-Used by `cursor_mcp_list` and `cursor_mcp_tools` MCP tools (informational only).
+Used by `agent_mcp_list` and `agent_mcp_tools` MCP tools (informational only).
 
 ---
 
@@ -188,7 +188,7 @@ Used by `cursor_mcp_list` and `cursor_mcp_tools` MCP tools (informational only).
 cursor-agent create-chat
 ```
 
-Creates a new empty chat, prints its ID. Used by `cursor_new_session` to pre-create
+Creates a new empty chat, prints its ID. Used by `agent_new_session` to pre-create
 a session ID before any prompt.
 
 ---

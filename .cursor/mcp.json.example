@@ -1,14 +1,15 @@
 {
-  "//": "Reference only. The bridge auto-writes the GLOBAL ~/.cursor/mcp.json on voice-session start (dev: http://127.0.0.1:5089/mcp · host: https://<tailscale-hostname>/mcp). Do not keep a project-level cursor-voice entry — it is removed automatically to avoid conflicting with the global config.",
+  "//": "Reference only. The bridge auto-writes the GLOBAL ~/.cursor/mcp.json on voice-session start (dev: http://127.0.0.1:5089/mcp · host: https://<tailscale-hostname>/mcp). Do not keep a project-level agent-voice entry — it is removed automatically to avoid conflicting with the global config.",
   "mcpServers": {
-    "cursor-voice": {
+    "agent-voice": {
       "url": "https://<tailscale-hostname>/mcp",
+      "type": "http",
       "transport": "http",
       "headers": {
         "Authorization": "Bearer <your-app-token>"
       },
-      "cursorVoice": {
-        "version": "0.2.1",
+      "agentVoice": {
+        "version": "0.3.0",
         "enabled": true
       }
     }

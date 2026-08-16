@@ -21,6 +21,7 @@
 
 import { getConfig } from '../config.js';
 import { childLogger } from '../log.js';
+import { getActiveProvider } from '../providers/agents/registry.js';
 import { notifyPhone } from '../push/notifyPhone.js';
 import type { NarrationEvent } from './watcher.js';
 
@@ -162,7 +163,7 @@ export class Narrator {
       }
     } else {
       // Job still running when session reconnected.
-      summaryText = 'Cursor is still working.';
+      summaryText = `${getActiveProvider().displayName} is still working.`;
       if (writesCount > 0) summaryText += ` So far: ${writesCount} file${writesCount !== 1 ? 's' : ''} written.`;
     }
 

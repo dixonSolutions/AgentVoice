@@ -1,4 +1,4 @@
-/** Shared callback types for cursor_native and llm_intelligence voice sessions. */
+/** Shared callback types for agent_native and llm_intelligence voice sessions. */
 
 export type VoiceLogSubcategory = 'stt' | 'tts' | 'tool' | 'pipeline';
 export type VoiceLogLevel = 'info' | 'warn' | 'error' | 'debug';
@@ -17,6 +17,10 @@ export interface VoiceAgentStatusEvent {
   mcpSessionId: string | null;
   state: 'starting' | 'running' | 'done' | 'error' | 'stopped';
   project: string;
+  /** Active agent client id (cursor / codex / claude-code), from the bridge. */
+  provider: string | null;
+  /** Human name of the coding agent behind this run — never hardcode it here. */
+  providerName: string | null;
 }
 
 export interface SessionCallbacks {

@@ -1,21 +1,23 @@
 /**
- * Conversational voice agent — auto-spawned cursor-agent loop for cursor_native.
+ * Conversational voice agent — the auto-spawned agent loop for `agent_native`.
  *
- * When a voice turn is enqueued and no agent is running, the bridge spawns
- * cursor-agent -p with the voice system prompt and --approve-mcps so the
- * agent can call cursor-voice MCP tools (next_voice_turn, speak, done).
+ * When a voice turn is enqueued and no agent is running, the bridge spawns the
+ * active coding CLI in headless mode with the AgentVoice system prompt, wired
+ * to the agent-voice MCP server so it can call next_voice_turn / speak / done.
+ * Every CLI-specific flag lives in providers/agents/<client>.ts.
  *
- * See docs/16-mcp-server-cursor-as-brain.md § Phase 3.
+ * See docs/16-mcp-server-agent-as-brain.md § Phase 3.
  */
 
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import stripAnsi from 'strip-ansi';
-import { attachCursorAgentSpawnGuard } from './cursorAgent.js';
+import { attachCursorAgentSpawnGuard } from './agentProcess.js';
 import { getActiveProvider } from '../providers/agents/registry.js';
 import { notifyAuthRequired } from '../providers/agents/authNotify.js';
 import { childLogger } from '../log.js';
-import { cursorVoiceRuleBody } from '../mcp/loadCursorVoicePrompt.js';
+import { agentVoiceRuleBody } from '../mcp/agentVoicePrompt.js';
+import { MCP_SERVER_NAME } from '../providers/agents/mcpRegistration.js';
 import {
   broadcastVoiceAgentStatus,
   broadcastVoiceTurnIdle,
@@ -33,19 +35,32 @@ import {
   type Project,
   type SessionState,
 } from '../state/registry.js';
-import type { StreamJsonEvent } from './watcher.js';
+import type { AgentStreamEvent } from '../providers/agents/events.js';
 
 const log = childLogger('voice-agent');
 
 const VOICE_BOOT_SUFFIX =
-  '\n\n---\nThe cursor-voice MCP server (AgentVoice) is connected. ' +
+  `\n\n---\nThe ${MCP_SERVER_NAME} MCP server (AgentVoice) is connected. ` +
   'Speak one sentence to greet or acknowledge the user first, then call next_voice_turn() to receive their request. ' +
   'Never start a session in silent tool mode.';
 
 const VOICE_RESUME_SUFFIX =
-  '\n\n---\n@cursor-voice\n\nThe cursor-voice MCP server (AgentVoice) is connected. ' +
+  `\n\n---\nThe ${MCP_SERVER_NAME} MCP server (AgentVoice) is connected. ` +
   'Speak one sentence to acknowledge the user first, then call next_voice_turn() immediately. ' +
   'If a worker is running, narrate its live progress via get_agent_status() — do not go silent.';
+
+/**
+ * Trimmed reminder of the voice contract for resumed threads.
+ *
+ * Only Cursor persists our rules via a `.mdc` file, so a resumed Codex or
+ * Claude Code thread would otherwise carry NO AgentVoice instructions at all —
+ * the agent replies as text and the user hears silence. Cursor keeps the short
+ * form (its rule file already holds the full prompt); everyone else gets the
+ * full system prompt again.
+ */
+function resumeSystemBlock(): string {
+  return getActiveProvider().id === 'cursor' ? '' : `\n\n${agentVoiceRuleBody()}`;
+}
 
 export interface VoiceAgentEvent {
   type: 'spawned' | 'session_id' | 'exit';
@@ -92,18 +107,18 @@ function buildPendingTurnBlock(pendingTurn?: string): string {
 function buildVoiceBootPrompt(project: Project, pendingTurn?: string): string {
   const turnBlock = buildPendingTurnBlock(pendingTurn);
   const isResume = Boolean(project.resumeId);
-  // Do NOT trim VOICE_RESUME_SUFFIX — it starts with "---" after trimming,
-  // which cursor-agent CLI parses as an unknown option flag (exit code 1).
-  // The leading "\n\n" keeps it from being treated as a CLI flag.
+  // Do NOT trim these suffixes — they start with "---" after trimming, which
+  // cursor-agent parses as an unknown option flag (exit code 1). The leading
+  // "\n\n" keeps the prompt from being treated as a CLI flag.
   return isResume
-    ? `${VOICE_RESUME_SUFFIX}${turnBlock}`
-    : `${cursorVoiceRuleBody()}${VOICE_BOOT_SUFFIX}${turnBlock}`;
+    ? `${resumeSystemBlock()}${VOICE_RESUME_SUFFIX}${turnBlock}`
+    : `${agentVoiceRuleBody()}${VOICE_BOOT_SUFFIX}${turnBlock}`;
 }
 
 /**
  * First sentence(s) of assistant text for TTS when speak() was never called.
- * Skips internal planning / narration-of-intent (Cursor stream text that was
- * never meant to be spoken aloud).
+ * Skips internal planning / narration-of-intent (stream text that was never
+ * meant to be spoken aloud).
  */
 function summarizeForSpeechFallback(text: string): string {
   const clean = text.replace(/\s+/g, ' ').trim();
@@ -126,33 +141,6 @@ function summarizeForSpeechFallback(text: string): string {
   return (lastBreak > max * 0.4 ? cut.slice(0, lastBreak + 1) : cut).trimEnd() + '…';
 }
 
-function extractAssistantText(event: Record<string, unknown>): string | null {
-  if (event['type'] === 'result') {
-    if (typeof event['result'] === 'string' && event['result'].trim()) {
-      return event['result'].trim();
-    }
-    const msg = event['message'];
-    if (typeof msg === 'string' && msg.trim()) return msg.trim();
-  }
-
-  if (event['type'] === 'assistant') {
-    const msg = event['message'];
-    if (
-      typeof msg === 'object' &&
-      msg !== null &&
-      'content' in msg &&
-      Array.isArray((msg as { content: unknown[] }).content)
-    ) {
-      const textPart = (msg as { content: Array<{ text?: string }> }).content.find(
-        (c) => typeof c.text === 'string' && c.text.trim(),
-      );
-      if (textPart?.text) return textPart.text.trim();
-    }
-  }
-
-  return null;
-}
-
 /**
  * Build the conversational voice-agent argv for the active provider.
  * Every CLI-specific flag lives in the provider (providers/agents/*.ts) —
@@ -169,7 +157,7 @@ function buildVoiceAgentArgs(
 }
 
 /**
- * Spawn the conversational cursor-agent loop. At most one voice agent runs at a time.
+ * Spawn the conversational agent loop. At most one voice agent runs at a time.
  */
 export function spawnVoiceAgent(
   project: Project,
@@ -241,22 +229,29 @@ export function spawnVoiceAgent(
     const clean = stripAnsi(raw).trim();
     if (!clean) return;
 
-    let event: Record<string, unknown>;
+    let parsed: Record<string, unknown>;
     try {
-      event = JSON.parse(clean) as Record<string, unknown>;
+      parsed = JSON.parse(clean) as Record<string, unknown>;
     } catch {
       return;
     }
 
-    if (typeof event['session_id'] === 'string') {
-      const sid = event['session_id'];
-      if (sid !== capturedSessionId) {
+    let events: AgentStreamEvent[];
+    try {
+      events = provider.parseStreamEvent(parsed);
+    } catch (err) {
+      log.warn({ err, client }, 'provider failed to parse voice stream event');
+      return;
+    }
+
+    for (const event of events) {
+      if (event.kind === 'session') {
+        const sid = event.sessionId;
+        if (sid === capturedSessionId) continue;
         capturedSessionId = sid;
         setProjectResumeId(project.name, sid);
         updateVoiceAgentRun(runId, { sessionId: sid });
-        if (activeVoiceAgent) {
-          activeVoiceAgent.sessionId = sid;
-        }
+        if (activeVoiceAgent) activeVoiceAgent.sessionId = sid;
         log.info({ runId, pid, sessionId: sid }, 'voice agent session_id captured');
         broadcastVoiceAgentStatus({
           runId,
@@ -265,19 +260,13 @@ export function spawnVoiceAgent(
           state: 'running',
           project: project.name,
         });
-        for (const cb of eventListeners) {
-          cb({ type: 'session_id', value: sid });
-        }
+        for (const cb of eventListeners) cb({ type: 'session_id', value: sid });
+      } else if (event.kind === 'assistant_text') {
+        lastAssistantText = event.text;
+      } else if (event.kind === 'result' && event.text) {
+        lastAssistantText = event.text;
       }
     }
-
-    const assistantText = extractAssistantText(event);
-    if (assistantText) {
-      lastAssistantText = assistantText;
-    }
-
-    const typed = event as StreamJsonEvent;
-    void typed;
   });
 
   const stderrChunks: Buffer[] = [];
@@ -351,7 +340,7 @@ export function spawnVoiceAgent(
 
     // Safety net only when the agent never called speak() this user turn.
     // spokeThisTurn must survive done() — clearing it there made normal turns
-    // look silent and TTS’d Cursor’s final process/summary text after exit.
+    // look silent and TTS’d the agent’s final process/summary text after exit.
     if (!hadSpeakThisTurn()) {
       const fallback = authRequired
         ? `${provider.displayName} needs you to sign in — I sent a sign-in link to your phone.`

@@ -1,9 +1,18 @@
 # 12 — Stream-JSON Watcher & Monitoring Engine
 
-The bridge monitors `cursor-agent` in real-time by parsing the NDJSON event
-stream from `--output-format stream-json`. A lightweight **watcher** classifies
-events and emits **narration events** that a **narrator** injects into the active
-realtime session — so Dad hears what Cursor is doing without asking.
+The bridge monitors the active coding CLI in real-time by parsing its NDJSON
+event stream. A lightweight **watcher** classifies events and emits **narration
+events** that a **narrator** injects into the active realtime session — so the
+hands-free user hears what the agent is doing without asking.
+
+> **Since August 2026 the watcher does not parse raw CLI JSON.** Each of the
+> three CLIs speaks a different dialect, and the watcher only understood
+> Cursor's — so Codex and Claude Code produced no narration at all. Providers
+> now translate their own stream into the normalized events in
+> `src/providers/agents/events.ts` (`session` / `init` / `tool_start` /
+> `tool_done` / `assistant_text` / `result` / `error`), and the watcher consumes
+> those. The per-CLI shapes below describe Cursor's dialect specifically; see
+> [`28-provider-parity-and-branding.md`](./28-provider-parity-and-branding.md).
 
 > **ADR-017 note:** ACP (`cursor-agent acp`) was evaluated for this role. It was
 > rejected in favour of the `--print` stream because `--print` is simpler,
@@ -139,11 +148,11 @@ job's `job_events` table and replayed as a summary when Dad next connects.
 
 ---
 
-## `cursor_status` integration
+## `agent_job_status` integration
 
-`cursor_status` returns the same `JobSummary` and all `NarrationEvent`s logged
+`agent_job_status` returns the same `JobSummary` and all `NarrationEvent`s logged
 so far. If the voice model (or Dad) asks "how's it going?", the model calls
-`cursor_status`, receives the structured summary, and speaks it — no dependency
+`agent_job_status`, receives the structured summary, and speaks it — no dependency
 on the narration injection path. Both paths work independently.
 
 ---
@@ -155,7 +164,7 @@ needs information it doesn't have, it either:
 
 1. Makes a reasonable assumption and proceeds (common with good system prompt steering).
 2. Outputs a completion `result` that mentions it was unclear — bridge speaks it
-   to Dad; Dad follows up with a new `cursor_submit` + `--resume`.
+   to Dad; Dad follows up with a new `agent_submit` + `--resume`.
 
 There is no structured question-answer protocol at the CLI level. Prompt
 steering handles the vast majority of cases; `--resume` handles the rest. This
@@ -168,7 +177,7 @@ is simpler and equally effective for the Dad-as-user scenario.
 ```
 Dad: "Cursor… refactor the auth module in the budget app"
   │
-  ├─ cursor_submit → Bridge spawns cursor-agent, gets job_id
+  ├─ agent_submit → Bridge spawns cursor-agent, gets job_id
   ├─ voice model returns: "Working on it — I'll keep you posted"
   │
   ├─ watcher: system:init → NarrationEvent(job_started) → narrator injects
@@ -188,7 +197,7 @@ Dad: "Cursor… refactor the auth module in the budget app"
   │
 Dad: "Yes, show me the diff"
   │
-  └─ cursor_diff → voice model describes the changes
+  └─ agent_diff → voice model describes the changes
 ```
 
 ---

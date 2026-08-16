@@ -37,7 +37,7 @@ CREATE TABLE model_cache (
   models_json   TEXT NOT NULL          -- JSON array of {id, displayName}
 );
 
--- One row per cursor_submit invocation.
+-- One row per agent_submit invocation.
 CREATE TABLE job (
   id           TEXT PRIMARY KEY,        -- uuid
   project      TEXT NOT NULL REFERENCES project(name),
@@ -107,8 +107,8 @@ startup; invalid config fails fast with a clear error.
   `cursor-agent --workspace` (see `05`).
 - Both consumers read the same registry:
   - **Web app dropdown** — dad manually selects a project (see `06`).
-  - **Voice agent** — `cursor_list_projects` lets the model view/search/select,
-    plus `cursor_set_project` to choose (see `05`/`06`).
+  - **Voice agent** — `agent_list_projects` lets the model view/search/select,
+    plus `agent_set_project` to choose (see `05`/`06`).
 - Voice-friendly names matter (dad says them): short, distinct, low phonetic
   collision (helps STT). Document the naming convention with the user.
 - Each entry carries `aliases[]` (spoken variants), a short `description`, and

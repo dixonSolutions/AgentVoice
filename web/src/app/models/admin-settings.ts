@@ -61,7 +61,7 @@ export interface LlmIntelligenceSettings {
   readOutputMaxChars: number;
 }
 
-export type WorkflowDefault = 'cursor_native' | 'llm_intelligence';
+export type WorkflowDefault = 'agent_native' | 'llm_intelligence';
 
 export interface WorkflowSettings {
   default: WorkflowDefault;

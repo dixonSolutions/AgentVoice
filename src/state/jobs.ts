@@ -430,7 +430,7 @@ export function projectHasCursorSession(projectName: string, sessionId: string):
   return Boolean(row?.ok);
 }
 
-// ── Voice agent runs (cursor_native conversational loop) ─────────────────────
+// ── Voice agent runs (agent_native conversational loop) ─────────────────────
 
 export type VoiceAgentRunStatus = 'running' | 'done' | 'error' | 'stopped';
 

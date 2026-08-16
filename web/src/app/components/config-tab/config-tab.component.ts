@@ -383,7 +383,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   // ── Select options ──────────────────────────────────────────────────────
 
   protected readonly workflowOptions = [
-    { label: 'Cursor Native', value: 'cursor_native' },
+    { label: 'Agent Native', value: 'agent_native' },
     { label: 'LLM Intelligence (Bedrock)', value: 'llm_intelligence' },
   ];
 
@@ -520,7 +520,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     { label: 'Off', value: 'off' },
   ];
 
-  protected cursorVoiceEnabled = true;
+  protected agentVoiceEnabled = true;
   protected errorSoundEnabled = true;
   protected errorSpeakEnabled = true;
   protected webkitRate = 1.02;
@@ -657,7 +657,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     if (data?.workerPollTimeoutMs) this.workerPollTimeoutMs = Number(data.workerPollTimeoutMs);
     this.userName = data?.userName ?? '';
     if (data?.tts) {
-      this.cursorVoiceEnabled = data.tts.cursorVoiceEnabled;
+      this.agentVoiceEnabled = data.tts.agentVoiceEnabled;
       this.errorSoundEnabled = data.tts.errorSoundEnabled ?? true;
       this.errorSpeakEnabled = data.tts.errorSpeakEnabled ?? true;
       this.webkitRate = data.tts.webkit.rate;
@@ -1005,7 +1005,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     this.savingTts = true;
     try {
       await this.voiceProviders.updateVoiceTts({
-        cursorVoiceEnabled: this.cursorVoiceEnabled,
+        agentVoiceEnabled: this.agentVoiceEnabled,
         errorSoundEnabled: this.errorSoundEnabled,
         errorSpeakEnabled: this.errorSpeakEnabled,
         webkit: {

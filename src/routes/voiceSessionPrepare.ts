@@ -14,7 +14,7 @@ import {
   ensureClientMcpSetup,
   cleanupLegacyProjectMcp,
   type SessionLogEvent,
-} from '../mcp/globalMcpSetup.js';
+} from '../mcp/agentMcpSetup.js';
 import { getConfig } from '../config.js';
 import { getRunModeInfo } from '../runMode.js';
 import { childLogger } from '../log.js';

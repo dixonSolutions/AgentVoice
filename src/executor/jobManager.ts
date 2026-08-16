@@ -4,13 +4,14 @@
  * Responsibilities:
  *   - Enforce concurrency cap (from config.settings.maxConcurrentJobs).
  *   - Take git checkpoint before each submit.
- *   - Create job DB row, spawn cursor-agent, wire watcher + narrator.
+ *   - Create job DB row, spawn the active agent CLI, wire watcher + narrator.
  *   - Apply per-job timeout; kill + mark error on expiry.
  *   - Persist resume_id from the run's session_id on completion.
  *   - Keep in-memory map of active handles (cleared on completion).
  */
 
-import { spawnAgent } from './cursorAgent.js';
+import { spawnAgent } from './agentProcess.js';
+import { getActiveProvider } from '../providers/agents/registry.js';
 import {
   assertAgentAvailable,
   getActiveAgentActivity,
@@ -31,7 +32,7 @@ import { getDb } from '../state/db.js';
 import { setProjectResumeId, getSessionState, type Project } from '../state/registry.js';
 import { getConfig } from '../config.js';
 import { childLogger } from '../log.js';
-import type { AgentHandle } from './cursorAgent.js';
+import type { AgentHandle } from './agentProcess.js';
 import { notifyAuthRequired } from '../providers/agents/authNotify.js';
 
 const log = childLogger('job-manager');
@@ -50,7 +51,7 @@ const sessionActiveJobs = new Map<string, string>();
 /** Monotonic start time for grace-period checks (Nova parallel tool calls). */
 const jobStartedAtMs = new Map<string, number>();
 
-/** How long a job must run before cursor_stop is honored (blocks Nova parallel stop spam). */
+/** How long a job must run before agent_job_stop is honored (blocks parallel stop spam). */
 export const JOB_STOP_GRACE_MS = 15_000;
 
 /** Number of currently running jobs. */
@@ -65,7 +66,7 @@ export function getActiveJobIdForSession(sessionKey: string): string | null {
   return jobId;
 }
 
-/** Live activity summary for the session's running job (for cursor_status intel). */
+/** Live activity summary for the session's running job (for agent_job_status intel). */
 export function getActiveJobActivity(sessionKey: string): string | null {
   const jobId = getActiveJobIdForSession(sessionKey);
   if (!jobId) return null;
@@ -75,8 +76,8 @@ export function getActiveJobActivity(sessionKey: string): string | null {
   return age !== null ? `${summary} (${Math.round(age / 1000)}s elapsed)` : summary;
 }
 
-/** Live activity for cursor_ask or cursor_submit. */
-export function getActiveCursorActivity(sessionKey: string): string | null {
+/** Live activity for agent_ask or agent_submit. */
+export function getActiveAgentJobActivity(sessionKey: string): string | null {
   const fromAsk = getActiveAgentRun();
   if (fromAsk?.sessionKey === sessionKey && fromAsk.kind === 'ask') {
     return getActiveAgentActivity();
@@ -196,9 +197,9 @@ export function getJobsHistory(
 }
 
 /**
- * Submit a new cursor-agent job.
+ * Submit a new worker job on the active agent CLI.
  * Returns immediately with a job_id; the job runs asynchronously.
- * Track progress with cursor_status(job_id).
+ * Track progress with agent_job_status(job_id).
  *
  * Pass `worktree` to run in an isolated git worktree — bypasses the singleton
  * gate so multiple agents can run in parallel on separate worktrees.
@@ -213,6 +214,7 @@ export async function submitJob(
 ): Promise<SubmitResult> {
   const { settings } = getConfig();
   const session = getSessionState(sessionKey);
+  assertModeSupported(mode);
 
   // Enforce global concurrency cap.
   if (activeJobs.size >= settings.maxConcurrentJobs) {
@@ -252,7 +254,7 @@ export async function submitJob(
   const watcher = new Watcher(jobId, project.name, () => {
     if (!settings.ghostKillEnabled) return;
     if (!activeJobs.has(jobId)) return;
-    log.warn({ jobId, project: project.name }, 'ghost kill — terminating cursor-agent');
+    log.warn({ jobId, project: project.name }, 'ghost kill — terminating agent');
     stopJob(jobId, 'Stopped: agent tried to spawn subagents (budget protection)', 'error');
   });
   const narrator = getNarrator();
@@ -338,7 +340,7 @@ export async function submitJob(
   return {
     jobId,
     project: project.name,
-    sessionId: null, // not yet known — check cursor_status
+    sessionId: null, // not yet known — check agent_job_status
     model: session.activeModel,
     status: 'running',
     ...(worktree ? { worktree } : {}),
@@ -391,10 +393,28 @@ export function stopJob(
   return true;
 }
 
-// ── cursor_ask (one-shot, synchronous) ───────────────────────────────────
+// ── agent_ask (one-shot, synchronous) ────────────────────────────────────
 
 /**
- * Run cursor-agent in ask mode and wait for the answer.
+ * Refuse a mode the active CLI cannot actually enforce.
+ *
+ * `ask` must be read-only. Codex enforces it with `--sandbox read-only` and
+ * Claude Code with plan mode; a CLI that can do neither would run a *writing*
+ * agent under a read-only-sounding tool name, so it is refused outright rather
+ * than silently downgraded.
+ */
+function assertModeSupported(mode: JobMode): void {
+  const provider = getActiveProvider();
+  if (provider.supportedModes().includes(mode)) return;
+  throw new Error(
+    `${provider.displayName} cannot enforce "${mode}" mode — it supports ${provider
+      .supportedModes()
+      .join(', ')}. Switch the agent client in Config, or use a mode it supports.`,
+  );
+}
+
+/**
+ * Run the active agent CLI in ask (read-only) mode and wait for the answer.
  * Shares the global agent singleton with submit jobs.
  */
 export async function askQuestion(
@@ -402,6 +422,7 @@ export async function askQuestion(
   sessionKey: string,
   question: string,
 ): Promise<string> {
+  assertModeSupported('ask');
   assertAgentAvailable();
 
   const session = getSessionState(sessionKey);
@@ -416,7 +437,7 @@ export async function askQuestion(
 
   log.info(
     { project: project.name, sessionKey, question: question.slice(0, 120), pid: handle.pid },
-    'cursor_ask started (headless cursor-agent CLI — fresh session, not IDE sidebar)',
+    'agent_ask started (headless CLI run — fresh session, not the IDE sidebar)',
   );
 
   const watcher = new Watcher('ask', project.name, undefined, false);
@@ -424,9 +445,9 @@ export async function askQuestion(
   registerAgentRun({ kind: 'ask', refId: 'ask', sessionKey, handle, watcher });
 
   emitVoiceToolActivity({
-    tool: 'cursor_ask',
+    tool: 'agent_ask',
     phase: 'start',
-    label: `Cursor CLI running (pid ${handle.pid}) — researching repo…`,
+    label: `${getActiveProvider().displayName} running (pid ${handle.pid}) — researching repo…`,
     detail: question.slice(0, 120),
   });
 
@@ -435,15 +456,17 @@ export async function askQuestion(
 
     if (result.exitCode !== 0) {
       if (result.authRequired) {
-        void notifyAuthRequired(`cursor_ask on ${project.name}`);
+        void notifyAuthRequired(`agent_ask on ${project.name}`);
       }
-      throw new Error(result.error ?? `cursor-agent exited with code ${result.exitCode}`);
+      throw new Error(
+        result.error ?? `${getActiveProvider().displayName} exited with code ${result.exitCode}`,
+      );
     }
 
-    const answer = result.summary ?? 'No answer returned from cursor-agent.';
+    const answer = result.summary ?? `No answer returned from ${getActiveProvider().displayName}.`;
     log.info(
       { project: project.name, sessionKey, answerLen: answer.length },
-      'cursor_ask completed',
+      'agent_ask completed',
     );
     return answer;
   } finally {

@@ -13,7 +13,7 @@ import { Tag } from '@openng/optimus-ui/tag';
 import { Toast } from '@openng/optimus-ui/toast';
 import { Toolbar } from '@openng/optimus-ui/toolbar';
 
-import { BrandLogoComponent } from './components/brand-logo/brand-logo.component';
+import { BrandComponent } from './components/brand/brand.component';
 import { ConfigTabComponent } from './components/config-tab/config-tab.component';
 import { LogsTabComponent } from './components/logs-tab/logs-tab.component';
 import { VoiceTabComponent } from './components/voice-tab/voice-tab.component';
@@ -43,7 +43,7 @@ interface TabItem {
   standalone: true,
   imports: [
     FormsModule,
-    BrandLogoComponent,
+    BrandComponent,
     Button,
     Dialog,
     Fluid,

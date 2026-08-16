@@ -56,7 +56,7 @@ import {
 } from './browser-tts-settings.js';
 
 export interface VoiceTtsSettings {
-  cursorVoiceEnabled: boolean;
+  agentVoiceEnabled: boolean;
   errorSoundEnabled: boolean;
   errorSpeakEnabled: boolean;
   webkit: WebkitTtsDefaults;
@@ -81,9 +81,9 @@ export class LlmIntelligenceSession {
   private closed = false;
   private wakeWords: WakeWords = { start: '', end: 'send' };
   private turnSubmit: TurnSubmit = { silenceMs: 1500, vadEnabled: true };
-  private workflow = 'cursor_native';
+  private workflow = 'agent_native';
   private ttsSettings: VoiceTtsSettings = {
-    cursorVoiceEnabled: true,
+    agentVoiceEnabled: true,
     errorSoundEnabled: true,
     errorSpeakEnabled: true,
     webkit: { rate: 1.02, pitch: 1, volume: 1, lang: 'en-US' },
@@ -348,7 +348,7 @@ export class LlmIntelligenceSession {
 
   /**
    * Typed message — skips the wake gate; uses the same user_turn path as voice.
-   * Always enqueues while the session is live (cursor_native queues behind a running agent).
+   * Always enqueues while the session is live (agent_native queues behind a running agent).
    * @returns false when the turn could not be sent (caller should keep the draft).
    */
   sendTextTurn(text: string): boolean {
@@ -1062,7 +1062,7 @@ export class LlmIntelligenceSession {
     switch (msg['type']) {
       case 'auth_ok': {
         this.workflow =
-          typeof msg['workflow'] === 'string' ? msg['workflow'] : 'cursor_native';
+          typeof msg['workflow'] === 'string' ? msg['workflow'] : 'agent_native';
         const wake = msg['wakeWords'] as WakeWords | undefined;
         this.wakeWords = wake ?? { start: '', end: 'send' };
         const submit = msg['turnSubmit'] as TurnSubmit | undefined;
@@ -1082,7 +1082,7 @@ export class LlmIntelligenceSession {
 
       case 'speak': {
         const text = typeof msg['text'] === 'string' ? msg['text'] : '';
-        if (text && this.ttsSettings.cursorVoiceEnabled) {
+        if (text && this.ttsSettings.agentVoiceEnabled) {
           cancelTtsFallback();
           if (!this.ttsPile.isActive()) {
             this.ttsPile.resetHeard();
@@ -1096,7 +1096,7 @@ export class LlmIntelligenceSession {
 
       case 'narration': {
         const text = typeof msg['text'] === 'string' ? msg['text'] : '';
-        if (text && this.ttsSettings.cursorVoiceEnabled) {
+        if (text && this.ttsSettings.agentVoiceEnabled) {
           this.enqueueSpeak(text);
           this.cb.onAssistantTranscript(text);
         } else if (text) {
@@ -1156,6 +1156,9 @@ export class LlmIntelligenceSession {
           typeof msg['mcp_session_id'] === 'string' ? msg['mcp_session_id'] : null;
         const state = msg['state'] as VoiceAgentStatusEvent['state'] | undefined;
         const project = typeof msg['project'] === 'string' ? msg['project'] : '';
+        const provider = typeof msg['provider'] === 'string' ? msg['provider'] : null;
+        const providerName =
+          typeof msg['provider_name'] === 'string' ? msg['provider_name'] : null;
         if (runId && state && project) {
           this.cb.onVoiceAgentStatus?.({
             runId,
@@ -1164,6 +1167,8 @@ export class LlmIntelligenceSession {
             mcpSessionId,
             state,
             project,
+            provider,
+            providerName,
           });
         }
         break;
@@ -1211,7 +1216,7 @@ export class LlmIntelligenceSession {
 
   /** Queue speak lines from MCP — piles and plays sequentially. */
   private enqueueSpeak(text: string): void {
-    if (!this.ttsSettings.cursorVoiceEnabled) return;
+    if (!this.ttsSettings.agentVoiceEnabled) return;
     this.ttsPile.enqueue(text);
   }
 
@@ -1221,7 +1226,7 @@ export class LlmIntelligenceSession {
     this.ttsPile.setBaseVolume(this.resolvedWebkitTts.volume);
   }
 
-  /** Error earcon + optional spoken alert (independent of cursorVoiceEnabled). */
+  /** Error earcon + optional spoken alert (independent of agentVoiceEnabled). */
   notifyError(message: string): void {
     const trimmed = message.trim();
     if (!trimmed) return;

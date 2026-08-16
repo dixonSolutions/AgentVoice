@@ -1,7 +1,7 @@
 # 04 — Implementation Plan
 
 > **Note (2026):** Speech-to-speech (WebRTC / Nova Sonic) was removed. Current voice
-> path: STT/TTS cascade + `cursor_native` MCP. Spikes C/D are historical.
+> path: STT/TTS cascade + `agent_native` MCP. Spikes C/D are historical.
 
 Phased, dependency-ordered, each milestone independently testable.
 
@@ -38,11 +38,11 @@ health endpoint green; registry loads and validates paths.
 
 | Task | Size |
 | --- | --- |
-| `cursorAgent.ts`: spawn `cursor-agent -p --output-format stream-json`, flag builder, NDJSON readline parser, process lifecycle (kill/timeout/reap). | M |
+| `agentProcess.ts`: spawn `cursor-agent -p --output-format stream-json`, flag builder, NDJSON readline parser, process lifecycle (kill/timeout/reap). | M |
 | Job state: SQLite `jobs` + `job_events` rows; persist resume `session_id`; concurrency cap; orphan cleanup on startup. | M |
 | `watcher.ts`: classify stream-json events (tool-use, file-write, shell-run, result, error); maintain rolling job summary; emit `NarrationEvent`s at cadence limits. | M |
 | `narrator.ts`: consume `NarrationEvent`s; inject text into the active realtime session via OpenAI Realtime `conversation.item.create` so Dad hears progress without asking. | M |
-| `git.ts`: pre-job checkpoint commit; `cursor_diff`; `cursor_revert` (hard reset to checkpoint, gated by voice confirm). | M |
+| `git.ts`: pre-job checkpoint commit; `agent_diff`; `agent_revert` (hard reset to checkpoint, gated by voice confirm). | M |
 
 **Acceptance:** submit a prompt programmatically → see watcher events → Dad
 hears mid-job narration → final summary spoken → diff visible → revert works.
@@ -55,10 +55,10 @@ hears mid-job narration → final summary spoken → diff visible → revert wor
 | MCP server wiring — register all 16 tools (see `11` for full surface). | M |
 | **Project tools**: registry resolution, fuzzy match + `query` filter, sticky active project, disambiguation errors. | M |
 | **Model tools**: `cursor-agent models` parse + SQLite cache + TTL refresh + filter. | M |
-| **Session tools**: `cursor_new_session` (`create-chat`), `cursor_session_info` from DB. | S |
-| **System tools**: `cursor_agent_info` / `cursor_agent_status` (`about/status --format json`). | S |
-| **MCP inspect tools**: `cursor_mcp_list`, `cursor_mcp_tools` (parse plain-text output). | S |
-| `cursor_ask` (hard-coded `--mode ask`) + `preRunFlags` from config for all invocations. | S |
+| **Session tools**: `agent_new_session` (`create-chat`), `agent_session_info` from DB. | S |
+| **System tools**: `agent_info` / `agent_status` (`about/status --format json`). | S |
+| **MCP inspect tools**: `agent_mcp_list`, `agent_mcp_tools` (parse plain-text output). | S |
+| `agent_ask` (hard-coded `--mode ask`) + `preRunFlags` from config for all invocations. | S |
 | HTTP project endpoints: `GET /api/projects` (names+descriptions, no paths) + `POST /api/active-project`. | S |
 | Server-side arg validation + project allowlist enforcement + audit logging on all tools. | M |
 | `functionTools.ts` — generate provider function-tool definitions from the same zod schemas. | S |
@@ -113,7 +113,7 @@ unattended.
 
 | Task | Size |
 | --- | --- |
-| Plan-mode-first toggle for `cursor_submit` (confirm before apply). | M |
+| Plan-mode-first toggle for `agent_submit` (confirm before apply). | M |
 | Better progress narration / earcons; error recovery phrasing (Peak-End). | M |
 | **(Optional v2)** on-device "cursor start" wake-word spotter. | L |
 | **(Optional)** Gemini Live provider implementation behind the interface. | M |
@@ -131,8 +131,8 @@ unattended.
 
 ## Suggested cutline for a first usable version (MVP)
 
-Milestones 0–5 with: push-to-talk toggle, `cursor_submit` + `cursor_status` +
-`cursor_revert` + `cursor_diff`, `cursor_set_project`/`cursor_list_projects` with
+Milestones 0–5 with: push-to-talk toggle, `agent_submit` + `agent_job_status` +
+`agent_revert` + `agent_diff`, `agent_set_project`/`agent_list_projects` with
 sticky active project (even a 1–2 project registry exercises the selection flow),
-OpenAI provider, English+Polish. Defer `cursor_new_session`, plan-mode toggle,
+OpenAI provider, English+Polish. Defer `agent_new_session`, plan-mode toggle,
 and the v2 wake-word to later.

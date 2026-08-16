@@ -9,10 +9,7 @@
   [style]="{ width: '92vw', maxWidth: '28rem' }">
 
   <ng-template pTemplate="header">
-    <div class="cv-dialog-brand">
-      <cv-brand-logo size="lg" />
-      <span>AgentVoice</span>
-    </div>
+    <cv-brand size="lg" [wordmark]="true" />
   </ng-template>
 
   <p-fluid>
@@ -46,10 +43,7 @@
       <header class="cv-shell-header">
         <p-toolbar class="cv-topbar">
           <ng-template #start>
-            <div class="cv-topbar-brand">
-              <cv-brand-logo size="md" />
-              <p-tag value="AgentVoice" severity="secondary" class="cv-brand-tag" />
-            </div>
+            <cv-brand size="md" [wordmark]="true" />
           </ng-template>
 
           <ng-template #center>

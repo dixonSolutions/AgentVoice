@@ -75,13 +75,13 @@ single-user scale.
 
 ### ADR-010 — Project selection: sticky active project + liberal-accept/strict-execute
 **Decision:** Projects are chosen by **voice name**, with a **sticky active
-project** per session (set via `cursor_set_project`, defaulted on all other
+project** per session (set via `agent_set_project`, defaulted on all other
 tools). The model maps fuzzy speech to a candidate using the **injected catalog**
 (`name` + `aliases[]` + `description`); the **bridge** re-resolves and validates
 against the allowlist and only ever runs against a registry path. Ambiguous /
-low-confidence / missing → structured error → the model asks. `cursor_submit`,
-`cursor_revert`, `cursor_diff`, `cursor_new_session` take `project` as
-**optional**; new tools `cursor_list_projects` and `cursor_set_project` added.
+low-confidence / missing → structured error → the model asks. `agent_submit`,
+`agent_revert`, `agent_diff`, `agent_new_session` take `project` as
+**optional**; new tools `agent_list_projects` and `agent_set_project` added.
 **Rationale:** Say-it-once ergonomics (Miller's Law), graceful recovery from STT
 mishears (Postel's Law), and the wrong-codebase risk is contained by server-side
 allowlist resolution (R-3).
@@ -95,7 +95,7 @@ holds the active project; readback is used for low-confidence/destructive ops.
 committed). Projects are **registered manually** by the owner editing
 `config.json` over SSH/iSH — never via voice/dad. Project selection works **two
 interchangeable ways** over the same registry: a **web-app dropdown** (manual)
-and the **voice agent** (`cursor_list_projects` view/search + `cursor_set_project`),
+and the **voice agent** (`agent_list_projects` view/search + `agent_set_project`),
 both updating the same `session_state.active_project`.
 **Rationale:** Clear operator control surface; secrets isolated from settings
 (rotation, git hygiene); both human and agent can pick projects; allowlist stays
@@ -110,7 +110,7 @@ Precedence: `.env` > `config.json` > defaults.
 First run for a project bootstraps a session; the bridge **captures `session_id`
 from the structured (`stream-json`/`json`) output** and persists it as the
 project's `resume_id`; subsequent runs use `--resume <id>` **paired with the same
-`--workspace`**. `cursor_new_session` clears the id to force a fresh thread.
+`--workspace`**. `agent_new_session` clears the id to force a fresh thread.
 **Rationale:** Matches how the CLI scopes sessions to a workspace; reliable,
 restart-surviving continuity; no TTY scraping.
 **Consequence:** Resume must always reuse the original workspace (else the CLI
@@ -136,18 +136,18 @@ completion agent) is the natural fit.
 not in-run. Operator must provision/maintain the deny list as security config.
 Resolves the core concern behind R-11.
 
-### ADR-014 — Voice model stays "dumb"; gains repo context via `cursor_ask` (ask mode)
+### ADR-014 — Voice model stays "dumb"; gains repo context via `agent_ask` (ask mode)
 **Decision:** The realtime voice model has **no direct repo access**. It only
 converses and drafts prompts. For any repo/code uncertainty it calls a new
-read-only tool **`cursor_ask`** (`cursor-agent --mode ask`) **before** asking Dad
-a question or drafting a `cursor_submit`. It asks **Dad** only for
-intent/preference the repo can't answer. `cursor_ask` is one-shot and does not
+read-only tool **`agent_ask`** (`cursor-agent --mode ask`) **before** asking Dad
+a question or drafting a `agent_submit`. It asks **Dad** only for
+intent/preference the repo can't answer. `agent_ask` is one-shot and does not
 pollute the project's work session.
 **Rationale:** Keeps the voice model cheap/simple and grounds all repo facts in
 the real codebase via the read-only ask mode, reducing wrong assumptions. Clean
 separation: voice = talk + draft; cursor-agent (ask) = know; cursor-agent (agent)
 = do.
-**Consequence:** New `cursor_ask` tool (read-only, hard-coded `--mode ask`, still
+**Consequence:** New `agent_ask` tool (read-only, hard-coded `--mode ask`, still
 allowlist-validated + audited). System prompt encodes "ask cursor before Dad for
 repo facts."
 
@@ -175,7 +175,7 @@ system prompt) rather than a structured question/answer protocol.
 **Decision:** No model ID is hardcoded anywhere in config. Models are fetched
 live at runtime via `cursor-agent models`, parsed, cached in SQLite
 (`model_cache`, TTL from `settings.modelCacheTtlMs`), and exposed via two new
-MCP tools: `cursor_list_models` (list/search) and `cursor_set_model` (set sticky
+MCP tools: `agent_list_models` (list/search) and `agent_set_model` (set sticky
 session model). All invocations use `session_state.active_model` (default:
 `"auto"` = Cursor account default). Filtering is server-side (case-insensitive
 contains on `id` + `displayName`); no native CLI filter flag exists.
@@ -288,26 +288,26 @@ when done. PWA copy still says the screen stays on. See
 | ID | Item | Plan to resolve | Severity |
 | --- | --- | --- | --- |
 | R-1 | **Does `cursor-agent` truly work without a pty?** Docs say yes (non-TTY infers print mode). | Milestone 0 Spike A validates. Fallback: add `node-pty`; parsing unchanged. | Med |
-| R-2 | **`cursor-agent` is beta — flags and stream-json schema may change.** | Pin CLI version; startup self-check (`about --format json`); isolate all CLI knowledge in `src/executor/cursorAgent.ts`. | Med |
+| R-2 | **`cursor-agent` is beta — flags and stream-json schema may change.** | Pin CLI version; startup self-check (`about --format json`); isolate all CLI knowledge in `src/executor/agentProcess.ts`. | Med |
 | R-3 | **STT accuracy for code-y Polish/English + project names.** Misheard names → wrong project. | Voice-friendly registry names; confirm-before-apply for risky ops; readback of chosen project. | Med |
 | R-4 | **Latency of long jobs vs conversational feel.** | Async function calling + progress narration; never silent. | Med |
 | R-5 | **"cursor start" while mic OFF** needs always-listening. | v1: button is the on-switch; v2 optional on-device wake-word spotter. | Low |
 | R-6 | **GA Realtime event/schema details** differ from older snippets. | Build against GA docs; Spike C/D validates exact event names. | Med |
-| R-7 | **Destructive-but-valid agent actions** (e.g., "delete the tests"). | git checkpoint + `cursor_revert`; optional plan-mode-first + voice confirm. | Med |
+| R-7 | **Destructive-but-valid agent actions** (e.g., "delete the tests"). | git checkpoint + `agent_revert`; optional plan-mode-first + voice confirm. | Med |
 | R-8 | **iOS Safari audio quirks** (autoplay unlock, call/Siri interruptions, backgrounding). | Wake Lock + silent media keepalive + auto-resume on visibility; keep sessions foreground. See [`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md). | Low |
 | R-9 | **Git revert aggressiveness** (uncommitted vs committed agent changes). | Define checkpoint policy in `git.ts`; gate hard resets behind confirmation. | Low |
 | R-10 | **Two billing accounts** (provider key vs Cursor subscription) — cost visibility. | Document expected usage; ephemeral token TTL limits provider abuse. | Low |
-| R-11 | **Agent mid-run questions.** With `--force`, headless cursor does not block for questions — it proceeds or aborts. If cursor does abort mid-task asking for clarification, the voice model receives the partial result text, speaks it back, and the user can follow up with `cursor_submit` + `--resume`. | Prompt-steering in system prompt ("proceed; make reasonable assumptions"). Worst case: dad answers a question via voice and a new `cursor_submit` continues the thread. | Low |
-| R-12 | **Auto-run blast radius even with deny list** (a valid prompt does harm inside an allowlisted workspace). | Deny list (`Shell(rm)`, `Read(.env*)`, no `git push`, …) + optional `--sandbox enabled` + `cursor_revert`; least-priv OS user; deny list maintained as security config. | Med |
+| R-11 | **Agent mid-run questions.** With `--force`, headless cursor does not block for questions — it proceeds or aborts. If cursor does abort mid-task asking for clarification, the voice model receives the partial result text, speaks it back, and the user can follow up with `agent_submit` + `--resume`. | Prompt-steering in system prompt ("proceed; make reasonable assumptions"). Worst case: dad answers a question via voice and a new `agent_submit` continues the thread. | Low |
+| R-12 | **Auto-run blast radius even with deny list** (a valid prompt does harm inside an allowlisted workspace). | Deny list (`Shell(rm)`, `Read(.env*)`, no `git push`, …) + optional `--sandbox enabled` + `agent_revert`; least-priv OS user; deny list maintained as security config. | Med |
 
 ## Questions that may still need user input (non-blocking for docs)
 
 1. **Project naming convention** — which projects, what voice-friendly names?
    (Needed to seed the registry; collect during Milestone 1/6.)
 2. **`cursor-agent` executor model** — no hardcoding; dad selects via
-   `cursor_set_model` (or leaves as `auto` = Cursor account default). Models
-   fetched live from `cursor-agent models` via `cursor_list_models`.
-3. **Plan-mode-first default?** — Should `cursor_submit` propose a plan and wait
+   `agent_set_model` (or leaves as `auto` = Cursor account default). Models
+   fetched live from `cursor-agent models` via `agent_list_models`.
+3. **Plan-mode-first default?** — Should `agent_submit` propose a plan and wait
    for "yes" before applying, or apply directly? (Recommended: configurable;
    start with direct + git revert, add plan-first if it feels risky.)
 4. **Revert hard-reset policy** — OK to `git reset --hard` to a checkpoint when

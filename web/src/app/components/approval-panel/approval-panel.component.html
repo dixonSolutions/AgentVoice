@@ -6,7 +6,7 @@
       @if (asUserInput(); as q) {
         <div class="approval-header">
           <span class="approval-icon">🤔</span>
-          <span class="approval-title">Cursor needs your input</span>
+          <span class="approval-title">{{ agentName() }} needs your input</span>
         </div>
 
         <p class="approval-question">{{ q.question }}</p>

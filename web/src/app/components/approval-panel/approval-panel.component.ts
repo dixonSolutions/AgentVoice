@@ -11,6 +11,7 @@ import {
   type PlanApprovalRequest,
   type UserInputRequest,
 } from '../../services/bridge.service';
+import { AgentProviderService } from '../../services/agent-provider.service';
 
 /**
  * ApprovalPanelComponent — presents agent-initiated requests to the user.
@@ -31,6 +32,10 @@ import {
 })
 export class ApprovalPanelComponent {
   protected readonly bridge = inject(BridgeService);
+  private readonly agentProviders = inject(AgentProviderService);
+
+  /** Who is asking — the active coding agent, never a hardcoded name. */
+  protected readonly agentName = this.agentProviders.activeProviderName;
 
   protected readonly pending = computed(() => this.bridge.pendingApproval());
 

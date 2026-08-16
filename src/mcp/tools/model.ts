@@ -1,6 +1,5 @@
 /**
- * Model tools — cursor_list_models / cursor_set_model (and their generic
- * agent_list_models / agent_set_model aliases).
+ * Model tools — agent_list_models / agent_set_model.
  *
  * Backed by the active AgentProvider's listModels() — never hardcoded, and
  * never locked to the Cursor CLI. The cache (state/models.ts) is keyed per
@@ -17,7 +16,7 @@ import { parseMisroutedExecutionMode } from './questionDetect.js';
 
 const log = childLogger('tool:model');
 
-// ── cursor_list_models / agent_list_models ────────────────────────────────
+// ── agent_list_models ─────────────────────────────────────────────────────
 
 export interface ListModelsArgs {
   query?: string;
@@ -63,7 +62,7 @@ export async function handleListModels(
   };
 }
 
-// ── cursor_set_model / agent_set_model ─────────────────────────────────────
+// ── agent_set_model ───────────────────────────────────────────────────────
 
 export interface SetModelArgs {
   model_id: string;
@@ -99,14 +98,14 @@ export async function handleSetModel(
   if (misroutedMode) {
     if (misroutedMode === 'ask') {
       throw new Error(
-        `"${args.model_id}" is read-only Q&A mode — use cursor_ask, not cursor_set_model. ` +
-          'For the AI model (Claude, GPT, etc.), use cursor_list_models or leave as "auto".',
+        `"${args.model_id}" is read-only Q&A mode — use agent_ask, not agent_set_model. ` +
+          'For the AI model (Claude, GPT, etc.), use agent_list_models or leave as "auto".',
       );
     }
     throw new Error(
       `"${args.model_id}" is an execution mode, not an AI model. ` +
-        `Use cursor_submit with mode: "${misroutedMode}" when the user wants that behavior. ` +
-        'For the AI model, use cursor_list_models — or leave as "auto".',
+        `Use agent_submit with mode: "${misroutedMode}" when the user wants that behavior. ` +
+        'For the AI model, use agent_list_models — or leave as "auto".',
     );
   }
 
@@ -122,7 +121,7 @@ export async function handleSetModel(
       `Unknown model ID "${args.model_id}". ` +
         (close.length > 0
           ? `Did you mean: ${close.map((m) => m.id).join(', ')}?`
-          : 'Use cursor_list_models to browse available models.'),
+          : 'Use agent_list_models to browse available models.'),
     );
   }
 

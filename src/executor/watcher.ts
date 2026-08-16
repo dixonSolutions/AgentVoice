@@ -1,10 +1,12 @@
 /**
- * Stream-JSON watcher & event classifier.
+ * Agent stream watcher & narration classifier.
  *
- * Receives raw cursor-agent stream-json events (from cursorAgent.ts) and:
- *   1. Classifies them into typed NarrationEvent kinds.
- *   2. Maintains a rolling JobSummary (accumulated across the run).
- *   3. Emits NarrationEvents with cadence limiting (max 1 per 15 s for ticks;
+ * Receives *normalized* agent events (providers/agents/events.ts) rather than
+ * raw CLI JSON, so narration works identically for Cursor, Codex and Claude
+ * Code. Responsibilities:
+ *   1. Turn normalized events into typed NarrationEvent kinds.
+ *   2. Maintain a rolling JobSummary (accumulated across the run).
+ *   3. Emit NarrationEvents with cadence limiting (max 1 per 15 s for ticks;
  *      significant transitions always emit immediately).
  *
  * See docs/12-stream-json-watcher.md for the full spec.
@@ -13,34 +15,18 @@
 import { getConfig } from '../config.js';
 import { addJobEvent } from '../state/jobs.js';
 import { childLogger } from '../log.js';
+import { getActiveProvider } from '../providers/agents/registry.js';
+import type { AgentStreamEvent, NormalizedToolCall } from '../providers/agents/events.js';
 
 const log = childLogger('watcher');
 
-// ── stream-json event shapes ──────────────────────────────────────────────
+export type { AgentStreamEvent };
 
-// Only the fields we act on — unknown fields are ignored (forward-compatible).
-export type StreamJsonEvent =
-  | { type: 'system'; subtype: 'init'; session_id: string; model?: string }
-  | {
-      type: 'assistant';
-      subtype: 'tool_use_start';
-      tool_call: Record<string, unknown>;
-    }
-  | {
-      type: 'assistant';
-      subtype: 'tool_use_done';
-      tool_call: Record<string, unknown>;
-      success?: boolean;
-    }
-  | { type: 'assistant'; message?: { content?: Array<{ text?: string }> } }
-  | {
-      type: 'tool_call';
-      subtype: 'started' | 'completed';
-      tool_call: Record<string, unknown>;
-    }
-  | { type: 'result'; session_id?: string; usage?: unknown; message?: unknown }
-  | { type: 'error'; message?: string }
-  | { type: string; [key: string]: unknown };
+/**
+ * @deprecated Raw CLI JSON no longer reaches this module — providers parse it.
+ * Kept as the transport type for one raw stdout line.
+ */
+export type StreamJsonEvent = Record<string, unknown>;
 
 // ── NarrationEvent ────────────────────────────────────────────────────────
 
@@ -72,83 +58,38 @@ export interface JobSummary {
   startedAt: Date;
 }
 
-// ── Tool call name extraction ─────────────────────────────────────────────
+// ── Narration labels ──────────────────────────────────────────────────────
 
-/**
- * Extract a human-readable tool name and path/cmd from a tool_call object.
- * The cursor-agent stream uses keys like `writeToolCall`, `readToolCall`,
- * `shellToolCall`, etc.
- */
-function classifyToolCall(toolCall: Record<string, unknown>): {
-  kind: 'write' | 'read' | 'shell' | 'other';
-  label: string;
-  path?: string;
-  cmd?: string;
-} {
-  const keys = Object.keys(toolCall);
-
-  for (const key of keys) {
-    const lower = key.toLowerCase();
-    const val = toolCall[key] as Record<string, unknown> | null;
-    const args = (val?.['args'] ?? val) as Record<string, unknown> | undefined;
-
-    if (lower.includes('write')) {
-      const path = args && typeof args['path'] === 'string' ? args['path'] : undefined;
-      return { kind: 'write', label: path ? `wrote ${path}` : 'wrote a file', path };
-    }
-    if (lower.includes('read')) {
-      const path = args && typeof args['path'] === 'string' ? args['path'] : undefined;
-      return { kind: 'read', label: path ? `reading ${path}` : 'reading a file', path };
-    }
-    if (lower.includes('glob')) {
-      const pattern =
-        (args && typeof args['globPattern'] === 'string' ? args['globPattern'] : undefined) ??
-        'project files';
-      return { kind: 'read', label: `searching ${pattern}`, path: pattern };
-    }
-    if (lower.includes('grep') || lower.includes('search')) {
-      const pattern =
-        (args && typeof args['pattern'] === 'string' ? args['pattern'] : undefined) ?? 'codebase';
-      return { kind: 'read', label: `searching for "${pattern}"`, path: pattern };
-    }
-    if (lower.includes('shell') || lower.includes('bash') || lower.includes('cmd')) {
-      const cmd =
-        args && typeof args['command'] === 'string'
-          ? (args['command'] as string).slice(0, 60)
-          : undefined;
-      return { kind: 'shell', label: cmd ? `ran: ${cmd}` : 'ran a command', cmd };
-    }
+/** One human-readable phrase describing what a tool call is doing. */
+function describeToolCall(tool: NormalizedToolCall): string {
+  switch (tool.action) {
+    case 'write':
+      return tool.path ? `wrote ${tool.path}` : 'wrote a file';
+    case 'read':
+      return tool.path ? `reading ${tool.path}` : 'reading a file';
+    case 'search':
+      return tool.path ? `searching ${tool.path}` : 'searching the codebase';
+    case 'shell':
+      return tool.command ? `ran: ${tool.command.slice(0, 60)}` : 'ran a command';
+    case 'task':
+      return `spawning ${tool.subagent ?? 'a subagent'}`;
+    default:
+      return 'called a tool';
   }
-
-  return { kind: 'other', label: 'called a tool' };
 }
 
-/** Detect Task/subagent spawns — budget-burning "ghost agent" pattern. */
-export function isGhostToolCall(toolCall: Record<string, unknown>): {
+/**
+ * Detect Task/subagent spawns — the budget-burning "ghost agent" pattern.
+ * Providers already flag these as `action: 'task'`, so this is a single check
+ * rather than per-CLI key sniffing.
+ */
+export function isGhostToolCall(tool: NormalizedToolCall): {
   ghost: boolean;
   reason: string | null;
 } {
-  for (const key of Object.keys(toolCall)) {
-    const lower = key.toLowerCase();
-    // Match explicit Task/subagent tool keys only — not grep/glob args containing "explore".
-    if (
-      (lower.includes('task') && lower.includes('tool')) ||
-      lower.includes('subagent')
-    ) {
-      return { ghost: true, reason: key };
-    }
+  if (tool.action === 'task') {
+    return { ghost: true, reason: tool.subagent ?? tool.name };
   }
-
-  // Structured subagent spawn inside a Task tool payload.
-  for (const val of Object.values(toolCall)) {
-    if (typeof val !== 'object' || val === null) continue;
-    const payload = val as Record<string, unknown>;
-    const subagentType = payload['subagent_type'] ?? payload['subagentType'];
-    if (typeof subagentType === 'string' && subagentType.length > 0) {
-      return { ghost: true, reason: 'subagent_spawn' };
-    }
-  }
-
   return { ghost: false, reason: null };
 }
 
@@ -220,64 +161,56 @@ export class Watcher {
     }
   }
 
-  /** Process one parsed stream-json event. */
-  process(event: StreamJsonEvent): void {
+  /**
+   * Process one normalized agent event.
+   *
+   * The spoken agent name comes from the active provider — narration used to
+   * say "Cursor" no matter which CLI was running, which is exactly what the
+   * hands-free user hears.
+   */
+  process(event: AgentStreamEvent): void {
     this.summary.elapsedMs = Date.now() - this.summary.startedAt.getTime();
+    const agent = this.agentName();
 
-    // ── system:init ────────────────────────────────────────────────────
-    if (event.type === 'system' && 'subtype' in event && event.subtype === 'init') {
-      log.debug({ jobId: this.jobId, sessionId: event.session_id }, 'job started');
-      this.trackEvent('system_init', { sessionId: event.session_id });
-      this.emit({
-        kind: 'job_started',
-        text: `Cursor started working on ${this.projectName}.`,
-      });
-      // No cadence TTS ticks — the voice agent narrates via get_agent_status.
-      return;
-    }
+    switch (event.kind) {
+      case 'init':
+        log.debug({ jobId: this.jobId }, 'job started');
+        this.trackEvent('system_init', { model: event.model ?? null });
+        this.emit({ kind: 'job_started', text: `${agent} started working on ${this.projectName}.` });
+        // No cadence TTS ticks — the voice agent narrates via get_agent_status.
+        return;
 
-    // ── tool_use_start (legacy) ───────────────────────────────────────
-    if (event.type === 'assistant' && 'subtype' in event && event.subtype === 'tool_use_start') {
-      this.handleToolCallStart(
-        (event as { type: 'assistant'; subtype: 'tool_use_start'; tool_call: Record<string, unknown> })
-          .tool_call,
-      );
-      return;
-    }
+      case 'tool_start':
+        this.handleToolCallStart(event.tool);
+        return;
 
-    // ── tool_call (current CLI) ───────────────────────────────────────
-    if (event.type === 'tool_call' && 'subtype' in event && event.subtype === 'started') {
-      this.handleToolCallStart(
-        (event as { type: 'tool_call'; subtype: 'started'; tool_call: Record<string, unknown> })
-          .tool_call,
-      );
-      return;
-    }
+      case 'result': {
+        this.stopCadenceTicks();
+        const filesChanged = this.summary.filesWritten.length;
+        const doneText =
+          filesChanged > 0
+            ? `Done — ${agent} changed ${filesChanged} file${filesChanged !== 1 ? 's' : ''}. Want to see the diff?`
+            : `Done — ${agent} finished with no file changes.`;
+        this.trackEvent('job_done', { summary: doneText });
+        this.emit({ kind: 'job_done', text: doneText });
+        return;
+      }
 
-    // ── result (job done) ──────────────────────────────────────────────
-    if (event.type === 'result') {
-      this.stopCadenceTicks();
-      const filesChanged = this.summary.filesWritten.length;
-      const doneText =
-        filesChanged > 0
-          ? `Done — Cursor changed ${filesChanged} file${filesChanged !== 1 ? 's' : ''}. Want to see the diff?`
-          : 'Done — Cursor finished with no file changes.';
-      this.trackEvent('job_done', { summary: doneText });
-      this.emit({ kind: 'job_done', text: doneText });
-      return;
-    }
+      case 'error':
+        this.stopCadenceTicks();
+        this.trackEvent('job_error', { message: event.message });
+        this.emit({ kind: 'job_error', text: `Something went wrong. ${agent} said: ${event.message}` });
+        return;
 
-    // ── error ──────────────────────────────────────────────────────────
-    if (event.type === 'error') {
-      this.stopCadenceTicks();
-      const msg =
-        typeof (event as { type: 'error'; message?: string }).message === 'string'
-          ? (event as { type: 'error'; message: string }).message
-          : 'an unknown error';
-      this.trackEvent('job_error', { message: msg });
-      this.emit({ kind: 'job_error', text: `Something went wrong. Cursor said: ${msg}` });
-      return;
+      // session / tool_done / assistant_text carry no narration of their own.
+      default:
+        return;
     }
+  }
+
+  /** Display name of the coding agent currently running (Cursor / Codex / Claude Code). */
+  private agentName(): string {
+    return getActiveProvider().displayName;
   }
 
   /** Human-readable snapshot of what the agent is doing right now. */
@@ -300,13 +233,13 @@ export class Watcher {
       );
     }
     if (parts.length === 0) {
-      return 'Cursor CLI is researching the codebase…';
+      return `${this.agentName()} is researching the codebase…`;
     }
     return parts.join('; ');
   }
 
-  private handleToolCallStart(toolCall: Record<string, unknown>): void {
-    const ghost = isGhostToolCall(toolCall);
+  private handleToolCallStart(tool: NormalizedToolCall): void {
+    const ghost = isGhostToolCall(tool);
     if (ghost.ghost && !this.ghostTriggered) {
       this.ghostTriggered = true;
       this.stopCadenceTicks();
@@ -315,25 +248,25 @@ export class Watcher {
       this.trackEvent('ghost_killed', { reason });
       this.emit({
         kind: 'ghost_killed',
-        text: `Stopped — Cursor tried to spawn extra agents (${reason}). Budget protection kicked in.`,
+        text: `Stopped — ${this.agentName()} tried to spawn extra agents (${reason}). Budget protection kicked in.`,
       });
       this.onGhostDetected?.();
       return;
     }
 
-    const { kind, label, path, cmd } = classifyToolCall(toolCall);
+    const label = describeToolCall(tool);
     this.lastActivityLabel = label;
 
-    if (kind === 'write' && path) {
-      this.summary.filesWritten.push(path);
-      this.trackEvent('file_write', { path });
-      this.emit({ kind: 'file_write', text: `Cursor just wrote ${path}.` });
-    } else if (kind === 'read') {
-      if (path) this.summary.filesRead.push(path);
-      this.trackEvent('file_read', { path: path ?? label });
-    } else if (kind === 'shell') {
-      if (cmd) this.summary.shellCommands.push(cmd);
-      this.trackEvent('shell_run', { cmd, label });
+    if (tool.action === 'write' && tool.path) {
+      this.summary.filesWritten.push(tool.path);
+      this.trackEvent('file_write', { path: tool.path });
+      this.emit({ kind: 'file_write', text: `${this.agentName()} just wrote ${tool.path}.` });
+    } else if (tool.action === 'read' || tool.action === 'search') {
+      if (tool.path) this.summary.filesRead.push(tool.path);
+      this.trackEvent('file_read', { path: tool.path ?? label });
+    } else if (tool.action === 'shell') {
+      if (tool.command) this.summary.shellCommands.push(tool.command);
+      this.trackEvent('shell_run', { cmd: tool.command, label });
       // Raw commands are useful in logs/status but noisy and potentially
       // sensitive over TTS. Cadence ticks provide concise spoken progress.
     }

@@ -5,7 +5,7 @@
 
 ## Overview
 
-Both workflows (`cursor_native` and `llm_intelligence`) share the same PWA audio
+Both workflows (`agent_native` and `llm_intelligence`) share the same PWA audio
 pipeline. The phone handles capture and playback; the bridge handles turn routing
 and (for `llm_intelligence`) Claude orchestration.
 
@@ -78,9 +78,9 @@ Playback: `web/src/sound-effects.ts` via `playVoiceCueNow()` — fired in `llm-i
 
 Configure error feedback under **Config → Voice → Cursor voice (TTS)**:
 - `errorSoundEnabled` — play the error earcon (default on)
-- `errorSpeakEnabled` — also speak the error message via TTS, independent of `cursorVoiceEnabled` (default on; turn off for sound-only alerts)
+- `errorSpeakEnabled` — also speak the error message via TTS, independent of `agentVoiceEnabled` (default on; turn off for sound-only alerts)
 
-For **`cursor_native`**, primary TTS comes from MCP `speak()` events pushed over
+For **`agent_native`**, primary TTS comes from MCP `speak()` events pushed over
 `/ws/intelligence`. For **`llm_intelligence`**, orchestrator `speak` tool + optional
 browser TTS fallback (`web/src/tts-fallback.ts`).
 
@@ -93,7 +93,7 @@ volume** (never ducks), keeps the queue for cancel-resume, and on submit snapsho
 Legacy `interruptMode` / `interruptDeafenFactor` config keys are stripped on load — volume
 ducking is gone.
 
-Set `settings.voice.tts.cursorVoiceEnabled: false` to disable MCP `speak()` playback entirely
+Set `settings.voice.tts.agentVoiceEnabled: false` to disable MCP `speak()` playback entirely
 (transcripts still appear in the UI).
 
 Configure in Config tab → Voice & Wake Words, or `PATCH /api/voice/tts`.
@@ -152,7 +152,7 @@ Limits, battery notes, and user guidance: [`19-mobile-session-keepalive.md`](./1
 ## Related docs
 
 - [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) — barge-in snapshot + wake echo filter
-- [`16-mcp-server-cursor-as-brain.md`](./16-mcp-server-cursor-as-brain.md) — Cursor voice loop
+- [`16-mcp-server-agent-as-brain.md`](./16-mcp-server-agent-as-brain.md) — Cursor voice loop
 - [`15-llm-intelligence-workflow.md`](./15-llm-intelligence-workflow.md) — Bedrock orchestrator
 - [`13-voice-providers.md`](./13-voice-providers.md) — wake word config
 - [`27-touch-controls-and-cancel.md`](./27-touch-controls-and-cancel.md) — on-screen Speak / Cancel and cancel during Transcribe

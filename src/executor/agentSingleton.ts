@@ -3,7 +3,7 @@
  *
  * Tracks two categories of workers:
  *   - Singleton (active): the primary worker agent for the current session.
- *     At most one at a time; cursor_ask and cursor_submit share this slot.
+ *     At most one at a time; agent_ask and agent_submit share this slot.
  *   - Worktree pool: additional parallel agents running in isolated git worktrees.
  *     No concurrency limit beyond maxConcurrentJobs; each uses a separate tree.
  *
@@ -12,7 +12,8 @@
  */
 
 import { childLogger } from '../log.js';
-import type { AgentHandle } from './cursorAgent.js';
+import { getActiveProvider } from '../providers/agents/registry.js';
+import type { AgentHandle } from './agentProcess.js';
 import type { Watcher } from './watcher.js';
 
 const log = childLogger('agent-singleton');
@@ -26,7 +27,7 @@ export interface ActiveAgentRun {
   sessionKey: string;
   pid: number;
   handle: AgentHandle;
-  /** Live stream watcher (cursor_ask and cursor_submit). */
+  /** Live stream watcher (agent_ask and agent_submit). */
   watcher?: Watcher;
   /** Worktree name, if this is a worktree worker. */
   worktreeName?: string;
@@ -59,9 +60,9 @@ export function assertAgentAvailable(): void {
   const label = active.kind === 'ask' ? 'answering a question' : 'running a job';
   const hint =
     active.kind === 'ask'
-      ? 'Wait for the answer — use cursor_status for live progress; do not retry cursor_ask.'
+      ? 'Wait for the answer — use agent_job_status for live progress; do not retry agent_ask.'
       : 'Wait for it to finish or call stop_agent, or use spawn_agent with use_worktree: true to run in parallel.';
-  throw new Error(`Cursor is already busy (${label}, pid ${active.pid}). ${hint}`);
+  throw new Error(`${getActiveProvider().displayName} is already busy (${label}, pid ${active.pid}). ${hint}`);
 }
 
 /** Claim the singleton immediately after spawnAgent (before any await). */
@@ -97,7 +98,7 @@ export function releaseAgentRun(handle: AgentHandle): void {
   active = null;
 }
 
-/** Kill whatever is running and clear the slot (cursor_stop / shutdown). */
+/** Kill whatever is running and clear the slot (agent_job_stop / shutdown). */
 export function killActiveAgent(reason: string): boolean {
   if (!active) return false;
   const { pid, kind, refId } = active;

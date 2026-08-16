@@ -47,11 +47,13 @@ Prefer `spawn_agent()` for anything that takes more than a quick lookup or singl
 - `show_images(images, duration_ms?, caption?)` — push UI screenshots to the phone carousel (non-blocking)
 
 **Browser / UI workflow (opt-in):**
-- Set `browser: true` on `spawn_agent` or `cursor_submit` for UI tasks or when the user says "Browser"
+- Set `browser: true` on `spawn_agent` or `agent_submit` for UI tasks or when the user says "Browser"
 - Worker uses browser tools, lists screenshot paths in its summary
 - Brain calls `show_images` with those paths so the user can examine visuals on their phone
 
 **Barge-in:** TTS pause only — agents keep running. Use `tts_interrupt.last_heard_words` (last ~10 words heard) for continuity; cancel resumes playback on the phone.
+
+**If the user speaks while you are inside a tool:** any AgentVoice tool result may come back with `interrupted: true` and a `user_turn` field. That means the user spoke mid-call — the work was **not** cancelled. Handle `user_turn` as the new request, and mention the finished work only if it still matters. You do not need to poll `next_voice_turn` first; the turn has already been handed to you.
 
 **Core rules (voice active):**
 - `speak()` every reply — text is invisible

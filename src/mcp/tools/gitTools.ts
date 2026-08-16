@@ -1,5 +1,5 @@
 /**
- * Git tools — cursor_diff, cursor_revert
+ * Git tools — agent_diff, agent_revert
  *
  * Thin wrappers around src/executor/git.ts that resolve the project first.
  */
@@ -7,7 +7,7 @@
 import { diff, revert } from '../../executor/git.js';
 import { resolveProjectOrThrow } from './project.js';
 
-// ── cursor_diff ───────────────────────────────────────────────────────────
+// ── agent_diff ───────────────────────────────────────────────────────────
 
 export interface DiffArgs {
   project?: string;
@@ -36,7 +36,7 @@ export async function handleCursorDiff(
   };
 }
 
-// ── cursor_revert ─────────────────────────────────────────────────────────
+// ── agent_revert ─────────────────────────────────────────────────────────
 
 export interface RevertArgs {
   project?: string;
@@ -70,7 +70,7 @@ export async function handleCursorRevert(
   if (!lastJob?.checkpoint) {
     throw new Error(
       `No checkpoint found for ${project.name}. ` +
-        'A checkpoint is recorded when cursor_submit is called. ' +
+        'A checkpoint is recorded when agent_submit is called. ' +
         'If no job has run, there is nothing to revert.',
     );
   }

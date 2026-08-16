@@ -1,6 +1,6 @@
 /**
- * Detect read-only questions misrouted to cursor_submit.
- * Server-side guard — questions must use cursor_ask (no code changes).
+ * Detect read-only questions misrouted to agent_submit.
+ * Server-side guard — questions must use agent_ask (no code changes).
  */
 
 const MUTATION_VERBS =
@@ -23,7 +23,7 @@ const QUESTION_PATTERNS = [
 const READ_ONLY_INTENT =
   /\b(next implementation steps|implementation steps|what('s| is) next|roadmap|remaining work|what to (do|build) next)\b/i;
 
-/** cursor-agent execution modes — NOT valid cursor_set_model IDs. */
+/** cursor-agent execution modes — NOT valid agent_set_model IDs. */
 export const EXECUTION_MODES = new Set(['agent', 'plan', 'ask']);
 
 export function looksLikeReadOnlyQuestion(text: string): boolean {
@@ -34,7 +34,7 @@ export function looksLikeReadOnlyQuestion(text: string): boolean {
   return QUESTION_PATTERNS.some((p) => p.test(trimmed));
 }
 
-/** Research / Q&A — never cursor_submit even if the user says "create an agent". */
+/** Research / Q&A — never agent_submit even if the user says "create an agent". */
 export function isReadOnlyResearchIntent(text: string): boolean {
   const t = text.trim();
   if (!t) return false;
@@ -43,7 +43,7 @@ export function isReadOnlyResearchIntent(text: string): boolean {
   return false;
 }
 
-/** Requests that write git state or files — must use cursor_submit. */
+/** Requests that write git state or files — must use agent_submit. */
 export function looksLikeMutationRequest(text: string): boolean {
   const trimmed = text.trim();
   if (!trimmed) return false;
@@ -53,7 +53,7 @@ export function looksLikeMutationRequest(text: string): boolean {
   return /\bpull request\b/i.test(trimmed);
 }
 
-/** Strip voice preamble / STT junk; extract the research question for cursor_ask. */
+/** Strip voice preamble / STT junk; extract the research question for agent_ask. */
 export function normalizeAskQuestion(raw: string): string {
   let t = raw.trim();
   if (!t) return t;
@@ -102,7 +102,7 @@ export function isMetaVoiceBridgeQuestion(text: string): boolean {
   );
 }
 
-/** True when model_id is actually a cursor_submit / cursor_ask execution mode. */
+/** True when model_id is actually a agent_submit / agent_ask execution mode. */
 export function parseMisroutedExecutionMode(modelId: string): string | null {
   const normalized = modelId.toLowerCase().replace(/\s+mode$/, '').trim();
   return EXECUTION_MODES.has(normalized) ? normalized : null;

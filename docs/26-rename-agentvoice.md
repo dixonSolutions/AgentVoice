@@ -28,19 +28,31 @@ package / service name.
 | Windows NSSM service | `CursorVoice` | `AgentVoice` |
 | Example install path | `/opt/cursor-voice` | `/opt/agentvoice` |
 
+## Stage B — the rest of the rename (August 2026)
+
+Stage A above deliberately stopped at the display name. The deferred items were
+finished in [`28-provider-parity-and-branding.md`](./28-provider-parity-and-branding.md),
+each with a migration so existing installs keep working:
+
+| Surface | Now | Migration |
+| --- | --- | --- |
+| MCP server registration key | `agent-voice` | every voice-session prepare strips a leftover `cursor-voice` entry, so the two can never both be registered |
+| Cursor rule filename | `~/.cursor/rules/agent-voice.mdc` | the legacy `cursor-voice.mdc` body is blanked so an enabled stale rule cannot re-inject old tool names |
+| MCP tool names | `agent_*` | `cursor_*` still accepted by `dispatchTool` (`LEGACY_TOOL_ALIASES`), but not advertised on the MCP server |
+| `settings.voice.tts.cursorVoiceEnabled` | `agentVoiceEnabled` | rewritten on config load |
+| `workflow.default: cursor_native` | `agent_native` | rewritten on config load; the admin API also accepts the old value |
+| `/api/cursor-sessions/*` | `/api/agent-sessions/*` | old paths still served, so a cached PWA build keeps working |
+| Internal TypeScript symbols | `agentVoicePrompt.ts`, `agentMcpSetup.ts`, `hostPaths.ts`, `agentProcess.ts`, `agentSessions.ts` | internal only |
+
 ## What deliberately did **not** change
 
 These stay as-is so existing installs keep working without re-registering push
-tokens or rewriting every MCP config:
+tokens:
 
 | Surface | Kept as | Reason |
 | --- | --- | --- |
 | Capacitor / APNs `appId` / `APNS_BUNDLE_ID` | `com.cursorvoice.app` | Changing the bundle id invalidates every already-registered APNs device token |
 | Android Java package | `com.cursorvoice.callsession` | Tied to the Capacitor `appId` |
-| MCP server registration key | `cursor-voice` in `~/.cursor/mcp.json`, `~/.codex/config.toml`, `~/.claude/settings.json` | Already written to users' global configs; renaming would create a second conflicting server |
-| Cursor rule filename | `~/.cursor/rules/cursor-voice.mdc` | Same — already on disk for existing users |
-| MCP tool names | `cursor_*` (plus new `agent_*` aliases) | Stage A already added generic aliases; renaming the originals would break prompts/configs |
-| Internal TypeScript symbols | `loadCursorVoicePrompt`, `CURSOR_VOICE_MCP_*`, … | Purely internal; renaming is a larger cleanup for a later PR |
 | Local folder / git remote | `SideProjects/CursorVoice`, `dixonSolutions/Cursor-Voice` | Repo rename on GitHub is a manual operator step — update the remote when you're ready |
 
 ## Migration for existing hosts
@@ -75,8 +87,9 @@ override as a fallback; prefer `AGENTVOICE_TUNNEL_ENV`.
 
 ### MCP / APNs
 
-No action required. The MCP key stays `cursor-voice`; the APNs bundle id stays
-`com.cursorvoice.app`.
+No action required. The APNs bundle id stays `com.cursorvoice.app`. The MCP key
+became `agent-voice` in Stage B — the next voice session rewrites the entry and
+removes the old `cursor-voice` one automatically.
 
 ## Repo rename (done)
 

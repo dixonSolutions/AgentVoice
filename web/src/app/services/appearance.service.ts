@@ -37,6 +37,16 @@ export type AppearanceTone = (typeof APPEARANCE_TONES)[number];
 const STORAGE_KEY = 'cv-appearance';
 const DARK_CLASS = 'app-dark';
 
+/**
+ * Fired on `document` after the theme has been applied.
+ *
+ * Optimus writes the primary palette into an injected <style> element rather
+ * than onto <html>, so a MutationObserver cannot see a tone change. Anything
+ * caching resolved theme tokens (the voice orb reads `--p-primary-*` into a
+ * canvas palette) listens for this instead.
+ */
+export const APPEARANCE_CHANGED_EVENT = 'cv-appearance-changed';
+
 const DEFAULTS: AppearanceSettings = {
   scheme: 'system',
   tone: 'violet',
@@ -128,6 +138,7 @@ export class AppearanceService {
 
     updatePrimaryPalette(palette(`{${settings.tone}}`) as PaletteDesignToken);
     this.updateThemeColorMeta(dark);
+    document.dispatchEvent(new CustomEvent(APPEARANCE_CHANGED_EVENT));
   }
 
   private updateThemeColorMeta(dark: boolean): void {

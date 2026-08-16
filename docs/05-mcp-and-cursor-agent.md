@@ -14,27 +14,27 @@ backing for every tool are in [`11-mcp-tool-surface.md`](./11-mcp-tool-surface.m
 
 | # | Tool | Group | Description |
 | --- | --- | --- | --- |
-| 1 | `cursor_list_projects` | Project | List/search the project registry |
-| 2 | `cursor_set_project` | Project | Set the sticky active project |
-| 3 | `cursor_list_models` | Model | List/filter available models (CLI-backed, cached) |
-| 4 | `cursor_set_model` | Model | Set the sticky active model (default: `auto`) |
-| 5 | `cursor_submit` | Execute | Submit work to cursor-agent (async, returns job_id) |
-| 6 | `cursor_ask` | Execute | Read-only repo Q&A (`--mode ask`, no writes) |
-| 7 | `cursor_status` | Job | Poll a job's status and progress events |
-| 8 | `cursor_stop` | Job | Kill a running job |
-| 9 | `cursor_new_session` | Session | Drop resume id; start fresh thread next submit |
-| 10 | `cursor_session_info` | Session | Read persisted session state for a project |
-| 11 | `cursor_diff` | Git | Current uncommitted diff (stat + optional patch) |
-| 12 | `cursor_revert` | Git | Git-level undo to pre-job checkpoint |
-| 13 | `cursor_agent_info` | System | CLI version, OS, model (`about --format json`) |
-| 14 | `cursor_agent_status` | System | Auth status + user info (`status --format json`) |
-| 15 | `cursor_mcp_list` | MCP inspect | List executor's configured MCP servers |
-| 16 | `cursor_mcp_tools` | MCP inspect | List tools for an executor MCP server |
+| 1 | `agent_list_projects` | Project | List/search the project registry |
+| 2 | `agent_set_project` | Project | Set the sticky active project |
+| 3 | `agent_list_models` | Model | List/filter available models (CLI-backed, cached) |
+| 4 | `agent_set_model` | Model | Set the sticky active model (default: `auto`) |
+| 5 | `agent_submit` | Execute | Submit work to cursor-agent (async, returns job_id) |
+| 6 | `agent_ask` | Execute | Read-only repo Q&A (`--mode ask`, no writes) |
+| 7 | `agent_job_status` | Job | Poll a job's status and progress events |
+| 8 | `agent_job_stop` | Job | Kill a running job |
+| 9 | `agent_new_session` | Session | Drop resume id; start fresh thread next submit |
+| 10 | `agent_session_info` | Session | Read persisted session state for a project |
+| 11 | `agent_diff` | Git | Current uncommitted diff (stat + optional patch) |
+| 12 | `agent_revert` | Git | Git-level undo to pre-job checkpoint |
+| 13 | `agent_info` | System | CLI version, OS, model (`about --format json`) |
+| 14 | `agent_status` | System | Auth status + user info (`status --format json`) |
+| 15 | `agent_mcp_list` | MCP inspect | List executor's configured MCP servers |
+| 16 | `agent_mcp_tools` | MCP inspect | List tools for an executor MCP server |
 | 17 | `cursor_answer_question` | Interaction | Reply to a blocking `cursor/ask_question` mid-run |
 | 18 | `cursor_approve_plan` | Interaction | Accept/reject a blocking `cursor/create_plan` mid-run |
 
-> **ACP transport:** `cursor_submit`, `cursor_ask`, `cursor_stop`,
-> `cursor_new_session`, `cursor_answer_question`, and `cursor_approve_plan` are
+> **ACP transport:** `agent_submit`, `agent_ask`, `agent_job_stop`,
+> `agent_new_session`, `cursor_answer_question`, and `cursor_approve_plan` are
 > backed by `cursor-agent acp` (JSON-RPC over stdio) rather than `--print`.
 > ACP enables live subscriptions, cursor's questions, plan approvals, per-call
 > permissions, and clean cancellation. See [`12-acp-and-live-monitoring.md`](./12-acp-and-live-monitoring.md).
@@ -65,7 +65,7 @@ the bridge is the final authority and only ever runs against an allowlisted path
    - **Disabled project** → reject.
 4. **Never trust a path.** The caller supplies a *name*, never a path. The path
    comes from the registry only (see `03-security.md`).
-5. **Readback for risky ops.** For `cursor_submit`/`cursor_revert`, the system
+5. **Readback for risky ops.** For `agent_submit`/`agent_revert`, the system
    prompt instructs the model to confirm the target on low confidence or for
    destructive intent ("Working in **budget** — go ahead?"). Avoid confirming on
    every call (don't nag; preserve flow).
@@ -77,7 +77,7 @@ the bridge is the final authority and only ever runs against an allowlisted path
   `--workspace`. If omitted, use the session's active project; if there is none,
   return `no_active_project` so the model asks which one.
 - `prompt` → non-empty, length-capped; passed as a single argv element.
-- `question` (`cursor_ask`) → non-empty, length-capped; run **only** in
+- `question` (`agent_ask`) → non-empty, length-capped; run **only** in
   `--mode ask` (read-only); never resolves to a writing run.
 - `mode` → enum; default per config (recommend `agent`, with optional
   `plan`-first config toggle).
@@ -128,7 +128,7 @@ const args = [
   "-p",
   "--output-format", "stream-json",
   "--workspace", project.path,        // from registry — never from caller
-  "--model", session.activeModel,     // from session_state; set via cursor_set_model
+  "--model", session.activeModel,     // from session_state; set via agent_set_model
   ...config.preRunFlags,              // default: ["--force", "--trust"]
   ...(resumeId ? ["--resume", resumeId] : []),
   ...(mode === "plan" ? ["--mode", "plan"] : []),
@@ -137,7 +137,7 @@ const args = [
 spawn("cursor-agent", args, { cwd: project.path, shell: false, env: scopedEnv });
 ```
 
-### `cursor_ask` invocation (read-only context for the voice model)
+### `agent_ask` invocation (read-only context for the voice model)
 
 ```ts
 const args = [
@@ -152,7 +152,7 @@ const args = [
 // one-shot (no --resume) — exploration never pollutes the work session thread
 ```
 
-`cursor_ask` is the **only** repo-context path for the voice model. It runs in
+`agent_ask` is the **only** repo-context path for the voice model. It runs in
 `--mode ask` (read-only exploration — searches/reads, makes no changes), returns
 the answer text, and does **not** persist to the project's work session.
 
@@ -160,11 +160,11 @@ the answer text, and does **not** persist to the project's work session.
 
 **No model IDs appear in `config.json`.** Instead:
 
-- `cursor_list_models` calls `cursor-agent models`, parses the plain-text output
+- `agent_list_models` calls `cursor-agent models`, parses the plain-text output
   into `[{id, displayName}]`, and **caches the result** (TTL from
   `settings.modelCacheTtlMs`, e.g., 3600000 = 1 hour) in the SQLite state.
   Dad can say *"Cursor, what models are available?"* or *"show me the Claude models"*.
-- `cursor_set_model` sets `session_state.active_model` (validated against the
+- `agent_set_model` sets `session_state.active_model` (validated against the
   cache). Dad can say *"Cursor, use Opus"* and the model filters/fuzzy-matches the
   display name.
 - If no model is set for the session, the bridge passes `auto` (Cursor chooses
@@ -175,8 +175,8 @@ the answer text, and does **not** persist to the project's work session.
 
 ```
 session_state
-  ├─ active_project  (set by cursor_set_project or web dropdown)
-  └─ active_model    (set by cursor_set_model; default: "auto")
+  ├─ active_project  (set by agent_set_project or web dropdown)
+  └─ active_model    (set by agent_set_model; default: "auto")
 
 model_cache
   ├─ fetched_at
@@ -195,7 +195,7 @@ This is the lifecycle of a project's `cursor-agent` session, from first run to
 every subsequent resume. The bridge owns this; the model only calls tools.
 
 ```
-cursor_submit(project) → resolve project → path (registry)
+agent_submit(project) → resolve project → path (registry)
         │
         ├─ resume_id known for this project?
         │
@@ -226,8 +226,8 @@ Key points:
 3. **`--resume` is always paired with `--workspace`.** Resuming under a different
    workspace silently starts fresh (CLI sessions are workspace-scoped). The
    bridge guarantees the pairing because both derive from the same registry entry.
-4. **`cursor_new_session`** clears `resume_id` for a project, forcing the next
-   `cursor_submit` back through the FIRST-RUN path.
+4. **`agent_new_session`** clears `resume_id` for a project, forcing the next
+   `agent_submit` back through the FIRST-RUN path.
 5. **Initial prompt construction.** The bridge builds the prompt argv element
    from the model's task text only; workspace/flags are added in code. No host
    shell string is ever assembled (`shell:false`, args array).
@@ -310,11 +310,11 @@ mode** instead of guessing. Order of operations when the voice model is unsure:
 ```
 Dad says something ambiguous
       │
-      ├─ Is the ambiguity about the REPO/code? ── yes ──► cursor_ask(question)   [--mode ask, read-only]
+      ├─ Is the ambiguity about the REPO/code? ── yes ──► agent_ask(question)   [--mode ask, read-only]
       │        (e.g., "is there already a settings page?")        │
       │                                                           ▼
       │                                              use the answer to either:
-      │                                                ├─ draft a precise cursor_submit, or
+      │                                                ├─ draft a precise agent_submit, or
       │                                                └─ ask Dad a better, informed question
       │
       └─ Is the ambiguity about INTENT/preference? ── yes ──► ask Dad directly
@@ -327,9 +327,9 @@ the voice model cheap/simple while answers stay grounded in the real codebase.
 
 ### After a run — clarification via session resume
 
-If a `cursor_submit` run's **final output** still contains a question or flags
+If a `agent_submit` run's **final output** still contains a question or flags
 uncertainty, the bridge returns that text → the voice model **speaks it to Dad**
-→ Dad answers → the voice model calls `cursor_submit` again, which **`--resume`s
+→ Dad answers → the voice model calls `agent_submit` again, which **`--resume`s
 the same session** with the answer. Multi-turn is **session-level**, not a
 blocking in-run prompt. (`--mode plan` remains available for plan-first
 confirmation on risky/vague tasks.)
@@ -337,7 +337,7 @@ confirmation on risky/vague tasks.)
 Net separation of concerns:
 
 - **Voice model** = conversational layer (drafts prompts, asks Dad, asks
-  `cursor_ask` for repo facts). No repo access, stays dumb.
+  `agent_ask` for repo facts). No repo access, stays dumb.
 - **cursor-agent (ask)** = read-only knowledge source for the voice model.
 - **cursor-agent (agent)** = run-to-completion executor that applies changes.
 
@@ -374,12 +374,12 @@ Document the spike outcome in `08-decisions-and-risks.md`.
 ## Job lifecycle & concurrency
 
 ```
-cursor_submit → create job row (status=running) → spawn agent
+agent_submit → create job row (status=running) → spawn agent
    │  stream events → append to job.progress + audit
    │  on final result → status=done, store summary/diffstat, persist resume id
    │  on nonzero exit / parse error → status=error, capture stderr tail
-cursor_status(job_id) → read job row
-cursor_stop(job_id) → SIGTERM→SIGKILL the pid, status=stopped
+agent_job_status(job_id) → read job row
+agent_job_stop(job_id) → SIGTERM→SIGKILL the pid, status=stopped
 ```
 
 - **Concurrency cap** (config, e.g., 1–2 jobs) to protect the home machine.
@@ -388,15 +388,15 @@ cursor_stop(job_id) → SIGTERM→SIGKILL the pid, status=stopped
   mark orphaned `running` jobs as `error` (their process died with the old
   bridge).
 
-## Git strategy (`cursor_revert` / `cursor_diff`) via `simple-git`
+## Git strategy (`agent_revert` / `agent_diff`) via `simple-git`
 
 Decision needed at implementation time (tracked in `08`): how aggressive is
 revert? Recommended safe default:
 
-- Before each `cursor_submit`, record the current HEAD + whether the tree is
+- Before each `agent_submit`, record the current HEAD + whether the tree is
   clean (a checkpoint row).
-- `cursor_diff` → `git diff --stat` (+ optional full patch) of working tree.
-- `cursor_revert` → restore to the pre-job checkpoint:
+- `agent_diff` → `git diff --stat` (+ optional full patch) of working tree.
+- `agent_revert` → restore to the pre-job checkpoint:
   `git stash`/`git checkout -- .` for uncommitted changes, or
   `git reset --hard <checkpoint>` if the agent committed (configurable; destructive
   resets gated behind a confirmation in the voice flow).

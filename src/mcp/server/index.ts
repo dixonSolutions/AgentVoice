@@ -1,8 +1,9 @@
 /**
- * MCP Streamable HTTP server — exposes all cursor-voice tools to Cursor.
+ * MCP Streamable HTTP server — exposes every AgentVoice tool to the coding CLI.
  *
- * Cursor registers this bridge as an MCP server via global ~/.cursor/mcp.json.
- * Once connected, Cursor's conversational agent can call every tool listed below.
+ * Each provider registers this bridge as an MCP server named `agent-voice` in
+ * its own config (see providers/agents/<client>.ts). Once connected, the
+ * conversational voice agent can call every tool listed below.
  *
  * Tool groups:
  *   Voice I/O    — speak, done, next_voice_turn
@@ -11,22 +12,24 @@
  *                  spawn_agent, stop_agent, inject, revert_agent
  *   Jobs         — list_jobs_history
  *   Mode         — set_mode, execute_plan
- *   Project      — cursor_list_projects, cursor_set_project, cursor_manage_projects
- *   Model        — cursor_list_models, cursor_set_model
- *   Execute      — cursor_submit, cursor_ask, cursor_recall_answer
- *   Job tracking — cursor_status, cursor_stop
- *   Session      — cursor_new_session, cursor_session_info
- *   Git          — cursor_diff, cursor_revert
- *   System       — cursor_agent_info, cursor_agent_status
- *   Agent alias  — agent_info, agent_status, agent_list_models, agent_set_model (CLI-neutral names)
- *   MCP inspect  — cursor_mcp_list, cursor_mcp_tools
+ *   Project      — agent_list_projects, agent_set_project, agent_manage_projects
+ *   Model        — agent_list_models, agent_set_model
+ *   Execute      — agent_submit, agent_ask, agent_recall_answer
+ *   Job tracking — agent_job_status, agent_job_stop
+ *   Session      — agent_new_session, agent_session_info
+ *   Git          — agent_diff, agent_revert
+ *   System       — agent_info, agent_status
+ *   MCP inspect  — agent_mcp_list, agent_mcp_tools
  *   User display — show_images
  *   User interact — request_user_input, submit_plan_for_approval
  *
  * Transport: MCP Streamable HTTP (preferred over legacy SSE).
  * Auth: same Bearer token as /api/*.
  *
- * See docs/16-mcp-server-cursor-as-brain.md and docs/11-mcp-tool-surface.md.
+ * Pre-rename `cursor_*` tool names are still accepted by dispatchTool but are
+ * deliberately not advertised here — see LEGACY_TOOL_ALIASES in schemas.ts.
+ *
+ * See docs/16-mcp-server-agent-as-brain.md and docs/11-mcp-tool-surface.md.
  */
 
 import { randomUUID } from 'node:crypto';
@@ -47,7 +50,8 @@ import {
   makeAgentHandlers,
 } from './agentToolHandlers.js';
 import { dispatchTool } from '../handlers.js';
-import { cursorVoiceMcpInstructions } from '../loadCursorVoicePrompt.js';
+import { agentVoiceMcpInstructions } from '../agentVoicePrompt.js';
+import { MCP_ENTRY_VERSION, MCP_SERVER_NAME } from '../../providers/agents/mcpRegistration.js';
 import { bindVoiceAgentMcpSession } from '../../executor/voiceAgent.js';
 import { registerRequest, type UserInputRequest, type PlanApprovalRequest } from './approvalRegistry.js';
 import { notifyPhone } from '../../push/notifyPhone.js';
@@ -74,10 +78,10 @@ function buildMcpServer(sessionKey: string): McpServer {
   const agentTools = makeAgentHandlers(sessionKey);
 
   const server = new McpServer(
-    { name: 'cursor-voice', version: '0.1.0' },
+    { name: MCP_SERVER_NAME, version: MCP_ENTRY_VERSION },
     {
       capabilities: { tools: {} },
-      instructions: cursorVoiceMcpInstructions(),
+      instructions: agentVoiceMcpInstructions(),
     },
   );
 
@@ -134,7 +138,7 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'get_session_ref',
-    'Get your current identity: voice agent run ID, cursor session ID (resume ref), ' +
+    'Get your current identity: voice agent run ID, CLI session ID (resume ref), ' +
       'MCP session ID, active job ID, active project, active model, and preferred spawn mode. ' +
       'Call this to orient yourself after a resume or when session state is unclear.',
     {},
@@ -362,36 +366,36 @@ function buildMcpServer(sessionKey: string): McpServer {
   // ── Project management ─────────────────────────────────────────────────
 
   server.tool(
-    'cursor_list_projects',
+    'agent_list_projects',
     'List all enabled projects in the registry. ' +
       'Returns name, description, aliases, and which is active. ' +
-      'Use before cursor_set_project or when the user asks "what can I work on?"',
+      'Use before agent_set_project or when the user asks "what can I work on?"',
     {
       query: z.string().optional().describe('Filter by name, alias, or description (fuzzy contains).'),
     },
     async ({ query }) => {
-      const result = await dispatchTool('cursor_list_projects', { query }, sessionKey);
+      const result = await dispatchTool('agent_list_projects', { query }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
 
   server.tool(
-    'cursor_set_project',
+    'agent_set_project',
     'Set the active project for this session. Validates against the registry. ' +
       'Speak the project description back to the user so a mishear is caught before any edits.',
     {
       project: z.string().describe('Project name or alias to set as active.'),
     },
     async ({ project }) => {
-      const result = await dispatchTool('cursor_set_project', { project }, sessionKey);
+      const result = await dispatchTool('agent_set_project', { project }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
 
   server.tool(
-    'cursor_manage_projects',
+    'agent_manage_projects',
     'Administer allowlisted codebases: describe the project model, list/filter, add, update, or remove. ' +
-      'Projects map spoken names to cursor-agent workspaces; the user usually selects active project in the PWA dropdown.',
+      'Projects map spoken names to workspace paths; the user usually selects the active project in the PWA dropdown.',
     {
       action: z
         .enum(['describe', 'list', 'add', 'update', 'remove'])
@@ -404,7 +408,7 @@ function buildMcpServer(sessionKey: string): McpServer {
       aliases: z.array(z.string()).optional().describe('Spoken aliases'),
     },
     async (args) => {
-      const result = await dispatchTool('cursor_manage_projects', args, sessionKey);
+      const result = await dispatchTool('agent_manage_projects', args, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
@@ -412,33 +416,33 @@ function buildMcpServer(sessionKey: string): McpServer {
   // ── Model management ───────────────────────────────────────────────────
 
   server.tool(
-    'cursor_list_models',
+    'agent_list_models',
     'List available AI models. Returns id, displayName, and the currently active model. ' +
       'Refreshes from CLI cache (TTL-based). ' +
-      'Use to find a model ID before cursor_set_model.',
+      'Use to find a model ID before agent_set_model.',
     {
       query: z.string().optional().describe('Filter by id or display name (e.g. "claude", "fast", "thinking").'),
     },
     async ({ query }) => {
-      const result = await dispatchTool('cursor_list_models', { query }, sessionKey);
+      const result = await dispatchTool('agent_list_models', { query }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
 
   server.tool(
-    'cursor_set_model',
+    'agent_set_model',
     'Set the AI model. Default scope is global: updates the bridge default, all active sessions, and future sessions. ' +
       'Use scope "session" only when the user explicitly says they want this session/connection only. ' +
-      'Must be a valid model ID from cursor_list_models.',
+      'Must be a valid model ID from agent_list_models.',
     {
-      model_id: z.string().describe('Exact model ID (from cursor_list_models, e.g. "claude-opus-4-8-thinking-high").'),
+      model_id: z.string().describe('Exact model ID (from agent_list_models, e.g. "claude-opus-4-8-thinking-high").'),
       scope: z
         .enum(['global', 'session'])
         .optional()
         .describe('global (default) = default + all sessions. session = this connection only.'),
     },
     async ({ model_id, scope }) => {
-      const result = await dispatchTool('cursor_set_model', { model_id, scope }, sessionKey);
+      const result = await dispatchTool('agent_set_model', { model_id, scope }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
@@ -446,9 +450,9 @@ function buildMcpServer(sessionKey: string): McpServer {
   // ── Execution ──────────────────────────────────────────────────────────
 
   server.tool(
-    'cursor_submit',
-    'Submit a coding task to cursor-agent (worker). ' +
-      'Returns immediately with a job_id. Track progress with cursor_status or get_agent_status. ' +
+    'agent_submit',
+    'Submit a coding task to the active agent CLI (worker). ' +
+      'Returns immediately with a job_id. Track progress with agent_job_status or get_agent_status. ' +
       'Takes a git checkpoint automatically — use revert_agent to undo if needed.',
     {
       prompt: z
@@ -470,7 +474,7 @@ function buildMcpServer(sessionKey: string): McpServer {
     },
     async ({ prompt, project, mode, browser }) => {
       const result = await dispatchTool(
-        'cursor_submit',
+        'agent_submit',
         { prompt, project, mode, browser },
         sessionKey,
       );
@@ -479,10 +483,10 @@ function buildMcpServer(sessionKey: string): McpServer {
   );
 
   server.tool(
-    'cursor_ask',
+    'agent_ask',
     'Ask a read-only question about the codebase. No file edits; uses --mode ask. ' +
       'One-shot; does not pollute the work session. ' +
-      'Use before cursor_submit when you need repo facts to draft an accurate prompt.',
+      'Use before agent_submit when you need repo facts to draft an accurate prompt.',
     {
       question: z
         .string()
@@ -492,14 +496,14 @@ function buildMcpServer(sessionKey: string): McpServer {
       project: z.string().optional().describe('Target project (defaults to active project).'),
     },
     async ({ question, project }) => {
-      const result = await dispatchTool('cursor_ask', { question, project }, sessionKey);
+      const result = await dispatchTool('agent_ask', { question, project }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
 
   server.tool(
-    'cursor_recall_answer',
-    'Return the last cursor_ask result without re-running cursor-agent. ' +
+    'agent_recall_answer',
+    'Return the last agent_ask result without re-running the agent CLI. ' +
       'Use for summarize / repeat / expand follow-ups on the previous answer.',
     {
       format: z
@@ -508,7 +512,7 @@ function buildMcpServer(sessionKey: string): McpServer {
         .describe('brief = voice-length summary (default); full = complete text.'),
     },
     async ({ format }) => {
-      const result = await dispatchTool('cursor_recall_answer', { format }, sessionKey);
+      const result = await dispatchTool('agent_recall_answer', { format }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
@@ -516,7 +520,7 @@ function buildMcpServer(sessionKey: string): McpServer {
   // ── Job tracking ───────────────────────────────────────────────────────
 
   server.tool(
-    'cursor_status',
+    'agent_job_status',
     'Poll a running or completed job. Returns status, recent progress events, summary, ' +
       'diffstat, and session ID. Call periodically while waiting for a long job.',
     {
@@ -524,18 +528,18 @@ function buildMcpServer(sessionKey: string): McpServer {
         .string()
         .uuid()
         .optional()
-        .describe('Job UUID from cursor_submit or spawn_agent (defaults to the active job).'),
+        .describe('Job UUID from agent_submit or spawn_agent (defaults to the active job).'),
     },
     async ({ job_id }) => {
-      const result = await dispatchTool('cursor_status', { job_id }, sessionKey);
+      const result = await dispatchTool('agent_job_status', { job_id }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
 
   server.tool(
-    'cursor_stop',
-    'Terminate the active cursor_submit job (SIGTERM → SIGKILL). ' +
-      'Does not cancel in-flight cursor_ask calls — those run to completion.',
+    'agent_job_stop',
+    'Terminate the active agent_submit job (SIGTERM → SIGKILL). ' +
+      'Does not cancel in-flight agent_ask calls — those run to completion.',
     {
       job_id: z
         .string()
@@ -544,7 +548,7 @@ function buildMcpServer(sessionKey: string): McpServer {
         .describe('Job UUID (defaults to the active job for this session).'),
     },
     async ({ job_id }) => {
-      const result = await dispatchTool('cursor_stop', { job_id }, sessionKey);
+      const result = await dispatchTool('agent_job_stop', { job_id }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
@@ -552,27 +556,27 @@ function buildMcpServer(sessionKey: string): McpServer {
   // ── Session management ─────────────────────────────────────────────────
 
   server.tool(
-    'cursor_new_session',
-    'Clear the stored resume ID for a project so the next cursor_submit starts a fresh thread. ' +
+    'agent_new_session',
+    'Clear the stored resume ID for a project so the next agent_submit starts a fresh thread. ' +
       'Use when the user says "start fresh" or "new conversation".',
     {
       project: z.string().optional().describe('Project to reset (defaults to active project).'),
     },
     async ({ project }) => {
-      const result = await dispatchTool('cursor_new_session', { project }, sessionKey);
+      const result = await dispatchTool('agent_new_session', { project }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
 
   server.tool(
-    'cursor_session_info',
+    'agent_session_info',
     'Read the persisted session state for a project: resume ID, last job, last run time. ' +
       'Useful for narrating "you were last working on X twenty minutes ago".',
     {
       project: z.string().optional().describe('Project to query (defaults to active project).'),
     },
     async ({ project }) => {
-      const result = await dispatchTool('cursor_session_info', { project }, sessionKey);
+      const result = await dispatchTool('agent_session_info', { project }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
@@ -580,7 +584,7 @@ function buildMcpServer(sessionKey: string): McpServer {
   // ── Git ────────────────────────────────────────────────────────────────
 
   server.tool(
-    'cursor_diff',
+    'agent_diff',
     'Return the current uncommitted git diff for the active project. ' +
       'diffstat is always included; set full_patch: true for the full diff text. ' +
       'Use to describe what the last agent run changed.',
@@ -589,13 +593,13 @@ function buildMcpServer(sessionKey: string): McpServer {
       full_patch: z.boolean().optional().describe('Include full patch text (default: false, stat only).'),
     },
     async ({ project, full_patch }) => {
-      const result = await dispatchTool('cursor_diff', { project, full_patch }, sessionKey);
+      const result = await dispatchTool('agent_diff', { project, full_patch }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
 
   server.tool(
-    'cursor_revert',
+    'agent_revert',
     'Revert uncommitted changes in the active project. ' +
       'Uncommitted: git stash (safe). Agent-committed: git reset --hard (requires confirm: true). ' +
       'Always confirm with the user before hard reset.',
@@ -607,7 +611,7 @@ function buildMcpServer(sessionKey: string): McpServer {
         .describe('Required for hard reset. Confirm with the user first.'),
     },
     async ({ project, confirm }) => {
-      const result = await dispatchTool('cursor_revert', { project, confirm }, sessionKey);
+      const result = await dispatchTool('agent_revert', { project, confirm }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
@@ -615,37 +619,9 @@ function buildMcpServer(sessionKey: string): McpServer {
   // ── System ─────────────────────────────────────────────────────────────
 
   server.tool(
-    'cursor_agent_info',
-    'Get CLI version, default model, OS, and account info from `cursor-agent about`. ' +
-      "Use when the user asks about the Cursor version or 'what model are you using?'",
-    {},
-    async () => {
-      const result = await dispatchTool('cursor_agent_info', {}, sessionKey);
-      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
-    },
-  );
-
-  server.tool(
-    'cursor_agent_status',
-    'Check authentication status from `cursor-agent status`. ' +
-      'Returns isAuthenticated, email, and user info. Use to verify the service is ready before jobs.',
-    {},
-    async () => {
-      const result = await dispatchTool('cursor_agent_status', {}, sessionKey);
-      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
-    },
-  );
-
-  // ── Generic agent-provider aliases (CLI-neutral names) ─────────────────
-  //
-  // Same handlers as the cursor_* tools above, routed through the active
-  // AgentProvider (settings.agentClient) instead of a hardcoded CLI. Use
-  // these when running under Codex or Claude Code, where "cursor_*" would
-  // be misleading. See docs/24-agent-providers.md.
-
-  server.tool(
     'agent_info',
-    'Get CLI version, model, and account info from the active agent provider (Cursor, Codex, or Claude Code).',
+    'Get CLI version, default model, OS, and account info for the active agent provider ' +
+      "(Cursor, Codex, or Claude Code). Use when the user asks 'what model are you using?'",
     {},
     async () => {
       const result = await dispatchTool('agent_info', {}, sessionKey);
@@ -655,7 +631,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_status',
-    'Check authentication status of the active agent provider. Returns authenticated, email, provider id.',
+    'Check authentication status of the active agent provider. ' +
+      'Returns authenticated, email, and provider id. Use to verify the CLI is ready before jobs.',
     {},
     async () => {
       const result = await dispatchTool('agent_status', {}, sessionKey);
@@ -663,54 +640,29 @@ function buildMcpServer(sessionKey: string): McpServer {
     },
   );
 
-  server.tool(
-    'agent_list_models',
-    'List models for the active agent provider. Returns supports_selection: false for providers ' +
-      '(e.g. Codex, Claude Code) that choose their model from their own config, not this app.',
-    {
-      query: z.string().optional().describe('Filter by id or display name.'),
-    },
-    async ({ query }) => {
-      const result = await dispatchTool('agent_list_models', { query }, sessionKey);
-      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
-    },
-  );
-
-  server.tool(
-    'agent_set_model',
-    'Set the model for the active agent provider (only when it supports_selection).',
-    {
-      model_id: z.string().describe('Exact model ID from agent_list_models.'),
-      scope: z.enum(['global', 'session']).optional().describe('global (default) or session.'),
-    },
-    async ({ model_id, scope }) => {
-      const result = await dispatchTool('agent_set_model', { model_id, scope }, sessionKey);
-      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
-    },
-  );
 
   // ── MCP inspect ────────────────────────────────────────────────────────
 
   server.tool(
-    'cursor_mcp_list',
-    'List MCP servers configured in the executor workspace (.cursor/mcp.json) and their load status. ' +
+    'agent_mcp_list',
+    'List MCP servers the Cursor CLI has configured, and their load status. Cursor-only diagnostic. ' +
       'Informational — shows what MCPs the worker agents can use.',
     {},
     async () => {
-      const result = await dispatchTool('cursor_mcp_list', {}, sessionKey);
+      const result = await dispatchTool('agent_mcp_list', {}, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
 
   server.tool(
-    'cursor_mcp_tools',
+    'agent_mcp_tools',
     'List tools exposed by a specific executor MCP server. ' +
       'Use to discover what tools are available to worker agents from a given server.',
     {
-      server: z.string().describe('MCP server identifier from cursor_mcp_list.'),
+      server: z.string().describe('MCP server identifier from agent_mcp_list.'),
     },
     async ({ server }) => {
-      const result = await dispatchTool('cursor_mcp_tools', { server }, sessionKey);
+      const result = await dispatchTool('agent_mcp_tools', { server }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );

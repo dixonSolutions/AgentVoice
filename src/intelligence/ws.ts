@@ -2,7 +2,7 @@
  * WebSocket handler for cascade voice workflows (/ws/intelligence).
  *
  * Supports:
- *   cursor_native   — STT → VoiceTurnQueue → Cursor MCP (speak/done)
+ *   agent_native   — STT → VoiceTurnQueue → agent-voice MCP (speak/done)
  *   llm_intelligence — STT → Bedrock Claude orchestrator
  *
  * Phone → Bridge:
@@ -23,6 +23,7 @@
 import type { FastifyInstance } from 'fastify';
 import { parseWsAuthMessage, verifyWsToken } from '../auth.js';
 import { getConfig } from '../config.js';
+import { getActiveProvider } from '../providers/agents/registry.js';
 import type { WorkflowId } from '../config.js';
 import { childLogger } from '../log.js';
 import { getNarrator, PhoneRelaySession } from '../executor/narrator.js';
@@ -97,7 +98,7 @@ function formatToolLabel(tool: string, phase: 'start' | 'done' | 'error'): strin
 }
 
 function isCascadeWorkflow(workflow: WorkflowId): boolean {
-  return workflow === 'cursor_native' || workflow === 'llm_intelligence';
+  return workflow === 'agent_native' || workflow === 'llm_intelligence';
 }
 
 export function registerIntelligenceWebSocket(app: FastifyInstance): void {
@@ -158,7 +159,7 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
             turnSubmit: voice.turnSubmit,
             tts: voice.tts,
             wakeWordsEnabled: voice.wakeWordsEnabled !== false,
-            model: workflowId === 'cursor_native' ? 'cursor' : llm.model,
+            model: workflowId === 'agent_native' ? getActiveProvider().id : llm.model,
             audio: {
               preferWebkit: audio.preferWebkit,
               ttsProvider: audio.ttsProvider,
@@ -196,7 +197,7 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
             'intelligence user_turn',
           );
 
-          if (intelSession.busy && intelSession.workflow !== 'cursor_native') {
+          if (intelSession.busy && intelSession.workflow !== 'agent_native') {
             send(socket, {
               type: 'speak',
               text: "One moment — I'm still working on your last request.",
@@ -204,7 +205,7 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
             return;
           }
 
-          if (intelSession.workflow === 'cursor_native') {
+          if (intelSession.workflow === 'agent_native') {
             intelSession.busy = true;
             send(socket, { type: 'thinking', value: true });
 
@@ -265,7 +266,7 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
                 sessionId: va?.sessionId,
                 delivery: agentAlreadyRunning ? 'queue' : 'spawn_prompt',
               },
-              'cursor_native turn delivered',
+              'agent_native turn delivered',
             );
             return;
           }

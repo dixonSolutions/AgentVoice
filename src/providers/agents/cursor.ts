@@ -12,16 +12,37 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { homedir } from 'node:os';
+import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import stripAnsi from 'strip-ansi';
 import { getConfig } from '../../config.js';
 import { childLogger } from '../../log.js';
 import { updateAgentEnvKeys } from '../../state/envFile.js';
 import type { Project, SessionState } from '../../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from '../../executor/agentPrompt.js';
+import { formatPathForLog, resolveUserHome } from '../../mcp/hostPaths.js';
 import { createBinResolver, homeCandidate } from '../binResolve.js';
 import { runLoginCommand } from './authFlowRunner.js';
+import {
+  buildJsonMcpEntry,
+  describeAction,
+  mergeJsonMcpEntry,
+  readJsonConfig,
+  registrationFailure,
+  writeJsonConfig,
+  type McpRegistrationContext,
+  type McpRegistrationResult,
+} from './mcpRegistration.js';
+import {
+  extractContentText,
+  logUnhandledEvent,
+  normalizeToolCall,
+  type AgentStreamEvent,
+  type NormalizedToolCall,
+} from './events.js';
 import type {
   AgentAbout,
+  AgentMode,
   AgentProvider,
   AuthCheckResult,
   AuthFlowDescriptor,
@@ -127,6 +148,178 @@ function buildVoiceArgs(project: Project, session: SessionState, pendingTurn?: s
   return args;
 }
 
+// ── Stream parsing ────────────────────────────────────────────────────────
+
+/**
+ * Cursor packs the tool name into the *key* of the tool_call object
+ * (`{ writeToolCall: { args: { path } } }`), so the name and args come out of
+ * the same object rather than separate fields.
+ */
+function normalizeCursorToolCall(toolCall: Record<string, unknown>): NormalizedToolCall | null {
+  for (const key of Object.keys(toolCall)) {
+    const value = toolCall[key] as Record<string, unknown> | null;
+    const args = (value?.['args'] ?? value) as Record<string, unknown> | undefined;
+    const call = normalizeToolCall(key, args);
+    if (call.action !== 'other' || call.subagent) return call;
+  }
+  const first = Object.keys(toolCall)[0];
+  return first ? normalizeToolCall(first, undefined) : null;
+}
+
+function parseCursorEvent(raw: Record<string, unknown>): AgentStreamEvent[] {
+  const events: AgentStreamEvent[] = [];
+
+  if (typeof raw['session_id'] === 'string' && raw['session_id']) {
+    events.push({ kind: 'session', sessionId: raw['session_id'] });
+  }
+
+  const type = raw['type'];
+  const subtype = raw['subtype'];
+
+  if (type === 'system' && subtype === 'init') {
+    events.push({ kind: 'init', model: typeof raw['model'] === 'string' ? raw['model'] : undefined });
+    return events;
+  }
+
+  // Both the legacy (`assistant`/`tool_use_start`) and current (`tool_call`) shapes.
+  const isToolStart =
+    (type === 'assistant' && subtype === 'tool_use_start') ||
+    (type === 'tool_call' && subtype === 'started');
+  const isToolDone =
+    (type === 'assistant' && subtype === 'tool_use_done') ||
+    (type === 'tool_call' && subtype === 'completed');
+
+  if (isToolStart || isToolDone) {
+    const payload = raw['tool_call'];
+    const call =
+      typeof payload === 'object' && payload !== null
+        ? normalizeCursorToolCall(payload as Record<string, unknown>)
+        : null;
+    if (call) {
+      events.push(
+        isToolStart
+          ? { kind: 'tool_start', tool: call }
+          : { kind: 'tool_done', tool: call, success: raw['success'] !== false },
+      );
+    }
+    return events;
+  }
+
+  if (type === 'assistant') {
+    const text = extractContentText(raw['message']);
+    if (text) events.push({ kind: 'assistant_text', text });
+    return events;
+  }
+
+  if (type === 'result') {
+    const direct = typeof raw['result'] === 'string' && raw['result'].trim() ? raw['result'].trim() : null;
+    events.push({ kind: 'result', text: direct ?? extractContentText(raw['message']) });
+    return events;
+  }
+
+  if (type === 'error') {
+    events.push({
+      kind: 'error',
+      message: typeof raw['message'] === 'string' ? raw['message'] : 'an unknown error',
+    });
+    return events;
+  }
+
+  if (events.length === 0) logUnhandledEvent('cursor', raw);
+  return events;
+}
+
+// ── MCP registration (~/.cursor/mcp.json + ~/.cursor/rules) ───────────────
+
+function resolveCursorMcpJsonPath(): string {
+  return join(resolveUserHome(), '.cursor', 'mcp.json');
+}
+
+const RULE_FILE = 'agent-voice.mdc';
+const LEGACY_RULE_FILES = ['cursor-voice.mdc'];
+
+/**
+ * Cursor reads project/user rules from `.mdc` files. Writing one means the
+ * voice system prompt is present even on `--resume`, where we cannot re-send
+ * the full boot prompt without confusing the resumed thread.
+ */
+function ensureCursorVoiceRule(ctx: McpRegistrationContext): void {
+  const rulesDir = join(resolveUserHome(), '.cursor', 'rules');
+  const rulePath = join(rulesDir, RULE_FILE);
+  const label = formatPathForLog(rulePath);
+  const content = `---
+description: >
+  AgentVoice — use only during an active phone/PWA voice session.
+  When a voice session is connected, all communication MUST go through ${ctx.serverName} MCP tools:
+  speak() to talk, done() to re-arm the mic, next_voice_turn() to receive requests.
+  If speak() returns NO_VOICE_SESSION, respond with normal IDE text instead.
+  Text-only replies are invisible to the hands-free user.
+alwaysApply: false
+---
+
+${ctx.ruleBody()}
+`;
+
+  try {
+    mkdirSync(dirname(rulePath), { recursive: true });
+    const exists = existsSync(rulePath);
+    writeFileSync(rulePath, content, 'utf-8');
+    for (const legacy of LEGACY_RULE_FILES) {
+      const legacyPath = join(rulesDir, legacy);
+      if (existsSync(legacyPath)) {
+        // Leave the file in place but blank the body so an enabled stale rule
+        // cannot keep injecting the old cursor-voice tool names.
+        writeFileSync(legacyPath, `---\ndescription: Superseded by ${RULE_FILE}.\nalwaysApply: false\n---\n`, 'utf-8');
+        ctx.log('update', 'info', `Retired legacy Cursor rule ${formatPathForLog(legacyPath)}.`);
+      }
+    }
+    ctx.log(
+      exists ? 'update' : 'install',
+      'info',
+      exists
+        ? `Updated Cursor rule ${label} — enable in Settings → Rules when running voice`
+        : `Installed Cursor rule ${label} — enable in Settings → Rules for voice mode`,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    ctx.log('error', 'warn', `Could not write ${label}: ${message}`);
+  }
+}
+
+async function ensureCursorMcpRegistration(
+  ctx: McpRegistrationContext,
+): Promise<McpRegistrationResult> {
+  const configPath = resolveCursorMcpJsonPath();
+  const label = formatPathForLog(configPath);
+  ctx.log('check', 'info', `Checking global Cursor MCP config (${label})…`);
+
+  const existing = readJsonConfig(configPath);
+  const { file, action, removedLegacy } = mergeJsonMcpEntry(existing, buildJsonMcpEntry(ctx), ctx);
+
+  for (const legacy of removedLegacy) {
+    ctx.log('update', 'info', `Removed stale "${legacy}" MCP entry from ${label}.`);
+  }
+  ctx.log(
+    action === 'unchanged' ? 'check' : action === 'installed' ? 'install' : 'update',
+    'info',
+    action === 'unchanged'
+      ? `${ctx.serverName} MCP server found (version ${ctx.version}).`
+      : `${action === 'installed' ? 'Adding' : 'Updating'} ${ctx.serverName} in ${label}…`,
+  );
+
+  try {
+    // Always rewrite: removedLegacy and the enable flag both need to land even
+    // when the version matched.
+    writeJsonConfig(configPath, file);
+    ensureCursorVoiceRule(ctx);
+  } catch (err) {
+    return registrationFailure(ctx, configPath, err);
+  }
+
+  ctx.log('done', 'info', 'Global MCP ready for all projects — restart Cursor if the server list did not refresh.');
+  return { ok: true, configPath, action, message: describeAction(action, 'Cursor') };
+}
+
 export const cursorProvider: AgentProvider = {
   id: 'cursor',
   displayName: 'Cursor',
@@ -202,6 +395,24 @@ export const cursorProvider: AgentProvider = {
   supportsModelSelection: () => true,
   buildWorkerArgs,
   buildVoiceArgs,
+
+  supportedModes: (): readonly AgentMode[] => ['agent', 'plan', 'ask', 'debug'],
+  parseStreamEvent: parseCursorEvent,
+  ensureMcpRegistration: ensureCursorMcpRegistration,
+
+  /** `cursor-agent create-chat` mints a thread id we can resume into later. */
+  async createSession(): Promise<string | null> {
+    try {
+      const { stdout } = await execFileAsync(resolver.resolve(), ['create-chat'], {
+        timeout: 10_000,
+        env: cursorEnv(process.env),
+      });
+      return stripAnsi(stdout).trim() || null;
+    } catch (err) {
+      log.warn({ err }, 'create-chat failed');
+      return null;
+    }
+  },
 
   async getAbout(): Promise<AgentAbout | null> {
     try {

@@ -7,8 +7,8 @@ Self-hosted voice bridge for driving a coding agent CLI —
 or [Claude Code](https://github.com/anthropics/claude-code) — by **speech, from your phone**.
 
 Speak from an iPhone **native app (CallKit)** or PWA; the active agent CLI is the reasoning
-layer via the **cursor-voice MCP server** (`speak`, `done`, `next_voice_turn`) — the MCP
-registration key stays `cursor-voice` for compatibility. Coding work is
+layer via the **agent-voice MCP server** (`speak`, `done`, `next_voice_turn`) — the MCP
+registration key stays `agent-voice` for compatibility. Coding work is
 delegated to worker agents via `spawn_agent`. Audio uses browser STT/TTS with
 Amazon Polly/Transcribe fallback. If the CLI needs you to sign in, the app prompts you
 in place — see [`docs/24-agent-providers.md`](./docs/24-agent-providers.md).
@@ -30,7 +30,7 @@ Bridge (Node/TS) ── VoiceTurnQueue ── MCP /mcp ──► Cursor voice ag
         └──────────────────────────────────────► cursor-agent workers → git
 ```
 
-**Default workflow:** `cursor_native` — see [`docs/16-mcp-server-cursor-as-brain.md`](./docs/16-mcp-server-cursor-as-brain.md).
+**Default workflow:** `agent_native` — see [`docs/16-mcp-server-agent-as-brain.md`](./docs/16-mcp-server-agent-as-brain.md).
 
 **Alternate:** `llm_intelligence` — Claude on Bedrock orchestrates tools.
 
@@ -138,7 +138,7 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 | --- | --- |
 | [`02-architecture.md`](./docs/02-architecture.md) | System architecture |
 | [`06-voice-audio-webrtc.md`](./docs/06-voice-audio-webrtc.md) | STT, TTS, VAD, wake words |
-| [`16-mcp-server-cursor-as-brain.md`](./docs/16-mcp-server-cursor-as-brain.md) | Default Cursor voice workflow |
+| [`16-mcp-server-agent-as-brain.md`](./docs/16-mcp-server-agent-as-brain.md) | Default Cursor voice workflow |
 | [`11-mcp-tool-surface.md`](./docs/11-mcp-tool-surface.md) | MCP tool inventory |
 | [`20-native-callkit-shell.md`](./docs/20-native-callkit-shell.md) | CallKit native app + push notifications |
 | [`23-multi-agent-client.md`](./docs/23-multi-agent-client.md) | Cursor / Codex / Claude Code CLI setup |
@@ -151,7 +151,7 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 - **Bridge:** Node.js 20+, TypeScript, Fastify, MCP SDK, SQLite
 - **Web app:** Angular PWA + vanilla TS voice modules (Vosk, Silero VAD)
 - **Voice I/O:** WebKit STT/TTS; Amazon Polly/Transcribe fallback
-- **Reasoning:** Cursor IDE (`cursor_native`) or Bedrock Claude (`llm_intelligence`)
+- **Reasoning:** Cursor IDE (`agent_native`) or Bedrock Claude (`llm_intelligence`)
 - **Executor:** Cursor, Codex, or Claude Code CLI (`settings.agentClient`, see [`docs/24-agent-providers.md`](./docs/24-agent-providers.md))
 - **Network:** Tailscale by default; Cloudflare Tunnel, ngrok, Azure Dev Tunnels, LAN, or manual (see [`docs/25-hosting-providers.md`](./docs/25-hosting-providers.md))
 

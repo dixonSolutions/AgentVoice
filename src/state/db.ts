@@ -96,7 +96,7 @@ const MIGRATION_SQL = `
     reason    TEXT
   );
 
-  -- Conversational voice agent (cursor_native auto-dispatch).
+  -- Conversational voice agent (agent_native auto-dispatch).
   CREATE TABLE IF NOT EXISTS voice_agent_run (
     id          TEXT PRIMARY KEY,
     project     TEXT NOT NULL REFERENCES project(name),

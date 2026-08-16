@@ -31,7 +31,7 @@ import { readConfigFile, writeConfigFile } from '../state/configFile.js';
 import {
   isAgentClientAvailable,
   resolvedAgentBinPath,
-} from '../executor/cursorAgent.js';
+} from '../executor/agentProcess.js';
 import { getAwsKeyStatus, updateAwsEnvKeys, isAwsConfigured } from '../state/envFile.js';
 import { getDb } from '../state/db.js';
 import { childLogger } from '../log.js';
@@ -47,7 +47,12 @@ const log = childLogger('adminSettings');
 
 const WorkflowPatchSchema = z
   .object({
-    default: z.enum(['cursor_native', 'llm_intelligence']).optional(),
+    // `cursor_native` is the pre-rename id — accepted and normalized so a
+    // cached PWA build cannot 400 against a freshly migrated bridge.
+    default: z
+      .enum(['agent_native', 'cursor_native', 'llm_intelligence'])
+      .optional()
+      .transform((v) => (v === 'cursor_native' ? ('agent_native' as const) : v)),
     llmIntelligence: z
       .object({
         llm: z

@@ -1,7 +1,7 @@
 /**
- * Voice I/O tool handlers for the MCP SSE server exposed to Cursor.
+ * Voice I/O tool handlers for the AgentVoice MCP server.
  *
- * Cursor calls these tools to interact with the user over voice:
+ * The voice agent calls these tools to interact with the user over voice:
  *   speak(text)         — push text to TTS, forward audio to PWA
  *   done()              — signal PWA to re-arm mic for next wake word
  *   next_voice_turn()   — long-poll dequeue of next user utterance
@@ -9,13 +9,14 @@
  * The `speak` path mirrors the llm_intelligence `onSpeak` callback: it sends
  * { type: "speak", text } to all connected intelligence WebSocket clients.
  *
- * See docs/16-mcp-server-cursor-as-brain.md.
+ * See docs/16-mcp-server-agent-as-brain.md.
  */
 
 import { childLogger } from '../../log.js';
 import { getConfig } from '../../config.js';
 import { notifyPhone } from '../../push/notifyPhone.js';
 import { voiceTurnQueue } from './turnQueue.js';
+import { getActiveProvider } from '../../providers/agents/registry.js';
 
 const log = childLogger('mcp:server:voiceTools');
 
@@ -30,24 +31,33 @@ voiceTurnQueue.setQueuedWithoutWaiterHandler((queueLen) => {
   log.info({ queueLen }, 'user turn queued while voice agent busy (not polling)');
 });
 
-voiceTurnQueue.setApprovalsInterruptedHandler((aborted, turn) => {
-  for (const req of aborted) {
+voiceTurnQueue.setToolsInterruptedHandler((delivery, turn) => {
+  // Dismiss any approval/question card the user has effectively answered by
+  // speaking. `meta` is the ApprovalRequest the registry attached.
+  for (const wait of delivery.aborted) {
+    const request = wait.meta as { request_id?: string } | undefined;
+    if (!request?.request_id) continue;
     void notifyPhone({
       type: 'approval_cancelled',
-      request_id: req.request_id,
+      request_id: request.request_id,
       reason: 'user_turn',
     });
   }
+
+  const tools = [...delivery.aborted, ...delivery.annotated].map((w) => w.tool);
   broadcastToVoiceSessions({
     type: 'tool_activity',
     tool: 'user_turn',
     phase: 'start',
-    label: 'Interrupted approval wait',
+    label:
+      delivery.aborted.length > 0
+        ? 'User turn delivered — wait released'
+        : 'User turn attached to running work',
     detail: turn.text.slice(0, 120),
   });
   log.info(
-    { aborted: aborted.length, text: turn.text.slice(0, 80) },
-    'approval/input wait interrupted by user turn',
+    { tools, aborted: delivery.aborted.length, annotated: delivery.annotated.length },
+    'user turn delivered through in-flight AgentVoice tool(s)',
   );
 });
 
@@ -60,7 +70,7 @@ voiceTurnQueue.setApprovalsInterruptedHandler((aborted, turn) => {
  *   - next_voice_turn() delivers a real follow-up turn to the same process
  * NOT cleared when a follow-up is merely queued while the agent is mid-turn /
  * on done() — otherwise exit-fallback thinks the agent was silent and speaks
- * Cursor’s internal assistant/planning text after a normal speak→done turn.
+ * the agent’s internal assistant/planning text after a normal speak→done turn.
  */
 let spokeThisTurn = false;
 
@@ -113,7 +123,7 @@ export function broadcastToVoiceSessions(payload: unknown): void {
 
 const turnCompleteHooks = new Set<() => void>();
 
-/** Called when Cursor invokes done() — clears server-side turn state. */
+/** Called when the agent invokes done() — clears server-side turn state. */
 export function registerTurnCompleteHook(fn: () => void): () => void {
   turnCompleteHooks.add(fn);
   return () => {
@@ -142,6 +152,19 @@ export interface VoiceAgentStatusPayload {
   project: string;
 }
 
+/**
+ * The coding agent behind this run, sent with every status broadcast.
+ *
+ * The PWA used to hardcode "Cursor agent starting…" in its session log, which
+ * was simply wrong for Codex and Claude Code — and read as if AgentVoice were
+ * announcing its own internals. Shipping the provider identity with the event
+ * means the log always names the CLI that is actually running.
+ */
+function activeAgentIdentity(): { id: string; displayName: string } {
+  const provider = getActiveProvider();
+  return { id: provider.id, displayName: provider.displayName };
+}
+
 /** Push voice agent lifecycle to all connected PWA sessions (debug/monitor). */
 export function broadcastVoiceAgentStatus(payload: VoiceAgentStatusPayload): void {
   log.info(
@@ -155,6 +178,7 @@ export function broadcastVoiceAgentStatus(payload: VoiceAgentStatusPayload): voi
     'voice agent status',
   );
 
+  const agent = activeAgentIdentity();
   broadcastToVoiceSessions({
     type: 'voice_agent_status',
     run_id: payload.runId,
@@ -163,6 +187,8 @@ export function broadcastVoiceAgentStatus(payload: VoiceAgentStatusPayload): voi
     mcp_session_id: payload.mcpSessionId ?? null,
     state: payload.state,
     project: payload.project,
+    provider: agent.id,
+    provider_name: agent.displayName,
   });
 }
 
@@ -182,7 +208,7 @@ export interface SpeakResult {
 }
 
 /**
- * speak(text) — called by Cursor to deliver a response to the user.
+ * speak(text) — called by the voice agent to deliver a response to the user.
  * Broadcasts { type: "speak", text } to all connected PWA sessions.
  */
 export function handleSpeak(args: SpeakArgs): SpeakResult {
@@ -214,7 +240,7 @@ export interface DoneResult {
 }
 
 /**
- * done() — called by Cursor when it has finished speaking.
+ * done() — called by the voice agent when it has finished speaking.
  * Sends turn_complete; the PWA re-arms after queued TTS has finished.
  */
 export function handleDone(): DoneResult {
@@ -254,7 +280,7 @@ export interface NextVoiceTurnResult {
   message?: string;
   /**
    * When the user barged in during TTS: what they heard (especially last_heard_words),
-   * plus lines cut off / not spoken. The Cursor agent keeps running — do not stop workers.
+   * plus lines cut off / not spoken. The agent keeps running — do not stop workers.
    */
   tts_interrupt?: {
     heard_complete: string[];
@@ -271,7 +297,7 @@ const DEFAULT_POLL_MS = 30_000;
 
 /**
  * next_voice_turn() — long-poll dequeue.
- * Cursor calls this in a loop to receive the user's next utterance.
+ * The voice agent calls this in a loop to receive the user's next utterance.
  * Returns immediately if a turn is already queued; otherwise suspends up to timeout_ms.
  */
 export async function handleNextVoiceTurn(
@@ -311,7 +337,7 @@ export async function handleNextVoiceTurn(
     type: 'tool_activity',
     tool: 'next_voice_turn',
     phase: 'done',
-    label: 'Cursor received turn',
+    label: 'Agent received turn',
     detail: turn.text.slice(0, 120),
   });
 

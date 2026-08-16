@@ -1,6 +1,8 @@
 # 24 — Agent Providers: In-App Auth, Live Models, Generic MCP Tools
 
-> Added: August 2026
+> Added: August 2026. Extended later that month — the contract now also owns
+> stream parsing, MCP registration, execution modes and session creation. See
+> [`28-provider-parity-and-branding.md`](./28-provider-parity-and-branding.md).
 
 `docs/23-multi-agent-client.md` covers CLI installation, invocation flags, and
 MCP registration. This doc covers what was built on top of that: a single
@@ -13,11 +15,21 @@ Cursor, Codex, and Claude Code — without duplicating logic per CLI.
 Cursor, Codex, and Claude Code each authenticate, list models, and report
 errors differently. Before this, only Cursor had auth-error detection, model
 caching, and MCP tools; Codex/Claude were second-class. `AgentProvider` is the
-one interface the rest of the app depends on — `executor/cursorAgent.ts`,
-`executor/voiceAgent.ts`, `mcp/tools/model.ts`, and `mcp/tools/system.ts` no
-longer branch on `agentClient`; they call `getActiveProvider()` and let the
-provider file (`cursor.ts` / `codex.ts` / `claude.ts`) own the CLI-specific
-details. Adding a fourth CLI means one new file + one registry entry.
+one interface the rest of the app depends on — `executor/agentProcess.ts`,
+`executor/voiceAgent.ts`, `executor/watcher.ts`, `mcp/agentMcpSetup.ts`,
+`mcp/tools/model.ts`, `mcp/tools/system.ts` and `mcp/tools/session.ts` no longer
+branch on `agentClient`; they call `getActiveProvider()` and let the provider
+file (`cursor.ts` / `codex.ts` / `claude.ts`) own the CLI-specific details.
+Adding a fourth CLI means one new file + one registry entry.
+
+The contract members added in the follow-up pass:
+
+| Member                    | Owns                                                    |
+| ------------------------- | ------------------------------------------------------- |
+| `parseStreamEvent()`      | translating this CLI's NDJSON dialect to normalized events |
+| `ensureMcpRegistration()` | where and how `agent-voice` is registered for this CLI   |
+| `supportedModes()`        | which execution modes this CLI can actually *enforce*    |
+| `createSession()`         | minting a resumable thread id up front, if the CLI can   |
 
 See [`src/providers/agents/types.ts`](../src/providers/agents/types.ts) for
 the full interface.
@@ -114,7 +126,7 @@ on options).
 
 `agent_status`, `agent_list_models`, `agent_set_model`, `agent_info` delegate
 to whichever provider is active. The original `cursor_*` tool names
-(`cursor_status`, `cursor_list_models`, …) keep working as aliases — existing
+(`agent_job_status`, `agent_list_models`, …) keep working as aliases — existing
 MCP configs and prompts referencing them are unaffected. See
 [`src/mcp/schemas.ts`](../src/mcp/schemas.ts) and
 [`src/mcp/handlers.ts`](../src/mcp/handlers.ts).
@@ -123,7 +135,7 @@ MCP configs and prompts referencing them are unaffected. See
 
 `prompts/agentvoice/system.md` and `mcp-instructions.md` use
 `{{AGENT_DISPLAY_NAME}}` instead of a hardcoded "Cursor". It's substituted at
-render time in [`src/mcp/loadCursorVoicePrompt.ts`](../src/mcp/loadCursorVoicePrompt.ts)
+render time in [`src/mcp/agentVoicePrompt.ts`](../src/mcp/agentVoicePrompt.ts)
 with `getActiveProvider().displayName`, so the same prompt text narrates
 correctly regardless of which CLI is active.
 

@@ -14,7 +14,7 @@
  * This layer assumes the call is already authenticated.
  */
 
-import { TOOL_SCHEMAS, type ToolName } from './schemas.js';
+import { TOOL_SCHEMAS, canonicalToolName, type ToolName } from './schemas.js';
 import { writeAudit } from '../state/db.js';
 import { hashArgs } from '../log.js';
 import { getSessionState } from '../state/registry.js';
@@ -51,13 +51,15 @@ export async function dispatchTool(
   rawArgs: unknown,
   sessionKey: string,
 ): Promise<ToolResult> {
-  // ── 1. Tool allowlist ──────────────────────────────────────────────────
-  if (!(name in TOOL_SCHEMAS)) {
+  // ── 1. Tool allowlist (accepting pre-rename aliases) ───────────────────
+  const toolName = canonicalToolName(name);
+  if (!toolName) {
     writeAudit({ tool: name, result: 'rejected', reason: 'unknown tool' });
     throw new Error(`Unknown tool: "${name}"`);
   }
-
-  const toolName = name as ToolName;
+  if (toolName !== name) {
+    log.debug({ called: name, canonical: toolName }, 'legacy tool name mapped');
+  }
 
   // ── 2. Schema validation ───────────────────────────────────────────────
   const schema = TOOL_SCHEMAS[toolName];
@@ -109,50 +111,44 @@ async function route(
   const a = args as AnyArgs;
 
   switch (name) {
-    case 'cursor_list_projects':
+    case 'agent_list_projects':
       return handleListProjects(a, activeProject);
-    case 'cursor_set_project':
+    case 'agent_set_project':
       return handleSetProject(a, sessionKey);
-    case 'cursor_manage_projects':
+    case 'agent_manage_projects':
       return handleManageProjects(a);
-    case 'cursor_list_models':
-      return handleListModels(a, getSessionState(sessionKey).activeModel);
-    case 'cursor_set_model':
-      return handleSetModel(a, sessionKey);
-    case 'cursor_submit':
-      return handleCursorSubmit(a, sessionKey, activeProject);
-    case 'cursor_ask':
-      return handleCursorAsk(a, sessionKey, activeProject);
-    case 'cursor_recall_answer':
-      return handleCursorRecallAnswer(a, sessionKey);
-    case 'cursor_status':
-      return handleCursorStatus(a, sessionKey);
-    case 'cursor_stop':
-      return handleCursorStop(a, sessionKey);
-    case 'cursor_new_session':
-      return handleNewSession(a, activeProject);
-    case 'cursor_session_info':
-      return handleSessionInfo(a, activeProject);
-    case 'cursor_diff':
-      return handleCursorDiff(a, activeProject);
-    case 'cursor_revert':
-      return handleCursorRevert(a, activeProject);
-    case 'cursor_agent_info':
-    case 'agent_info':
-      return handleCursorAgentInfo();
-    case 'cursor_agent_status':
-    case 'agent_status':
-      return handleCursorAgentStatus();
-    case 'cursor_mcp_list':
-      return handleMcpList();
-    case 'cursor_mcp_tools':
-      return handleMcpTools(a);
-    case 'show_images':
-      return handleShowImages(a);
     case 'agent_list_models':
       return handleListModels(a, getSessionState(sessionKey).activeModel);
     case 'agent_set_model':
       return handleSetModel(a, sessionKey);
+    case 'agent_submit':
+      return handleCursorSubmit(a, sessionKey, activeProject);
+    case 'agent_ask':
+      return handleCursorAsk(a, sessionKey, activeProject);
+    case 'agent_recall_answer':
+      return handleCursorRecallAnswer(a, sessionKey);
+    case 'agent_job_status':
+      return handleCursorStatus(a, sessionKey);
+    case 'agent_job_stop':
+      return handleCursorStop(a, sessionKey);
+    case 'agent_new_session':
+      return handleNewSession(a, activeProject);
+    case 'agent_session_info':
+      return handleSessionInfo(a, activeProject);
+    case 'agent_diff':
+      return handleCursorDiff(a, activeProject);
+    case 'agent_revert':
+      return handleCursorRevert(a, activeProject);
+    case 'agent_info':
+      return handleCursorAgentInfo();
+    case 'agent_status':
+      return handleCursorAgentStatus();
+    case 'agent_mcp_list':
+      return handleMcpList();
+    case 'agent_mcp_tools':
+      return handleMcpTools(a);
+    case 'show_images':
+      return handleShowImages(a);
     default: {
       const _exhaustive: never = name;
       throw new Error(`Unhandled tool: ${_exhaustive}`);

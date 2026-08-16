@@ -56,7 +56,7 @@ Returns immediately: `{ ok, count, delivered, batch_id }`.
 
 ### Browser workflow (opt-in)
 
-Set `browser: true` on `spawn_agent` or `cursor_submit` when:
+Set `browser: true` on `spawn_agent` or `agent_submit` when:
 
 - The user is reviewing UI on their phone
 - The user says **"Browser"** in the request
@@ -100,4 +100,4 @@ See [`03-security.md`](./03-security.md) § Image carousel.
 
 - [`11-mcp-tool-surface.md`](./11-mcp-tool-surface.md) — full tool list
 - [`14-prompts.md`](./14-prompts.md) — agent prompt guidance for Browser workflow
-- [`16-mcp-server-cursor-as-brain.md`](./16-mcp-server-cursor-as-brain.md) — voice brain architecture
+- [`16-mcp-server-agent-as-brain.md`](./16-mcp-server-agent-as-brain.md) — voice brain architecture

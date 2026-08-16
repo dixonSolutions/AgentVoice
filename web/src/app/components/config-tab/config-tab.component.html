@@ -110,7 +110,7 @@
         <p-fieldset legend="Activation">
           <p-iftalabel>
             <input pInputText id="cfg-wake-start" [(ngModel)]="wakeStart"
-              placeholder="cursor listen" [disabled]="!isBridgeConnected() || !wakeWordsEnabled" />
+              placeholder="agent listen" [disabled]="!isBridgeConnected() || !wakeWordsEnabled" />
             <label for="cfg-wake-start">Start phrase (wake)</label>
           </p-iftalabel>
           <p-iftalabel>
@@ -207,14 +207,14 @@
             text="While a sub-agent runs, how long to wait for your next voice/text turn before checking worker status again. Speaking is optional when nothing meaningful changed." />
         </p-fieldset>
 
-        <p-fieldset legend="Cursor voice (TTS)">
+        <p-fieldset legend="Agent voice (TTS)">
           <p-message severity="secondary" variant="simple"
             text="Controls MCP speak() playback. When disabled, transcripts still appear but nothing is spoken." />
 
           <div class="cv-cfg-toggle-row">
-            <p-toggleSwitch id="cfg-cursor-voice" [(ngModel)]="cursorVoiceEnabled"
+            <p-toggleSwitch id="cfg-agent-voice" [(ngModel)]="agentVoiceEnabled"
               [disabled]="!isBridgeConnected()" />
-            <label for="cfg-cursor-voice">Play Cursor voice aloud</label>
+            <label for="cfg-agent-voice">Play agent voice aloud</label>
           </div>
 
           <p-message severity="secondary" variant="simple"
@@ -846,7 +846,7 @@
           <p-fieldset legend="Active agent client">
             <p class="cv-cfg-hint">
               Select the AI coding agent the bridge will spawn for voice and worker jobs.
-              All three clients support the shared cursor-voice MCP server.
+              All three clients register the shared agent-voice MCP server.
             </p>
             <div class="cv-client-list">
               @for (client of agentClientData.clients; track client.id) {
@@ -1306,7 +1306,7 @@
 
           <p-fieldset legend="Pre-run flags">
             <p-message severity="secondary" variant="simple"
-              text="Flags passed to cursor-agent before each job run." />
+              text="Extra flags passed to the Cursor CLI before each job run (Cursor only)." />
             <div class="cv-cfg-flags">
               @for (flag of jobsData.preRunFlags; track flag) {
                 <div class="cv-cfg-flag-chip">

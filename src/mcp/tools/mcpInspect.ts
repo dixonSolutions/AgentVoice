@@ -1,9 +1,13 @@
 /**
- * MCP inspect tools — cursor_mcp_list, cursor_mcp_tools
+ * MCP inspect tools — agent_mcp_list, agent_mcp_tools
  *
- * Informational tools for debugging the cursor-agent executor's MCP config.
- * These are NOT about AgentVoice's own MCP server — they inspect what MCPs
- * cursor-agent itself has configured in .cursor/mcp.json.
+ * Informational tools for debugging what MCP servers the *coding CLI* has
+ * configured. These are NOT about AgentVoice's own MCP server.
+ *
+ * Cursor is the only supported CLI with an `mcp list` command, so these tools
+ * refuse loudly when another client is active rather than shelling out to
+ * `cursor-agent` behind the user's back (which is what they used to do — the
+ * output described a CLI that was not even running the work).
  *
  * Backed by:
  *   cursor-agent mcp list
@@ -15,11 +19,27 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import stripAnsi from 'strip-ansi';
-import { buildCursorAgentEnv } from '../../executor/cursorAgent.js';
+import { getActiveProvider, getProvider } from '../../providers/agents/registry.js';
 
 const execFileAsync = promisify(execFile);
 
-// ── cursor_mcp_list ───────────────────────────────────────────────────────
+/**
+ * Resolve the Cursor CLI, or explain why this diagnostic does not apply.
+ * Returns the binary path + env for `cursor-agent`.
+ */
+function requireCursorCli(tool: string): { bin: string; env: NodeJS.ProcessEnv } {
+  const active = getActiveProvider();
+  if (active.id !== 'cursor') {
+    throw new Error(
+      `${tool} inspects Cursor's own MCP config, but the active agent client is ${active.displayName}. ` +
+        `Switch the agent client to Cursor in Config, or check ${active.displayName}'s MCP setup with its own CLI.`,
+    );
+  }
+  const cursor = getProvider('cursor');
+  return { bin: cursor.resolveBin(), env: cursor.env(process.env) };
+}
+
+// ── agent_mcp_list ────────────────────────────────────────────────────────
 
 export interface McpServer {
   name: string;
@@ -35,12 +55,10 @@ export interface McpListResult {
  * Plain text output: one line per server, format varies.
  */
 export async function handleMcpList(): Promise<McpListResult> {
+  const { bin, env } = requireCursorCli('agent_mcp_list');
   let stdout: string;
   try {
-    ({ stdout } = await execFileAsync('cursor-agent', ['mcp', 'list'], {
-      timeout: 10_000,
-      env: buildCursorAgentEnv(),
-    }));
+    ({ stdout } = await execFileAsync(bin, ['mcp', 'list'], { timeout: 10_000, env }));
   } catch {
     return { servers: [] };
   }
@@ -59,7 +77,7 @@ export async function handleMcpList(): Promise<McpListResult> {
   return { servers };
 }
 
-// ── cursor_mcp_tools ──────────────────────────────────────────────────────
+// ── agent_mcp_tools ───────────────────────────────────────────────────────
 
 export interface McpTool {
   name: string;
@@ -72,17 +90,17 @@ export interface McpToolsResult {
 }
 
 /**
- * List tools for a specific cursor-agent MCP server.
+ * List tools for a specific MCP server registered with the Cursor CLI.
  * Used for debugging executor MCP configuration.
  */
 export async function handleMcpTools(args: { server: string }): Promise<McpToolsResult> {
+  const { bin, env } = requireCursorCli('agent_mcp_tools');
   let stdout: string;
   try {
-    ({ stdout } = await execFileAsync(
-      'cursor-agent',
-      ['mcp', 'list-tools', args.server],
-      { timeout: 10_000, env: buildCursorAgentEnv() },
-    ));
+    ({ stdout } = await execFileAsync(bin, ['mcp', 'list-tools', args.server], {
+      timeout: 10_000,
+      env,
+    }));
   } catch (err) {
     throw new Error(`cursor-agent mcp list-tools "${args.server}" failed: ${String(err)}`);
   }

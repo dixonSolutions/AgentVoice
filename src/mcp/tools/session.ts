@@ -1,13 +1,10 @@
 /**
- * Session tools — cursor_new_session, cursor_session_info
+ * Session tools — agent_new_session, agent_session_info
  *
- * cursor_new_session: clear the project's resume_id so next submit starts fresh.
- * cursor_session_info: read persisted session state without running the CLI.
+ * agent_new_session: clear the project's resume_id so next submit starts fresh.
+ * agent_session_info: read persisted session state without running the CLI.
  */
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import stripAnsi from 'strip-ansi';
 import {
   clearProjectResumeId,
   setProjectResumeId,
@@ -16,12 +13,11 @@ import {
 import { getLatestJobForProject } from '../../state/jobs.js';
 import { resolveProjectOrThrow } from './project.js';
 import { childLogger } from '../../log.js';
-import { buildCursorAgentEnv } from '../../executor/cursorAgent.js';
+import { getActiveProvider } from '../../providers/agents/registry.js';
 
-const execFileAsync = promisify(execFile);
 const log = childLogger('tool:session');
 
-// ── cursor_new_session ────────────────────────────────────────────────────
+// ── agent_new_session ─────────────────────────────────────────────────────
 
 export interface NewSessionArgs {
   project?: string;
@@ -34,8 +30,13 @@ export interface NewSessionResult {
 }
 
 /**
- * Clear the project's resume_id so the next cursor_submit starts a fresh
- * conversation thread. Optionally pre-creates a session ID via create-chat.
+ * Clear the project's resume_id so the next agent_submit starts a fresh
+ * conversation thread.
+ *
+ * Only some CLIs can mint a thread id up front (Cursor's `create-chat`); the
+ * rest simply drop the resume id and let the next run create its own. Either
+ * way this must never shell out to a hardcoded binary — the previous version
+ * ran `cursor-agent create-chat` even when Codex or Claude Code was active.
  */
 export async function handleNewSession(
   args: NewSessionArgs,
@@ -43,22 +44,23 @@ export async function handleNewSession(
 ): Promise<NewSessionResult> {
   const project = resolveProjectOrThrow(args.project, activeProject);
 
-  // Optionally call create-chat to get a fresh ID up front.
+  const provider = getActiveProvider();
   let newSessionId: string | null = null;
-  try {
-    const { stdout } = await execFileAsync('cursor-agent', ['create-chat'], {
-      timeout: 10_000,
-      env: buildCursorAgentEnv(),
-    });
-    newSessionId = stripAnsi(stdout).trim() || null;
-    if (newSessionId) {
-      setProjectResumeId(project.name, newSessionId);
-      log.info({ project: project.name, sessionId: newSessionId }, 'new session pre-created');
+
+  if (provider.createSession) {
+    try {
+      newSessionId = await provider.createSession(project);
+    } catch (err) {
+      log.warn({ err, provider: provider.id }, 'createSession failed — clearing resume_id only');
     }
-  } catch (err) {
-    // create-chat failure is non-fatal — just clear the old id
-    log.warn({ err }, 'create-chat failed, clearing resume_id only');
+  }
+
+  if (newSessionId) {
+    setProjectResumeId(project.name, newSessionId);
+    log.info({ project: project.name, provider: provider.id, sessionId: newSessionId }, 'new session pre-created');
+  } else {
     clearProjectResumeId(project.name);
+    log.info({ project: project.name, provider: provider.id }, 'resume_id cleared — next run starts a fresh thread');
   }
 
   return {
@@ -70,7 +72,7 @@ export async function handleNewSession(
   };
 }
 
-// ── cursor_session_info ───────────────────────────────────────────────────
+// ── agent_session_info ────────────────────────────────────────────────────
 
 export interface SessionInfoArgs {
   project?: string;

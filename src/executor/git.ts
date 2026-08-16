@@ -129,7 +129,7 @@ export async function revert(
   if (agentCommitted) {
     if (!confirm) {
       throw new Error(
-        'cursor_revert: agent made commits since the checkpoint. ' +
+        'agent_revert: agent made commits since the checkpoint. ' +
           'Call with confirm=true after obtaining user confirmation to hard-reset.',
       );
     }

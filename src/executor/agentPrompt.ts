@@ -1,6 +1,7 @@
 /**
- * Standing instructions prepended to cursor-agent prompts.
- * Keep minimal — Cursor handles the work; we only pass the user's words through.
+ * Standing instructions prepended to worker prompts, for every agent CLI.
+ * Keep minimal — the coding agent handles the work; we only pass the user's
+ * words through.
  */
 
 /** Submit jobs — block budget-burning Task/subagent spawns (watcher enforces too). */
@@ -8,7 +9,7 @@ export const AGENT_GUARDRAILS = `Do not use the Task tool or spawn subagents. Wo
 
 USER REQUEST:`;
 
-/** Ask — pass the question through; no extra rules for Cursor. */
+/** Ask — pass the question through; no extra rules for the agent. */
 export const ASK_GUARDRAILS = `QUESTION:`;
 
 /** Appended when browser flag is set — worker captures UI for the voice agent to show_images. */

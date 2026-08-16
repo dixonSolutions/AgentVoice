@@ -7,7 +7,7 @@
  *   /api/*                   — Bearer-authenticated REST endpoints
  *   /ws/control              — authenticated control WebSocket (voice model relay)
  *   /ws/intelligence         — authenticated WebSocket (llm_intelligence workflow)
- *   GET|POST|DELETE /mcp     — MCP Streamable HTTP server (Cursor registers this)
+ *   GET|POST|DELETE /mcp     — MCP Streamable HTTP server (the agent CLI registers this)
  *
  * All /api/* and /mcp routes require a valid Bearer token (see auth.ts).
  * Security is enforced at the API level on every request and WS frame.
@@ -17,8 +17,6 @@ import Fastify from 'fastify';
 import type { FastifyInstance } from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
 import { resolve } from 'node:path';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { randomUUID } from 'node:crypto';
 import { requireAuth, verifyWsToken, parseWsAuthMessage } from './auth.js';
 import { getDb } from './state/db.js';
@@ -37,7 +35,7 @@ import { getNarrator, PhoneRelaySession } from './executor/narrator.js';
 import { registerVoiceProviderRoutes } from './routes/voiceProviders.js';
 import { registerIntelligenceWebSocket } from './intelligence/ws.js';
 import { registerIntelligenceAudioRoutes } from './routes/intelligenceAudio.js';
-import { registerCursorSessionRoutes } from './routes/cursorSessions.js';
+import { registerAgentSessionRoutes } from './routes/agentSessions.js';
 import { registerVoiceSessionPrepareRoutes } from './routes/voiceSessionPrepare.js';
 import { registerConfigRoutes } from './routes/config.js';
 import { registerAdminSettingsRoutes } from './routes/adminSettings.js';
@@ -52,7 +50,7 @@ import { registerControlSocket } from './state/controlSocket.js';
 import { registerPushRoutes } from './routes/push.js';
 import { resolveRequest } from './mcp/server/approvalRegistry.js';
 import { getImage, readImageBytes, clearImages } from './mcp/server/imageRegistry.js';
-import { buildCursorAgentEnv } from './executor/cursorAgent.js';
+import { getActiveProvider } from './providers/agents/registry.js';
 
 /** Required for vosk-browser SharedArrayBuffer (wake-word WASM). */
 const CROSS_ORIGIN_ISOLATION_HEADERS = {
@@ -60,27 +58,26 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
   'Cross-Origin-Embedder-Policy': 'require-corp',
 } as const;
 
-const execFileAsync = promisify(execFile);
 const log = childLogger('server');
 
 // ── Health check helpers ──────────────────────────────────────────────────
 //
-// cursor-agent about can take several seconds — never block /healthz on it.
-// Cache the version in the background; liveness checks must stay sub-second.
+// An `about`/version probe can take several seconds — never block /healthz on
+// it. Cache the version in the background; liveness must stay sub-second.
+// The probe follows the ACTIVE provider, so /healthz reports the CLI that
+// actually runs the work rather than always reporting Cursor's.
 
 let cachedCliVersion: string | null = null;
+let cachedCliClient: string | null = null;
 let cliVersionRefreshInFlight: Promise<void> | null = null;
 
-async function fetchCursorAgentVersion(): Promise<string | null> {
+async function fetchActiveCliVersion(): Promise<{ client: string; version: string | null }> {
+  const provider = getActiveProvider();
   try {
-    const { stdout } = await execFileAsync('cursor-agent', ['about', '--format', 'json'], {
-      timeout: 5000,
-      env: buildCursorAgentEnv(),
-    });
-    const parsed = JSON.parse(stdout.trim()) as { cliVersion?: string };
-    return parsed.cliVersion ?? null;
+    const about = provider.getAbout ? await provider.getAbout() : null;
+    return { client: provider.id, version: about?.cliVersion ?? null };
   } catch {
-    return null;
+    return { client: provider.id, version: null };
   }
 }
 
@@ -88,7 +85,9 @@ function refreshCliVersionCache(): void {
   if (cliVersionRefreshInFlight) return;
   cliVersionRefreshInFlight = (async () => {
     try {
-      cachedCliVersion = await fetchCursorAgentVersion();
+      const { client, version } = await fetchActiveCliVersion();
+      cachedCliClient = client;
+      cachedCliVersion = version;
     } finally {
       cliVersionRefreshInFlight = null;
     }
@@ -113,7 +112,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   app.addHook('onSend', async (req, reply, payload) => {
     // COOP/COEP are required for the PWA (Vosk WASM SharedArrayBuffer).
-    // Do NOT send them on /mcp — Cursor's MCP process is not a browser and
+    // Do NOT send them on /mcp — the CLI's MCP client is not a browser and
     // some SSE clients reject responses with COEP/COOP set.
     if (!req.url.startsWith('/mcp')) {
       for (const [key, value] of Object.entries(CROSS_ORIGIN_ISOLATION_HEADERS)) {
@@ -166,6 +165,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       db: db.open ? 'ok' : 'error',
       projects: projects.length,
       cliVersion,
+      agentClient: cachedCliClient ?? settings.agentClient,
       appVersion,
       gitCommit,
       runMode: run.runMode,
@@ -268,7 +268,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   await registerVoiceProviderRoutes(app);
   await registerConfigRoutes(app);
   await registerIntelligenceAudioRoutes(app);
-  await registerCursorSessionRoutes(app);
+  await registerAgentSessionRoutes(app);
   await registerVoiceSessionPrepareRoutes(app);
   await registerAdminSettingsRoutes(app);
   await registerServeRoutes(app);

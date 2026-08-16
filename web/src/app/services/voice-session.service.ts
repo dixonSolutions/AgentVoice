@@ -12,6 +12,7 @@ import { LogService } from './log.service';
 import { ToastService } from './toast.service';
 import { VoiceProvidersService } from './voice-providers.service';
 import { PushService } from './push.service';
+import { AgentProviderService } from './agent-provider.service';
 import { cancelTtsFallback, clearTranscriptTts, configureTranscriptTts, scheduleTtsFallback, stopAllTts } from '../../tts-fallback.js';
 import { primeTtsPlaybackUnlock } from '../../audio.js';
 import { CallSession, isNativeShell } from '../../native/call-session.js';
@@ -56,6 +57,7 @@ export class VoiceSessionService {
   private readonly voiceProviders = inject(VoiceProvidersService);
   private readonly push = inject(PushService);
   private readonly logs = inject(LogService);
+  private readonly agentProviders = inject(AgentProviderService);
 
   private _session: ActiveSession | null = null;
   private prepareAbort: AbortController | null = null;
@@ -219,7 +221,7 @@ export class VoiceSessionService {
         },
         prepareSignal,
       );
-      await this.bridge.ensureCursorSessionReady(project);
+      await this.bridge.ensureAgentSessionReady(project);
       if (!this.bridge.settings()) {
         await this.bridge.loadSettings();
       }
@@ -239,7 +241,7 @@ export class VoiceSessionService {
     }
 
     const callbacks = this.buildCallbacks();
-    const workflow = this.bridge.settings()?.workflow.default ?? 'cursor_native';
+    const workflow = this.bridge.settings()?.workflow.default ?? 'agent_native';
 
     const intelSession = new LlmIntelligenceSession(
       this.bridge.bridgeBase,
@@ -260,11 +262,12 @@ export class VoiceSessionService {
         audio: intelSession.getAudioConfig(),
       });
       const wakeOff = this.voiceProviders.data()?.wakeWordsEnabled === false;
+      const agent = this.agentProviders.activeProviderName();
       const startMsg =
-        workflow === 'cursor_native'
+        workflow === 'agent_native'
           ? wakeOff
-            ? 'Cursor voice session started — tap Speak (wake words off)'
-            : 'Cursor voice session started — run the voice agent in Cursor IDE, then say the wake phrase'
+            ? `AgentVoice session started on ${agent} — tap Speak (wake words off)`
+            : `AgentVoice session started on ${agent} — say the wake phrase to talk to it`
           : wakeOff
             ? 'Intelligence session started — tap Speak (wake words off)'
             : 'Intelligence session started — say wake phrase to activate';
@@ -422,7 +425,7 @@ export class VoiceSessionService {
         // MCP speak() already drives TTS via the `speak` WS event. Scheduling fallback
         // here replays the same line after playback when assistant_transcript follows speak().
         const cursorVoiceTts =
-          this.voiceProviders.data()?.tts.cursorVoiceEnabled ?? true;
+          this.voiceProviders.data()?.tts.agentVoiceEnabled ?? true;
         if (!cursorVoiceTts) {
           scheduleTtsFallback(text, () => this._speaking());
         }
@@ -442,7 +445,7 @@ export class VoiceSessionService {
       },
       onToolActivity: (event) => {
         this.toolActivity.set({ ...event, at: Date.now() });
-        const workflow = this.bridge.settings()?.workflow.default ?? 'cursor_native';
+        const workflow = this.bridge.settings()?.workflow.default ?? 'agent_native';
         if (workflow === 'llm_intelligence') {
           this.logs.voiceLog(
             'tool',
@@ -462,14 +465,18 @@ export class VoiceSessionService {
       onVoiceAgentStatus: (event) => {
         this.agentStatus.set({ ...event, at: Date.now() });
         const sid = event.sessionId ? `${event.sessionId.slice(0, 8)}…` : 'pending';
+        // Name the CLI that is actually running. "Voice agent starting" read as
+        // if AgentVoice were narrating its own internals, and the old hardcoded
+        // "Cursor agent" was outright wrong under Codex / Claude Code.
+        const agent = event.providerName ?? this.agentProviders.activeProviderName();
         const label =
           event.state === 'starting'
-            ? `Cursor agent starting — pid ${event.pid}, run ${event.runId.slice(0, 8)}…`
+            ? `${agent} starting — pid ${event.pid}, run ${event.runId.slice(0, 8)}…`
             : event.state === 'running'
-              ? `Cursor agent running — pid ${event.pid}, session ${sid}`
+              ? `${agent} running — pid ${event.pid}, session ${sid}`
               : event.state === 'done'
-                ? `Cursor agent finished — session ${sid}`
-                : `Cursor agent ${event.state} — pid ${event.pid}`;
+                ? `${agent} finished — session ${sid}`
+                : `${agent} ${event.state} — pid ${event.pid}`;
         this.logs.append('info', 'voice', label);
       },
       onClosed: (reason) => {
@@ -628,24 +635,25 @@ export class VoiceSessionService {
     if (phase === 'error') {
       return `${tool.replace(/_/g, ' ')} — failed`;
     }
+    const agent = this.agentProviders.activeProviderName();
     if (phase === 'done') {
-      if (tool === 'cursor_status' && typeof p['activity'] === 'string') {
+      if (tool === 'agent_job_status' && typeof p['activity'] === 'string') {
         const pid = typeof p['cli_pid'] === 'number' ? ` [pid ${p['cli_pid']}]` : '';
         return `Progress${pid} → ${p['activity']}`;
       }
-      if (tool === 'cursor_ask') return 'Cursor answered';
-      if (tool === 'cursor_submit') return 'Job started';
+      if (tool === 'agent_ask') return `${agent} answered`;
+      if (tool === 'agent_submit') return 'Job started';
       return `${tool.replace(/_/g, ' ')} — done`;
     }
     switch (tool) {
-      case 'cursor_set_project':
+      case 'agent_set_project':
         return `Setting project → ${String(p['project'] ?? '')}`;
-      case 'cursor_ask':
-        return `Asking Cursor (CLI) → ${String(p['question'] ?? '').slice(0, 60)}`;
-      case 'cursor_submit':
-        return `Sending to Cursor → ${String(p['prompt'] ?? '').slice(0, 72)}`;
-      case 'cursor_status':
-        return 'Checking Cursor progress';
+      case 'agent_ask':
+        return `Asking ${agent} → ${String(p['question'] ?? '').slice(0, 60)}`;
+      case 'agent_submit':
+        return `Sending to ${agent} → ${String(p['prompt'] ?? '').slice(0, 72)}`;
+      case 'agent_job_status':
+        return `Checking ${agent} progress`;
       default:
         return tool.replace(/_/g, ' ');
     }

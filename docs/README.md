@@ -26,27 +26,28 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`13-voice-providers.md`](./13-voice-providers.md) | Wake words, turn submit, AWS IAM for Polly/Transcribe | Configuring voice I/O |
 | [`14-prompts.md`](./14-prompts.md) | Prompts folder layout and editing | Tuning agent behavior |
 | [`15-llm-intelligence-workflow.md`](./15-llm-intelligence-workflow.md) | Alternate cascade workflow (STT→Claude→TTS) | Using Bedrock orchestrator mode |
-| [`16-mcp-server-cursor-as-brain.md`](./16-mcp-server-cursor-as-brain.md) | **Default** `cursor_native` workflow — Cursor as reasoning layer | Primary voice path |
+| [`16-mcp-server-agent-as-brain.md`](./16-mcp-server-agent-as-brain.md) | **Default** `agent_native` workflow — Cursor as reasoning layer | Primary voice path |
 | [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) | TTS interrupt snapshot, `tts_interrupt` delivery, wake-word echo filter | Barge-in bugs or agent heard/not-heard context |
 | [`18-image-carousel.md`](./18-image-carousel.md) | `show_images` tool, carousel PWA, Browser snapshot workflow | UI review on phone |
 | [`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md) | Wake Lock (PWA only), silent media, auto-resume; why native battery ≠ a phone call | Screen-off disconnects; iPhone battery drain |
 | [`20-native-callkit-shell.md`](./20-native-callkit-shell.md) | CallKit native app + push notifications | True call-style session + background alerts |
 | [`21-serve-self-hosting.md`](./21-serve-self-hosting.md) | Serve hub: health, live journalctl, restart script, origin rebase | Self-hosting from Config tab |
 | [`22-split-host-tunnel.md`](./22-split-host-tunnel.md) | Incus container hosting + optional SSH tunnel for Tailscale Serve | Container DNS / tunnel 502 |
-| [`23-multi-agent-client.md`](./23-multi-agent-client.md) | Cursor / Codex / Claude Code CLI install, invocation flags, MCP registration | Installing or switching agent clients |
+| [`23-multi-agent-client.md`](./23-multi-agent-client.md) | Cursor / Codex / Claude Code CLI install, invocation flags, execution modes, MCP registration | Installing or switching agent clients |
 | [`24-agent-providers.md`](./24-agent-providers.md) | `AgentProvider` abstraction: phone-driven auth, live model selection, generic MCP aliases | In-app sign-in, model picker, or adding a 4th CLI |
 | [`25-hosting-providers.md`](./25-hosting-providers.md) | `HostingProvider` abstraction: Tailscale, Cloudflare, ngrok, Dev Tunnels, LAN, local, manual | Choosing/switching how the bridge is exposed |
 | [`26-rename-agentvoice.md`](./26-rename-agentvoice.md) | Product rename from Cursor Voice → AgentVoice (what changed / what stayed) | Migrating an existing install after the rename |
 | [`27-touch-controls-and-cancel.md`](./27-touch-controls-and-cancel.md) | On-screen Speak / Cancel, cancel-while-processing, touch-only preset | Mute UX, no wake words, or cancel during Transcribe |
+| [`28-provider-parity-and-branding.md`](./28-provider-parity-and-branding.md) | Normalized agent events, per-provider MCP registration and modes, the AgentVoice interrupt hook, `agent_*` tool names, one branding source | Anything Codex/Claude Code behaves differently from Cursor, or naming/theme questions |
 
 ## One-paragraph summary
 
 The **phone** (iPhone Safari PWA) captures speech with **browser STT** (WebKit or
 Amazon Transcribe) and plays replies with **WebKit TTS** or **Amazon Polly**.
 Utterances flow over **`/ws/intelligence`** to the bridge, which queues them for
-the active coding agent (Cursor / Codex / Claude Code) via the **`cursor-voice`
-MCP server** (`next_voice_turn`, `speak`, `done` — registration key kept for
-compatibility; see [`26-rename-agentvoice.md`](./26-rename-agentvoice.md)). The
+the active coding agent (Cursor / Codex / Claude Code) via the **`agent-voice`
+MCP server** (`next_voice_turn`, `speak`, `done` — renamed from `cursor-voice`;
+see [`28-provider-parity-and-branding.md`](./28-provider-parity-and-branding.md)). The
 agent is the conversational brain; coding work is delegated to **worker** CLI
 processes via `spawn_agent`. Networking defaults to **Tailscale** but is
 pluggable ([`25-hosting-providers.md`](./25-hosting-providers.md)); every bridge
@@ -56,7 +57,7 @@ request is validated with a **single app token**.
 
 | Workflow | Who reasons | Audio path |
 | --- | --- | --- |
-| **`cursor_native`** (default) | Cursor agent via MCP | PWA STT/TTS ↔ bridge ↔ MCP `speak()` |
+| **`agent_native`** (default) | the active coding CLI via MCP | PWA STT/TTS ↔ bridge ↔ MCP `speak()` |
 | **`llm_intelligence`** | Claude on Bedrock Converse | Same PWA STT/TTS; bridge orchestrator |
 
 Speech-to-speech (OpenAI Realtime, Nova Sonic) was removed. AWS IAM keys in `.env`
@@ -64,7 +65,7 @@ power **Polly**, **Transcribe**, and **Bedrock Converse** only.
 
 ## Confirmed key decisions
 
-- **Default workflow:** `cursor_native` — Cursor controls voice via MCP.
+- **Default workflow:** `agent_native` — the active coding CLI controls voice via MCP.
 - **Audio:** Cascade STT + TTS (not S2S). WebKit first; Amazon fallback on desktop.
 - **Wake/submit:** Vosk offline grammar for wake/end phrases; Silero VAD for speech-end.
 - **Safety:** Constrained MCP tool set + project allowlist + git revert.

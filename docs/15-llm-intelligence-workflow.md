@@ -1,10 +1,10 @@
 # 15 — LLM Intelligence workflow
 
-The **`llm_intelligence`** workflow is an **alternate** to the default **`cursor_native`**
+The **`llm_intelligence`** workflow is an **alternate** to the default **`agent_native`**
 path. It uses a **cascade**: STT → Claude (Bedrock Converse) → TTS. Each layer is
 independently controllable and debuggable.
 
-For most users, **`cursor_native`** is preferred — Cursor has full repo context and
+For most users, **`agent_native`** is preferred — Cursor has full repo context and
 controls workers directly via MCP. Use `llm_intelligence` when you want Claude as
 the conversational orchestrator without Cursor IDE in the loop.
 
@@ -58,7 +58,7 @@ iPhone PWA (WebKit STT/TTS or Amazon fallback)
 
 | Field | Purpose |
 | --- | --- |
-| `workflow.default` | `cursor_native` or `llm_intelligence` |
+| `workflow.default` | `agent_native` or `llm_intelligence` |
 | `llmIntelligence.llm.model` | Bedrock Converse model (Claude 4 needs `us.anthropic.…` prefix) |
 | `llmIntelligence.llm.region` | AWS region for Bedrock |
 | `llmIntelligence.memory.*` | Sliding window + summarisation |
@@ -70,7 +70,7 @@ iPhone PWA (WebKit STT/TTS or Amazon fallback)
 
 1. User speaks → STT → `{ type: "user_turn", text }` on `/ws/intelligence`
 2. Bridge runs Bedrock orchestrator with system prompt + memory + transcript
-3. Claude calls tools (`speak`, `cursor_submit`, etc.) in an agentic loop
+3. Claude calls tools (`speak`, `agent_submit`, etc.) in an agentic loop
 4. Bridge sends `{ type: "speak", text }` to PWA for TTS
 5. `{ type: "turn_complete" }` when done → mic re-arms
 
@@ -87,10 +87,10 @@ See [`06-voice-audio-webrtc.md`](./06-voice-audio-webrtc.md) and `src/intelligen
 | `src/intelligence/aws/credentials.ts` | IAM auth for Bedrock |
 | `src/intelligence/audio/polly.ts` | Polly TTS |
 | `src/intelligence/audio/transcribe.ts` | Transcribe STT |
-| `web/src/llm-intelligence-session.ts` | PWA session (shared with cursor_native) |
+| `web/src/llm-intelligence-session.ts` | PWA session (shared with agent_native) |
 
 ## Related docs
 
-- [`16-mcp-server-cursor-as-brain.md`](./16-mcp-server-cursor-as-brain.md) — default cursor_native workflow
+- [`16-mcp-server-agent-as-brain.md`](./16-mcp-server-agent-as-brain.md) — default agent_native workflow
 - [`13-voice-providers.md`](./13-voice-providers.md) — wake words and AWS keys
 - [`14-prompts.md`](./14-prompts.md) — orchestrator prompts

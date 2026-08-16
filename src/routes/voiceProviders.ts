@@ -56,7 +56,7 @@ export async function registerVoiceProviderRoutes(app: FastifyInstance): Promise
     },
   );
 
-  /** PATCH /api/voice/tts — cursor voice on/off, error feedback, WebKit defaults */
+  /** PATCH /api/voice/tts — agent voice on/off, error feedback, WebKit defaults */
   app.patch('/api/voice/tts', async (req, reply) => {
     try {
       return setVoiceTts(req.body);
