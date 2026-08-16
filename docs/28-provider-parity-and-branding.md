@@ -89,6 +89,46 @@ Claude Code too. What did *not* work equally was everything around it: on Claude
 Code the MCP server was never registered, so no tool was ever in flight to
 interrupt. That is the fix in §1, not here.
 
+### The gap live testing found
+
+The two policies above cover turns that arrive while the agent is inside one of
+*our* tools. They do not cover the most common case: the agent researching with
+its **own** Read/Grep/Bash tools. No AgentVoice tool is in flight, so the turn
+lands in the buffer — and nothing tells the agent it is there.
+
+Against a signed-in Claude Code this was clearly visible. The user interrupted
+mid-answer; the agent finished its previous answer across five more sentences,
+asked "want me to walk through any of those files?", and called `done()`. The
+interruption was heard nowhere until the next turn.
+
+`speak()` closes it. It is the one tool the agent calls constantly — once per
+sentence — so its result now carries `pending_user_turns` and an instruction to
+collect the turn before continuing. `done()` carries it too and logs a warning,
+so a turn cannot be silently left uncollected at the end of a turn. The turn is
+**not** consumed there: `next_voice_turn()` stays the single delivery point, so
+it can never be handed out twice.
+
+After that change, the same live test on the same machine: interrupt fired 7.0 s
+in, collected 10.0 s in, first turn would not have finished until 14.5 s. The
+agent answered the new question and said "Walkthrough's dropped — say the word
+if you want it back."
+
+### Verifying it
+
+`scripts/live-hook-test.mjs` impersonates the PWA, sends a real task, then fires
+a second turn mid-work. It passes only on proof of **collection** — a
+`next_voice_turn` carrying the interrupt text. An earlier version accepted "the
+agent spoke after the interrupt", which a agent merely finishing its previous
+sentence satisfies; that produced a false pass on the very run that exposed the
+bug above.
+
+`scripts/stub-agent-cli.mjs` stands in for a coding CLI on machines with no
+signed-in one. The bridge spawns it exactly as it would the real binary, so the
+argv, the MCP registration, the transport, the tool handlers and the hook are
+all production code — only the model's judgement is scripted. It emits NDJSON in
+each CLI's own dialect, which exercises the per-provider parsers and the
+session-id capture `--resume` depends on.
+
 ---
 
 ## 3. Branding lives in one place
