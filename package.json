@@ -2,6 +2,7 @@
   "name": "agentvoice",
   "version": "0.1.0",
   "description": "Self-hosted voice bridge for Cursor, Codex, and Claude Code CLIs",
+  "license": "MIT",
   "type": "module",
   "engines": {
     "node": ">=20"
