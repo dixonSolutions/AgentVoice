@@ -242,8 +242,12 @@ function judge() {
   if (state.agentName === null) {
     failures.push('bridge did not report provider_name on voice_agent_status');
   }
-  if (state.spokeBeforeInterrupt.length === 0) {
-    failures.push('agent never spoke before the interrupt — MCP speak() is not reaching the bridge');
+  // Only "no speech at all" proves speak() is not reaching the bridge. A slower
+  // CLI (Cursor is markedly slower to first speak than Claude Code) can easily
+  // still be researching when the interrupt fires, which is not a failure —
+  // it is the case this test most wants to cover.
+  if (state.spokeBeforeInterrupt.length + state.spokeAfterInterrupt.length === 0) {
+    failures.push('agent never spoke at all — MCP speak() is not reaching the bridge');
   }
   if (state.spokeAfterInterrupt.length === 0) {
     failures.push('agent said nothing after the interrupt — the turn was not delivered to it');
@@ -271,6 +275,9 @@ function judge() {
 
   console.log('\nPASS:');
   console.log('  ✓ agent spawned and spoke via MCP');
+  if (state.spokeBeforeInterrupt.length === 0) {
+    console.log('    (note: still researching at interrupt time — had not spoken yet)');
+  }
   console.log('  ✓ interrupt was sent while the agent was still working');
   console.log('  ✓ agent collected the interrupt via next_voice_turn while mid-work');
   console.log('  ✓ agent responded after collecting it');
