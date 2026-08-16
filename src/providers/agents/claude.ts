@@ -64,10 +64,27 @@ function resolveMcpConfigPath(): string {
  * un-allowlisted MCP tool is simply denied — which silently removes speak(),
  * done() and next_voice_turn() and makes the whole session mute.
  *
- * `mcp__<server>` allows every tool on that server (the documented wildcard
- * form); listing individual tools would break each time we add one.
+ * `mcp__<server>` allows every tool on that server; listing individual tools
+ * would break each time we add one.
+ *
+ * The list covers every MCP server the user has registered, not just ours.
+ * People add servers (gdr, playwright, …) precisely so the agent can use them,
+ * and an allowlist denies anything omitted — so hardcoding only `agent-voice`
+ * silently made the voice agent the *least* capable way to run Claude Code,
+ * even though the same servers work fine in an interactive session.
  */
-const ALLOWED_MCP_TOOLS = `mcp__${MCP_SERVER_NAME}`;
+function allowedToolsSpec(): string {
+  const servers = new Set<string>([MCP_SERVER_NAME]);
+  try {
+    const userConfig = readJsonConfig(join(resolveUserHome(), '.claude.json'));
+    for (const name of Object.keys(userConfig?.mcpServers ?? {})) {
+      if (name.trim()) servers.add(name);
+    }
+  } catch {
+    // Unreadable user config is not fatal — ours is always allowed.
+  }
+  return [...servers].map((name) => `mcp__${name}`).join(',');
+}
 
 /** Modes that must not be able to modify the repo. */
 const READ_ONLY_DISALLOWED = 'Write,Edit,MultiEdit,NotebookEdit';
@@ -105,7 +122,22 @@ async function checkAuth(): Promise<AuthCheckResult> {
 function baseArgs(oneShot: boolean): string[] {
   const args = ['-p', '--output-format', oneShot ? 'json' : 'stream-json'];
   if (!oneShot) args.push('--verbose');
-  args.push('--mcp-config', resolveMcpConfigPath(), '--allowedTools', ALLOWED_MCP_TOOLS);
+  args.push('--mcp-config', resolveMcpConfigPath(), '--allowedTools', allowedToolsSpec());
+  return args;
+}
+
+/**
+ * End option parsing before the prompt.
+ *
+ * `--allowedTools` and `--disallowedTools` are variadic: given
+ * `--allowedTools mcp__agent-voice "the prompt"` the CLI swallows the prompt as
+ * a second tool pattern and then dies with "Input must be provided either
+ * through stdin or as a prompt argument". Today the prompt survives only
+ * because a single-value flag happens to sit last; `--` makes that ordering
+ * irrelevant, and also protects a prompt that begins with a dash.
+ */
+function withPrompt(args: string[], prompt: string): string[] {
+  args.push('--', prompt);
   return args;
 }
 
@@ -363,8 +395,7 @@ export const claudeProvider: AgentProvider = {
       args.push('--permission-mode', 'acceptEdits');
     }
 
-    args.push(mode === 'ask' ? buildAskPrompt(prompt) : buildAgentPrompt(prompt, { browser }));
-    return args;
+    return withPrompt(args, mode === 'ask' ? buildAskPrompt(prompt) : buildAgentPrompt(prompt, { browser }));
   },
 
   buildVoiceArgs(project: Project, session: SessionState, _pendingTurn?: string, bootPrompt = ''): string[] {
@@ -374,8 +405,7 @@ export const claudeProvider: AgentProvider = {
     }
     if (project.resumeId) args.push('--resume', project.resumeId);
     args.push('--permission-mode', 'acceptEdits');
-    args.push(bootPrompt);
-    return args;
+    return withPrompt(args, bootPrompt);
   },
 };
 
