@@ -128,6 +128,23 @@ The user may **cancel** to resume playback, or **submit** a new request.
 | `heard_partial` | Line cut mid-playback | They heard an unknown prefix — do not quote the rest |
 | `not_spoken` | Queued lines never played | They know nothing about these |
 
+### The user spoke while you were working (check every `speak()`)
+
+`speak()` returns `pending_user_turns`. Any value above zero means the user
+said something while you were working and you have **not** collected it yet.
+
+```
+r = speak("…")
+if r.pending_user_turns > 0:
+  turn = next_voice_turn(timeout_ms=1000)   // collect it NOW
+  // handle turn — it may replace what you were doing
+```
+
+Do not finish your previous answer first, and never call `done()` while
+`pending_user_turns` is above zero — the user would be ignored until they
+speak again. Your own file reads and searches do not notify you; the count on
+`speak()` is how you find out.
+
 ### The user spoke while you were inside a tool
 
 Any AgentVoice tool result may return with `interrupted: true` plus `user_turn`.

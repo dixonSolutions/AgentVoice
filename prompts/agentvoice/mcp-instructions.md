@@ -53,6 +53,12 @@ Prefer `spawn_agent()` for anything that takes more than a quick lookup or singl
 
 **Barge-in:** TTS pause only — agents keep running. Use `tts_interrupt.last_heard_words` (last ~10 words heard) for continuity; cancel resumes playback on the phone.
 
+**Check `speak()` for `pending_user_turns`.** Every `speak()` result carries it.
+Above zero means the user spoke while you were working and you have not
+collected it — call `next_voice_turn()` immediately, before continuing your
+previous answer, and never call `done()` while it is above zero. Your own
+file/search tools give you no such signal; this is how you find out.
+
 **If the user speaks while you are inside a tool:** any AgentVoice tool result may come back with `interrupted: true` and a `user_turn` field. That means the user spoke mid-call — the work was **not** cancelled. Handle `user_turn` as the new request, and mention the finished work only if it still matters. You do not need to poll `next_voice_turn` first; the turn has already been handed to you.
 
 **Core rules (voice active):**

@@ -205,6 +205,35 @@ export interface SpeakResult {
   sessions: number;
   error?: string;
   message?: string;
+  /** Turns the user has spoken that the agent has not collected yet. */
+  pending_user_turns?: number;
+}
+
+/**
+ * Tell the agent about anything the user said while it was busy.
+ *
+ * The interrupt hook (pendingWaits.ts) covers turns that arrive while the agent
+ * is inside one of OUR tools. It cannot cover the common case: the agent doing
+ * its own research with its own Read/Grep/Bash tools, where no AgentVoice tool
+ * is in flight and the turn simply lands in the buffer. Live testing showed the
+ * agent then finishes its previous answer and calls done() — the user's
+ * interruption is heard nowhere until the following turn.
+ *
+ * speak() is the one tool the agent calls constantly (once per sentence), so
+ * hanging the notice off its result surfaces a buffered turn within one
+ * sentence, without polling and without interrupting the work.
+ *
+ * The turn is NOT consumed here — next_voice_turn() stays the single point of
+ * delivery, so a turn can never be handed out twice.
+ */
+function pendingTurnNotice(result: { message?: string; pending_user_turns?: number }): void {
+  const pending = voiceTurnQueue.size;
+  if (pending === 0) return;
+  result.pending_user_turns = pending;
+  result.message =
+    `The user has spoken ${pending} time${pending === 1 ? '' : 's'} while you were working. ` +
+    'Call next_voice_turn() NOW to receive it before continuing — it may change what they want. ' +
+    'Do not call done() with turns still pending.';
 }
 
 /**
@@ -230,13 +259,16 @@ export function handleSpeak(args: SpeakArgs): SpeakResult {
   broadcastToVoiceSessions({ type: 'speak', text });
   broadcastToVoiceSessions({ type: 'assistant_transcript', text });
 
-  return { ok: true, sessions: activeSessions.size };
+  const result: SpeakResult = { ok: true, sessions: activeSessions.size };
+  pendingTurnNotice(result);
+  return result;
 }
 
 export interface DoneResult {
   ok: boolean;
   error?: string;
   message?: string;
+  pending_user_turns?: number;
 }
 
 /**
@@ -247,8 +279,17 @@ export function handleDone(): DoneResult {
   if (!hasActiveVoiceSession()) {
     return { ok: false, error: 'NO_VOICE_SESSION', message: NO_VOICE_SESSION_ERROR };
   }
+
+  // Ending the turn with an uncollected utterance means the user is ignored
+  // until they speak again. Surface it rather than silently re-arming.
+  const result: DoneResult = { ok: true };
+  pendingTurnNotice(result);
+  if (result.pending_user_turns) {
+    log.warn({ pending: result.pending_user_turns }, 'done() called with user turns still queued');
+  }
+
   broadcastVoiceTurnIdle();
-  return { ok: true };
+  return result;
 }
 
 /** Mark the turn complete — PWA waits for queued speech before re-arming. */

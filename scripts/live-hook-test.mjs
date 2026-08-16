@@ -76,6 +76,8 @@ const state = {
   firstTurnCompleteAt: null,
   toolActivity: [],
   agentStates: [],
+  /** Set when the bridge reports next_voice_turn actually handing over our interrupt. */
+  interruptCollectedAt: null,
 };
 
 const token = loadToken();
@@ -160,6 +162,19 @@ ws.on('message', (raw) => {
 
     case 'tool_activity': {
       state.toolActivity.push({ at: Date.now() - t0, ...msg });
+      // The one unambiguous proof the agent COLLECTED the turn: the bridge
+      // broadcasts next_voice_turn/done with the dequeued text as detail.
+      // "the agent kept talking" is not proof — it may just be finishing its
+      // previous answer, which is exactly the false pass this test had before.
+      if (
+        msg.tool === 'next_voice_turn' &&
+        typeof msg.detail === 'string' &&
+        msg.detail.slice(0, 40) === INTERRUPT.slice(0, 40)
+      ) {
+        state.interruptCollectedAt = Date.now() - t0;
+        record('INTERRUPT COLLECTED', 'agent dequeued the turn via next_voice_turn');
+        if (state.interruptSentAt !== null) scheduleJudgement();
+      }
       record(`tool.${msg.phase}`, `${msg.tool} — ${msg.label}${msg.detail ? ` :: ${String(msg.detail).slice(0, 90)}` : ''}`);
       return;
     }
@@ -167,13 +182,10 @@ ws.on('message', (raw) => {
     case 'turn_complete': {
       if (state.firstTurnCompleteAt === null) state.firstTurnCompleteAt = Date.now() - t0;
       record('turn_complete', '');
-      // Give the agent a moment to handle the interrupt turn, then judge.
-      if (state.interruptSentAt !== null) {
-        setTimeout(() => {
-          clearTimeout(timer);
-          judge();
-        }, 4000);
-      }
+      // The agent may collect and answer the interrupt in a FOLLOWING turn, so
+      // do not judge on the first turn_complete. Settle once it has collected
+      // the turn; otherwise give it a grace period before calling it a miss.
+      if (state.interruptSentAt !== null) scheduleJudgement();
       return;
     }
 
@@ -192,6 +204,17 @@ ws.on('message', (raw) => {
 
 // ── Verdict ───────────────────────────────────────────────────────────────
 
+let judgeTimer = null;
+function scheduleJudgement() {
+  if (judgeTimer) clearTimeout(judgeTimer);
+  // Short settle once we have our proof; long grace while still hoping for it.
+  const wait = state.interruptCollectedAt !== null ? 6000 : 25000;
+  judgeTimer = setTimeout(() => {
+    clearTimeout(timer);
+    judge();
+  }, wait);
+}
+
 function summarize() {
   console.log('\n──────── summary ────────');
   console.log('agent               :', state.agentName ?? '(none reported)');
@@ -201,6 +224,7 @@ function summarize() {
   console.log('first turn complete :', state.firstTurnCompleteAt === null ? 'never' : `${state.firstTurnCompleteAt}ms`);
   console.log('speak before        :', state.spokeBeforeInterrupt.length);
   console.log('speak after         :', state.spokeAfterInterrupt.length);
+  console.log('interrupt collected :', state.interruptCollectedAt === null ? 'NEVER' : `${state.interruptCollectedAt}ms`);
   for (const line of state.spokeAfterInterrupt) console.log('   POST:', line);
   console.log('tool calls          :', state.toolActivity.map((t) => `${t.tool}/${t.phase}`).join(', ') || '-');
 }
@@ -224,6 +248,13 @@ function judge() {
   if (state.spokeAfterInterrupt.length === 0) {
     failures.push('agent said nothing after the interrupt — the turn was not delivered to it');
   }
+  if (state.interruptCollectedAt === null) {
+    failures.push(
+      'agent never COLLECTED the interrupt (no next_voice_turn carrying it). It kept talking about ' +
+        'the original request, so the user was ignored — speaking after an interrupt is not the same ' +
+        'as handling it',
+    );
+  }
   if (
     state.firstTurnCompleteAt !== null &&
     state.interruptSentAt !== null &&
@@ -241,6 +272,7 @@ function judge() {
   console.log('\nPASS:');
   console.log('  ✓ agent spawned and spoke via MCP');
   console.log('  ✓ interrupt was sent while the agent was still working');
-  console.log('  ✓ agent responded after the interrupt (turn reached it mid-work)');
+  console.log('  ✓ agent collected the interrupt via next_voice_turn while mid-work');
+  console.log('  ✓ agent responded after collecting it');
   return done(0, 'interrupt hook verified live');
 }
