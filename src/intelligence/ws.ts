@@ -79,19 +79,20 @@ function formatIntelligenceError(err: unknown): string {
 function formatToolLabel(tool: string, phase: 'start' | 'done' | 'error'): string {
   if (phase === 'error') return `${tool} failed`;
   if (phase === 'done') return `${tool} done`;
+  const agent = getActiveProvider().displayName;
   switch (tool) {
     case 'speak':
       return 'Speaking';
     case 'get_status':
-    case 'cursor_status':
-      return 'Checking Cursor progress';
+    case 'agent_job_status':
+      return `Checking ${agent} progress`;
     case 'launch_agent':
-    case 'cursor_submit':
-      return 'Sending task to Cursor';
+    case 'agent_submit':
+      return `Sending task to ${agent}`;
     case 'read_output':
-      return 'Reading Cursor output';
-    case 'cursor_ask':
-      return 'Asking Cursor';
+      return `Reading ${agent} output`;
+    case 'agent_ask':
+      return `Asking ${agent}`;
     default:
       return tool.replace(/_/g, ' ');
   }
@@ -241,7 +242,10 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
               } catch (err) {
                 const message = err instanceof Error ? err.message : String(err);
                 log.error({ err, sessionKey }, 'voice agent spawn failed');
-                send(socket, { type: 'speak', text: `Could not start Cursor agent: ${message}` });
+                send(socket, {
+                  type: 'speak',
+                  text: `Could not start ${getActiveProvider().displayName}: ${message}`,
+                });
                 send(socket, { type: 'error', message });
                 send(socket, { type: 'thinking', value: false });
                 send(socket, { type: 'turn_complete' });
