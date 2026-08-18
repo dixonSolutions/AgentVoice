@@ -128,13 +128,23 @@ export async function registerAgentSessionRoutes(app: FastifyInstance): Promise<
         });
       }
 
+      // Job history spans every CLI the user has run, so a listed thread can
+      // belong to a different one. Selecting it would store a foreign id the
+      // active CLI cannot resume (exit 1, silent voice turn) — refuse instead.
+      const provider = getActiveProvider();
+      if (provider.sessionStatus?.(project, sessionId) === 'absent') {
+        return reply.code(400).send({
+          error: `${provider.displayName} has no conversation "${sessionId}" — it belongs to a different agent CLI. Start a new session instead.`,
+        });
+      }
+
       setProjectResumeId(project.name, sessionId);
-      log.info({ project: project.name, sessionId }, 'agent session selected');
+      log.info({ project: project.name, provider: provider.id, sessionId }, 'agent session selected');
 
       return {
         project: project.name,
         active_session_id: sessionId,
-        message: `${getActiveProvider().displayName} will continue this thread on the next submit.`,
+        message: `${provider.displayName} will continue this thread on the next submit.`,
       };
     });
   }

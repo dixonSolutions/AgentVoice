@@ -12,7 +12,7 @@
 
 import { existsSync } from 'node:fs';
 import { getDb } from './db.js';
-import { getConfig, type ProjectConfig } from '../config.js';
+import { getConfig, type AgentClient, type ProjectConfig } from '../config.js';
 import { readConfigFile, writeConfigFile } from './configFile.js';
 import { childLogger } from '../log.js';
 import { foldedProjectMatch, projectMatchScore } from './projectMatch.js';
@@ -26,6 +26,7 @@ export interface ProjectRow {
   path: string;
   aliases: string; // JSON array string
   description: string | null;
+  /** LEGACY — provider-agnostic resume id. Read only by the boot migration. */
   resume_id: string | null;
   model: string | null;
   enabled: number; // 1 | 0
@@ -38,6 +39,7 @@ export interface Project {
   path: string;
   aliases: string[];
   description: string | null;
+  /** Resume thread for the *currently active* agent CLI only (see project_resume). */
   resumeId: string | null;
   model: string | null;
   enabled: boolean;
@@ -59,7 +61,9 @@ function rowToProject(row: ProjectRow): Project {
     path: row.path,
     aliases,
     description: row.description,
-    resumeId: row.resume_id,
+    // NOT row.resume_id — that column is provider-agnostic and handing one
+    // CLI's thread id to another kills the spawn (see project_resume).
+    resumeId: getProjectResumeId(row.name),
     model: row.model,
     enabled: row.enabled === 1,
     createdAt: row.created_at,
@@ -210,22 +214,57 @@ export function getProjectByName(name: string): Project | null {
 
 // ── Session / model persistence ───────────────────────────────────────────────
 
-/** Persist the cursor-agent session ID for a project (called after each successful run). */
-export function setProjectResumeId(projectName: string, resumeId: string): void {
+/**
+ * Resume threads are per (project, agent CLI).
+ *
+ * Cursor, Codex and Claude Code each store conversations in their own private
+ * format and namespace, so a thread id from one is meaningless to the others.
+ * Keeping a single id per project meant that switching agentClient handed the
+ * new CLI a foreign id — `claude --resume <cursor chat id>` exits 1 with
+ * "No conversation found with session ID: …", the voice agent dies before it
+ * can speak, and the user just hears the "I finished but did not speak aloud"
+ * fallback on every single turn.
+ */
+function activeAgentClient(): AgentClient {
+  return getConfig().settings.agentClient;
+}
+
+/** Resume id for a project under one CLI (default: the active one). */
+export function getProjectResumeId(
+  projectName: string,
+  provider: AgentClient = activeAgentClient(),
+): string | null {
+  const row = getDb()
+    .prepare('SELECT resume_id FROM project_resume WHERE project = @name AND provider = @provider')
+    .get({ name: projectName, provider }) as { resume_id: string } | undefined;
+  return row?.resume_id ?? null;
+}
+
+/** Persist the agent CLI's session ID for a project (called after each successful run). */
+export function setProjectResumeId(
+  projectName: string,
+  resumeId: string,
+  provider: AgentClient = activeAgentClient(),
+): void {
   getDb()
     .prepare(
-      `UPDATE project SET resume_id = @resumeId, updated_at = datetime('now') WHERE name = @name`,
+      `INSERT INTO project_resume (project, provider, resume_id, updated_at)
+       VALUES (@name, @provider, @resumeId, datetime('now'))
+       ON CONFLICT(project, provider) DO UPDATE SET
+         resume_id  = excluded.resume_id,
+         updated_at = excluded.updated_at`,
     )
-    .run({ resumeId, name: projectName });
+    .run({ name: projectName, provider, resumeId });
 }
 
 /** Clear the resume ID so the next submit starts a fresh thread. */
-export function clearProjectResumeId(projectName: string): void {
+export function clearProjectResumeId(
+  projectName: string,
+  provider: AgentClient = activeAgentClient(),
+): void {
   getDb()
-    .prepare(
-      `UPDATE project SET resume_id = NULL, updated_at = datetime('now') WHERE name = @name`,
-    )
-    .run({ name: projectName });
+    .prepare('DELETE FROM project_resume WHERE project = @name AND provider = @provider')
+    .run({ name: projectName, provider });
 }
 
 // ── Session state ─────────────────────────────────────────────────────────────

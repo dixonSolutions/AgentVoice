@@ -13,7 +13,7 @@
  * See https://code.claude.com/docs/en/authentication
  */
 
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { childLogger } from '../../log.js';
@@ -203,6 +203,37 @@ function parseClaudeEvent(raw: Record<string, unknown>): AgentStreamEvent[] {
   return events;
 }
 
+// ── Session store ─────────────────────────────────────────────────────────
+
+/**
+ * Claude Code keeps one JSONL transcript per conversation under
+ * `~/.claude/projects/<flattened cwd>/<session-id>.jsonl`.
+ *
+ * We deliberately do NOT reimplement the cwd-flattening rule (it is internal to
+ * the CLI and would silently start dropping valid resumes if it ever changed).
+ * Instead we look for the transcript under *any* project dir: present anywhere
+ * means the id is genuinely Claude Code's, and absent everywhere means
+ * `--resume` is guaranteed to fail — which is the case worth catching, since
+ * that failure is fatal and mute.
+ */
+function claudeSessionStatus(_project: Project, sessionId: string): 'present' | 'absent' | 'unknown' {
+  const root = join(resolveUserHome(), '.claude', 'projects');
+  let dirs: string[];
+  try {
+    dirs = readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return 'unknown'; // no store yet, or unreadable — let the CLI decide.
+  }
+  if (dirs.length === 0) return 'unknown';
+
+  for (const dir of dirs) {
+    if (existsSync(join(root, dir, `${sessionId}.jsonl`))) return 'present';
+  }
+  return 'absent';
+}
+
 // ── MCP registration ──────────────────────────────────────────────────────
 
 /**
@@ -375,6 +406,7 @@ export const claudeProvider: AgentProvider = {
   supportedModes: (): readonly AgentMode[] => ['agent', 'plan', 'ask'],
   parseStreamEvent: parseClaudeEvent,
   ensureMcpRegistration: ensureClaudeMcpRegistration,
+  sessionStatus: claudeSessionStatus,
 
   buildWorkerArgs(opts: SpawnOptions): string[] {
     const { project, session, prompt, mode = 'agent', oneShot = false, browser } = opts;

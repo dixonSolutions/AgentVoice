@@ -6,7 +6,7 @@
  *   2. Load + validate config (config.ts)
  *   3. Initialise logger (log.ts)
  *   4. Open DB + run migrations (db.ts)
- *   5. Reconcile project registry (registry.ts)
+ *   5. Reconcile project registry (registry.ts) + migrate legacy resume ids
  *   6. Mark orphaned jobs (jobs.ts)
  *   7. Start Fastify server (server.ts)
  *   8. Register graceful shutdown handlers
@@ -19,6 +19,7 @@ import { getRunModeInfo } from './runMode.js';
 import { initLogger, getLogger } from './log.js';
 import { getDb, closeDb } from './state/db.js';
 import { reconcileRegistry } from './state/registry.js';
+import { migrateLegacyResumeIds } from './state/resumeMigration.js';
 import { markOrphanedJobs, markOrphanedVoiceAgentRuns } from './state/jobs.js';
 import { getActiveProvider } from './providers/agents/registry.js';
 import { getActiveHostingProvider } from './providers/hosting/registry.js';
@@ -53,6 +54,9 @@ async function main(): Promise<void> {
 
   // 4. Registry reconciliation (upsert projects from config.json)
   reconcileRegistry();
+
+  // 4b. File any legacy provider-agnostic resume id under the CLI that owns it.
+  migrateLegacyResumeIds();
 
   // 5. Orphan cleanup (jobs left running from a previous bridge process)
   const orphanCount = markOrphanedJobs();
