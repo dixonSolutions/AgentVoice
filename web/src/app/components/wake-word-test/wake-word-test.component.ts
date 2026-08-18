@@ -10,7 +10,7 @@ import { Tag } from '@openng/optimus-ui/tag';
 import { captureMicStream, unlockAudioContext } from '../../../audio.js';
 import { playVoiceCueNow } from '../../../sound-effects.js';
 import { isCrossOriginIsolated } from '../../../cross-origin-isolation.js';
-import { SileroVadDetector } from '../../../silero-vad.js';
+import { DEFAULT_REDEMPTION_MS, SileroVadDetector } from '../../../silero-vad.js';
 import {
   VoskGrammarSpotter,
   wakeSpotterOptions,
@@ -126,7 +126,7 @@ export class WakeWordTestComponent implements OnInit, OnDestroy {
   );
 
   protected readonly silenceMs = computed(
-    () => this.voiceProviders.data()?.turnSubmit.silenceMs ?? 1500,
+    () => this.voiceProviders.data()?.turnSubmit.silenceMs ?? DEFAULT_REDEMPTION_MS,
   );
 
   protected readonly phraseConflict = computed(() => {

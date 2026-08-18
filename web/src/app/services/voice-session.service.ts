@@ -19,6 +19,7 @@ import { CallSession, isNativeShell } from '../../native/call-session.js';
 import { SessionKeepAlive } from '../../session-keepalive.js';
 import { preloadVoiceCues, playVoiceCueNow } from '../../sound-effects.js';
 import type { SttBackend, TtsBackend } from '../../intelligence-audio.js';
+import { onModelDownload, type ModelDownloadState } from '../../model-download.js';
 
 export interface TranscriptEntry {
   id: number;
@@ -79,6 +80,8 @@ export class VoiceSessionService {
   readonly sessionConnecting = signal(false);
   /** True while MCP install / version check runs before mic opens. */
   readonly sessionPrepActive = signal(false);
+  /** Offline model download in flight — null when nothing is being fetched. */
+  readonly modelDownload = signal<ModelDownloadState | null>(null);
   readonly speaking = this._speaking.asReadonly();
   readonly voiceActivated = this._voiceActivated.asReadonly();
   readonly micMuted = this._micMuted.asReadonly();
@@ -108,6 +111,12 @@ export class VoiceSessionService {
   private meterRaf = 0;
 
   private static readonly MIC_MUTE_PREF_KEY = 'cv_mic_muted_pref';
+
+  constructor() {
+    // Model download progress drives the orb's Preparing state. The service lives
+    // for the app's lifetime, so this subscription is never torn down.
+    onModelDownload((state) => this.modelDownload.set(state));
+  }
 
   private readMicMutePref(): boolean | null {
     try {

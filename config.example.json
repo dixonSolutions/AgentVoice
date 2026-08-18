@@ -49,7 +49,7 @@
         "wakeConfidenceThreshold": 0.45
       },
       "turnSubmit": {
-        "silenceMs": 1500,
+        "silenceMs": 700,
         "vadEnabled": true
       },
       "tts": {

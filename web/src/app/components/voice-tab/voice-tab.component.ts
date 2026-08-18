@@ -37,6 +37,7 @@ import { AuthCardComponent } from '../auth-card/auth-card.component';
 import { ImageCarouselComponent } from '../image-carousel/image-carousel.component';
 import { LiveLogPanelComponent } from '../live-log-panel/live-log-panel.component';
 import { VoiceOrbComponent, type OrbColorMode } from '../voice-orb/voice-orb.component';
+import { formatBytes, type ModelDownloadState } from '../../../model-download.js';
 
 const SELECT_PANEL_WIDTH_VAR = '--cv-select-panel-width';
 
@@ -232,6 +233,23 @@ export class VoiceTabComponent {
 
   /** Large "Preparing" label while MCP setup runs — logs and setup chrome stay hidden. */
   protected readonly isPreparing = computed(() => this.voiceSession.sessionPrepActive());
+
+  /** Whole-number percent for the progress bar; 0 while the total is unknown. */
+  protected downloadPercent(download: ModelDownloadState): number {
+    if (download.fraction === null) return 0;
+    return Math.round(download.fraction * 100);
+  }
+
+  /** "23.4 MB of 48.2 MB · 49%", or a phase label when there is nothing to count. */
+  protected downloadStatus(download: ModelDownloadState): string {
+    if (download.phase === 'unpacking') return 'Unpacking…';
+    if (download.totalBytes === null) {
+      return `${formatBytes(download.loadedBytes)} downloaded`;
+    }
+    const loaded = formatBytes(download.loadedBytes);
+    const total = formatBytes(download.totalBytes);
+    return `${loaded} of ${total} · ${this.downloadPercent(download)}%`;
+  }
 
   /** Session log panel: existing session history or live call — never during prepare. */
   protected readonly showSessionLogs = computed(() => {

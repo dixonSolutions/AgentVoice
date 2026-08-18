@@ -10,7 +10,7 @@ import { isCrossOriginIsolated, voskCoopError } from './cross-origin-isolation.j
 import { loadVoskModel } from './vosk-model-cache.js';
 import { normalizeForWakeMatch } from './wake-words.js';
 
-export const VOSK_MODEL_URL = '/vosk/model.tar.gz';
+export { VOSK_MODEL_URL } from './model-download.js';
 export const VOSK_SAMPLE_RATE = 16000;
 
 export interface VoskGrammarSpotterCallbacks {

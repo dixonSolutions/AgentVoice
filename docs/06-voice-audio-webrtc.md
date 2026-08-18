@@ -38,6 +38,78 @@ Callback types: `web/src/voice-session-types.ts`.
 | **End phrase** | `vadEnabled: false` | Vosk listens for end phrase |
 | **Silence fallback** | `turnSubmit.silenceMs` | Auto-submit after N ms quiet |
 
+### Redemption and the VAD model
+
+`turnSubmit.silenceMs` is passed straight through as Silero's `redemptionMs`, and
+the model's frame size quantises it. vad-web still defaults to the **legacy**
+model, whose frames are 1536 samples (96 ms):
+
+| Model | Frame | `silenceMs` | Real redemption | Earliest speech-end |
+| --- | --- | --- | --- | --- |
+| legacy (was) | 96 ms | 1500 | **1 440 ms** | 1 824 ms |
+| v5 (now) | 32 ms | 700 | **672 ms** | 1 056 ms |
+
+We select `model: 'v5'` explicitly in `web/src/silero-vad.ts` and ship
+`silero_vad_v5.onnx` via the asset globs in `angular.json` — keep those two in
+step. v5's finer frames and better accuracy are what make a sub-second
+redemption safe; **v5 alone is not a win** (at `silenceMs: 1500` it quantises to
+1 472 ms, slightly worse than legacy), so the lowered default is the other half
+of the change.
+
+`LlmIntelligenceSession.minSpeechEndMs` (800 ms) discards a speech-end that
+arrives too soon after wake. That is safe only because the VAD cannot report one
+before `minSpeechMs` + redemption — 864 ms even at the lowest configurable
+`silenceMs` of 500. Re-check it if either bound moves.
+
+Hosts that still carry the old `1500` default are migrated to `700` once, on
+config load. A `silenceMs` set to anything else is treated as deliberate and left
+alone. Note the value also drives the silence-submit timer in the non-VAD,
+non-end-phrase mode, which gets correspondingly snappier.
+
+## Model download progress
+
+The two offline models are large and neither library reports progress:
+`vosk-browser`'s `createModel(url)` fetches the ~50 MB archive inside its own
+worker, and `MicVAD.new()` fetches the ONNX graph and the ONNX Runtime binary
+internally. Before this, a first run showed a motionless orb for the length of a
+~65 MB transfer, and the VAD assets landed *mid-turn* on the first wake.
+
+`web/src/model-download.ts` fetches them up front through a counting stream and
+writes them into the same Cache Storage buckets the service worker reads, so the
+library call that follows resolves locally.
+
+| Asset | Size | Cache |
+| --- | --- | --- |
+| `/vosk/model.tar.gz` | ~50 MB | `agentvoice-vosk-v1` |
+| `/silero-vad/silero_vad_v5.onnx` | 2.2 MB | `agentvoice-models-v1` |
+| `/silero-vad/ort-wasm-simd-threaded.wasm` | 13 MB | `agentvoice-models-v1` |
+
+`LlmIntelligenceSession.start()` calls `prefetchVoiceModels()` after the
+WebSocket authenticates and before the wake phase, so the download happens while
+the orb still reads **Preparing**. Vosk is skipped when wake words are off or
+cross-origin isolation is missing; Silero is skipped when `vadEnabled: false`.
+
+Progress reaches the UI through `onModelDownload()` →
+`VoiceSessionService.modelDownload` → the orb stage in the Voice tab. Emissions
+are throttled to ~8/s so change detection is not flooded per network chunk.
+
+Two phases are reported separately, because only one of them can be counted:
+
+- **downloading** — determinate when the server sends `Content-Length`,
+  indeterminate (a sweeping bar) when it does not.
+- **unpacking** — Vosk un-tars the archive in WASM afterwards. That is several
+  silent seconds on a phone with nothing to count, so it gets its own label
+  rather than a progress bar frozen at 100%.
+
+Prefetch failure is never fatal: the warning is logged and the library downloads
+the asset itself, exactly as it did before.
+
+**Caching notes.** `vosk-browser` also keeps the *extracted* model in IndexedDB
+(it mounts `IDBFS` and syncs around the download), so a repeat visit re-reads it
+from there and never touches the cached archive. Bump `MODEL_CACHE_NAME` in
+`web/public/sw.js` when the bundled model assets change — like `VOSK_CACHE_NAME`
+it is deliberately excluded from the activate-time cache sweep.
+
 ## STT backends
 
 | Backend | When used |
@@ -148,6 +220,7 @@ Limits, battery notes, and user guidance: [`19-mobile-session-keepalive.md`](./1
 `web/src/audio.ts` — mic capture, echo cancellation, noise gate.
 `web/src/silero-vad.ts` — speech-end detection.
 `web/src/voice-audio-meter.ts` — orb visualization levels.
+`web/src/model-download.ts` — offline model prefetch + progress reporting.
 
 ## Related docs
 

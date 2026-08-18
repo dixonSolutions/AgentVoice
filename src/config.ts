@@ -89,9 +89,18 @@ export const WakeWordsSchema = z
       (sensitivity ? LEGACY_WAKE_SENSITIVITY_THRESHOLD[sensitivity] : 0.45),
   }));
 
+/**
+ * Previous default. Silero's `legacy` model quantised it to 15 x 96 ms frames,
+ * so every turn ended with 1 440 ms of dead air. Kept so the migration below can
+ * recognise an untouched config.
+ */
+export const LEGACY_TURN_SILENCE_MS = 1500;
+/** With the v5 VAD (32 ms frames) this lands at 672 ms of real redemption. */
+export const DEFAULT_TURN_SILENCE_MS = 700;
+
 export const TurnSubmitSchema = z.object({
   /** Ms of silence after last STT final before auto-submitting the buffered turn. */
-  silenceMs: z.number().int().min(500).max(30_000).default(1500),
+  silenceMs: z.number().int().min(500).max(30_000).default(DEFAULT_TURN_SILENCE_MS),
   /** When true, Silero VAD detects speech end; when false, use end wake phrase or silence timer. */
   vadEnabled: z.boolean().default(true),
 });
@@ -413,10 +422,22 @@ function migrateRawConfig(raw: unknown): unknown {
       }
     }
     if (!voice['turnSubmit'] || typeof voice['turnSubmit'] !== 'object') {
-      voice['turnSubmit'] = { silenceMs: 1500, vadEnabled: true };
+      voice['turnSubmit'] = {
+        silenceMs: DEFAULT_TURN_SILENCE_MS,
+        vadEnabled: true,
+      };
     } else {
       const ts = voice['turnSubmit'] as Record<string, unknown>;
       if (ts['vadEnabled'] === undefined) ts['vadEnabled'] = true;
+      // Only rewrite a value that is provably the old default — anything else is
+      // a deliberate choice and stays untouched.
+      if (ts['silenceMs'] === LEGACY_TURN_SILENCE_MS) {
+        ts['silenceMs'] = DEFAULT_TURN_SILENCE_MS;
+        log.info(
+          { from: LEGACY_TURN_SILENCE_MS, to: DEFAULT_TURN_SILENCE_MS },
+          'Migrated config — turnSubmit.silenceMs lowered for the v5 VAD',
+        );
+      }
     }
     if (!voice['tts'] || typeof voice['tts'] !== 'object') {
       voice['tts'] = {
