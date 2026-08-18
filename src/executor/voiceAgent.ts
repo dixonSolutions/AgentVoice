@@ -13,6 +13,7 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import stripAnsi from 'strip-ansi';
 import { attachCursorAgentSpawnGuard } from './agentProcess.js';
+import { guardResumeId, handleStaleSessionExit } from './resumeGuard.js';
 import { getActiveProvider } from '../providers/agents/registry.js';
 import { notifyAuthRequired } from '../providers/agents/authNotify.js';
 import { childLogger } from '../log.js';
@@ -160,7 +161,7 @@ function buildVoiceAgentArgs(
  * Spawn the conversational agent loop. At most one voice agent runs at a time.
  */
 export function spawnVoiceAgent(
-  project: Project,
+  incomingProject: Project,
   session: SessionState,
   pendingTurn?: string,
 ): VoiceAgentHandle {
@@ -170,6 +171,9 @@ export function spawnVoiceAgent(
     );
   }
 
+  // A resume id the active CLI does not have is fatal *and* mute: it exits 1
+  // before the agent can speak. Better a fresh thread than a silent turn.
+  const project = guardResumeId(incomingProject);
   const provider = getActiveProvider();
   const client = provider.id;
   const args = buildVoiceAgentArgs(project, session, pendingTurn);
@@ -319,6 +323,9 @@ export function spawnVoiceAgent(
     });
 
     const authRequired = exitCode !== 0 && provider.isAuthError(exitCode, stderr);
+    // Last resort when the pre-spawn check could not tell (provider store
+    // unreadable): forget the thread so the next turn is not a silent repeat.
+    const staleSession = handleStaleSessionExit(project, exitCode, stderr);
 
     if (exitCode !== 0) {
       log.warn({ pid, runId, exitCode, authRequired, stderr: stderr.slice(0, 500) }, 'voice agent exited with error');
@@ -344,7 +351,9 @@ export function spawnVoiceAgent(
     if (!hadSpeakThisTurn()) {
       const fallback = authRequired
         ? `${provider.displayName} needs you to sign in — I sent a sign-in link to your phone.`
-        : summarizeForSpeechFallback(lastAssistantText);
+        : staleSession
+          ? `That ${provider.displayName} conversation is no longer available, so I cleared it. Say that again and I will start a fresh thread.`
+          : summarizeForSpeechFallback(lastAssistantText);
       if (fallback) {
         log.warn(
           { runId, pid, textLen: fallback.length },

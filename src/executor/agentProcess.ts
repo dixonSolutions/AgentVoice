@@ -20,6 +20,7 @@ import { childLogger } from '../log.js';
 import { getActiveProvider, getProvider } from '../providers/agents/registry.js';
 import type { SpawnOptions } from '../providers/agents/types.js';
 import type { AgentStreamEvent } from '../providers/agents/events.js';
+import { guardResumeId, handleStaleSessionExit } from './resumeGuard.js';
 
 export { AGENT_CLIENTS };
 export type { AgentClient, SpawnOptions };
@@ -89,8 +90,11 @@ export interface AgentResult {
  * stdout: NDJSON events (readline), forwarded to event subscribers.
  * stderr: buffered for error capture + auth-failure classification.
  */
-export function spawnAgent(opts: SpawnOptions): AgentHandle {
+export function spawnAgent(incomingOpts: SpawnOptions): AgentHandle {
   const provider = getActiveProvider();
+  // Never hand this CLI a thread id it does not own (e.g. left behind by the
+  // previously active CLI) — `--resume` on an unknown id exits 1 immediately.
+  const opts: SpawnOptions = { ...incomingOpts, project: guardResumeId(incomingOpts.project) };
   const args = provider.buildWorkerArgs(opts);
 
   log.info(
@@ -201,6 +205,8 @@ export function spawnAgent(opts: SpawnOptions): AgentHandle {
       const exitCode = code ?? -1;
       const stderr = stripAnsi(Buffer.concat(stderrChunks).toString('utf-8')).trim();
       const authRequired = exitCode !== 0 && provider.isAuthError(exitCode, stderr);
+      // Thread vanished under us — forget it so the retry is not identical.
+      handleStaleSessionExit(opts.project, exitCode, stderr);
 
       if (exitCode !== 0) {
         log.warn({ pid, exitCode, authRequired, stderr: stderr.slice(0, 500) }, 'agent exited with error');

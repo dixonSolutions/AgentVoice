@@ -157,6 +157,21 @@ export interface AgentProvider {
   getAbout?(): Promise<AgentAbout | null>;
 
   /**
+   * Best-effort: does this CLI still hold `sessionId` for `project`?
+   *
+   * Resuming a thread the CLI does not have is fatal (exit 1 before a single
+   * token is produced), so we check the CLI's own on-disk store first and drop
+   * `--resume` when the answer is a confident no.
+   *
+   * `'unknown'` means "the store could not be inspected" (layout changed, dir
+   * missing, permissions) — callers MUST treat that as "try the resume anyway"
+   * rather than silently starting a fresh thread. Session stores are internal
+   * to each CLI, so this is a heuristic and must never be the only safety net;
+   * executor/resumeGuard.ts also recovers from the failure at runtime.
+   */
+  sessionStatus?(project: Project, sessionId: string): 'present' | 'absent' | 'unknown';
+
+  /**
    * Pre-create a fresh conversation thread and return its id, if the CLI can.
    * When absent (or resolving null) `agent_new_session` just clears resume_id.
    */

@@ -59,6 +59,21 @@ const MIGRATION_SQL = `
     models_json   TEXT NOT NULL
   );
 
+  -- Resume thread id per (project, agent CLI). Each CLI keeps its own private
+  -- conversation store, so the ids are NOT interchangeable: the old shared
+  -- project.resume_id column meant switching agentClient handed the new CLI a
+  -- foreign id and every turn died with "No conversation found with session ID:
+  -- …" (exit 1) — the voice session went silent with no explanation.
+  -- project.resume_id is legacy: migrated once at boot (state/resumeMigration.ts)
+  -- and never read again.
+  CREATE TABLE IF NOT EXISTS project_resume (
+    project     TEXT NOT NULL REFERENCES project(name),
+    provider    TEXT NOT NULL,
+    resume_id   TEXT NOT NULL,
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (project, provider)
+  );
+
   -- One row per cursor_submit invocation.
   CREATE TABLE IF NOT EXISTS job (
     id           TEXT PRIMARY KEY,

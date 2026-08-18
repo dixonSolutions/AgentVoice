@@ -20,6 +20,7 @@ import { getConfig } from '../config.js';
 import { addProject, removeProject, updateProject } from '../state/projectsConfig.js';
 import { readConfigFile } from '../state/configFile.js';
 import { getDb } from '../state/db.js';
+import { getProjectResumeId } from '../state/registry.js';
 import { childLogger } from '../log.js';
 
 const log = childLogger('projectsAdmin');
@@ -57,11 +58,12 @@ export async function registerProjectsAdminRoutes(app: FastifyInstance): Promise
     const cfg = getConfig();
     const db = getDb();
 
+    // resume_id lives in project_resume, keyed by the active agent CLI — the
+    // column on `project` is legacy and always NULL after the boot migration.
     const rows = db
-      .prepare('SELECT name, resume_id, model, updated_at FROM project')
+      .prepare('SELECT name, model, updated_at FROM project')
       .all() as Array<{
         name: string;
-        resume_id: string | null;
         model: string | null;
         updated_at: string;
       }>;
@@ -78,7 +80,7 @@ export async function registerProjectsAdminRoutes(app: FastifyInstance): Promise
           description: p.description ?? null,
           aliases: p.aliases,
           enabled: p.enabled,
-          resumeId: reg?.resume_id ?? null,
+          resumeId: getProjectResumeId(p.name),
           model: reg?.model ?? null,
           pathExists: existsSync(p.path),
           updatedAt: reg?.updated_at ?? new Date().toISOString(),

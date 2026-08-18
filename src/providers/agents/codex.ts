@@ -13,7 +13,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { childLogger } from '../../log.js';
@@ -323,6 +323,43 @@ async function ensureCodexMcpRegistration(
   return { ok: true, configPath, action, message: describeAction(action, 'Codex') };
 }
 
+/**
+ * Codex writes one rollout transcript per session under
+ * `~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-<timestamp>-<session id>.jsonl`,
+ * so the id shows up in a filename somewhere in that date tree. The tree is
+ * shallow and small, and the walk is depth-capped.
+ */
+function hasRolloutFile(dir: string, sessionId: string, depth: number): boolean {
+  if (depth < 0) return false;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (hasRolloutFile(join(dir, entry.name), sessionId, depth - 1)) return true;
+    } else if (entry.name.includes(sessionId)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** See AgentProvider.sessionStatus — 'unknown' means "try the resume anyway". */
+function codexSessionStatus(_project: Project, sessionId: string): 'present' | 'absent' | 'unknown' {
+  const root = join(resolveUserHome(), '.codex', 'sessions');
+  let entries;
+  try {
+    entries = readdirSync(root);
+  } catch {
+    return 'unknown';
+  }
+  if (entries.length === 0) return 'unknown';
+  return hasRolloutFile(root, sessionId, 4) ? 'present' : 'absent';
+}
+
 export const codexProvider: AgentProvider = {
   id: 'codex',
   displayName: 'Codex',
@@ -402,6 +439,7 @@ export const codexProvider: AgentProvider = {
   supportedModes: (): readonly AgentMode[] => ['agent', 'ask'],
   parseStreamEvent: parseCodexEvent,
   ensureMcpRegistration: ensureCodexMcpRegistration,
+  sessionStatus: codexSessionStatus,
 
   buildWorkerArgs(opts: SpawnOptions): string[] {
     const { project, session, prompt, mode = 'agent', oneShot = false, worktree, browser } = opts;

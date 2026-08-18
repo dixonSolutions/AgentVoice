@@ -12,7 +12,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { homedir } from 'node:os';
-import { mkdirSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import stripAnsi from 'strip-ansi';
 import { getConfig } from '../../config.js';
@@ -320,6 +320,30 @@ async function ensureCursorMcpRegistration(
   return { ok: true, configPath, action, message: describeAction(action, 'Cursor') };
 }
 
+/**
+ * cursor-agent stores each chat as `~/.cursor/chats/<workspace hash>/<chat id>/`.
+ * The workspace hash is internal to Cursor, so we search every workspace: found
+ * anywhere means the id really is a Cursor chat, found nowhere means `--resume`
+ * would fail. See AgentProvider.sessionStatus for why 'unknown' is not 'absent'.
+ */
+function cursorSessionStatus(_project: Project, sessionId: string): 'present' | 'absent' | 'unknown' {
+  const root = join(resolveUserHome(), '.cursor', 'chats');
+  let workspaces: string[];
+  try {
+    workspaces = readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return 'unknown';
+  }
+  if (workspaces.length === 0) return 'unknown';
+
+  for (const workspace of workspaces) {
+    if (existsSync(join(root, workspace, sessionId))) return 'present';
+  }
+  return 'absent';
+}
+
 export const cursorProvider: AgentProvider = {
   id: 'cursor',
   displayName: 'Cursor',
@@ -399,6 +423,7 @@ export const cursorProvider: AgentProvider = {
   supportedModes: (): readonly AgentMode[] => ['agent', 'plan', 'ask', 'debug'],
   parseStreamEvent: parseCursorEvent,
   ensureMcpRegistration: ensureCursorMcpRegistration,
+  sessionStatus: cursorSessionStatus,
 
   /** `cursor-agent create-chat` mints a thread id we can resume into later. */
   async createSession(): Promise<string | null> {
