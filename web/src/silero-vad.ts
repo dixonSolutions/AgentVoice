@@ -8,6 +8,9 @@ import { MicVAD } from '@ricky0123/vad-web';
 import { getSharedAudioContext } from './audio.js';
 import { SILERO_ASSET_BASE, prefetchVoiceModels } from './model-download.js';
 
+/** Matches the `turnSubmit.silenceMs` default; used when a caller omits it. */
+export const DEFAULT_REDEMPTION_MS = 700;
+
 export interface SileroVadCallbacks {
   onSpeechEnd?: () => void;
   onSpeechStart?: () => void;
@@ -44,7 +47,12 @@ export class SileroVadDetector {
         onnxWASMBasePath: SILERO_ASSET_BASE,
         startOnLoad: false,
         processorType: 'auto',
-        redemptionMs: opts.redemptionMs ?? 1400,
+        // vad-web still defaults to `legacy`, whose 1536-sample frames quantise
+        // redemption to 96 ms steps. v5 ships in the same package with 512-sample
+        // (32 ms) frames and better accuracy, which is what makes a sub-second
+        // redemption safe. Keep this in step with the asset glob in angular.json.
+        model: 'v5',
+        redemptionMs: opts.redemptionMs ?? DEFAULT_REDEMPTION_MS,
         onSpeechEnd: () => opts.onSpeechEnd?.(),
         onSpeechStart: () => opts.onSpeechStart?.(),
       });

@@ -31,7 +31,7 @@
                 "output": "silero-vad"
               },
               {
-                "glob": "silero_vad_legacy.onnx",
+                "glob": "silero_vad_v5.onnx",
                 "input": "node_modules/@ricky0123/vad-web/dist",
                 "output": "silero-vad"
               },

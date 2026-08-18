@@ -38,6 +38,34 @@ Callback types: `web/src/voice-session-types.ts`.
 | **End phrase** | `vadEnabled: false` | Vosk listens for end phrase |
 | **Silence fallback** | `turnSubmit.silenceMs` | Auto-submit after N ms quiet |
 
+### Redemption and the VAD model
+
+`turnSubmit.silenceMs` is passed straight through as Silero's `redemptionMs`, and
+the model's frame size quantises it. vad-web still defaults to the **legacy**
+model, whose frames are 1536 samples (96 ms):
+
+| Model | Frame | `silenceMs` | Real redemption | Earliest speech-end |
+| --- | --- | --- | --- | --- |
+| legacy (was) | 96 ms | 1500 | **1 440 ms** | 1 824 ms |
+| v5 (now) | 32 ms | 700 | **672 ms** | 1 056 ms |
+
+We select `model: 'v5'` explicitly in `web/src/silero-vad.ts` and ship
+`silero_vad_v5.onnx` via the asset globs in `angular.json` — keep those two in
+step. v5's finer frames and better accuracy are what make a sub-second
+redemption safe; **v5 alone is not a win** (at `silenceMs: 1500` it quantises to
+1 472 ms, slightly worse than legacy), so the lowered default is the other half
+of the change.
+
+`LlmIntelligenceSession.minSpeechEndMs` (800 ms) discards a speech-end that
+arrives too soon after wake. That is safe only because the VAD cannot report one
+before `minSpeechMs` + redemption — 864 ms even at the lowest configurable
+`silenceMs` of 500. Re-check it if either bound moves.
+
+Hosts that still carry the old `1500` default are migrated to `700` once, on
+config load. A `silenceMs` set to anything else is treated as deliberate and left
+alone. Note the value also drives the silence-submit timer in the non-VAD,
+non-end-phrase mode, which gets correspondingly snappier.
+
 ## Model download progress
 
 The two offline models are large and neither library reports progress:
@@ -53,7 +81,7 @@ library call that follows resolves locally.
 | Asset | Size | Cache |
 | --- | --- | --- |
 | `/vosk/model.tar.gz` | ~50 MB | `agentvoice-vosk-v1` |
-| `/silero-vad/silero_vad_legacy.onnx` | 1.8 MB | `agentvoice-models-v1` |
+| `/silero-vad/silero_vad_v5.onnx` | 2.2 MB | `agentvoice-models-v1` |
 | `/silero-vad/ort-wasm-simd-threaded.wasm` | 13 MB | `agentvoice-models-v1` |
 
 `LlmIntelligenceSession.start()` calls `prefetchVoiceModels()` after the

@@ -20,7 +20,7 @@
 
 export const VOSK_MODEL_URL = '/vosk/model.tar.gz';
 export const SILERO_ASSET_BASE = '/silero-vad/';
-export const SILERO_MODEL_URL = `${SILERO_ASSET_BASE}silero_vad_legacy.onnx`;
+export const SILERO_MODEL_URL = `${SILERO_ASSET_BASE}silero_vad_v5.onnx`;
 /**
  * ONNX Runtime binary that MicVAD loads. vad-web imports `onnxruntime-web/wasm`,
  * whose loader resolves this exact filename against `onnxWASMBasePath`. It is

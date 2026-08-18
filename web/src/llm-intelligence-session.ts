@@ -46,7 +46,7 @@ import {
   voskPhraseMatches,
   wakeSpotterOptions,
 } from './vosk-wake-word.js';
-import { SileroVadDetector } from './silero-vad.js';
+import { DEFAULT_REDEMPTION_MS, SileroVadDetector } from './silero-vad.js';
 import { prefetchVoiceModels } from './model-download.js';
 import { TurnSubmitBuffer } from './turn-submit-buffer.js';
 import { playVoiceCueNow } from './sound-effects.js';
@@ -81,7 +81,7 @@ export class LlmIntelligenceSession {
   private stt: SttSession | null = null;
   private closed = false;
   private wakeWords: WakeWords = { start: '', end: 'send' };
-  private turnSubmit: TurnSubmit = { silenceMs: 1500, vadEnabled: true };
+  private turnSubmit: TurnSubmit = { silenceMs: DEFAULT_REDEMPTION_MS, vadEnabled: true };
   private workflow = 'agent_native';
   private ttsSettings: VoiceTtsSettings = {
     agentVoiceEnabled: true,
@@ -123,7 +123,13 @@ export class LlmIntelligenceSession {
   private vadSpeechEndPending = false;
   private endPhrasePending = false;
   private endSubmitTimer = 0;
-  /** Ignore speech-end for this long after wake (avoids bleed-through / partial false hits). */
+  /**
+   * Ignore speech-end for this long after wake (avoids bleed-through / partial
+   * false hits). Safe only while the VAD cannot physically report speech-end
+   * sooner: with the v5 model that floor is minSpeechMs(384) + redemption, i.e.
+   * 864 ms at the lowest configurable silenceMs (500). Re-check this if either
+   * the guard rises or the silenceMs minimum falls.
+   */
   private readonly minSpeechEndMs = 800;
   private capturePhaseStartedAt = 0;
   /** True only between wake activation and turn submit — VAD must not run before this. */
@@ -1076,7 +1082,7 @@ export class LlmIntelligenceSession {
         const wake = msg['wakeWords'] as WakeWords | undefined;
         this.wakeWords = wake ?? { start: '', end: 'send' };
         const submit = msg['turnSubmit'] as TurnSubmit | undefined;
-        this.turnSubmit = submit ?? { silenceMs: 1500, vadEnabled: true };
+        this.turnSubmit = submit ?? { silenceMs: DEFAULT_REDEMPTION_MS, vadEnabled: true };
         this.wakeWordsEnabled = msg['wakeWordsEnabled'] !== false;
         if (msg['tts'] && typeof msg['tts'] === 'object') {
           this.ttsSettings = msg['tts'] as VoiceTtsSettings;
