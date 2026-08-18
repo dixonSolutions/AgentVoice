@@ -7,13 +7,20 @@
  * stale data).
  *
  * Strategy: network-first for API routes, cache-first for static assets.
- * Vosk wake-word model: cache-first after first download (~50 MB).
- * Cache is versioned — bump CACHE_NAME when deploying a new build.
+ * Offline voice models (Vosk archive, Silero VAD graph + ONNX runtime) are
+ * cache-first after first download, so the app pays for them once. The PWA
+ * pre-fetches them with progress into these same caches — see
+ * web/src/model-download.ts.
+ *
+ * Cache is versioned — bump CACHE_NAME when deploying a new build, and
+ * MODEL_CACHE_NAME when the bundled model assets themselves change.
  */
 
 const CACHE_NAME = 'agentvoice-v4';
 const VOSK_CACHE_NAME = 'agentvoice-vosk-v1';
+const MODEL_CACHE_NAME = 'agentvoice-models-v1';
 const VOSK_MODEL_PATH = '/vosk/model.tar.gz';
+const SILERO_ASSET_PREFIX = '/silero-vad/';
 
 const APP_SHELL = [
   '/',
@@ -41,7 +48,12 @@ self.addEventListener('activate', (event) => {
       .then((keys) =>
         Promise.all(
           keys
-            .filter((key) => key !== CACHE_NAME && key !== VOSK_CACHE_NAME)
+            .filter(
+              (key) =>
+                key !== CACHE_NAME &&
+                key !== VOSK_CACHE_NAME &&
+                key !== MODEL_CACHE_NAME,
+            )
             .map((key) => caches.delete(key)),
         ),
       )
@@ -63,20 +75,32 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Vosk model — cache after first successful fetch (offline wake-word on repeat visits)
-  if (url.pathname === VOSK_MODEL_PATH && event.request.method === 'GET') {
-    event.respondWith(
-      caches.open(VOSK_CACHE_NAME).then(async (cache) => {
-        const cached = await cache.match(event.request);
-        if (cached) return cached;
-        const response = await fetch(event.request);
-        if (response.ok) {
-          await cache.put(event.request, response.clone());
-        }
-        return response;
-      }),
-    );
-    return;
+  // Offline voice models — cache-first, so a repeat visit never re-downloads them.
+  // The PWA writes these same entries ahead of time with a progress bar; a direct
+  // hit here is the fallback for anything it did not pre-fetch (e.g. the ONNX
+  // runtime binary, whose filename ORT picks at runtime).
+  if (event.request.method === 'GET') {
+    const modelCache =
+      url.pathname === VOSK_MODEL_PATH
+        ? VOSK_CACHE_NAME
+        : url.pathname.startsWith(SILERO_ASSET_PREFIX)
+          ? MODEL_CACHE_NAME
+          : null;
+
+    if (modelCache) {
+      event.respondWith(
+        caches.open(modelCache).then(async (cache) => {
+          const cached = await cache.match(url.pathname);
+          if (cached) return cached;
+          const response = await fetch(event.request);
+          if (response.ok) {
+            await cache.put(url.pathname, response.clone());
+          }
+          return response;
+        }),
+      );
+      return;
+    }
   }
 
   event.respondWith(

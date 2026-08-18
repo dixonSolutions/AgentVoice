@@ -39,7 +39,35 @@
           <i class="pi pi-pencil" aria-hidden="true"></i>
         </button>
       }
-      @if (isPreparing()) {
+      @if (voiceSession.modelDownload(); as download) {
+        <p class="cv-voice-preparing-label" aria-live="polite">Preparing</p>
+        <div class="cv-model-download">
+          <div class="cv-model-download-head">
+            <span class="cv-model-download-label">{{ download.label }}</span>
+            @if (download.stepCount > 1) {
+              <span class="cv-model-download-step">
+                {{ download.step }} of {{ download.stepCount }}
+              </span>
+            }
+          </div>
+          <div
+            class="cv-model-download-track"
+            role="progressbar"
+            [attr.aria-label]="'Downloading ' + download.label"
+            [attr.aria-valuemin]="download.fraction === null ? null : 0"
+            [attr.aria-valuemax]="download.fraction === null ? null : 100"
+            [attr.aria-valuenow]="downloadPercent(download)"
+            [attr.aria-valuetext]="downloadStatus(download)">
+            <div
+              class="cv-model-download-fill"
+              [class.cv-model-download-fill--indeterminate]="download.fraction === null"
+              [style.width.%]="download.fraction === null ? 100 : downloadPercent(download)"></div>
+          </div>
+          <p class="cv-model-download-status" aria-live="polite">
+            {{ downloadStatus(download) }}
+          </p>
+        </div>
+      } @else if (isPreparing()) {
         <p class="cv-voice-preparing-label" aria-live="polite">Preparing</p>
         <p class="cv-voice-preparing-hint">Tap the orb to cancel</p>
       } @else if (!isLiveSession()) {

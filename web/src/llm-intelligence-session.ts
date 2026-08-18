@@ -47,6 +47,7 @@ import {
   wakeSpotterOptions,
 } from './vosk-wake-word.js';
 import { SileroVadDetector } from './silero-vad.js';
+import { prefetchVoiceModels } from './model-download.js';
 import { TurnSubmitBuffer } from './turn-submit-buffer.js';
 import { playVoiceCueNow } from './sound-effects.js';
 import { errorSpeechText } from './error-feedback.js';
@@ -298,6 +299,14 @@ export class LlmIntelligenceSession {
     );
     this.wsConnected = true;
 
+    // Pull the offline models up front, with a progress bar, while the orb still
+    // says "Preparing". Doing it lazily meant a silent ~50 MB download on the
+    // first wake attempt and another one mid-turn when VAD first armed.
+    await prefetchVoiceModels({
+      vosk: this.wakeWordsEnabled && isCrossOriginIsolated(),
+      silero: this.usesVad(),
+    });
+
     // STT hardware is lazy-init in beginUtteranceCapture() — only one backend (WebKit OR Amazon).
     await this.startWakeWordPhase();
 
@@ -452,6 +461,7 @@ export class LlmIntelligenceSession {
     try {
       this.startSpotter = new VoskGrammarSpotter({
         onMatch: (_phrase, heard) => void this.onVoskStartDetected(heard),
+        onStatus: (status) => this.voiceLog('pipeline', 'info', status),
         onError: (message) => {
           console.warn('[vosk-start]', message);
           this.cb.onSttError?.(`Wake phrase spotter: ${message}`);

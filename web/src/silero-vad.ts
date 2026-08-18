@@ -6,6 +6,7 @@
 import { MicVAD } from '@ricky0123/vad-web';
 
 import { getSharedAudioContext } from './audio.js';
+import { SILERO_ASSET_BASE, prefetchVoiceModels } from './model-download.js';
 
 export interface SileroVadCallbacks {
   onSpeechEnd?: () => void;
@@ -29,14 +30,18 @@ export class SileroVadDetector {
       await ctx.resume();
     }
 
+    // Pull the ONNX graph with progress first; MicVAD.new() then reads it from
+    // Cache Storage rather than fetching it silently on the first turn.
+    await prefetchVoiceModels({ vosk: false, silero: true });
+
     try {
       this.micVad = await MicVAD.new({
         getStream: async () => stream,
         pauseStream: async () => {},
         resumeStream: async () => stream,
         audioContext: ctx,
-        baseAssetPath: '/silero-vad/',
-        onnxWASMBasePath: '/silero-vad/',
+        baseAssetPath: SILERO_ASSET_BASE,
+        onnxWASMBasePath: SILERO_ASSET_BASE,
         startOnLoad: false,
         processorType: 'auto',
         redemptionMs: opts.redemptionMs ?? 1400,
