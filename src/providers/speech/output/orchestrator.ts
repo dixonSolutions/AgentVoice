@@ -158,11 +158,10 @@ export const speechOutputPolicy: OrchestrationPolicy<
     const model = req.modelOverride?.trim() || resolveModelFor(id, vendor.defaultModel, settings);
     const voice = req.voiceOverride?.trim() || resolveVoiceFor(id, vendor.defaultVoice(model), settings);
 
-    // The provider can speak it — but can *this* voice? Polly swaps the voice
-    // itself, so only rule it out when no voice in the catalog would do.
+    // The provider can speak it — but can *this* voice? Polly resolves against
+    // its live catalog and swaps the voice itself.
     if (supportsLanguage(speechOutputLanguages(id, model, voice), language)) return true;
-    const alternative = vendor.voices(model).some((v) => supportsLanguage(v.languages ?? 'all', language));
-    return alternative ? true : `no ${language} voice available`;
+    return id === 'amazon_polly' ? true : `no ${language} voice available`;
   },
 
   retriable(err) {

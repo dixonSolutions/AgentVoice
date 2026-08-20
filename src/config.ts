@@ -580,7 +580,7 @@ function migrateAudioSettings(audio: Record<string, unknown>): void {
     rawObject(tts, 'voices')['amazon_polly'] = audio['pollyVoiceId'];
   }
   if (typeof audio['pollyEngine'] === 'string') {
-    rawObject(rawObject(tts, 'scopes'), 'amazon_polly')['engine'] = audio['pollyEngine'];
+    rawObject(tts, 'models')['amazon_polly'] = audio['pollyEngine'];
   }
 
   for (const key of LEGACY_AUDIO_KEYS) delete audio[key];
