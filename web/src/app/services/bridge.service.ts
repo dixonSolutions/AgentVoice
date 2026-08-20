@@ -150,6 +150,13 @@ export interface HostingSetupProgressPush {
   result?: { ok: boolean; publicUrl: string | null; detail: string };
 }
 
+export interface SpeechSetupProgressPush {
+  runId: string;
+  message: string;
+  done?: boolean;
+  error?: string;
+}
+
 interface PendingCall {
   resolve: (value: unknown) => void;
   reject: (reason: Error) => void;
@@ -199,6 +206,8 @@ export class BridgeService {
 
   /** Emits streamed progress for an in-flight hosting-provider setup run (Config → Network). */
   readonly hostingSetupProgress$ = new Subject<HostingSetupProgressPush>();
+  /** Self-hosted speech server setup: image pull, container start, model install. */
+  readonly speechSetupProgress$ = new Subject<SpeechSetupProgressPush>();
 
   // ── Image carousel signals ─────────────────────────────────────────────
 
@@ -639,6 +648,16 @@ export class BridgeService {
             typeof msg['result'] === 'object' && msg['result'] !== null
               ? (msg['result'] as { ok: boolean; publicUrl: string | null; detail: string })
               : undefined,
+        });
+        break;
+      }
+
+      case 'speech_setup_progress': {
+        this.speechSetupProgress$.next({
+          runId: String(msg['runId'] ?? ''),
+          message: String(msg['message'] ?? ''),
+          done: msg['done'] === true,
+          error: typeof msg['error'] === 'string' ? msg['error'] : undefined,
         });
         break;
       }

@@ -27,7 +27,19 @@ import { getActiveProvider } from '../providers/agents/registry.js';
 import type { WorkflowId } from '../config.js';
 import { childLogger } from '../log.js';
 import { getNarrator, PhoneRelaySession } from '../executor/narrator.js';
-import { isAmazonAudioAvailable } from './audio/awsClient.js';
+import {
+  describeSpeechInputChain,
+  hasServerSpeechInput,
+  primaryServerSpeechInputId,
+} from '../providers/speech/input/service.js';
+import { getSpeechInputSpecializer } from '../providers/speech/input/orchestrator.js';
+import {
+  describeSpeechOutputChain,
+  hasServerSpeechOutput,
+  primaryServerSpeechOutputId,
+  speechOutputLanguage,
+} from '../providers/speech/output/service.js';
+import { getSpeechOutputSpecializer } from '../providers/speech/output/orchestrator.js';
 import { createMemory, type ConversationMemory } from './memory.js';
 import { runIntelligenceTurn as runOrchestratorTurn, type OrchestratorCallbacks } from './orchestrator.js';
 import { voiceTurnQueue } from '../mcp/server/turnQueue.js';
@@ -35,7 +47,6 @@ import { parseTtsInterrupt } from '../voice/ttsInterrupt.js';
 import {
   registerTurnCompleteHook,
   registerVoiceSession,
-  handleSpeak,
   resetTurnSpeakTracking,
 } from '../mcp/server/voiceToolHandlers.js';
 import {
@@ -150,7 +161,10 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
           });
 
           const { llm, audio } = workflow.llmIntelligence;
-          const amazonAvailable = isAmazonAudioAvailable();
+          // The phone only needs "can the bridge answer, and what is it called";
+          // the chain picks the actual engine per request.
+          const sttFallback = primaryServerSpeechInputId();
+          const ttsFallback = primaryServerSpeechOutputId();
 
           send(socket, {
             type: 'auth_ok',
@@ -162,14 +176,23 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
             wakeWordsEnabled: voice.wakeWordsEnabled !== false,
             model: workflowId === 'agent_native' ? getActiveProvider().id : llm.model,
             audio: {
-              preferWebkit: audio.preferWebkit,
-              ttsProvider: audio.ttsProvider,
-              amazonAvailable,
-              sttFallback: amazonAvailable ? 'amazon_transcribe' : null,
-              ttsFallback: amazonAvailable ? 'amazon_polly' : null,
-              pollyVoiceId: audio.pollyVoiceId,
-              pollyEngine: audio.pollyEngine,
-              transcribeLanguageCode: audio.transcribeLanguageCode,
+              sttProvider: audio.stt.provider,
+              sttFallback,
+              sttProviderLabel: sttFallback
+                ? (getSpeechInputSpecializer(sttFallback)?.displayName ?? sttFallback)
+                : null,
+              sttAvailable: hasServerSpeechInput(),
+              sttLanguage: audio.stt.language,
+              sttChain: describeSpeechInputChain(),
+
+              ttsProvider: audio.tts.provider,
+              ttsFallback,
+              ttsProviderLabel: ttsFallback
+                ? (getSpeechOutputSpecializer(ttsFallback)?.displayName ?? ttsFallback)
+                : null,
+              ttsAvailable: hasServerSpeechOutput(),
+              ttsLanguage: speechOutputLanguage() ?? 'auto',
+              ttsChain: describeSpeechOutputChain(),
             },
           });
           log.info({ sessionKey, workflow: workflowId }, 'intelligence ws authenticated');

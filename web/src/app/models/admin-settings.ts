@@ -11,41 +11,12 @@ export interface LlmSettings {
   maxTokens: number;
 }
 
-export type TtsProvider = 'browser' | 'amazon_polly';
-
-export type TranscribeModelId = 'speech_foundation_model';
-export type TranscribeLanguageMode = 'fixed' | 'identify';
-export type TranscribePartialStability = 'low' | 'medium' | 'high';
-
+/**
+ * Speech settings live under /api/speech, not the workflow block — only the AWS
+ * region for Polly/Transcribe stays here. See models/speech.ts.
+ */
 export interface AudioSettings {
-  preferWebkit: boolean;
-  ttsProvider: TtsProvider;
   region?: string;
-  pollyVoiceId: string;
-  pollyEngine: 'standard' | 'neural' | 'generative';
-  transcribeModel: TranscribeModelId;
-  transcribeLanguageMode: TranscribeLanguageMode;
-  transcribeLanguageCode: string;
-  transcribeLanguageOptions: string;
-  transcribePreferredLanguage?: string;
-  transcribePartialResultsStabilization: boolean;
-  transcribePartialResultsStability: TranscribePartialStability;
-}
-
-export interface TranscribeModelInfo {
-  id: TranscribeModelId;
-  label: string;
-  description: string;
-  recommended: boolean;
-}
-
-export interface PollyVoiceInfo {
-  id: string;
-  name: string;
-  languageCode: string;
-  languageName: string;
-  gender: string;
-  supportedEngines: string[];
 }
 
 export interface MemorySettings {
@@ -181,6 +152,12 @@ export interface AwsKeyStatus {
   configured: boolean;
   complete: boolean;
 }
+
+/**
+ * Same shape for every credential the bridge stores in .env — the AWS name is
+ * historical. Aliased so non-AWS screens read sensibly.
+ */
+export type EnvKeyStatus = AwsKeyStatus;
 
 export interface KeysStatus {
   keys: AwsKeyStatus[];

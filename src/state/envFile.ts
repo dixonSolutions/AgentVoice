@@ -62,6 +62,32 @@ export const AGENT_AUTH_ENV_KEYS: EnvKeyField[] = [
 ];
 
 /**
+ * Speech-to-text provider credentials. OPENAI_API_KEY is shared with the Codex
+ * agent client (AGENT_AUTH_ENV_KEYS above) — same variable, listed twice so it
+ * can be set from either screen.
+ */
+export const SPEECH_ENV_KEYS: EnvKeyField[] = [
+  { envVar: 'OPENAI_API_KEY', label: 'OpenAI API key', minLength: 8, secret: true, optional: true },
+  { envVar: 'GROQ_API_KEY', label: 'Groq API key', minLength: 8, secret: true, optional: true },
+  { envVar: 'DEEPGRAM_API_KEY', label: 'Deepgram API key', minLength: 8, secret: true, optional: true },
+  {
+    envVar: 'ELEVENLABS_API_KEY',
+    label: 'ElevenLabs API key',
+    minLength: 8,
+    secret: true,
+    optional: true,
+  },
+  { envVar: 'GEMINI_API_KEY', label: 'Google Gemini API key', minLength: 8, secret: true, optional: true },
+  {
+    envVar: 'OPENROUTER_API_KEY',
+    label: 'OpenRouter API key',
+    minLength: 8,
+    secret: true,
+    optional: true,
+  },
+];
+
+/**
  * HostingProvider secrets/paths persisted by the Serve/Network setup wizard —
  * never in config.json since some of these grant tunnel access.
  */
@@ -238,4 +264,17 @@ export function updateHostingEnvKeys(updates: Record<string, string>): void {
 
 export function getHostingKeyStatus(env: Record<string, string | undefined>): EnvKeyStatus[] {
   return HOSTING_ENV_KEYS.map((field) => validateKeyField(field, env[field.envVar]));
+}
+
+/**
+ * Update speech-to-text provider keys in `.env`. AWS keys are deliberately not
+ * in this set — they stay under the Bedrock/IAM screen since they also grant
+ * Polly and Bedrock access.
+ */
+export function updateSpeechEnvKeys(updates: Record<string, string>): void {
+  writeEnvKeys(SPEECH_ENV_KEYS, updates, 'speech_env_keys');
+}
+
+export function getSpeechKeyStatus(env: Record<string, string | undefined>): EnvKeyStatus[] {
+  return SPEECH_ENV_KEYS.map((field) => validateKeyField(field, env[field.envVar]));
 }

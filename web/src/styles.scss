@@ -1610,6 +1610,26 @@ body {
   text-align: center;
 }
 
+/* ── Speech-to-Text ── */
+
+/* The key row is normally a child of .cv-cfg-keys-status, which draws the
+   surrounding frame. On the STT screen it stands alone, so it needs its own. */
+.cv-cfg-detail .cv-cfg-key-row:only-of-type {
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 8px;
+  margin-bottom: 0.75rem;
+}
+
+.cv-cfg-link {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8125rem;
+  color: var(--p-primary-color);
+  text-decoration: none;
+
+  &:hover { text-decoration: underline; }
+}
+
 /* ── Hosting provider (Network tab) ── */
 
 .cv-cfg-hosting-status {

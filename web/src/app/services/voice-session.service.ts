@@ -18,7 +18,7 @@ import { primeTtsPlaybackUnlock } from '../../audio.js';
 import { CallSession, isNativeShell } from '../../native/call-session.js';
 import { SessionKeepAlive } from '../../session-keepalive.js';
 import { preloadVoiceCues, playVoiceCueNow } from '../../sound-effects.js';
-import type { SttBackend, TtsBackend } from '../../intelligence-audio.js';
+import type { AudioBackendSummary } from '../../llm-intelligence-session.js';
 import { onModelDownload, type ModelDownloadState } from '../../model-download.js';
 
 export interface TranscriptEntry {
@@ -102,7 +102,7 @@ export class VoiceSessionService {
   });
   readonly audioSpectrum = this._audioSpectrum.asReadonly();
 
-  private readonly _audioBackends = signal<{ stt: SttBackend; tts: TtsBackend } | null>(null);
+  private readonly _audioBackends = signal<AudioBackendSummary | null>(null);
   readonly audioBackends = this._audioBackends.asReadonly();
 
   /** @deprecated use audioSpectrum */

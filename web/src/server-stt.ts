@@ -1,8 +1,11 @@
 /**
- * Amazon Transcribe STT — utterance capture only (Vosk gates wake/end; no phrase matching here).
+ * Server-side STT — utterance capture only (Vosk gates wake/end; no phrase matching here).
  *
- * Audio is buffered locally between beginCapture() and flushNow(). One Transcribe API call
- * per utterance. Optional VAD silence flush when no end phrase is configured.
+ * Audio is buffered locally between beginCapture() and flushNow(), then POSTed as raw
+ * PCM16LE to /api/intelligence/transcribe. Which engine answers is the bridge's business
+ * (Amazon Transcribe, Groq, OpenAI, a self-hosted Whisper container, …) — see
+ * docs/29-speech-to-text-providers.md. Optional VAD silence flush when no end phrase
+ * is configured.
  */
 
 import {
@@ -24,13 +27,13 @@ const SILENCE_FRAMES = 28;
 /** ~45s at 16 kHz — prevents runaway recordings when echo/VAD mis-fires. */
 const MAX_PCM_SAMPLES = INPUT_RATE * 45;
 
-export interface AmazonSttCallbacks {
+export interface ServerSttCallbacks {
   onInterim?: (text: string) => void;
   onFinal: (text: string) => void;
   onError?: (message: string) => void;
 }
 
-export class AmazonSttSession {
+export class ServerSttSession {
   private micStream: MediaStream | null = null;
   private ownsMic = false;
   private audioCtx: AudioContext | null = null;
@@ -52,7 +55,7 @@ export class AmazonSttSession {
     private readonly bridgeBase: string,
     private readonly appToken: string,
     private readonly gate: SttGate,
-    private readonly cb: AmazonSttCallbacks,
+    private readonly cb: ServerSttCallbacks,
   ) {}
 
   async start(mediaStream?: MediaStream): Promise<void> {
@@ -70,7 +73,7 @@ export class AmazonSttSession {
     }
     this.micChain = createMicProcessingChain(this.micStream, {
       highPassHz: 180,
-      // Amazon Transcribe handles noise; gating here often zeroes phone mic audio.
+      // Server STT handles noise; gating here often zeroes phone mic audio.
       noiseGateEnabled: false,
     });
     const ctx = this.audioCtx;
@@ -107,7 +110,7 @@ export class AmazonSttSession {
   }
 
   /**
-   * Abort in-flight Transcribe and discard buffered PCM.
+   * Abort the in-flight transcription and discard buffered PCM.
    * Safe to call during flush / "Transcribing…" — onFinal will not fire.
    */
   cancelPendingFlush(): void {
@@ -223,7 +226,7 @@ export class AmazonSttSession {
     const pcm = concatPcm16(chunks);
     this.transcribing = true;
     this.cb.onInterim?.('Transcribing…');
-    console.debug('[amazon-stt] sending to Transcribe', {
+    console.debug('[server-stt] sending for transcription', {
       samples: pcm.length,
       bytes: pcm.byteLength,
       durationSec: (pcm.length / INPUT_RATE).toFixed(2),
@@ -289,7 +292,7 @@ export class AmazonSttSession {
             'Recording too long to upload — say send sooner, or keep the request shorter.',
           );
         }
-        throw new Error(detail || `Transcribe failed (${res.status})`);
+        throw new Error(detail || `Transcription failed (${res.status})`);
       }
 
       const data = (await res.json()) as { text?: string };

@@ -1,15 +1,18 @@
 /**
- * Amazon Polly TTS for llm_intelligence fallback when WebKit speechSynthesis is unavailable.
+ * Amazon Polly — SynthesizeSpeech and DescribeVoices.
+ *
+ * Option-driven rather than config-reading: the speech-output provider
+ * (src/providers/speech/output/polly.ts) resolves voice and engine from its
+ * scopes and passes them in, so settings are interpreted in exactly one place.
  */
 
 import {
   DescribeVoicesCommand,
-  Engine,
   OutputFormat,
   SynthesizeSpeechCommand,
+  type Engine,
   type VoiceId,
 } from '@aws-sdk/client-polly';
-import { getConfig } from '../../config.js';
 import { childLogger } from '../../log.js';
 import { createPollyClient } from './awsClient.js';
 
@@ -31,12 +34,11 @@ export interface PollyVoiceInfo {
   supportedEngines: string[];
 }
 
+export type PollyEngine = 'standard' | 'neural' | 'generative';
+
 /** List Polly voices for the given engine (DescribeVoices). */
-export async function listPollyVoices(
-  engine?: 'standard' | 'neural' | 'generative',
-): Promise<PollyVoiceInfo[]> {
-  const { pollyEngine } = getConfig().settings.workflow.llmIntelligence.audio;
-  const selectedEngine = engine ?? pollyEngine;
+export async function listPollyVoices(engine: PollyEngine = 'neural'): Promise<PollyVoiceInfo[]> {
+  const selectedEngine = engine;
   const client = createPollyClient();
 
   try {
@@ -80,16 +82,15 @@ export async function listPollyVoices(
 
 export async function synthesizePollyMp3(
   text: string,
-  overrides?: { voiceId?: string; engine?: 'standard' | 'neural' | 'generative' },
+  opts: { voiceId?: string; engine?: PollyEngine } = {},
 ): Promise<PollySynthResult> {
   const clean = text.trim().slice(0, MAX_POLLY_CHARS);
   if (!clean) {
     throw new Error('Polly text is empty');
   }
 
-  const { pollyVoiceId, pollyEngine } = getConfig().settings.workflow.llmIntelligence.audio;
-  const voiceId = overrides?.voiceId?.trim() || pollyVoiceId;
-  const engine = overrides?.engine ?? pollyEngine;
+  const voiceId = opts.voiceId?.trim() || 'Joanna';
+  const engine = opts.engine ?? 'neural';
   const client = createPollyClient();
 
   try {

@@ -1,83 +1,77 @@
 /**
- * HTTP routes for intelligence audio fallbacks (Polly TTS, Transcribe STT).
+ * The two audio endpoints the phone actually calls during a voice session:
+ * transcribe a turn, and speak a reply.
+ *
+ * Both route through their provider chain (src/providers/speech/), so which
+ * engine answers is a settings question, not a code question. Provider
+ * selection, keys, scopes, and the self-hosted container live in
+ * src/routes/speechProviders.ts.
  *
  * Security: all /api/* routes require Bearer APP_TOKEN (see server preHandler).
  */
 
 import type { FastifyInstance } from 'fastify';
-import { z } from 'zod';
-import { isAmazonAudioAvailable } from '../intelligence/audio/awsClient.js';
-import { listPollyVoices, synthesizePollyMp3 } from '../intelligence/audio/polly.js';
-import { TRANSCRIBE_MODELS, transcribePcm16 } from '../intelligence/audio/transcribe.js';
-import { friendlyTranscribeError } from '../intelligence/audio/transcribeErrors.js';
 import { getConfig } from '../config.js';
 import { childLogger } from '../log.js';
+import { friendlySpeechError } from '../providers/speech/errors.js';
+import { getSpeechInputSpecializer } from '../providers/speech/input/orchestrator.js';
+import {
+  describeSpeechInputChain,
+  hasServerSpeechInput,
+  primaryServerSpeechInputId,
+  transcribe,
+} from '../providers/speech/input/service.js';
+import { getSpeechOutputSpecializer } from '../providers/speech/output/orchestrator.js';
+import {
+  describeSpeechOutputChain,
+  hasServerSpeechOutput,
+  primaryServerSpeechOutputId,
+  speechOutputLanguage,
+  synthesize,
+} from '../providers/speech/output/service.js';
 
 const log = childLogger('api:intelligence-audio');
 
-const PollyVoicesQuerySchema = z.object({
-  engine: z.enum(['standard', 'neural', 'generative']).optional(),
-});
+function providerLabel(id: string | null, direction: 'input' | 'output'): string | null {
+  if (!id) return null;
+  const specializer =
+    direction === 'input'
+      ? getSpeechInputSpecializer(id as never)
+      : getSpeechOutputSpecializer(id as never);
+  return specializer?.displayName ?? id;
+}
 
 export async function registerIntelligenceAudioRoutes(app: FastifyInstance): Promise<void> {
-  /** GET /api/intelligence/audio — capabilities for the PWA. */
+  /**
+   * GET /api/intelligence/audio — what the PWA needs to pick its backends.
+   *
+   * The phone only needs to know whether the bridge can answer and what to call
+   * it; which of the eight engines actually runs is decided here per request.
+   */
   app.get('/api/intelligence/audio', async () => {
     const { audio } = getConfig().settings.workflow.llmIntelligence;
-    const amazonAvailable = isAmazonAudioAvailable();
+    const sttId = primaryServerSpeechInputId();
+    const ttsId = primaryServerSpeechOutputId();
+
     return {
-      preferWebkit: audio.preferWebkit,
-      ttsProvider: audio.ttsProvider,
-      amazonAvailable,
-      sttFallback: amazonAvailable ? 'amazon_transcribe' : null,
-      ttsFallback: amazonAvailable ? 'amazon_polly' : null,
-      pollyVoiceId: audio.pollyVoiceId,
-      pollyEngine: audio.pollyEngine,
-      transcribeModel: audio.transcribeModel,
-      transcribeLanguageMode: audio.transcribeLanguageMode,
-      transcribeLanguageCode: audio.transcribeLanguageCode,
-      transcribeLanguageOptions: audio.transcribeLanguageOptions,
-      transcribePreferredLanguage: audio.transcribePreferredLanguage ?? audio.transcribeLanguageCode,
-      transcribePartialResultsStabilization: audio.transcribePartialResultsStabilization,
-      transcribePartialResultsStability: audio.transcribePartialResultsStability,
+      sttProvider: audio.stt.provider,
+      sttFallback: sttId,
+      sttProviderLabel: providerLabel(sttId, 'input'),
+      sttAvailable: hasServerSpeechInput(),
+      sttLanguage: audio.stt.language,
+      sttChain: describeSpeechInputChain(),
+
+      ttsProvider: audio.tts.provider,
+      ttsFallback: ttsId,
+      ttsProviderLabel: providerLabel(ttsId, 'output'),
+      ttsAvailable: hasServerSpeechOutput(),
+      ttsLanguage: speechOutputLanguage() ?? 'auto',
+      ttsChain: describeSpeechOutputChain(),
     };
   });
 
-  /** GET /api/intelligence/transcribe-models — curated STT catalog (SFM only). */
-  app.get('/api/intelligence/transcribe-models', async () => {
-    return {
-      models: TRANSCRIBE_MODELS,
-      note:
-        'Amazon Transcribe Speech Foundation Model powers StartStreamTranscription. Bedrock has no native real-time STT.',
-    };
-  });
-
-  /** GET /api/intelligence/polly-voices?engine=neural — DescribeVoices catalog. */
-  app.get<{ Querystring: { engine?: string } }>(
-    '/api/intelligence/polly-voices',
-    async (req, reply) => {
-      const parsed = PollyVoicesQuerySchema.safeParse(req.query ?? {});
-      if (!parsed.success) {
-        return reply.code(400).send({ error: parsed.error.message });
-      }
-      if (!isAmazonAudioAvailable()) {
-        return reply
-          .code(503)
-          .send({ error: 'Amazon Polly not configured — set IAM keys in .env', voices: [] });
-      }
-      const { audio } = getConfig().settings.workflow.llmIntelligence;
-      const engine = parsed.data.engine ?? audio.pollyEngine;
-      try {
-        const voices = await listPollyVoices(engine);
-        return { engine, voices };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return reply.code(500).send({ error: message, voices: [] });
-      }
-    },
-  );
-
-  /** POST /api/intelligence/tts { text, voiceId?, engine? } → MP3 audio. */
-  app.post<{ Body: { text?: string; voiceId?: string; engine?: string } }>(
+  /** POST /api/intelligence/tts { text, language? } → audio the phone can play. */
+  app.post<{ Body: { text?: string; language?: string } }>(
     '/api/intelligence/tts',
     {
       schema: {
@@ -85,28 +79,46 @@ export async function registerIntelligenceAudioRoutes(app: FastifyInstance): Pro
           type: 'object',
           required: ['text'],
           properties: {
-            text: { type: 'string', minLength: 1, maxLength: 3000 },
-            voiceId: { type: 'string', minLength: 1, maxLength: 64 },
-            engine: { type: 'string', enum: ['standard', 'neural', 'generative'] },
+            text: { type: 'string', minLength: 1, maxLength: 4000 },
+            language: { type: 'string', minLength: 2, maxLength: 16 },
           },
         },
       },
     },
     async (req, reply) => {
-      if (!isAmazonAudioAvailable()) {
-        return reply.code(503).send({ error: 'Amazon Polly not configured — set IAM keys in .env' });
+      if (!hasServerSpeechOutput()) {
+        return reply
+          .code(503)
+          .send({ error: 'No text-to-speech provider is configured — pick one in Config → Speech' });
       }
-      const engine =
-        req.body.engine === 'standard' ||
-        req.body.engine === 'neural' ||
-        req.body.engine === 'generative'
-          ? req.body.engine
-          : undefined;
-      const { audio, contentType } = await synthesizePollyMp3(req.body.text ?? '', {
-        voiceId: req.body.voiceId,
-        engine,
-      });
-      return reply.header('Content-Type', contentType).send(audio);
+
+      const startedAt = Date.now();
+      try {
+        const spoken = await synthesize(req.body.text ?? '', {
+          ...(req.body.language ? { language: req.body.language } : {}),
+        });
+        log.info(
+          {
+            provider: spoken.provider,
+            voice: spoken.voice,
+            bytes: spoken.audio.length,
+            latencyMs: Date.now() - startedAt,
+            ...(spoken.skipped.length ? { skipped: spoken.skipped } : {}),
+          },
+          'tts ok',
+        );
+        return reply
+          .header('Content-Type', spoken.contentType)
+          // The phone shows which engine spoke, so a silent fallback is visible.
+          .header('X-Speech-Provider', spoken.provider)
+          .header('X-Speech-Voice', spoken.voice)
+          .send(spoken.audio);
+      } catch (err) {
+        const label = providerLabel(primaryServerSpeechOutputId(), 'output') ?? 'Text-to-speech';
+        const message = friendlySpeechError(err, label, 'output');
+        log.error({ err, message }, 'tts failed');
+        return reply.code(502).send({ error: message });
+      }
     },
   );
 
@@ -115,8 +127,10 @@ export async function registerIntelligenceAudioRoutes(app: FastifyInstance): Pro
    * Body: raw PCM16LE octet-stream (preferred) or JSON `{ pcm: base64 }` (legacy).
    */
   app.post('/api/intelligence/transcribe', async (req, reply) => {
-    if (!isAmazonAudioAvailable()) {
-      return reply.code(503).send({ error: 'Amazon Transcribe not configured — set IAM keys in .env' });
+    if (!hasServerSpeechInput()) {
+      return reply
+        .code(503)
+        .send({ error: 'No speech-to-text provider is configured — pick one in Config → Speech' });
     }
 
     let pcm: Buffer;
@@ -148,19 +162,30 @@ export async function registerIntelligenceAudioRoutes(app: FastifyInstance): Pro
       return reply.code(400).send({ error: 'PCM payload too short' });
     }
 
-    log.info({ pcmBytes: pcm.length, contentType }, 'transcribe request');
+    const startedAt = Date.now();
     try {
-      const text = await transcribePcm16(pcm);
-      if (!text) {
-        log.warn({ pcmBytes: pcm.length }, 'transcribe returned empty transcript');
+      const result = await transcribe(pcm);
+      if (!result.text) {
+        log.warn({ pcmBytes: pcm.length, provider: result.provider }, 'transcribe returned empty transcript');
         return reply.code(422).send({
           error: 'No speech detected — speak louder or closer to the mic and try again.',
         });
       }
-      log.info({ pcmBytes: pcm.length, textLen: text.length }, 'transcribe ok');
-      return { text };
+      log.info(
+        {
+          pcmBytes: pcm.length,
+          textLen: result.text.length,
+          provider: result.provider,
+          model: result.model,
+          latencyMs: Date.now() - startedAt,
+          ...(result.skipped.length ? { skipped: result.skipped } : {}),
+        },
+        'transcribe ok',
+      );
+      return { text: result.text, provider: result.provider, model: result.model };
     } catch (err) {
-      const message = friendlyTranscribeError(err);
+      const label = providerLabel(primaryServerSpeechInputId(), 'input') ?? 'Transcription';
+      const message = friendlySpeechError(err, label, 'input');
       log.error({ err, pcmBytes: pcm.length, message }, 'transcribe failed');
       return reply.code(500).send({ error: message });
     }

@@ -185,18 +185,9 @@ export class VoiceTabComponent {
   protected readonly audioBackendLabel = computed(() => {
     const backends = this.voiceSession.audioBackends();
     if (!backends) return null;
-    const stt =
-      backends.stt === 'webkit'
-        ? 'Browser STT'
-        : backends.stt === 'amazon_transcribe'
-          ? 'Amazon Transcribe'
-          : 'Text input';
-    const tts =
-      backends.tts === 'webkit'
-        ? 'Browser TTS'
-        : backends.tts === 'amazon_polly'
-          ? 'Amazon Polly'
-          : 'No TTS';
+    // The session names the engines — the STT one is whatever the bridge routes to.
+    const stt = backends.stt === 'text_only' ? 'Text input' : backends.sttLabel;
+    const tts = backends.tts === 'none' ? 'No TTS' : backends.ttsLabel;
     return `${stt} · ${tts}`;
   });
 
