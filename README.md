@@ -9,8 +9,18 @@ or [Claude Code](https://github.com/anthropics/claude-code) — by **speech, fro
 Speak from an iPhone **native app (CallKit)** or PWA; the active agent CLI is the reasoning
 layer via the **agent-voice MCP server** (`speak`, `done`, `next_voice_turn`) — the MCP
 registration key stays `agent-voice` for compatibility. Coding work is
-delegated to worker agents via `spawn_agent`. Audio uses browser STT/TTS with
-Amazon Polly/Transcribe fallback. If the CLI needs you to sign in, the app prompts you
+delegated to worker agents via `spawn_agent`. **Speech is pluggable in both
+directions** — listen with the browser, a **self-hosted Whisper container**
+(no key, audio never leaves the host), Groq, OpenAI, Deepgram, Gemini,
+ElevenLabs, OpenRouter or Amazon Transcribe; speak with the browser, a local
+Kokoro voice, ElevenLabs, OpenAI, Gemini, Deepgram, Groq or Polly. Each side is
+an ordered fallback chain that skips any provider which cannot handle the
+language, so a device with no Polish voice hands that reply to one that has one.
+Configured and keyed from Config → Speech — see
+[`docs/29`](./docs/29-speech-to-text-providers.md),
+[`docs/30`](./docs/30-speech-output-providers.md) and
+[`docs/31`](./docs/31-service-orchestrator-converter.md).
+If the CLI needs you to sign in, the app prompts you
 in place — see [`docs/24-agent-providers.md`](./docs/24-agent-providers.md).
 
 Networking defaults to Tailscale but is pluggable — Cloudflare Tunnel, ngrok,

@@ -3,7 +3,7 @@
  * WebKit speechSynthesis first; Amazon Polly when WebKit is unavailable.
  */
 
-import { speakAmazonPolly, stopAmazonTts } from './amazon-tts.js';
+import { speakServerTts, stopServerTts } from './server-tts.js';
 import { resolveTtsBackend, type IntelligenceAudioConfig } from './intelligence-audio.js';
 import { canUseWebkitTts } from './webkit-capabilities.js';
 import type { TtsInterruptSnapshot, TtsPlayContext, TtsPlayFn } from './tts-interrupt.js';
@@ -156,7 +156,7 @@ export class TtsPile {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
-    stopAmazonTts();
+    stopServerTts();
 
     return snapshot;
   }
@@ -239,7 +239,7 @@ export class TtsPile {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
-    stopAmazonTts();
+    stopServerTts();
 
     return snapshot;
   }
@@ -371,8 +371,8 @@ async function playTranscriptLine(text: string, ctx?: TtsPlayContext): Promise<v
     await playWebkitLine(text, ctx);
     return;
   }
-  if (backend === 'amazon_polly' && cfg) {
-    await speakAmazonPolly(text, cfg.bridgeBase, cfg.appToken, ctx);
+  if (backend === 'server' && cfg) {
+    await speakServerTts(text, cfg.bridgeBase, cfg.appToken, ctx);
     lastSpokenAt = Date.now();
     lastSpokenText = text;
     return;
@@ -381,8 +381,8 @@ async function playTranscriptLine(text: string, ctx?: TtsPlayContext): Promise<v
     await playWebkitLine(text, ctx);
     return;
   }
-  if (cfg?.audio.amazonAvailable) {
-    await speakAmazonPolly(text, cfg.bridgeBase, cfg.appToken, ctx);
+  if (cfg?.audio.ttsAvailable) {
+    await speakServerTts(text, cfg.bridgeBase, cfg.appToken, ctx);
     lastSpokenAt = Date.now();
     lastSpokenText = text;
   }
@@ -406,8 +406,7 @@ export function prepareSpeechSynthesisForPlayback(): void {
 
 function canPlayTranscriptTts(): boolean {
   if (canUseWebkitTts()) return true;
-  const cfg = transcriptTtsConfig;
-  return Boolean(cfg?.audio.amazonAvailable && cfg.audio.ttsFallback === 'amazon_polly');
+  return Boolean(transcriptTtsConfig?.audio.ttsAvailable);
 }
 
 /** Enqueue browser TTS — lines pile and play sequentially. */

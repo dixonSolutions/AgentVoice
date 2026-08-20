@@ -1,0 +1,562 @@
+<p-fluid>
+  @if (loading() && !view()) {
+    <div class="cv-cfg-loading"><p-progressSpinner strokeWidth="3" /></div>
+  }
+
+  @if (view(); as v) {
+    <p-message severity="secondary" variant="simple"
+      text="Which engine listens, and which one speaks. Each side has an ordered chain: the first entry that is configured and can handle the language wins, so a provider going down degrades instead of breaking. Wake words stay on-device with Vosk and are unaffected." />
+
+    <p-tabs [value]="direction()" (valueChange)="onDirectionChange($any($event))">
+      <p-tablist>
+        <p-tab value="stt"><i class="pi pi-microphone"></i> Speech in</p-tab>
+        <p-tab value="tts"><i class="pi pi-volume-up"></i> Speech out</p-tab>
+      </p-tablist>
+
+      <p-tabpanels>
+        <!-- ═══════════════ SPEECH IN ═══════════════ -->
+        <p-tabpanel value="stt">
+
+          <p-fieldset legend="Chain">
+            <p-iftalabel>
+              <p-select id="spk-stt-provider"
+                [options]="sttProviders" optionLabel="displayName" optionValue="id"
+                [ngModel]="v.stt.provider"
+                (ngModelChange)="v.stt.provider = $event; onSelectStt($event)"
+                [disabled]="!isBridgeConnected() || saving">
+                <ng-template let-opt pTemplate="item">
+                  {{ opt.displayName }}<span class="cv-cfg-muted"> · {{ statusLabel(opt) }}</span>
+                </ng-template>
+              </p-select>
+              <label for="spk-stt-provider">Primary</label>
+            </p-iftalabel>
+
+            <p-iftalabel>
+              <p-multiSelect id="spk-stt-fallbacks"
+                [options]="sttFallbackOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="v.stt.fallbacks"
+                display="chip" [showToggleAll]="false"
+                placeholder="None — fail if the primary cannot answer"
+                [disabled]="!isBridgeConnected() || saving" />
+              <label for="spk-stt-fallbacks">Fallbacks, in order</label>
+            </p-iftalabel>
+
+            <p-iftalabel>
+              <p-select id="spk-stt-language"
+                [options]="languageOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="v.stt.language" [filter]="true" filterBy="label"
+                [disabled]="!isBridgeConnected() || saving" />
+              <label for="spk-stt-language">Spoken language</label>
+            </p-iftalabel>
+            <p-message severity="secondary" variant="simple"
+              text="Naming the language is faster and more accurate than auto-detect, and it is what lets the chain skip a provider that cannot handle it." />
+
+            @if (languageGaps.length > 0) {
+              <p-message severity="warn" variant="simple"
+                [text]="'Skipped for this language: ' + languageGaps.join(', ') + '. The chain will pass over them.'" />
+            }
+          </p-fieldset>
+
+          @if (sttProvider; as p) {
+            <p-fieldset [legend]="p.displayName">
+              <div class="cv-cfg-hosting-detect">
+                <p-tag [value]="statusLabel(p)" [severity]="statusSeverity(p)" />
+                <span class="cv-cfg-muted">{{ sttCost(p) }}</span>
+                @if (!p.capabilities.sendsAudioOffMachine) {
+                  <p-tag value="Audio stays local" severity="success" />
+                }
+              </div>
+              <p-message severity="secondary" variant="simple" [text]="p.description" />
+              @if (p.detail && !p.available) {
+                <p-message severity="warn" variant="simple" [text]="p.detail" />
+              }
+
+              @if (p.models.length > 0) {
+                <p-iftalabel>
+                  <p-select id="spk-stt-model"
+                    [options]="p.models" optionLabel="label" optionValue="id"
+                    [(ngModel)]="p.selectedModel" [editable]="true"
+                    [placeholder]="p.defaultModel"
+                    [disabled]="!isBridgeConnected() || saving">
+                    <ng-template let-opt pTemplate="item">
+                      {{ opt.label }}
+                      @if (opt.recommended) { <span class="cv-cfg-muted"> · recommended</span> }
+                    </ng-template>
+                  </p-select>
+                  <label for="spk-stt-model">Model</label>
+                </p-iftalabel>
+              }
+
+              <ng-container [ngTemplateOutlet]="scopeFields" />
+
+              <div class="cv-cfg-row-actions">
+                <p-button label="Save" icon="pi pi-save"
+                  [loading]="saving" [disabled]="!isBridgeConnected()" (onClick)="onSaveStt()" />
+                @if (p.id !== 'browser') {
+                  <p-button label="Test provider" icon="pi pi-bolt"
+                    severity="secondary" [outlined]="true"
+                    [loading]="testing" [disabled]="!isBridgeConnected()" (onClick)="onTestStt()" />
+                }
+              </div>
+
+              @if (sttTestResult; as r) {
+                <p-message [severity]="r.ok ? 'success' : 'warn'" variant="simple"
+                  [text]="r.ok
+                    ? 'Reachable — ' + r.model + ' answered in ' + r.latencyMs + ' ms. The probe clip has no speech, so an empty transcript is expected.'
+                    : (r.error ?? 'Test failed')" />
+              }
+
+              <ng-container [ngTemplateOutlet]="keyFields" />
+            </p-fieldset>
+          }
+        </p-tabpanel>
+
+        <!-- ═══════════════ SPEECH OUT ═══════════════ -->
+        <p-tabpanel value="tts">
+
+          <p-fieldset legend="Chain">
+            <p-iftalabel>
+              <p-select id="spk-tts-provider"
+                [options]="ttsProviders" optionLabel="displayName" optionValue="id"
+                [ngModel]="v.tts.provider"
+                (ngModelChange)="v.tts.provider = $event; onSelectTts($event)"
+                [disabled]="!isBridgeConnected() || saving">
+                <ng-template let-opt pTemplate="item">
+                  {{ opt.displayName }}<span class="cv-cfg-muted"> · {{ statusLabel(opt) }}</span>
+                </ng-template>
+              </p-select>
+              <label for="spk-tts-provider">Primary</label>
+            </p-iftalabel>
+
+            <p-iftalabel>
+              <p-multiSelect id="spk-tts-fallbacks"
+                [options]="ttsFallbackOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="v.tts.fallbacks"
+                display="chip" [showToggleAll]="false"
+                placeholder="None — stay silent if the primary cannot speak"
+                [disabled]="!isBridgeConnected() || saving" />
+              <label for="spk-tts-fallbacks">Fallbacks, in order</label>
+            </p-iftalabel>
+
+            <p-iftalabel>
+              <p-select id="spk-tts-language"
+                [options]="languageOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="v.tts.language" [filter]="true" filterBy="label"
+                [disabled]="!isBridgeConnected() || saving" />
+              <label for="spk-tts-language">Reply language</label>
+            </p-iftalabel>
+            <p-message severity="secondary" variant="simple"
+              [text]="v.tts.language === 'auto'
+                ? 'Auto follows the speech-in language — currently ' + v.tts.effectiveLanguage + '.'
+                : 'Replies are always spoken in this language.'" />
+
+            @if (languageGaps.length > 0) {
+              <p-message severity="warn" variant="simple"
+                [text]="'Cannot speak this language: ' + languageGaps.join(', ') + '. The chain will pass over them.'" />
+            }
+          </p-fieldset>
+
+          @if (ttsProvider; as p) {
+            <p-fieldset [legend]="p.displayName">
+              <div class="cv-cfg-hosting-detect">
+                <p-tag [value]="statusLabel(p)" [severity]="statusSeverity(p)" />
+                <span class="cv-cfg-muted">{{ ttsCost(p) }}</span>
+                @if (!p.capabilities.sendsTextOffMachine) {
+                  <p-tag value="Text stays local" severity="success" />
+                }
+              </div>
+              <p-message severity="secondary" variant="simple" [text]="p.description" />
+              @if (p.detail && !p.available) {
+                <p-message severity="warn" variant="simple" [text]="p.detail" />
+              }
+
+              @if (p.id === 'browser') {
+                <!-- Device-local: read straight from speechSynthesis. -->
+                @if (!deviceSpeaksSelectedLanguage) {
+                  <p-message severity="warn" variant="simple"
+                    [text]="currentBrowserLabel + ' has no voice for ' + v.tts.effectiveLanguage
+                      + '. Replies in that language will be handed to the next provider in the chain.'" />
+                }
+                @if (browserVoicesLoading) {
+                  <p-message severity="secondary" variant="simple" text="Loading browser voices…" />
+                } @else if (browserVoicesTotal > 0) {
+                  <p-message severity="secondary" variant="simple"
+                    text="{{ browserVoicesShown }} in list ({{ browserVoicesTotal }} from {{ currentBrowserLabel }}); speaks {{ deviceLanguages.join(', ') }}." />
+                }
+
+                <p-iftalabel>
+                  <p-select id="spk-browser-voice"
+                    [(ngModel)]="browserVoiceUri"
+                    [options]="browserVoiceOptions"
+                    optionLabel="label" optionValue="value" optionDisabled="disabled"
+                    [filter]="true" [virtualScroll]="true" [virtualScrollItemSize]="38"
+                    [lazy]="true" appendTo="body" scrollHeight="280px"
+                    (onLazyLoad)="onBrowserVoicesLazyLoad($event)"
+                    placeholder="Search or select a browser voice" [showClear]="true">
+                    <ng-template pTemplate="filter">
+                      <input type="text" pInputText class="p-select-filter w-full"
+                        placeholder="Search voices…"
+                        [ngModel]="browserVoiceFilter"
+                        (ngModelChange)="onBrowserVoiceSearch($event)"
+                        (click)="$event.stopPropagation()"
+                        (keydown)="$event.stopPropagation()" />
+                    </ng-template>
+                  </p-select>
+                  <label for="spk-browser-voice">Voice on this device</label>
+                </p-iftalabel>
+
+                <div class="cv-cfg-toggle-row">
+                  <p-toggleSwitch id="spk-browser-all" [(ngModel)]="browserVoicesShowAll"
+                    (onChange)="onBrowserVoicesShowAllChange()" />
+                  <label for="spk-browser-all">Include remote / all voices</label>
+                </div>
+
+                <p-iftalabel>
+                  <p-inputNumber id="spk-browser-rate" [(ngModel)]="browserTtsRate"
+                    [min]="0.5" [max]="2" [step]="0.05" [minFractionDigits]="2" />
+                  <label for="spk-browser-rate">Rate</label>
+                </p-iftalabel>
+                <p-iftalabel>
+                  <p-inputNumber id="spk-browser-pitch" [(ngModel)]="browserTtsPitch"
+                    [min]="0" [max]="2" [step]="0.05" [minFractionDigits]="2" />
+                  <label for="spk-browser-pitch">Pitch</label>
+                </p-iftalabel>
+                <p-iftalabel>
+                  <p-inputNumber id="spk-browser-volume" [(ngModel)]="browserTtsVolume"
+                    [min]="0" [max]="1" [step]="0.05" [minFractionDigits]="2" />
+                  <label for="spk-browser-volume">Volume</label>
+                </p-iftalabel>
+                <p-iftalabel>
+                  <input pInputText id="spk-browser-lang" [(ngModel)]="browserTtsLang" placeholder="en-US" />
+                  <label for="spk-browser-lang">Voice language tag (BCP-47)</label>
+                </p-iftalabel>
+                <p-message severity="secondary" variant="simple"
+                  text="Browser voice settings are per-device and stay in this browser's storage — they never reach config.json." />
+
+              } @else {
+                @if (p.models.length > 0) {
+                  <p-iftalabel>
+                    <p-select id="spk-tts-model"
+                      [options]="p.models" optionLabel="label" optionValue="id"
+                      [(ngModel)]="p.selectedModel" [editable]="true"
+                      (onChange)="onTtsModelChange()"
+                      [placeholder]="p.defaultModel"
+                      [disabled]="!isBridgeConnected() || saving">
+                      <ng-template let-opt pTemplate="item">
+                        {{ opt.label }}
+                        @if (opt.recommended) { <span class="cv-cfg-muted"> · recommended</span> }
+                      </ng-template>
+                    </p-select>
+                    <label for="spk-tts-model">Model</label>
+                  </p-iftalabel>
+                }
+
+                <p-iftalabel>
+                  <p-select id="spk-tts-voice"
+                    [options]="voiceOptions" optionLabel="label" optionValue="value"
+                    [(ngModel)]="p.selectedVoice" [editable]="true" [filter]="true"
+                    [placeholder]="p.defaultVoice"
+                    [disabled]="!isBridgeConnected() || saving || loadingVoices" />
+                  <label for="spk-tts-voice">Voice</label>
+                </p-iftalabel>
+                @if (voiceLanguageHint; as hint) {
+                  <p-message severity="secondary" variant="simple" [text]="hint" />
+                }
+                @if (p.capabilities.livesVoiceCatalog) {
+                  <div class="cv-cfg-row-actions">
+                    <p-button label="Refresh voices" icon="pi pi-refresh"
+                      severity="secondary" [text]="true" size="small"
+                      [loading]="loadingVoices" [disabled]="!isBridgeConnected() || !p.available"
+                      (onClick)="loadVoiceCatalog(p.id)" />
+                  </div>
+                }
+              }
+
+              <ng-container [ngTemplateOutlet]="scopeFields" />
+
+              <div class="cv-cfg-row-actions">
+                <p-button label="Save" icon="pi pi-save"
+                  [loading]="saving" [disabled]="!isBridgeConnected()" (onClick)="onSaveTts()" />
+                <p-button label="Preview" icon="pi pi-play"
+                  severity="secondary" [outlined]="true"
+                  [loading]="previewing" (onClick)="onPreviewTts()" />
+              </div>
+              @if (ttsPreviewError) {
+                <p-message severity="warn" variant="simple" [text]="ttsPreviewError" />
+              }
+
+              @if (browserProfiles.length > 0 && p.id === 'browser') {
+                <p-divider />
+                <div class="cv-cfg-section-sub-label">Saved device profiles</div>
+                @for (profile of browserProfiles; track profile.id) {
+                  <div class="cv-cfg-browser-profile">
+                    <div class="cv-cfg-browser-profile-info">
+                      <strong>{{ profile.label }}</strong>
+                      <span class="cv-cfg-muted">{{ profile.id }}</span>
+                      @if (profile.id === currentBrowserId) {
+                        <p-tag value="current" severity="success" />
+                      }
+                    </div>
+                    <div class="cv-cfg-row-actions">
+                      <p-button label="Load" icon="pi pi-upload" size="small" severity="secondary"
+                        [outlined]="true" (onClick)="onLoadBrowserProfile(profile)" />
+                      @if (profile.id !== currentBrowserId) {
+                        <p-button label="Remove" icon="pi pi-trash" size="small"
+                          severity="danger" [outlined]="true"
+                          (onClick)="onDeleteBrowserProfile(profile.id)" />
+                      }
+                    </div>
+                  </div>
+                }
+              }
+
+              <ng-container [ngTemplateOutlet]="keyFields" />
+            </p-fieldset>
+          }
+        </p-tabpanel>
+      </p-tabpanels>
+    </p-tabs>
+
+    <!-- ═══════════════ SELF-HOSTED SERVER ═══════════════ -->
+    @if (needsServerPanel && serverForm) {
+      <p-fieldset legend="Self-hosted speech server">
+        <p-message severity="secondary" variant="simple"
+          text="One container serves both directions — Whisper for listening, Kokoro or Piper for speaking. No key, no per-use cost, and nothing leaves this machine. Ollama is not used here: it has no speech endpoint in either direction." />
+
+        <p-iftalabel>
+          <p-select id="spk-server-manage"
+            [options]="serverManageOptions" optionLabel="label" optionValue="value"
+            [(ngModel)]="serverForm.manage"
+            [disabled]="!isBridgeConnected() || settingUpServer" />
+          <label for="spk-server-manage">How it runs</label>
+        </p-iftalabel>
+
+        @if (serverForm.manage === 'container') {
+          <p-iftalabel>
+            <p-select id="spk-server-runtime"
+              [options]="serverRuntimeOptions" optionLabel="label" optionValue="value"
+              [(ngModel)]="serverForm.runtime"
+              [disabled]="!isBridgeConnected() || settingUpServer" />
+            <label for="spk-server-runtime">Container runtime</label>
+          </p-iftalabel>
+          @if (runtimeHint; as hint) {
+            <p-message severity="secondary" variant="simple" [text]="hint" />
+          }
+
+          <p-iftalabel>
+            <p-select id="spk-server-image"
+              [options]="serverImageOptions" optionLabel="label" optionValue="value"
+              [(ngModel)]="serverForm.image" [editable]="true"
+              [disabled]="!isBridgeConnected() || settingUpServer" />
+            <label for="spk-server-image">Image</label>
+          </p-iftalabel>
+
+          <p-iftalabel>
+            <p-inputNumber id="spk-server-port" [(ngModel)]="serverForm.port"
+              [useGrouping]="false" [min]="1024" [max]="65535"
+              [disabled]="!isBridgeConnected() || settingUpServer" />
+            <label for="spk-server-port">Host port (bound to 127.0.0.1)</label>
+          </p-iftalabel>
+
+          <div class="cv-cfg-toggle-row">
+            <p-toggleSwitch id="spk-server-gpu" [(ngModel)]="serverForm.gpu"
+              [disabled]="!isBridgeConnected() || settingUpServer" />
+            <label for="spk-server-gpu">Pass through an NVIDIA GPU</label>
+          </div>
+          <p-message severity="secondary" variant="simple"
+            text="On CPU, stay on the small Whisper model — large-v3 can take minutes per turn. Kokoro runs in real time on a CPU either way." />
+        } @else {
+          <p-iftalabel>
+            <input pInputText id="spk-server-url" [(ngModel)]="serverBaseUrlInput"
+              placeholder="http://192.168.1.10:8000"
+              [disabled]="!isBridgeConnected() || settingUpServer" />
+            <label for="spk-server-url">Server URL</label>
+          </p-iftalabel>
+          <p-message severity="secondary" variant="simple"
+            text="Any server exposing POST {url}/v1/audio/transcriptions and /v1/audio/speech — speaches, faster-whisper-server, whisper.cpp, or your own." />
+        }
+
+        @if (server; as st) {
+          <div class="cv-cfg-hosting-detect">
+            <p-tag [value]="st.reachable ? 'Answering' : 'Not answering'"
+              [severity]="st.reachable ? 'success' : 'warn'" />
+            <code class="cv-cfg-serve-commit">{{ st.serverUrl }}</code>
+            @if (st.manage === 'container') {
+              <p-tag [value]="st.container.running ? 'Container running' : st.container.exists ? 'Container stopped' : 'No container'"
+                [severity]="st.container.running ? 'success' : 'secondary'" />
+              @if (!st.imagePresent) { <p-tag value="Image not pulled" severity="secondary" /> }
+            }
+          </div>
+          <p-message severity="secondary" variant="simple"
+            [text]="'Models: ' + (st.inputModel ?? 'none for listening') + ' · ' + (st.outputModel ?? 'none for speaking')" />
+          @if (st.detail && !st.reachable) {
+            <p-message severity="secondary" variant="simple" [text]="st.detail" />
+          }
+        }
+
+        <div class="cv-cfg-row-actions">
+          <p-button label="Save server settings" icon="pi pi-save"
+            [loading]="savingServer" [disabled]="!isBridgeConnected() || settingUpServer"
+            (onClick)="onSaveServer()" />
+          <p-button label="Pull &amp; start" icon="pi pi-download"
+            [loading]="settingUpServer" [disabled]="!isBridgeConnected()" (onClick)="onRunSetup()" />
+          @if (server; as st) {
+            @if (st.manage === 'container') {
+              <p-button label="Stop" icon="pi pi-stop-circle" severity="secondary" [outlined]="true"
+                [loading]="stoppingServer" [disabled]="!isBridgeConnected() || !st.container.running"
+                (onClick)="onStopServer(false)" />
+              <p-button label="Remove container" icon="pi pi-trash" severity="danger" [outlined]="true"
+                [loading]="stoppingServer" [disabled]="!isBridgeConnected() || !st.container.exists"
+                (onClick)="onStopServer(true)" />
+            }
+          }
+          <p-button label="Refresh" icon="pi pi-refresh" severity="secondary" [text]="true"
+            [loading]="loadingServer" [disabled]="!isBridgeConnected()" (onClick)="loadServerStatus()" />
+        </div>
+
+        @if (setupLog.length > 0 || settingUpServer) {
+          <div class="cv-cfg-hosting-log">
+            @for (line of setupLog; track $index) {
+              <div class="cv-cfg-hosting-log-line">{{ line }}</div>
+            }
+            @if (settingUpServer) {
+              <div class="cv-cfg-hosting-log-line cv-cfg-muted">Working… the first run downloads several GB.</div>
+            }
+          </div>
+        }
+        @if (setupError) {
+          <p-message severity="warn" variant="simple" [text]="setupError" />
+        }
+
+        @if (server; as st) {
+          @if (st.manage === 'container') {
+            <div class="cv-cfg-row-actions">
+              <p-button label="Show container logs" icon="pi pi-file" severity="secondary" [text]="true"
+                [loading]="loadingServerLogs" [disabled]="!isBridgeConnected()" (onClick)="onLoadServerLogs()" />
+            </div>
+            @if (serverLogs) {
+              <pre class="cv-cfg-serve-journal">{{ serverLogs }}</pre>
+            }
+          }
+        }
+      </p-fieldset>
+    }
+  }
+</p-fluid>
+
+<!-- ═══════════════ SHARED TEMPLATES ═══════════════ -->
+
+<!--
+  Scopes are rendered from the provider's own declaration, so a new option on
+  the bridge appears here with no change to this template.
+-->
+<ng-template #scopeFields>
+  @for (scope of basicScopes; track scope.id) {
+    <ng-container [ngTemplateOutlet]="scopeField" [ngTemplateOutletContext]="{ $implicit: scope }" />
+  }
+
+  @if (advancedScopes.length > 0) {
+    <div class="cv-cfg-toggle-row">
+      <p-toggleSwitch id="spk-advanced" [(ngModel)]="showAdvanced" />
+      <label for="spk-advanced">Show advanced options</label>
+    </div>
+    @if (showAdvanced) {
+      @for (scope of advancedScopes; track scope.id) {
+        <ng-container [ngTemplateOutlet]="scopeField" [ngTemplateOutletContext]="{ $implicit: scope }" />
+      }
+    }
+  }
+</ng-template>
+
+<ng-template #scopeField let-scope>
+  @switch (scope.kind) {
+    @case ('toggle') {
+      <div class="cv-cfg-toggle-row">
+        <p-toggleSwitch [inputId]="'spk-scope-' + scope.id"
+          [ngModel]="scopeValue(scope)"
+          (ngModelChange)="setScopeValue(scope, $event)"
+          [disabled]="!isBridgeConnected()" />
+        <label [for]="'spk-scope-' + scope.id">{{ scope.label }}</label>
+      </div>
+    }
+    @case ('select') {
+      <p-iftalabel>
+        <p-select [inputId]="'spk-scope-' + scope.id"
+          [options]="scopeChoices(scope)" optionLabel="label" optionValue="value"
+          [ngModel]="scopeValue(scope)"
+          (ngModelChange)="setScopeValue(scope, $event)"
+          [disabled]="!isBridgeConnected()" />
+        <label [for]="'spk-scope-' + scope.id">{{ scope.label }}</label>
+      </p-iftalabel>
+    }
+    @case ('number') {
+      <p-iftalabel>
+        <p-inputNumber [inputId]="'spk-scope-' + scope.id"
+          [ngModel]="scopeValue(scope)"
+          (ngModelChange)="setScopeValue(scope, $event)"
+          [min]="scope.min" [max]="scope.max" [step]="scope.step ?? 1"
+          [minFractionDigits]="(scope.step ?? 1) < 1 ? 2 : 0"
+          [disabled]="!isBridgeConnected()" />
+        <label [for]="'spk-scope-' + scope.id">{{ scope.label }}</label>
+      </p-iftalabel>
+    }
+    @default {
+      <p-iftalabel>
+        <input pInputText [id]="'spk-scope-' + scope.id"
+          [ngModel]="scopeValue(scope)"
+          (ngModelChange)="setScopeValue(scope, $event)"
+          [placeholder]="scope.placeholder ?? ''"
+          [disabled]="!isBridgeConnected()" />
+        <label [for]="'spk-scope-' + scope.id">{{ scope.label }}</label>
+      </p-iftalabel>
+    }
+  }
+  @if (scope.help) {
+    <p-message severity="secondary" variant="simple" [text]="scope.help" />
+  }
+</ng-template>
+
+<ng-template #keyFields>
+  @if (keyEnvVar; as envVar) {
+    <p-divider />
+    <div class="cv-cfg-section-sub-label">API key</div>
+    <p-message severity="secondary" variant="simple"
+      text="Written to .env on the bridge and never sent back to this screen — only whether it is set." />
+
+    @if (provider?.keyStatus; as key) {
+      <div class="cv-cfg-key-row">
+        <div class="cv-cfg-key-info">
+          <div class="cv-cfg-key-label">{{ key.label }}</div>
+          <div class="cv-cfg-key-var">{{ key.envVar }}</div>
+        </div>
+        <p-tag [value]="key.configured ? 'Set ••••••••' : 'Not set'"
+          [severity]="key.configured ? 'success' : 'secondary'" />
+      </div>
+    }
+
+    @if (provider?.capabilities?.sharedWith; as sharedWith) {
+      <p-message severity="warn" variant="simple"
+        [text]="'This key is shared with ' + sharedWith + ' — replacing it changes both.'" />
+    }
+
+    <p-iftalabel>
+      <p-password [id]="'spk-key-' + envVar" [(ngModel)]="keyInput"
+        [feedback]="false" [toggleMask]="true"
+        placeholder="Paste the key (leave blank to keep the current one)" />
+      <label [for]="'spk-key-' + envVar">{{ envVar }}</label>
+    </p-iftalabel>
+
+    <div class="cv-cfg-row-actions">
+      <p-button label="Save key" icon="pi pi-key"
+        [loading]="savingKey" [disabled]="!isBridgeConnected()" (onClick)="onSaveKey()" />
+      @if (provider?.keyStatus?.configured) {
+        <p-button label="Remove key" icon="pi pi-trash" severity="danger" [outlined]="true"
+          [loading]="savingKey" [disabled]="!isBridgeConnected()" (onClick)="onClearKey()" />
+      }
+      @if (provider?.capabilities?.apiKeyUrl; as keyUrl) {
+        <a class="cv-cfg-link" [href]="keyUrl" target="_blank" rel="noopener">Get a key ↗</a>
+      }
+      <a class="cv-cfg-link" [href]="provider?.capabilities?.docsUrl" target="_blank" rel="noopener">Docs ↗</a>
+    </div>
+  }
+</ng-template>

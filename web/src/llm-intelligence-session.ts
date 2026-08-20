@@ -30,11 +30,14 @@ import {
   type TtsInterruptSnapshot,
 } from './tts-interrupt.js';
 import { WebkitSttSession } from './webkit-stt.js';
-import { AmazonSttSession } from './amazon-stt.js';
-import { speakAmazonPolly, stopAmazonTts } from './amazon-tts.js';
+import { ServerSttSession } from './server-stt.js';
+import { speakServerTts, stopServerTts } from './server-tts.js';
 import { canUseWebkitTts } from './webkit-capabilities.js';
 import {
   resolveAudioBackendsAsync,
+  serverSttLabel,
+  serverTtsLabel,
+  EMPTY_AUDIO_CONFIG,
   type IntelligenceAudioConfig,
   type SttBackend,
   type TtsBackend,
@@ -74,7 +77,15 @@ export interface IntelligenceAuthOk {
   audio?: IntelligenceAudioConfig;
 }
 
-type SttSession = WebkitSttSession | AmazonSttSession;
+type SttSession = WebkitSttSession | ServerSttSession;
+
+export interface AudioBackendSummary {
+  stt: SttBackend;
+  tts: TtsBackend;
+  /** Display name of the active STT engine (e.g. "Groq", "Browser STT"). */
+  sttLabel: string;
+  ttsLabel: string;
+}
 
 export class LlmIntelligenceSession {
   private ws: WebSocket | null = null;
@@ -101,13 +112,7 @@ export class LlmIntelligenceSession {
   private orchestratorBusy = false;
   private ttsSpeaking = false;
   private wsConnected = false;
-  private audioConfig: IntelligenceAudioConfig = {
-    preferWebkit: true,
-    ttsProvider: 'browser',
-    amazonAvailable: false,
-    sttFallback: null,
-    ttsFallback: null,
-  };
+  private audioConfig: IntelligenceAudioConfig = EMPTY_AUDIO_CONFIG;
   private sttBackend: SttBackend = 'text_only';
   private ttsBackend: TtsBackend = 'none';
   private readonly ttsPile = new TtsPile((text, ctx) => this.playSpeakUtterance(text, ctx));
@@ -172,8 +177,15 @@ export class LlmIntelligenceSession {
     });
   }
 
-  getAudioBackends(): { stt: SttBackend; tts: TtsBackend } {
-    return { stt: this.sttBackend, tts: this.ttsBackend };
+  getAudioBackends(): AudioBackendSummary {
+    return {
+      stt: this.sttBackend,
+      tts: this.ttsBackend,
+      // Labels come from here rather than a UI-side lookup table: the STT
+      // engine is chosen on the bridge, so only the session knows its name.
+      sttLabel: this.sttProviderLabel(),
+      ttsLabel: this.ttsProviderLabel(),
+    };
   }
 
   getAudioConfig(): IntelligenceAudioConfig {
@@ -208,7 +220,7 @@ export class LlmIntelligenceSession {
     this.clearEndSubmitTimer();
     this.vadSpeechEndPending = false;
     this.endPhrasePending = false;
-    if (this.stt instanceof AmazonSttSession) {
+    if (this.stt instanceof ServerSttSession) {
       this.stt.cancelPendingFlush();
     }
     console.debug('[cancel] turn cancelled by user');
@@ -241,7 +253,7 @@ export class LlmIntelligenceSession {
       if (this.vadListening) this.vadDetector?.resume();
       if (this.listeningForEndPhrase) this.endSpotter?.resume();
     }
-    if (this.stt instanceof AmazonSttSession) {
+    if (this.stt instanceof ServerSttSession) {
       this.stt.setMicEnabled(!muted);
     }
     this.syncCapture();
@@ -350,7 +362,7 @@ export class LlmIntelligenceSession {
     this.sharedMicStream = null;
     this.ownsSharedMic = false;
     stopAllTts();
-    stopAmazonTts();
+    stopServerTts();
     this.ttsPile.interrupt();
     this.ws?.close();
     this.ws = null;
@@ -722,20 +734,20 @@ export class LlmIntelligenceSession {
       return;
     }
 
-    if (this.sttBackend === 'amazon_transcribe') {
-      const amazon = new AmazonSttSession(this.bridgeBase, this.appToken, this.sttGate, {
+    if (this.sttBackend === 'server') {
+      const server = new ServerSttSession(this.bridgeBase, this.appToken, this.sttGate, {
         onInterim: (text) => this.onSttPartial(text),
         onFinal: (text) => this.onUserText(text),
         onError: (message) => {
-          console.warn('[amazon-stt]', message);
-          this.voiceLog('stt', 'error', 'Amazon Transcribe error', message);
+          console.warn('[server-stt]', message);
+          this.voiceLog('stt', 'error', `${this.sttProviderLabel()} error`, message);
           this.cb.onSttError?.(message);
           if (this.vadSpeechEndPending || this.endPhrasePending || this.capturingUtterance) {
             this.recoverCaptureError();
           }
         },
       });
-      this.stt = amazon;
+      this.stt = server;
     }
   }
 
@@ -743,7 +755,7 @@ export class LlmIntelligenceSession {
   private async beginUtteranceCapture(): Promise<void> {
     if (!this.voiceActivated || this.closed) return;
     await this.ensureSttPipeline();
-    if (this.stt instanceof AmazonSttSession) {
+    if (this.stt instanceof ServerSttSession) {
       await this.stt.start(this.sharedMicStream ?? undefined);
     }
     this.capturingUtterance = true;
@@ -751,7 +763,7 @@ export class LlmIntelligenceSession {
     this.voiceLog('stt', 'info', `${this.sttProviderLabel()} listening`);
     const silenceFlush =
       !this.usesVad() && !this.usesEndPhraseSubmit() && this.turnSubmit.silenceMs > 0;
-    if (this.stt instanceof AmazonSttSession) {
+    if (this.stt instanceof ServerSttSession) {
       this.stt.beginCapture({ silenceFlush });
     } else if (this.stt instanceof WebkitSttSession) {
       this.stt.start();
@@ -761,7 +773,7 @@ export class LlmIntelligenceSession {
   /** Vosk cut-out: stop buffering (optionally discard buffered audio). */
   private endUtteranceCapture(discard = false): void {
     this.capturingUtterance = false;
-    if (this.stt instanceof AmazonSttSession) {
+    if (this.stt instanceof ServerSttSession) {
       if (discard) this.stt.endCapture();
       else this.stt.freezeCapture();
     } else if (this.stt instanceof WebkitSttSession) {
@@ -881,7 +893,7 @@ export class LlmIntelligenceSession {
   }
 
   private flushSttNow(): void {
-    if (this.stt instanceof AmazonSttSession) {
+    if (this.stt instanceof ServerSttSession) {
       this.stt.flushNow();
     } else if (this.stt instanceof WebkitSttSession) {
       this.stt.flushNow();
@@ -905,7 +917,7 @@ export class LlmIntelligenceSession {
 
   private scheduleTurnSubmit(reason: 'vad' | 'end_word'): void {
     this.clearEndSubmitTimer();
-    if (this.stt instanceof AmazonSttSession) {
+    if (this.stt instanceof ServerSttSession) {
       void this.submitAmazonTurn(reason);
       return;
     }
@@ -915,7 +927,7 @@ export class LlmIntelligenceSession {
   /** Await Amazon Transcribe — single flush path (WebKit uses pollTurnSubmit instead). */
   private async submitAmazonTurn(reason: 'vad' | 'end_word'): Promise<void> {
     await new Promise((resolve) => window.setTimeout(resolve, 50));
-    if (this.closed || !(this.stt instanceof AmazonSttSession)) return;
+    if (this.closed || !(this.stt instanceof ServerSttSession)) return;
 
     try {
       await this.stt.flushNowAsync();
@@ -956,7 +968,7 @@ export class LlmIntelligenceSession {
   private failTurnSubmit(reason: 'vad' | 'end_word', buffered: string): void {
     if (reason === 'vad') this.vadSpeechEndPending = false;
     if (reason === 'end_word') this.endPhrasePending = false;
-    if (this.stt instanceof AmazonSttSession) this.stt.endCapture();
+    if (this.stt instanceof ServerSttSession) this.stt.endCapture();
     if (buffered) {
       const hint =
         reason === 'end_word'
@@ -998,7 +1010,7 @@ export class LlmIntelligenceSession {
     this.vadSpeechEndPending = false;
     this.endPhrasePending = false;
     this.clearEndSubmitTimer();
-    if (this.stt instanceof AmazonSttSession) this.stt.endCapture();
+    if (this.stt instanceof ServerSttSession) this.stt.endCapture();
     this.sendUserTurn(text);
     this.cb.onTurnSubmitted?.(reason);
     console.debug('[turn-submit]', reason, text.slice(0, 80));
@@ -1015,7 +1027,7 @@ export class LlmIntelligenceSession {
     if (trimmed) {
       this.voiceLog('stt', 'info', `${this.sttProviderLabel()} final`, trimmed.slice(0, 120));
     }
-    if (this.stt instanceof AmazonSttSession && this.capturingUtterance) {
+    if (this.stt instanceof ServerSttSession && this.capturingUtterance) {
       this.endUtteranceCapture(false);
     }
     this.enqueueSpeech(text);
@@ -1285,12 +1297,12 @@ export class LlmIntelligenceSession {
     try {
       if (this.ttsBackend === 'webkit') {
         await this.playWebkit(text, wrappedCtx, webkitOpts);
-      } else if (this.ttsBackend === 'amazon_polly') {
-        await speakAmazonPolly(text, this.bridgeBase, this.appToken, wrappedCtx);
+      } else if (this.ttsBackend === 'server') {
+        await speakServerTts(text, this.bridgeBase, this.appToken, wrappedCtx);
       } else if (canUseWebkitTts()) {
         await this.playWebkit(text, wrappedCtx, webkitOpts);
-      } else if (this.audioConfig.amazonAvailable) {
-        await speakAmazonPolly(text, this.bridgeBase, this.appToken, wrappedCtx);
+      } else if (this.audioConfig.ttsAvailable) {
+        await speakServerTts(text, this.bridgeBase, this.appToken, wrappedCtx);
       } else {
         console.warn('[tts] no TTS backend — text only:', text.slice(0, 80));
         wrappedCtx.onStart();
@@ -1306,16 +1318,19 @@ export class LlmIntelligenceSession {
       const message = err instanceof Error ? err.message : String(err);
       this.voiceLog('tts', 'error', `${provider} error`, message.slice(0, 120));
       console.warn('[tts]', err);
-      if (this.ttsBackend === 'webkit' && this.audioConfig.amazonAvailable) {
+      // Cross-side rescue: the bridge already walked its own provider chain, so
+      // the only fallback left is the *other* kind of backend.
+      if (this.ttsBackend === 'webkit' && this.audioConfig.ttsAvailable) {
+        const serverLabel = serverTtsLabel(this.audioConfig);
         try {
-          await speakAmazonPolly(text, this.bridgeBase, this.appToken, wrappedCtx);
+          await speakServerTts(text, this.bridgeBase, this.appToken, wrappedCtx);
           if (!ctx.signal.aborted) {
-            this.voiceLog('tts', 'info', 'Amazon Polly done (fallback)', text.slice(0, 80));
+            this.voiceLog('tts', 'info', `${serverLabel} done (fallback)`, text.slice(0, 80));
           }
-        } catch (pollyErr) {
-          const pollyMsg = pollyErr instanceof Error ? pollyErr.message : String(pollyErr);
-          this.voiceLog('tts', 'error', 'Amazon Polly fallback error', pollyMsg.slice(0, 120));
-          console.warn('[tts polly fallback]', pollyErr);
+        } catch (serverErr) {
+          const serverMsg = serverErr instanceof Error ? serverErr.message : String(serverErr);
+          this.voiceLog('tts', 'error', `${serverLabel} fallback error`, serverMsg.slice(0, 120));
+          console.warn('[tts server fallback]', serverErr);
         }
       } else if (canUseWebkitTts()) {
         try {
@@ -1332,7 +1347,7 @@ export class LlmIntelligenceSession {
     }
 
     const hadTtsBackend =
-      this.ttsBackend !== 'none' || canUseWebkitTts() || this.audioConfig.amazonAvailable;
+      this.ttsBackend !== 'none' || canUseWebkitTts() || this.audioConfig.ttsAvailable;
     if (!playbackStarted && hadTtsBackend && !ctx.signal.aborted) {
       this.notifyError('Speech playback failed.');
     }
@@ -1411,15 +1426,15 @@ export class LlmIntelligenceSession {
 
   private sttProviderLabel(): string {
     if (this.sttBackend === 'webkit') return 'Browser STT';
-    if (this.sttBackend === 'amazon_transcribe') return 'Amazon Transcribe';
+    if (this.sttBackend === 'server') return serverSttLabel(this.audioConfig);
     return 'STT';
   }
 
   private ttsProviderLabel(): string {
     if (this.ttsBackend === 'webkit') return 'Browser TTS';
-    if (this.ttsBackend === 'amazon_polly') return 'Amazon Polly';
+    if (this.ttsBackend === 'server') return serverTtsLabel(this.audioConfig);
     if (canUseWebkitTts()) return 'Browser TTS';
-    if (this.audioConfig.amazonAvailable) return 'Amazon Polly';
+    if (this.audioConfig.ttsAvailable) return serverTtsLabel(this.audioConfig);
     return 'TTS';
   }
 }

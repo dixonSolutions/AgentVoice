@@ -239,235 +239,20 @@
             (onClick)="onSaveTtsSettings()" />
         </p-fieldset>
 
-        <p-fieldset legend="Speech output">
-          <p-message severity="secondary" variant="simple"
-            text="Choose how AgentVoice speaks replies. Browser voices come from this device’s speechSynthesis API (not a hard-coded Chrome/Safari list). Amazon Polly voices are loaded from AWS for the selected engine." />
-
-          <p-iftalabel>
-            <p-select id="cfg-tts-provider" [(ngModel)]="ttsProvider"
-              [options]="ttsProviderOptions" optionLabel="label" optionValue="value"
-              [disabled]="!isBridgeConnected()"
-              (onChange)="onTtsProviderChange()" />
-            <label for="cfg-tts-provider">Default speech output</label>
-          </p-iftalabel>
-
-          @if (ttsProvider === 'browser') {
-            <p-message severity="secondary" variant="simple"
-              text="Voices from {{ currentBrowserLabel }} via speechSynthesis. Search and scroll the list — virtual/lazy loading keeps large Firefox catalogs responsive." />
-
-            @if (browserVoicesLoading) {
-              <p-message severity="secondary" variant="simple" text="Loading browser voices…" />
-            } @else if (browserVoicesTotal > 0) {
-              <p-message severity="secondary" variant="simple"
-                text="{{ browserVoicesShown }} in list ({{ browserVoicesTotal }} from browser){{ browserVoicesShowAll ? '' : ' — curated; turn on all voices to browse everything' }}." />
-            }
-
-            <!-- Optimus Select: custom search + virtualScroll + lazy window over full catalog. -->
-            <p-iftalabel>
-              <p-select id="cfg-browser-voice"
-                [(ngModel)]="browserVoiceUri"
-                [options]="browserVoiceOptions"
-                optionLabel="label"
-                optionValue="value"
-                optionDisabled="disabled"
-                [filter]="true"
-                [virtualScroll]="true"
-                [virtualScrollItemSize]="38"
-                [lazy]="true"
-                appendTo="body"
-                scrollHeight="280px"
-                (onLazyLoad)="onBrowserVoicesLazyLoad($event)"
-                placeholder="Search or select a browser voice"
-                [showClear]="true">
-                <ng-template pTemplate="filter">
-                  <input
-                    type="text"
-                    pInputText
-                    class="p-select-filter w-full"
-                    placeholder="Search voices…"
-                    [ngModel]="browserVoiceFilter"
-                    (ngModelChange)="onBrowserVoiceSearch($event)"
-                    (click)="$event.stopPropagation()"
-                    (keydown)="$event.stopPropagation()" />
-                </ng-template>
-              </p-select>
-              <label for="cfg-browser-voice">Browser voice</label>
-            </p-iftalabel>
-
-            <div class="cv-cfg-toggle-row">
-              <p-toggleSwitch id="cfg-browser-voices-all"
-                [(ngModel)]="browserVoicesShowAll"
-                (onChange)="onBrowserVoicesShowAllChange()" />
-              <label for="cfg-browser-voices-all">Include remote / all voices (virtual + lazy)</label>
-            </div>
-
-            <p-iftalabel>
-              <p-inputNumber id="cfg-browser-rate" [(ngModel)]="browserTtsRate"
-                [min]="0.5" [max]="2" [step]="0.05" [minFractionDigits]="2" />
-              <label for="cfg-browser-rate">Rate (speed)</label>
-            </p-iftalabel>
-
-            <p-iftalabel>
-              <p-inputNumber id="cfg-browser-pitch" [(ngModel)]="browserTtsPitch"
-                [min]="0" [max]="2" [step]="0.05" [minFractionDigits]="2" />
-              <label for="cfg-browser-pitch">Pitch</label>
-            </p-iftalabel>
-
-            <p-iftalabel>
-              <p-inputNumber id="cfg-browser-volume" [(ngModel)]="browserTtsVolume"
-                [min]="0" [max]="1" [step]="0.05" [minFractionDigits]="2" />
-              <label for="cfg-browser-volume">Volume</label>
-            </p-iftalabel>
-
-            <p-iftalabel>
-              <input pInputText id="cfg-browser-lang" [(ngModel)]="browserTtsLang"
-                placeholder="en-US" />
-              <label for="cfg-browser-lang">Language (BCP-47)</label>
-            </p-iftalabel>
-
-            <div class="cv-cfg-row-actions">
-              <p-button label="Preview" icon="pi pi-play" severity="secondary" [outlined]="true"
-                (onClick)="onPreviewBrowserTts()" />
-            </div>
-          }
-
-          @if (ttsProvider === 'amazon_polly') {
-            <p-iftalabel>
-              <p-select id="cfg-speech-polly-engine"
-                [options]="pollyEngineOptions" optionLabel="label" optionValue="value"
-                [(ngModel)]="pollyEngine"
-                [disabled]="!isBridgeConnected()"
-                (onChange)="onPollyEngineChange()" />
-              <label for="cfg-speech-polly-engine">Polly engine</label>
-            </p-iftalabel>
-
-            @if (loadingPollyVoices) {
-              <p-message severity="secondary" variant="simple" text="Loading Polly voices from AWS…" />
-            }
-
-            <p-iftalabel>
-              <p-select id="cfg-speech-polly-voice" [(ngModel)]="pollyVoiceId"
-                [options]="pollyVoiceOptions" optionLabel="label" optionValue="value"
-                [filter]="true" filterPlaceholder="Search Polly voices…"
-                [disabled]="!isBridgeConnected() || loadingPollyVoices"
-                [editable]="true" placeholder="Joanna" />
-              <label for="cfg-speech-polly-voice">Polly voice</label>
-            </p-iftalabel>
-
-            <div class="cv-cfg-row-actions">
-              <p-button label="Preview" icon="pi pi-play" severity="secondary" [outlined]="true"
-                [loading]="previewingPolly" [disabled]="!isBridgeConnected()"
-                (onClick)="onPreviewPollyVoice()" />
-              <p-button label="Refresh voices" icon="pi pi-refresh" severity="secondary"
-                [outlined]="true" [loading]="loadingPollyVoices"
-                [disabled]="!isBridgeConnected()"
-                (onClick)="onPollyEngineChange()" />
-            </div>
-          }
-
-          <p-button label="Save speech output" icon="pi pi-volume-up"
-            [loading]="savingSpeechOutput" [disabled]="!isBridgeConnected()"
-            (onClick)="onSaveSpeechOutput()" />
-        </p-fieldset>
-
-        <p-fieldset legend="Speech input (Amazon Transcribe)">
-          <p-message severity="secondary" variant="simple"
-            text="Uses Amazon Transcribe’s Speech Foundation Model (SFM) — the premier multi-billion-parameter ASR. Bedrock has no native real-time STT; Medical/Call Analytics are omitted as they are slower or domain-specific for voice turns." />
-
-          <p-iftalabel>
-            <p-select id="cfg-transcribe-model" [(ngModel)]="transcribeModel"
-              [options]="transcribeModelOptions" optionLabel="label" optionValue="value"
-              [disabled]="!isBridgeConnected()" />
-            <label for="cfg-transcribe-model">Transcribe model</label>
-          </p-iftalabel>
-
-          <p-iftalabel>
-            <p-select id="cfg-transcribe-lang-mode" [(ngModel)]="transcribeLanguageMode"
-              [options]="transcribeLanguageModeOptions" optionLabel="label" optionValue="value"
-              [disabled]="!isBridgeConnected()" />
-            <label for="cfg-transcribe-lang-mode">Language mode</label>
-          </p-iftalabel>
-
-          @if (transcribeLanguageMode === 'fixed') {
-            <p-iftalabel>
-              <input pInputText id="cfg-transcribe-lang-code"
-                [(ngModel)]="transcribeLanguageCode"
-                placeholder="en-US"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-transcribe-lang-code">Language code</label>
-            </p-iftalabel>
-          } @else {
-            <p-iftalabel>
-              <input pInputText id="cfg-transcribe-lang-options"
-                [(ngModel)]="transcribeLanguageOptions"
-                placeholder="en-US,es-US,fr-FR,de-DE"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-transcribe-lang-options">Language options (one locale per language)</label>
-            </p-iftalabel>
-            <p-iftalabel>
-              <input pInputText id="cfg-transcribe-pref-lang"
-                [(ngModel)]="transcribePreferredLanguage"
-                placeholder="en-US"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-transcribe-pref-lang">Preferred language</label>
-            </p-iftalabel>
-            <p-message severity="warn" variant="simple"
-              text="Auto-identify is more accurate across languages but ~3× slower in our tests — prefer fixed language for voice latency." />
-          }
-
-          <div class="cv-cfg-toggle-row">
-            <p-toggleSwitch id="cfg-transcribe-stabilize"
-              [(ngModel)]="transcribePartialResultsStabilization"
-              [disabled]="!isBridgeConnected()" />
-            <label for="cfg-transcribe-stabilize">Partial results stabilization (faster streaming)</label>
-          </div>
-
-          @if (transcribePartialResultsStabilization) {
-            <p-iftalabel>
-              <p-select id="cfg-transcribe-stability"
-                [(ngModel)]="transcribePartialResultsStability"
-                [options]="transcribeStabilityOptions" optionLabel="label" optionValue="value"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-transcribe-stability">Stability level</label>
-            </p-iftalabel>
-          }
-
-          <p-button label="Save speech input" icon="pi pi-microphone"
-            [loading]="savingSpeechInput" [disabled]="!isBridgeConnected()"
-            (onClick)="onSaveSpeechInput()" />
-        </p-fieldset>
-
-        @if (browserProfiles.length > 0) {
-          <p-fieldset legend="Saved browser profiles">
-            @for (profile of browserProfiles; track profile.id) {
-              <div class="cv-cfg-browser-profile">
-                <div class="cv-cfg-browser-profile-info">
-                  <strong>{{ profile.label }}</strong>
-                  <span class="cv-cfg-muted">{{ profile.id }}</span>
-                  @if (profile.id === currentBrowserId) {
-                    <p-tag value="current" severity="success" />
-                  }
-                </div>
-                <div class="cv-cfg-row-actions">
-                  <p-button label="Load" icon="pi pi-upload" size="small" severity="secondary"
-                    [outlined]="true" (onClick)="onLoadBrowserProfile(profile)" />
-                  @if (profile.id !== currentBrowserId) {
-                    <p-button label="Remove" icon="pi pi-trash" size="small"
-                      severity="danger" [outlined]="true"
-                      (onClick)="onDeleteBrowserProfile(profile.id)" />
-                  }
-                </div>
-              </div>
-            }
-          </p-fieldset>
-        }
-
         <p-button label="Save voice settings" icon="pi pi-save"
           [loading]="savingVoice"
           [disabled]="!isBridgeConnected() || (!vadEnabled && phraseConflict())"
           (onClick)="onSaveVoiceSettings()" />
 
       </p-fluid>
+    </div>
+  }
+
+  <!-- ── Speech-to-Text ── -->
+  <!-- ── Speech (in + out) ── -->
+  @if (activeSection() === 'speech') {
+    <div class="cv-cfg-detail">
+      <cv-speech-tab />
     </div>
   }
 
@@ -740,52 +525,9 @@
             </p-iftalabel>
           </p-fieldset>
 
-          <p-fieldset legend="Audio (STT / region)">
+          <p-fieldset legend="AWS audio region">
             <p-message severity="secondary" variant="simple"
-              text="Polly voice, Transcribe language, and speech backends are configured under Voice &amp; Controls. This section only keeps Bedrock audio region / prefer-WebKit for the intelligence workflow." />
-            <p-message severity="secondary" variant="simple"
-              text="Speech output and Transcribe SFM options live under Voice. Here: browser STT preference and AWS audio region." />
-            <div class="cv-cfg-toggle-row">
-              <p-toggleSwitch id="cfg-prefer-webkit"
-                [(ngModel)]="workflowData.llmIntelligence.audio.preferWebkit"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-prefer-webkit">Prefer browser STT when available</label>
-            </div>
-            <p-iftalabel>
-              <p-select id="cfg-workflow-tts-provider"
-                [options]="ttsProviderOptions" optionLabel="label" optionValue="value"
-                [(ngModel)]="workflowData.llmIntelligence.audio.ttsProvider"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-workflow-tts-provider">Speech output provider</label>
-            </p-iftalabel>
-            <p-iftalabel>
-              <input pInputText id="cfg-polly-voice"
-                [(ngModel)]="workflowData.llmIntelligence.audio.pollyVoiceId"
-                placeholder="Joanna"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-polly-voice">Polly voice ID</label>
-            </p-iftalabel>
-            <p-iftalabel>
-              <p-select id="cfg-polly-engine"
-                [options]="pollyEngineOptions" optionLabel="label" optionValue="value"
-                [(ngModel)]="workflowData.llmIntelligence.audio.pollyEngine"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-polly-engine">Polly engine</label>
-            </p-iftalabel>
-            <p-iftalabel>
-              <p-select id="cfg-workflow-transcribe-model"
-                [options]="transcribeModelOptions" optionLabel="label" optionValue="value"
-                [(ngModel)]="workflowData.llmIntelligence.audio.transcribeModel"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-workflow-transcribe-model">Transcribe model</label>
-            </p-iftalabel>
-            <p-iftalabel>
-              <input pInputText id="cfg-transcribe-lang"
-                [(ngModel)]="workflowData.llmIntelligence.audio.transcribeLanguageCode"
-                placeholder="en-US"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-transcribe-lang">Transcribe language code</label>
-            </p-iftalabel>
+              text="Which engines listen and speak — and their voices, languages, models and keys — live under Config → Speech. This is only the AWS region Polly and Transcribe use when they are the chosen provider." />
             <p-iftalabel>
               <input pInputText id="cfg-audio-region"
                 [(ngModel)]="workflowData.llmIntelligence.audio.region"

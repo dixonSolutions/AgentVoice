@@ -15,7 +15,6 @@ import { Password } from '@openng/optimus-ui/password';
 import { ProgressSpinner } from '@openng/optimus-ui/progressspinner';
 import { PrimeTemplate } from '@openng/optimus-ui/api';
 import { Select } from '@openng/optimus-ui/select';
-import type { SelectLazyLoadEvent } from '@openng/optimus-ui/types/select';
 import { SelectButton } from '@openng/optimus-ui/selectbutton';
 import { Tag } from '@openng/optimus-ui/tag';
 import { Textarea } from '@openng/optimus-ui/textarea';
@@ -23,18 +22,6 @@ import { ToggleSwitch } from '@openng/optimus-ui/toggleswitch';
 import { Tabs, TabList, Tab, TabPanels, TabPanel } from '@openng/optimus-ui/tabs';
 
 import { phrasesConflict } from '../../../wake-words.js';
-import {
-  currentBrowserProfileId,
-  deleteBrowserTtsProfile,
-  detectBrowserLabel,
-  curateBrowserTtsVoices,
-  listBrowserTtsProfiles,
-  listBrowserTtsVoicesAsync,
-  onBrowserTtsVoicesChanged,
-  saveBrowserTtsProfile,
-  type BrowserTtsProfile,
-} from '../../../browser-tts-settings.js';
-import { speakAmazonPolly } from '../../../amazon-tts.js';
 import {
   APPEARANCE_TONES,
   AppearanceService,
@@ -46,6 +33,7 @@ import { ToastService } from '../../services/toast.service';
 import { VoiceProvidersService } from '../../services/voice-providers.service';
 import { VoiceSessionService } from '../../services/voice-session.service';
 import { ConnectionTabComponent } from '../connection-tab/connection-tab.component';
+import { SpeechTabComponent } from '../speech-tab/speech-tab.component';
 import type {
   AdminProject,
   AuditEntry,
@@ -61,11 +49,6 @@ import type {
   WorkflowSettings,
   AgentClientSettings,
   AgentClientId,
-  PollyVoiceInfo,
-  TtsProvider,
-  TranscribeLanguageMode,
-  TranscribeModelId,
-  TranscribePartialStability,
   HostingProviderId,
   HostingProviderInfo,
   HostingDoctorResult,
@@ -76,6 +59,7 @@ type SectionId =
   | 'appearance'
   | 'connection'
   | 'voice'
+  | 'speech'
   | 'personal'
   | 'projects'
   | 'keys'
@@ -87,10 +71,6 @@ type SectionId =
   | 'database'
   | 'debug';
 
-type BrowserVoiceOption = { label: string; value: string; disabled?: boolean };
-
-const BROWSER_VOICE_LAZY_CHUNK = 64;
-const BROWSER_VOICE_CURATED_MAX = 80;
 
 type ServeTabId = 'status' | 'network' | 'logs';
 
@@ -123,6 +103,19 @@ const ALL_SECTIONS: ConfigSection[] = [
     icon: 'pi-microphone',
     description: 'Wake words, on-screen controls, turn submit, TTS, and transcription',
     keywords: ['wake', 'phrase', 'vad', 'silence', 'start', 'end', 'cancel', 'audio', 'sound', 'cue', 'tts', 'voice', 'interrupt', 'browser', 'polly', 'transcribe', 'sfm', 'speech', 'stt', 'touch', 'mute', 'speak'],
+  },
+  {
+    id: 'speech',
+    label: 'Speech',
+    icon: 'pi-language',
+    description: 'Which engines listen and speak — providers, voices, languages, keys',
+    keywords: [
+      'speech', 'stt', 'tts', 'transcribe', 'transcription', 'whisper', 'asr', 'dictation',
+      'voice', 'voices', 'polly', 'kokoro', 'piper', 'scribe', 'aura', 'nova',
+      'openai', 'groq', 'deepgram', 'elevenlabs', 'gemini', 'openrouter', 'amazon',
+      'local', 'self-hosted', 'selfhosted', 'docker', 'podman', 'container', 'gpu',
+      'api key', 'key', 'model', 'language', 'provider', 'fallback', 'offline', 'privacy',
+    ],
   },
   {
     id: 'personal',
@@ -276,6 +269,7 @@ const HOSTING_LOGIN_SERVER_FIELD: Partial<Record<HostingProviderId, HostnameFiel
     TabPanel,
     PrimeTemplate,
     ConnectionTabComponent,
+    SpeechTabComponent,
   ],
   templateUrl: './config-tab.component.html',
 })
@@ -387,41 +381,6 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     { label: 'LLM Intelligence (Bedrock)', value: 'llm_intelligence' },
   ];
 
-  protected readonly pollyEngineOptions = [
-    { label: 'Neural', value: 'neural' },
-    { label: 'Generative', value: 'generative' },
-    { label: 'Standard', value: 'standard' },
-  ];
-
-  protected readonly ttsProviderOptions: Array<{ label: string; value: TtsProvider }> = [
-    { label: 'Browser text-to-speech', value: 'browser' },
-    { label: 'Amazon Polly', value: 'amazon_polly' },
-  ];
-
-  protected readonly transcribeModelOptions: Array<{ label: string; value: TranscribeModelId }> = [
-    {
-      label: 'Speech Foundation Model (SFM) — recommended',
-      value: 'speech_foundation_model',
-    },
-  ];
-
-  protected readonly transcribeLanguageModeOptions: Array<{
-    label: string;
-    value: TranscribeLanguageMode;
-  }> = [
-    { label: 'Fixed language (fastest)', value: 'fixed' },
-    { label: 'Auto-identify (slower, multilingual)', value: 'identify' },
-  ];
-
-  protected readonly transcribeStabilityOptions: Array<{
-    label: string;
-    value: TranscribePartialStability;
-  }> = [
-    { label: 'High — lowest latency', value: 'high' },
-    { label: 'Medium — balanced', value: 'medium' },
-    { label: 'Low — highest accuracy on revisions', value: 'low' },
-  ];
-
   protected readonly runModeOptions = [
     { label: 'Test (local dev)', value: 'test' },
     { label: 'Serve (production)', value: 'serve' },
@@ -447,12 +406,6 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    if (this.browserVoiceSearchTimer) {
-      clearTimeout(this.browserVoiceSearchTimer);
-      this.browserVoiceSearchTimer = null;
-    }
-    this.unsubBrowserVoices?.();
-    this.unsubBrowserVoices = null;
     if (this.hostingSetupPollTimer) clearTimeout(this.hostingSetupPollTimer);
     this.hostingProgressSub?.unsubscribe();
     this.stopJournalStream();
@@ -464,8 +417,8 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       case 'voice':
         await this.voiceProviders.refresh();
         this.syncVoiceForm();
-        await this.loadSpeechOutputUi();
         break;
+      // 'speech' is handled entirely by <cv-speech-tab />.
       case 'personal':
         this.syncVoiceForm();
         break;
@@ -528,50 +481,6 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected webkitVolume = 1;
   protected webkitLang = 'en-US';
   protected savingTts = false;
-
-  protected browserVoiceUri = '';
-  protected browserTtsRate = 1.02;
-  protected browserTtsPitch = 1;
-  protected browserTtsVolume = 1;
-  protected browserTtsLang = 'en-US';
-  protected browserProfiles: BrowserTtsProfile[] = [];
-  /**
-   * Sparse options bound to p-select: length === filtered catalog for correct
-   * virtual-scroll height; only the visible window holds real rows.
-   */
-  protected browserVoiceOptions: BrowserVoiceOption[] = [];
-  /** Active catalog (curated or all) — full objects in memory for search/lazy. */
-  private browserVoiceSource: BrowserVoiceOption[] = [];
-  /** Search query for the custom Select filter (does not use Select’s built-in filter). */
-  protected browserVoiceFilter = '';
-  protected browserVoicesLoading = false;
-  protected browserVoicesShowAll = false;
-  protected browserVoicesTotal = 0;
-  protected browserVoicesShown = 0;
-  protected browserVoicesLoaded = 0;
-  private rawBrowserVoices: SpeechSynthesisVoice[] = [];
-  private browserVoiceSearchTimer: ReturnType<typeof setTimeout> | null = null;
-  protected readonly currentBrowserLabel = detectBrowserLabel();
-  protected readonly currentBrowserId = currentBrowserProfileId();
-
-  /** Speech output (TTS) — synced with workflow.llmIntelligence.audio */
-  protected ttsProvider: TtsProvider = 'browser';
-  protected pollyVoiceId = 'Joanna';
-  protected pollyEngine: 'standard' | 'neural' | 'generative' = 'neural';
-  protected pollyVoiceOptions: Array<{ label: string; value: string }> = [];
-  protected pollyVoices: PollyVoiceInfo[] = [];
-  protected loadingPollyVoices = false;
-  protected savingSpeechOutput = false;
-  protected previewingPolly = false;
-
-  protected transcribeModel: TranscribeModelId = 'speech_foundation_model';
-  protected transcribeLanguageMode: TranscribeLanguageMode = 'fixed';
-  protected transcribeLanguageCode = 'en-US';
-  protected transcribeLanguageOptions = 'en-US,es-US,fr-FR,de-DE';
-  protected transcribePreferredLanguage = 'en-US';
-  protected transcribePartialResultsStabilization = true;
-  protected transcribePartialResultsStability: TranscribePartialStability = 'high';
-  protected savingSpeechInput = false;
 
   protected readonly wakeConfidencePresets = [
     { label: '45% — fast (partial)', value: 45 },
@@ -705,302 +614,6 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     }
   }
 
-  private voiceToOption(v: SpeechSynthesisVoice): BrowserVoiceOption {
-    return {
-      label: `${v.name} · ${v.lang}${v.localService ? '' : ' · remote'}`,
-      value: v.voiceURI,
-    };
-  }
-
-  private lazyPad(index: number): BrowserVoiceOption {
-    return { label: ' ', value: `__lazy_${index}`, disabled: true };
-  }
-
-  private buildBrowserVoiceSource(voices: SpeechSynthesisVoice[]): BrowserVoiceOption[] {
-    const curated = curateBrowserTtsVoices(voices, {
-      preferredLang: this.browserTtsLang || undefined,
-      selectedVoiceURI: this.browserVoiceUri || undefined,
-      includeRemote: this.browserVoicesShowAll,
-      maxVoices: this.browserVoicesShowAll ? Number.POSITIVE_INFINITY : BROWSER_VOICE_CURATED_MAX,
-    });
-    const mapped = curated.map((v) => this.voiceToOption(v));
-    return [{ label: 'System default', value: '' }, ...mapped];
-  }
-
-  private filteredBrowserVoiceSource(): BrowserVoiceOption[] {
-    const q = this.browserVoiceFilter.trim().toLowerCase();
-    if (!q) return this.browserVoiceSource;
-    return this.browserVoiceSource.filter((opt) => opt.label.toLowerCase().includes(q));
-  }
-
-  /**
-   * Bind a full-length sparse array so virtual scroll height matches the catalog,
-   * and only hydrate the visible window (plus the selected row).
-   */
-  private fillBrowserVoiceWindow(first: number, last: number): void {
-    const source = this.filteredBrowserVoiceSource();
-    this.browserVoicesShown = source.length;
-
-    if (source.length === 0) {
-      this.browserVoiceOptions = [];
-      this.browserVoicesLoaded = 0;
-      return;
-    }
-
-    const from = Math.max(0, Math.min(first, source.length - 1));
-    const to = Math.min(
-      source.length,
-      Math.max(last + 1, from + BROWSER_VOICE_LAZY_CHUNK, BROWSER_VOICE_LAZY_CHUNK),
-    );
-
-    const next: BrowserVoiceOption[] = new Array(source.length);
-    for (let i = 0; i < source.length; i++) {
-      next[i] = i >= from && i < to ? source[i]! : this.lazyPad(i);
-    }
-
-    const selected = this.browserVoiceUri;
-    if (selected !== undefined && selected !== null) {
-      const selectedIdx = source.findIndex((o) => o.value === selected);
-      if (selectedIdx >= 0) next[selectedIdx] = source[selectedIdx]!;
-    }
-
-    this.browserVoicesLoaded = to - from;
-    this.browserVoiceOptions = next;
-  }
-
-  private applyBrowserVoiceOptions(voices: SpeechSynthesisVoice[]): void {
-    this.rawBrowserVoices = voices;
-    this.browserVoicesTotal = voices.length;
-    this.browserVoiceSource = this.buildBrowserVoiceSource(voices);
-    this.fillBrowserVoiceWindow(0, BROWSER_VOICE_LAZY_CHUNK);
-    this.cdr.markForCheck();
-  }
-
-  protected onBrowserVoicesShowAllChange(): void {
-    this.browserVoiceFilter = '';
-    this.applyBrowserVoiceOptions(this.rawBrowserVoices);
-  }
-
-  protected onBrowserVoicesLazyLoad(event: SelectLazyLoadEvent): void {
-    this.fillBrowserVoiceWindow(event.first, event.last);
-    this.cdr.markForCheck();
-  }
-
-  /** Custom filter — searches the full source, then rebuilds the lazy window. */
-  protected onBrowserVoiceSearch(query: string): void {
-    this.browserVoiceFilter = query;
-    if (this.browserVoiceSearchTimer) clearTimeout(this.browserVoiceSearchTimer);
-    this.browserVoiceSearchTimer = setTimeout(() => {
-      this.browserVoiceSearchTimer = null;
-      this.fillBrowserVoiceWindow(0, BROWSER_VOICE_LAZY_CHUNK);
-      this.cdr.markForCheck();
-    }, 120);
-  }
-
-  private async loadSpeechOutputUi(): Promise<void> {
-    this.browserProfiles = listBrowserTtsProfiles();
-    const current = this.browserProfiles.find((p) => p.id === this.currentBrowserId);
-    const opts = current?.options ?? {};
-    this.browserVoiceUri = opts.voiceURI ?? '';
-    this.browserTtsRate = opts.rate ?? this.webkitRate;
-    this.browserTtsPitch = opts.pitch ?? this.webkitPitch;
-    this.browserTtsVolume = opts.volume ?? this.webkitVolume;
-    this.browserTtsLang = opts.lang ?? this.webkitLang;
-
-    this.browserVoicesLoading = true;
-    try {
-      const voices = await listBrowserTtsVoicesAsync();
-      this.applyBrowserVoiceOptions(voices);
-    } finally {
-      this.browserVoicesLoading = false;
-    }
-
-    this.unsubBrowserVoices?.();
-    this.unsubBrowserVoices = onBrowserTtsVoicesChanged((voices) => {
-      this.applyBrowserVoiceOptions(voices);
-    });
-
-    try {
-      const res = await this.admin.getWorkflow();
-      const audio = res.workflow.llmIntelligence.audio;
-      this.ttsProvider = audio.ttsProvider ?? (audio.preferWebkit === false ? 'amazon_polly' : 'browser');
-      this.pollyVoiceId = audio.pollyVoiceId || 'Joanna';
-      this.pollyEngine = audio.pollyEngine || 'neural';
-      this.applyTranscribeAudio(audio);
-      if (this.workflowData) {
-        this.workflowData.llmIntelligence.audio.ttsProvider = this.ttsProvider;
-        this.workflowData.llmIntelligence.audio.pollyVoiceId = this.pollyVoiceId;
-        this.workflowData.llmIntelligence.audio.pollyEngine = this.pollyEngine;
-      }
-    } catch {
-      // Bridge offline — keep local defaults
-    }
-
-    if (this.ttsProvider === 'amazon_polly') {
-      await this.loadPollyVoices();
-    }
-    this.cdr.markForCheck();
-  }
-
-  protected async onTtsProviderChange(): Promise<void> {
-    if (this.ttsProvider === 'amazon_polly') {
-      await this.loadPollyVoices();
-    }
-  }
-
-  protected async onPollyEngineChange(): Promise<void> {
-    await this.loadPollyVoices();
-  }
-
-  private async loadPollyVoices(): Promise<void> {
-    if (!this.isBridgeConnected()) {
-      this.pollyVoiceOptions = [];
-      return;
-    }
-    this.loadingPollyVoices = true;
-    try {
-      const res = await this.admin.getPollyVoices(this.pollyEngine);
-      this.pollyVoices = res.voices;
-      this.pollyVoiceOptions = res.voices.map((v) => ({
-        label: `${v.name} · ${v.languageName || v.languageCode}${v.gender ? ` · ${v.gender}` : ''}`,
-        value: v.id,
-      }));
-      if (
-        this.pollyVoiceId &&
-        this.pollyVoiceOptions.length > 0 &&
-        !this.pollyVoiceOptions.some((o) => o.value === this.pollyVoiceId)
-      ) {
-        // Keep custom/legacy id selectable so save still works.
-        this.pollyVoiceOptions = [
-          { label: `${this.pollyVoiceId} (saved)`, value: this.pollyVoiceId },
-          ...this.pollyVoiceOptions,
-        ];
-      }
-    } catch (err) {
-      this.pollyVoices = [];
-      this.pollyVoiceOptions = this.pollyVoiceId
-        ? [{ label: `${this.pollyVoiceId} (saved — list unavailable)`, value: this.pollyVoiceId }]
-        : [];
-      this.toast.warn(
-        'Could not load Polly voices',
-        err instanceof Error ? err.message : String(err),
-      );
-    } finally {
-      this.loadingPollyVoices = false;
-      this.cdr.markForCheck();
-    }
-  }
-
-  protected async onSaveSpeechOutput(): Promise<void> {
-    this.savingSpeechOutput = true;
-    try {
-      if (this.ttsProvider === 'browser') {
-        saveBrowserTtsProfile(this.currentBrowserId, {
-          voiceURI: this.browserVoiceUri || undefined,
-          rate: Number(this.browserTtsRate),
-          pitch: Number(this.browserTtsPitch),
-          volume: Number(this.browserTtsVolume),
-          lang: this.browserTtsLang.trim() || 'en-US',
-        });
-        this.browserProfiles = listBrowserTtsProfiles();
-        this.voiceSession.refreshBrowserTtsOptions();
-      }
-
-      const res = await this.admin.patchWorkflow({
-        llmIntelligence: {
-          audio: {
-            ttsProvider: this.ttsProvider,
-            pollyVoiceId: this.pollyVoiceId.trim() || 'Joanna',
-            pollyEngine: this.pollyEngine,
-          },
-        },
-      } as Partial<WorkflowSettings>);
-      this.workflowData = structuredClone(res.workflow);
-      this.ttsProvider = res.workflow.llmIntelligence.audio.ttsProvider ?? this.ttsProvider;
-      this.pollyVoiceId = res.workflow.llmIntelligence.audio.pollyVoiceId;
-      this.pollyEngine = res.workflow.llmIntelligence.audio.pollyEngine;
-
-      this.toast.success(
-        'Speech output saved',
-        this.voiceSession.conversationActive()
-          ? 'Restart the voice session to apply the new TTS provider.'
-          : this.ttsProvider === 'browser'
-            ? `Browser voice profile saved for ${this.currentBrowserLabel}.`
-            : `Amazon Polly voice: ${this.pollyVoiceId}.`,
-      );
-    } catch (err) {
-      this.toast.error('Could not save speech output', err instanceof Error ? err.message : String(err));
-    } finally {
-      this.savingSpeechOutput = false;
-    }
-  }
-
-  private applyTranscribeAudio(audio: WorkflowSettings['llmIntelligence']['audio']): void {
-    this.transcribeModel = audio.transcribeModel ?? 'speech_foundation_model';
-    this.transcribeLanguageMode = audio.transcribeLanguageMode ?? 'fixed';
-    this.transcribeLanguageCode = audio.transcribeLanguageCode || 'en-US';
-    this.transcribeLanguageOptions =
-      audio.transcribeLanguageOptions || 'en-US,es-US,fr-FR,de-DE';
-    this.transcribePreferredLanguage =
-      audio.transcribePreferredLanguage || audio.transcribeLanguageCode || 'en-US';
-    this.transcribePartialResultsStabilization =
-      audio.transcribePartialResultsStabilization !== false;
-    this.transcribePartialResultsStability =
-      audio.transcribePartialResultsStability ?? 'high';
-  }
-
-  protected async onSaveSpeechInput(): Promise<void> {
-    this.savingSpeechInput = true;
-    try {
-      const res = await this.admin.patchWorkflow({
-        llmIntelligence: {
-          audio: {
-            transcribeModel: this.transcribeModel,
-            transcribeLanguageMode: this.transcribeLanguageMode,
-            transcribeLanguageCode: this.transcribeLanguageCode.trim() || 'en-US',
-            transcribeLanguageOptions: this.transcribeLanguageOptions.trim() || 'en-US',
-            transcribePreferredLanguage: this.transcribePreferredLanguage.trim() || 'en-US',
-            transcribePartialResultsStabilization: this.transcribePartialResultsStabilization,
-            transcribePartialResultsStability: this.transcribePartialResultsStability,
-          },
-        },
-      } as Partial<WorkflowSettings>);
-      this.workflowData = structuredClone(res.workflow);
-      this.applyTranscribeAudio(res.workflow.llmIntelligence.audio);
-      this.toast.success(
-        'Speech input saved',
-        this.transcribeLanguageMode === 'fixed'
-          ? `Transcribe SFM · ${this.transcribeLanguageCode} · stability ${this.transcribePartialResultsStability}`
-          : `Transcribe SFM · auto-identify · stability ${this.transcribePartialResultsStability}`,
-      );
-    } catch (err) {
-      this.toast.error('Could not save speech input', err instanceof Error ? err.message : String(err));
-    } finally {
-      this.savingSpeechInput = false;
-    }
-  }
-
-  protected async onPreviewPollyVoice(): Promise<void> {
-    if (!this.isBridgeConnected()) {
-      this.toast.warn('Not connected', 'Connect to the bridge to preview Polly.');
-      return;
-    }
-    this.previewingPolly = true;
-    try {
-      await speakAmazonPolly(
-        `This is the Amazon Polly voice ${this.pollyVoiceId}.`,
-        this.bridge.bridgeBase,
-        this.bridge.appToken,
-        undefined,
-        { voiceId: this.pollyVoiceId, engine: this.pollyEngine },
-      );
-    } catch (err) {
-      this.toast.error('Polly preview failed', err instanceof Error ? err.message : String(err));
-    } finally {
-      this.previewingPolly = false;
-    }
-  }
-
   protected async onSaveTtsSettings(): Promise<void> {
     this.savingTts = true;
     try {
@@ -1027,54 +640,6 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     } finally {
       this.savingTts = false;
     }
-  }
-
-  protected onSaveBrowserTtsProfile(): void {
-    saveBrowserTtsProfile(this.currentBrowserId, {
-      voiceURI: this.browserVoiceUri || undefined,
-      rate: Number(this.browserTtsRate),
-      pitch: Number(this.browserTtsPitch),
-      volume: Number(this.browserTtsVolume),
-      lang: this.browserTtsLang.trim() || 'en-US',
-    });
-    this.browserProfiles = listBrowserTtsProfiles();
-    this.voiceSession.refreshBrowserTtsOptions();
-    this.toast.success('Browser TTS saved', this.currentBrowserLabel);
-  }
-
-  protected onLoadBrowserProfile(profile: BrowserTtsProfile): void {
-    this.browserVoiceUri = profile.options.voiceURI ?? '';
-    this.browserTtsRate = profile.options.rate ?? this.webkitRate;
-    this.browserTtsPitch = profile.options.pitch ?? this.webkitPitch;
-    this.browserTtsVolume = profile.options.volume ?? this.webkitVolume;
-    this.browserTtsLang = profile.options.lang ?? this.webkitLang;
-    this.ttsProvider = 'browser';
-  }
-
-  protected onDeleteBrowserProfile(id: string): void {
-    deleteBrowserTtsProfile(id);
-    this.browserProfiles = listBrowserTtsProfiles();
-    this.toast.success('Profile removed');
-  }
-
-  protected onPreviewBrowserTts(): void {
-    if (typeof window === 'undefined' || !window.speechSynthesis) {
-      this.toast.warn('Browser TTS unavailable', 'speechSynthesis is not supported here.');
-      return;
-    }
-    window.speechSynthesis.cancel();
-    const utter = new SpeechSynthesisUtterance('This is how AgentVoice will sound on this browser.');
-    utter.rate = Number(this.browserTtsRate) || 1;
-    utter.pitch = Number(this.browserTtsPitch) || 1;
-    utter.volume = Number(this.browserTtsVolume) || 1;
-    utter.lang = this.browserTtsLang.trim() || 'en-US';
-    if (this.browserVoiceUri) {
-      const voice = window.speechSynthesis
-        .getVoices()
-        .find((v) => v.voiceURI === this.browserVoiceUri);
-      if (voice) utter.voice = voice;
-    }
-    window.speechSynthesis.speak(utter);
   }
 
   // ── Personal section ─────────────────────────────────────────────────────
@@ -1317,26 +882,9 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     try {
       const res = await this.admin.getWorkflow();
       if (seq !== this.workflowLoadSeq) return;
+      // Speech providers, voices, languages and scopes live under Config →
+      // Speech (/api/speech); this section only owns the LLM + memory settings.
       this.workflowData = structuredClone(res.workflow);
-      const audio = this.workflowData.llmIntelligence.audio;
-      if (!audio.ttsProvider) {
-        audio.ttsProvider = audio.preferWebkit === false ? 'amazon_polly' : 'browser';
-      }
-      if (!audio.transcribeModel) audio.transcribeModel = 'speech_foundation_model';
-      if (!audio.transcribeLanguageMode) audio.transcribeLanguageMode = 'fixed';
-      if (audio.transcribePartialResultsStabilization === undefined) {
-        audio.transcribePartialResultsStabilization = true;
-      }
-      if (!audio.transcribePartialResultsStability) {
-        audio.transcribePartialResultsStability = 'high';
-      }
-      if (!audio.transcribeLanguageOptions) {
-        audio.transcribeLanguageOptions = 'en-US,es-US,fr-FR,de-DE';
-      }
-      this.ttsProvider = audio.ttsProvider;
-      this.pollyVoiceId = audio.pollyVoiceId;
-      this.pollyEngine = audio.pollyEngine;
-      this.applyTranscribeAudio(audio);
     } catch (err) {
       if (seq !== this.workflowLoadSeq) return;
       this.toast.error('Could not load workflow settings', err instanceof Error ? err.message : String(err));

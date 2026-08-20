@@ -163,6 +163,38 @@ export function listBrowserTtsVoices(): SpeechSynthesisVoice[] {
   return window.speechSynthesis.getVoices();
 }
 
+/** `en-US` → `en`; empty / "auto" → null. */
+function baseLang(code: string | undefined | null): string | null {
+  const trimmed = code?.trim().toLowerCase();
+  if (!trimmed || trimmed === 'auto') return null;
+  const base = trimmed.split(/[-_]/)[0] ?? '';
+  return base.length >= 2 ? base : null;
+}
+
+/**
+ * Does this device have a speechSynthesis voice for the language?
+ *
+ * Safari ships en-* and little else, so asking for a Polish reply otherwise
+ * produces English phonemes or silence. The audio router uses this to skip the
+ * `browser` step of the chain and hand the reply to a provider that can speak
+ * it — see intelligence-audio.ts.
+ */
+export function hasBrowserVoiceForLanguage(language: string): boolean {
+  const want = baseLang(language);
+  if (!want) return true;
+  return listBrowserTtsVoices().some((v) => baseLang(v.lang) === want);
+}
+
+/** Languages this device can speak, as ISO-639-1 codes. */
+export function browserVoiceLanguages(): string[] {
+  const codes = new Set<string>();
+  for (const voice of listBrowserTtsVoices()) {
+    const base = baseLang(voice.lang);
+    if (base) codes.add(base);
+  }
+  return [...codes].sort();
+}
+
 export interface CurateBrowserVoicesOptions {
   /** Preferred BCP-47 language (e.g. en-US). */
   preferredLang?: string;

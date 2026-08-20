@@ -39,11 +39,17 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`26-rename-agentvoice.md`](./26-rename-agentvoice.md) | Product rename from Cursor Voice → AgentVoice (what changed / what stayed) | Migrating an existing install after the rename |
 | [`27-touch-controls-and-cancel.md`](./27-touch-controls-and-cancel.md) | On-screen Speak / Cancel, cancel-while-processing, touch-only preset | Mute UX, no wake words, or cancel during Transcribe |
 | [`28-provider-parity-and-branding.md`](./28-provider-parity-and-branding.md) | Normalized agent events, per-provider MCP registration and modes, the AgentVoice interrupt hook, `agent_*` tool names, one branding source | Anything Codex/Claude Code behaves differently from Cursor, or naming/theme questions |
+| [`29-speech-to-text-providers.md`](./29-speech-to-text-providers.md) | Speech-to-text providers: self-hosted Whisper (Docker/Podman), Groq, OpenAI, Deepgram, Gemini, ElevenLabs, OpenRouter, Amazon Transcribe | Choosing a transcription engine, adding API keys from the app, or running STT locally |
+| [`30-speech-output-providers.md`](./30-speech-output-providers.md) | Text-to-speech providers, per-vendor scopes, and language-aware fallback across device and cloud voices | The agent has to speak a language the device has no voice for, or you want a different voice |
+| [`31-service-orchestrator-converter.md`](./31-service-orchestrator-converter.md) | The Service / Orchestrator / Converter / Specializer layering shared by speech in, speech out, and (pending) the agent CLIs | Adding a provider or a selection policy, or working out where vendor knowledge belongs |
 
 ## One-paragraph summary
 
-The **phone** (iPhone Safari PWA) captures speech with **browser STT** (WebKit or
-Amazon Transcribe) and plays replies with **WebKit TTS** or **Amazon Polly**.
+The **phone** (iPhone Safari PWA) captures speech with **browser STT**, falling
+back to whichever server engine is configured — self-hosted Whisper, Groq,
+OpenAI, Deepgram, Gemini, ElevenLabs, OpenRouter, or Amazon Transcribe
+([`29-speech-to-text-providers.md`](./29-speech-to-text-providers.md)) — and
+plays replies with **WebKit TTS** or **Amazon Polly**.
 Utterances flow over **`/ws/intelligence`** to the bridge, which queues them for
 the active coding agent (Cursor / Codex / Claude Code) via the **`agent-voice`
 MCP server** (`next_voice_turn`, `speak`, `done` — renamed from `cursor-voice`;

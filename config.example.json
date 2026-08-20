@@ -28,16 +28,33 @@
         },
         "readOutputMaxChars": 8000,
         "audio": {
-          "preferWebkit": true,
-          "ttsProvider": "browser",
-          "pollyVoiceId": "Joanna",
-          "pollyEngine": "neural",
-          "transcribeModel": "speech_foundation_model",
-          "transcribeLanguageMode": "fixed",
-          "transcribeLanguageCode": "en-US",
-          "transcribeLanguageOptions": "en-US,es-US,fr-FR,de-DE",
-          "transcribePartialResultsStabilization": true,
-          "transcribePartialResultsStability": "high"
+          "stt": {
+            "provider": "browser",
+            "fallbacks": ["amazon_transcribe"],
+            "language": "auto",
+            "models": {},
+            "scopes": {}
+          },
+          "tts": {
+            "provider": "browser",
+            "fallbacks": ["amazon_polly"],
+            "language": "auto",
+            "models": {},
+            "voices": { "amazon_polly": "Joanna" },
+            "scopes": {}
+          },
+          "speechServer": {
+            "manage": "container",
+            "runtime": "auto",
+            "image": "ghcr.io/speaches-ai/speaches:latest-cpu",
+            "containerName": "agentvoice-speech",
+            "port": 8770,
+            "containerPort": 8000,
+            "apiPath": "/v1",
+            "gpu": false,
+            "modelVolume": "agentvoice-speech-models",
+            "modelCachePath": "/home/ubuntu/.cache/huggingface/hub"
+          }
         }
       }
     },

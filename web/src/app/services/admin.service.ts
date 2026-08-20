@@ -24,13 +24,22 @@ import type {
   AuditEntry,
   AgentClientSettings,
   AgentClientId,
-  PollyVoiceInfo,
-  TranscribeModelInfo,
   HostingProviderId,
   HostingProvidersResponse,
   HostingSetupRunStatus,
   HostingDoctorResult,
 } from '../models/admin-settings';
+import type {
+  SpeechView,
+  SpeechInputPatch,
+  SpeechOutputPatch,
+  SpeechInputProviderId,
+  SpeechOutputProviderId,
+  SpeechInputTestResult,
+  SpeechVoiceCatalog,
+  SpeechServerStatus,
+  SpeechSetupRunStatus,
+} from '../models/speech';
 
 @Injectable({ providedIn: 'root' })
 export class AdminService {
@@ -291,17 +300,94 @@ export class AdminService {
     return this.delete('/api/admin/sessions');
   }
 
-  // ── Speech / Polly ───────────────────────────────────────────────────────
+  // ── Speech providers (both directions) ───────────────────────────────────
 
-  getPollyVoices(
-    engine?: 'standard' | 'neural' | 'generative',
-  ): Promise<{ engine: string; voices: PollyVoiceInfo[] }> {
-    const q = engine ? `?engine=${encodeURIComponent(engine)}` : '';
-    return this.get(`/api/intelligence/polly-voices${q}`);
+  getSpeech(): Promise<SpeechView> {
+    return this.get('/api/speech');
   }
 
-  getTranscribeModels(): Promise<{ models: TranscribeModelInfo[]; note: string }> {
-    return this.get('/api/intelligence/transcribe-models');
+  patchSpeechInput(patch: SpeechInputPatch): Promise<{ ok: boolean } & SpeechView> {
+    return this.patch('/api/speech/stt', patch);
+  }
+
+  patchSpeechOutput(patch: SpeechOutputPatch): Promise<{ ok: boolean } & SpeechView> {
+    return this.patch('/api/speech/tts', patch);
+  }
+
+  /** Values go straight into .env and are never read back — status only. */
+  patchSpeechKeys(updates: Record<string, string>): Promise<{ ok: boolean } & SpeechView> {
+    return this.patch('/api/speech/keys', updates);
+  }
+
+  testSpeechInput(
+    provider: SpeechInputProviderId,
+    model?: string,
+  ): Promise<SpeechInputTestResult> {
+    return this.post(`/api/speech/stt/${encodeURIComponent(provider)}/test`, model ? { model } : {});
+  }
+
+  getSpeechVoices(provider: SpeechOutputProviderId, model?: string): Promise<SpeechVoiceCatalog> {
+    const q = model ? `?model=${encodeURIComponent(model)}` : '';
+    return this.get(`/api/speech/tts/${encodeURIComponent(provider)}/voices${q}`);
+  }
+
+  /**
+   * Synthesize a preview line and hand back a playable object URL. Returns the
+   * audio itself rather than JSON, so this bypasses the JSON helpers.
+   */
+  async previewSpeechOutput(
+    provider: SpeechOutputProviderId,
+    opts: { model?: string; voice?: string; text?: string } = {},
+  ): Promise<{ url: string; revoke: () => void }> {
+    const res = await fetch(
+      `${this.bridge.bridgeBase}/api/speech/tts/${encodeURIComponent(provider)}/test`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.bridge.appToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(opts),
+      },
+    );
+
+    if (!res.ok) {
+      let detail = `${res.status} ${res.statusText}`;
+      try {
+        const body = (await res.json()) as { error?: string };
+        if (body.error) detail = body.error;
+      } catch {
+        // non-JSON error body — keep the status line
+      }
+      throw new Error(detail);
+    }
+
+    const url = URL.createObjectURL(await res.blob());
+    return { url, revoke: () => URL.revokeObjectURL(url) };
+  }
+
+  // ── Self-hosted speech server ────────────────────────────────────────────
+
+  getSpeechServerStatus(): Promise<SpeechServerStatus> {
+    return this.get('/api/speech/server/status');
+  }
+
+  startSpeechServerSetup(): Promise<{ runId: string }> {
+    return this.post('/api/speech/server/setup');
+  }
+
+  getSpeechServerSetupRun(runId: string): Promise<SpeechSetupRunStatus> {
+    return this.get(`/api/speech/server/setup/${encodeURIComponent(runId)}`);
+  }
+
+  stopSpeechServer(
+    remove = false,
+  ): Promise<{ ok: boolean; detail: string; status: SpeechServerStatus }> {
+    return this.post('/api/speech/server/stop', { remove });
+  }
+
+  getSpeechServerLogs(lines = 120): Promise<{ lines: number; text: string }> {
+    return this.get(`/api/speech/server/logs?lines=${lines}`);
   }
 
   // ── Health ────────────────────────────────────────────────────────────────

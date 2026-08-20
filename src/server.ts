@@ -44,6 +44,7 @@ import { registerProjectsAdminRoutes } from './routes/projectsAdmin.js';
 import { registerProviderAuthRoutes } from './routes/providerAuth.js';
 import { registerProviderModelRoutes } from './routes/providerModels.js';
 import { registerHostingAdminRoutes } from './routes/hostingAdmin.js';
+import { registerSpeechProviderRoutes } from './routes/speechProviders.js';
 import { registerMcpServer } from './mcp/server/index.js';
 import { attachDevWebProxy, registerProductionWeb } from './webDispatch.js';
 import { registerControlSocket } from './state/controlSocket.js';
@@ -276,6 +277,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   await registerProviderAuthRoutes(app);
   await registerProviderModelRoutes(app);
   await registerHostingAdminRoutes(app);
+  await registerSpeechProviderRoutes(app);
   registerPushRoutes(app);
 
   /** GET /api/settings — non-secret operational settings. */
@@ -301,9 +303,9 @@ export async function buildServer(): Promise<FastifyInstance> {
           model: s.workflow.llmIntelligence.llm.model,
           region: s.workflow.llmIntelligence.llm.region,
           audio: {
-            preferWebkit: s.workflow.llmIntelligence.audio.preferWebkit,
-            pollyVoiceId: s.workflow.llmIntelligence.audio.pollyVoiceId,
-            transcribeLanguageCode: s.workflow.llmIntelligence.audio.transcribeLanguageCode,
+            sttProvider: s.workflow.llmIntelligence.audio.stt.provider,
+            ttsProvider: s.workflow.llmIntelligence.audio.tts.provider,
+            language: s.workflow.llmIntelligence.audio.stt.language,
           },
         },
       },

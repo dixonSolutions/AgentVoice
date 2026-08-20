@@ -15,6 +15,7 @@
 import { z } from 'zod';
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { ScopeMapSchema } from './providers/scopes.js';
 import { childLogger } from './log.js';
 
 const log = childLogger('config');
@@ -51,6 +52,16 @@ const EnvSchema = z.object({
   OPENAI_API_KEY: z.string().optional(),
   CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
+  /**
+   * Speech-to-text provider keys. OPENAI_API_KEY / ANTHROPIC_API_KEY above are
+   * shared with the agent CLIs — the rest are STT-only.
+   * See docs/29-speech-to-text-providers.md.
+   */
+  GROQ_API_KEY: z.string().optional(),
+  DEEPGRAM_API_KEY: z.string().optional(),
+  ELEVENLABS_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
+  OPENROUTER_API_KEY: z.string().optional(),
   /** HostingProvider secrets — never in config.json since they grant tunnel access. */
   NGROK_AUTHTOKEN: z.string().optional(),
   CLOUDFLARE_TUNNEL_TOKEN: z.string().optional(),
@@ -196,41 +207,113 @@ const LlmIntelligenceLlmSchema = z.object({
   maxTokens: z.number().int().min(256).max(8192).default(4096),
 });
 
-const LlmIntelligenceAudioSchema = z.object({
-  /** Try WebKit STT first; fall back to Amazon Transcribe when unavailable. */
-  preferWebkit: z.boolean().default(true),
+// ── Speech providers (docs/29-speech-to-text-providers.md, docs/30-…) ───────
+
+/**
+ * Speech-to-text engines. `browser` runs on the phone (SpeechRecognition);
+ * everything else transcribes on the bridge. Vosk is absent on purpose — it
+ * only spots wake phrases, it never transcribes the turn.
+ */
+export const SPEECH_INPUT_PROVIDERS = [
+  'browser',
+  'amazon_transcribe',
+  'openai',
+  'groq',
+  'deepgram',
+  'elevenlabs',
+  'gemini',
+  'openrouter',
+  'local_whisper',
+] as const;
+export type SpeechInputProviderId = (typeof SPEECH_INPUT_PROVIDERS)[number];
+
+/** Text-to-speech engines. `browser` is the device's own speechSynthesis voices. */
+export const SPEECH_OUTPUT_PROVIDERS = [
+  'browser',
+  'amazon_polly',
+  'openai',
+  'elevenlabs',
+  'deepgram',
+  'groq',
+  'gemini',
+  'local_speech',
+] as const;
+export type SpeechOutputProviderId = (typeof SPEECH_OUTPUT_PROVIDERS)[number];
+
+/**
+ * The self-hosted OpenAI-compatible speech server. One container serves both
+ * directions — `local_whisper` posts to `/audio/transcriptions`, `local_speech`
+ * to `/audio/speech` — so there is a single lifecycle to manage.
+ *
+ * `container` lets the bridge pull the image and run it (Docker or Podman);
+ * `external` points at a server you already run, here or on another host.
+ *
+ * Note: Ollama has no speech endpoint in either direction, so this goes through
+ * a speech server image rather than Ollama.
+ */
+export const SpeechServerSchema = z.object({
+  manage: z.enum(['container', 'external']).default('container'),
+  runtime: z.enum(['auto', 'docker', 'podman']).default('auto'),
+  image: z.string().min(1).default('ghcr.io/speaches-ai/speaches:latest-cpu'),
+  containerName: z.string().min(1).max(64).default('agentvoice-speech'),
+  /** Host port bound to 127.0.0.1 — never exposed beyond loopback. */
+  port: z.number().int().min(1024).max(65535).default(8770),
+  /** Port the server listens on inside the container. */
+  containerPort: z.number().int().min(1).max(65535).default(8000),
+  /** Explicit server root. Required for `external`; derived from `port` otherwise. */
+  baseUrl: z.string().url().optional(),
+  /** Path prefix where the server mounts the OpenAI-compatible API. */
+  apiPath: z.string().min(1).default('/v1'),
+  /** Pass the GPU through (docker --gpus all / podman --device nvidia.com/gpu=all). */
+  gpu: z.boolean().default(false),
+  /** Named volume for the weights cache, so re-pulling the image keeps models. */
+  modelVolume: z.string().min(1).max(64).default('agentvoice-speech-models'),
+  modelCachePath: z.string().min(1).default('/home/ubuntu/.cache/huggingface/hub'),
+});
+
+/**
+ * Ordered fallback chain — the same shape in both directions.
+ *
+ * `provider` is tried first; each entry in `fallbacks` is tried in turn when
+ * the one before it is unconfigured, unreachable, or cannot handle the
+ * requested language. Per-provider tunables live in `scopes`
+ * (see src/providers/scopes.ts) so adding an option never touches this schema.
+ */
+export const SpeechInputSchema = z.object({
+  provider: z.enum(SPEECH_INPUT_PROVIDERS).default('browser'),
+  fallbacks: z.array(z.enum(SPEECH_INPUT_PROVIDERS)).max(8).default(['amazon_transcribe']),
+  /** ISO-639-1 hint (e.g. "en", "pl") or "auto" to let the provider detect. */
+  language: z.string().min(2).max(16).default('auto'),
+  /** provider id → model id. Missing entries use that provider's default. */
+  models: z.record(z.string(), z.string()).default({}),
+  /** provider id → its scope values. */
+  scopes: ScopeMapSchema.default({}),
+});
+
+export const SpeechOutputSchema = z.object({
+  provider: z.enum(SPEECH_OUTPUT_PROVIDERS).default('browser'),
+  fallbacks: z.array(z.enum(SPEECH_OUTPUT_PROVIDERS)).max(8).default(['amazon_polly']),
   /**
-   * Speech output (TTS) provider.
-   * - browser: Web Speech API / speechSynthesis voices on the device
-   * - amazon_polly: Amazon Polly (server-side)
+   * Language the agent speaks. "auto" follows the speech-input language, which
+   * is what you want when you talk to it in one language and expect the reply
+   * in the same one.
    */
-  ttsProvider: z.enum(['browser', 'amazon_polly']).default('browser'),
+  language: z.string().min(2).max(16).default('auto'),
+  models: z.record(z.string(), z.string()).default({}),
+  /** provider id → voice id. Voice catalogs are per-provider, never a shared list. */
+  voices: z.record(z.string(), z.string()).default({}),
+  scopes: ScopeMapSchema.default({}),
+});
+
+const LlmIntelligenceAudioSchema = z.object({
   /** AWS region for Polly + Transcribe (defaults to llm.region if omitted at runtime). */
   region: z.string().min(1).optional(),
-  pollyVoiceId: z.string().min(1).default('Joanna'),
-  pollyEngine: z.enum(['standard', 'neural', 'generative']).default('neural'),
-  /**
-   * Amazon Transcribe ASR model.
-   * Only Speech Foundation Model (SFM) is exposed — it is AWS’s premier multi-billion
-   * parameter ASR used by StartStreamTranscription (100+ languages). Bedrock has no
-   * native real-time STT; Whisper-on-Marketplace is batch-oriented and slower for voice.
-   */
-  transcribeModel: z.enum(['speech_foundation_model']).default('speech_foundation_model'),
-  /**
-   * Language selection for Transcribe SFM.
-   * - fixed: fastest — use transcribeLanguageCode
-   * - identify: auto-detect among languageOptions (slower; one locale per language)
-   */
-  transcribeLanguageMode: z.enum(['fixed', 'identify']).default('fixed'),
-  transcribeLanguageCode: z.string().min(2).default('en-US'),
-  /** Comma-separated locales for identify mode — at most one locale per language (e.g. en-US,pl-PL). */
-  transcribeLanguageOptions: z.string().min(2).default('en-US,es-US,fr-FR,de-DE'),
-  /** Preferred language hint when identify mode is on (defaults to languageCode). */
-  transcribePreferredLanguage: z.string().min(2).optional(),
-  /** Reduce streaming latency (recommended on for voice). */
-  transcribePartialResultsStabilization: z.boolean().default(true),
-  /** high = lowest latency / more aggressive freeze of early words. */
-  transcribePartialResultsStability: z.enum(['low', 'medium', 'high']).default('high'),
+  /** Speech in: which engine transcribes a turn, plus its fallback chain. */
+  stt: SpeechInputSchema.default({}),
+  /** Speech out: which engine speaks a reply, plus its fallback chain. */
+  tts: SpeechOutputSchema.default({}),
+  /** Self-hosted server shared by `local_whisper` and `local_speech`. */
+  speechServer: SpeechServerSchema.default({}),
 });
 
 export const LlmIntelligenceWorkflowSchema = z.object({
@@ -385,6 +468,10 @@ export type VoiceTtsSettings = z.infer<typeof VoiceTtsSchema>;
 export type VoiceSettingsInput = z.infer<typeof VoiceSettingsSchema>;
 export type VoiceSettings = VoiceSettingsInput;
 export type RunModes = z.infer<typeof RunModesSchema>;
+export type SpeechServerSettings = z.infer<typeof SpeechServerSchema>;
+export type SpeechInputSettings = z.infer<typeof SpeechInputSchema>;
+export type SpeechOutputSettings = z.infer<typeof SpeechOutputSchema>;
+export type AudioSettings = z.infer<typeof LlmIntelligenceAudioSchema>;
 export type LlmIntelligenceWorkflow = z.infer<typeof LlmIntelligenceWorkflowSchema>;
 export type WorkflowSettings = z.infer<typeof WorkflowSettingsSchema>;
 export type ServeSettings = z.infer<typeof ServeSettingsSchema>;
@@ -403,6 +490,106 @@ export interface AppConfig {
 }
 
 // ── Migration ─────────────────────────────────────────────────────────────────
+
+
+/** Read a nested object off a raw config node, creating it when absent. */
+function rawObject(parent: Record<string, unknown>, key: string): Record<string, unknown> {
+  const existing = parent[key];
+  if (typeof existing === 'object' && existing !== null && !Array.isArray(existing)) {
+    return existing as Record<string, unknown>;
+  }
+  const created: Record<string, unknown> = {};
+  parent[key] = created;
+  return created;
+}
+
+/**
+ * Fold the pre-unification audio keys into `audio.stt` / `audio.tts` /
+ * `audio.speechServer`.
+ *
+ * Before this, speech settings were spread across `preferWebkit`,
+ * `ttsProvider`, `polly*` and seven `transcribe*` fields — one flat namespace
+ * per vendor. They now live as a provider choice plus a scope map, so a new
+ * engine adds no schema. Migration is one-way and lossless for every value the
+ * new model still has a home for; `transcribeModel` is dropped because it only
+ * ever had one legal value.
+ */
+const LEGACY_AUDIO_KEYS = [
+  'preferWebkit',
+  'ttsProvider',
+  'pollyVoiceId',
+  'pollyEngine',
+  'transcribeModel',
+  'transcribeLanguageMode',
+  'transcribeLanguageCode',
+  'transcribeLanguageOptions',
+  'transcribePreferredLanguage',
+  'transcribePartialResultsStabilization',
+  'transcribePartialResultsStability',
+] as const;
+
+function migrateAudioSettings(audio: Record<string, unknown>): void {
+  const stt = rawObject(audio, 'stt');
+
+  // The self-hosted server moved up a level once it started serving TTS too.
+  if (typeof stt['local'] === 'object' && stt['local'] !== null && audio['speechServer'] === undefined) {
+    audio['speechServer'] = stt['local'];
+  }
+  delete stt['local'];
+
+  const hasLegacy = LEGACY_AUDIO_KEYS.some((key) => key in audio);
+  if (!hasLegacy) return;
+
+  // ── Speech in ────────────────────────────────────────────────────────────
+  const serverStt =
+    typeof stt['provider'] === 'string' && stt['provider'] !== 'browser'
+      ? (stt['provider'] as string)
+      : 'amazon_transcribe';
+
+  if (audio['preferWebkit'] === false) {
+    stt['provider'] = serverStt;
+    stt['fallbacks'] = [];
+  } else {
+    // preferWebkit defaulted to true: browser first, server as the fallback.
+    stt['provider'] = 'browser';
+    stt['fallbacks'] = [serverStt];
+  }
+
+  if (typeof audio['transcribeLanguageCode'] === 'string' && stt['language'] === undefined) {
+    stt['language'] = audio['transcribeLanguageCode'];
+  }
+
+  const sttScopes = rawObject(stt, 'scopes');
+  sttScopes['amazon_transcribe'] = {
+    languageMode: audio['transcribeLanguageMode'] ?? 'fixed',
+    languageOptions: audio['transcribeLanguageOptions'] ?? 'en-US,es-US,fr-FR,de-DE',
+    stabilization: audio['transcribePartialResultsStabilization'] ?? true,
+    stability: audio['transcribePartialResultsStability'] ?? 'high',
+  };
+
+  // ── Speech out ───────────────────────────────────────────────────────────
+  const tts = rawObject(audio, 'tts');
+  const wantsPolly =
+    audio['ttsProvider'] === 'amazon_polly' ||
+    (audio['ttsProvider'] === undefined && audio['preferWebkit'] === false);
+
+  tts['provider'] = wantsPolly ? 'amazon_polly' : 'browser';
+  tts['fallbacks'] = wantsPolly ? ['browser'] : ['amazon_polly'];
+
+  if (typeof audio['pollyVoiceId'] === 'string') {
+    rawObject(tts, 'voices')['amazon_polly'] = audio['pollyVoiceId'];
+  }
+  if (typeof audio['pollyEngine'] === 'string') {
+    rawObject(rawObject(tts, 'scopes'), 'amazon_polly')['engine'] = audio['pollyEngine'];
+  }
+
+  for (const key of LEGACY_AUDIO_KEYS) delete audio[key];
+
+  log.info(
+    { sttProvider: stt['provider'], ttsProvider: tts['provider'] },
+    'Migrated config — audio.{preferWebkit,ttsProvider,polly*,transcribe*} → audio.stt / audio.tts',
+  );
+}
 
 function migrateRawConfig(raw: unknown): unknown {
   if (typeof raw !== 'object' || raw === null) return raw;
@@ -503,16 +690,7 @@ function migrateRawConfig(raw: unknown): unknown {
         const li = wf['llmIntelligence'] as Record<string, unknown>;
         delete li['systemPrompts'];
         if (typeof li['audio'] === 'object' && li['audio'] !== null) {
-          const audio = li['audio'] as Record<string, unknown>;
-          if (audio['ttsProvider'] === undefined) {
-            // Legacy: preferWebkit=false meant Polly-first for TTS.
-            audio['ttsProvider'] =
-              audio['preferWebkit'] === false ? 'amazon_polly' : 'browser';
-            log.info(
-              { ttsProvider: audio['ttsProvider'] },
-              'Migrated config — added settings.workflow.llmIntelligence.audio.ttsProvider',
-            );
-          }
+          migrateAudioSettings(li['audio'] as Record<string, unknown>);
         }
       }
     }

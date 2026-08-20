@@ -1,5 +1,12 @@
 /**
- * Amazon Polly TTS playback — fallback when WebKit speechSynthesis is unavailable.
+ * Server-side TTS playback — used when the device's own speechSynthesis is
+ * unavailable, or cannot speak the language the reply is in.
+ *
+ * Which engine answers is the bridge's business (Polly, ElevenLabs, OpenAI,
+ * Gemini, a self-hosted Kokoro container, …); this just posts the text and
+ * plays whatever audio comes back. The response's `X-Speech-Provider` header
+ * names the engine that actually spoke, so a silent fallback is still visible
+ * in the voice log. See docs/30-provider-scopes-and-speech-output.md.
  */
 
 import { getSharedAudioContext, unlockAudioContext } from './audio.js';
@@ -24,7 +31,7 @@ function isIosDevice(): boolean {
   );
 }
 
-export function stopAmazonTts(): void {
+export function stopServerTts(): void {
   if (currentBufferSource) {
     try {
       currentBufferSource.stop();
@@ -50,24 +57,31 @@ export function isWebkitTtsSupported(): boolean {
   return canUseWebkitTts();
 }
 
-export interface SpeakAmazonPollyOptions {
-  voiceId?: string;
-  engine?: 'standard' | 'neural' | 'generative';
+export interface SpeakServerTtsOptions {
+  /** Override the configured language for this line (e.g. a quoted phrase). */
+  language?: string;
 }
 
-/** Fetch Polly MP3 from bridge and play; resolves when playback ends or aborts. */
-export async function speakAmazonPolly(
+/** Which engine spoke the last line — surfaced in the voice log. */
+let lastProvider: string | null = null;
+
+export function lastServerTtsProvider(): string | null {
+  return lastProvider;
+}
+
+/** Fetch synthesized audio from the bridge and play it; resolves when done. */
+export async function speakServerTts(
   text: string,
   bridgeBase: string,
   appToken: string,
   ctx?: TtsPlayContext,
-  options?: SpeakAmazonPollyOptions,
+  options?: SpeakServerTtsOptions,
 ): Promise<void> {
   const clean = cleanText(text);
   if (!clean) return;
   if (ctx?.signal.aborted) return;
 
-  stopAmazonTts();
+  stopServerTts();
 
   const res = await fetch(`${bridgeBase}/api/intelligence/tts`, {
     method: 'POST',
@@ -77,8 +91,7 @@ export async function speakAmazonPolly(
     },
     body: JSON.stringify({
       text: clean,
-      ...(options?.voiceId ? { voiceId: options.voiceId } : {}),
-      ...(options?.engine ? { engine: options.engine } : {}),
+      ...(options?.language ? { language: options.language } : {}),
     }),
   });
 
@@ -90,9 +103,10 @@ export async function speakAmazonPolly(
     } catch {
       // ignore
     }
-    throw new Error(`Polly TTS failed: ${detail}`);
+    throw new Error(`Text-to-speech failed: ${detail}`);
   }
 
+  lastProvider = res.headers.get('X-Speech-Provider');
   const blob = await res.blob();
 
   if (isIosDevice()) {

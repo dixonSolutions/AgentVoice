@@ -8,13 +8,12 @@
  */
 
 import {
-  LanguageCode,
   MediaEncoding,
   PartialResultsStability,
   StartStreamTranscriptionCommand,
+  type LanguageCode,
   type TranscribeStreamingClient,
 } from '@aws-sdk/client-transcribe-streaming';
-import { getConfig } from '../../config.js';
 import { childLogger } from '../../log.js';
 import { createTranscribeStreamingClient } from './awsClient.js';
 
@@ -22,17 +21,6 @@ const log = childLogger('intelligence:transcribe');
 
 const CHUNK_BYTES = 6400; // 200 ms @ 16 kHz 16-bit mono
 
-export const TRANSCRIBE_MODELS = [
-  {
-    id: 'speech_foundation_model' as const,
-    label: 'Speech Foundation Model (SFM)',
-    description:
-      'Amazon Transcribe’s premier multi-billion-parameter ASR — 100+ languages, word timestamps, streaming. Fastest real-time option with IAM keys.',
-    recommended: true,
-  },
-] as const;
-
-export type TranscribeModelId = (typeof TRANSCRIBE_MODELS)[number]['id'];
 
 function asLanguageCode(code: string): LanguageCode {
   return code as LanguageCode;
@@ -59,23 +47,43 @@ async function* pcmAudioStream(pcm: Buffer): AsyncGenerator<{ AudioEvent: { Audi
   }
 }
 
-export async function transcribePcm16(pcm: Buffer): Promise<string> {
+/**
+ * Streaming parameters, supplied by the Amazon speech-input provider from its
+ * scope values — this module no longer reads config, so the provider layer
+ * stays the single place that knows how settings map to a request.
+ */
+export interface TranscribeStreamOptions {
+  /** BCP-47 locale for `fixed` mode, and the preferred hint for `identify`. */
+  languageCode: string;
+  languageMode: 'fixed' | 'identify';
+  /** Comma-separated locales for `identify` — at most one locale per language. */
+  languageOptions: string;
+  stabilize: boolean;
+  stability: 'low' | 'medium' | 'high';
+}
+
+export async function transcribePcm16(
+  pcm: Buffer,
+  opts: TranscribeStreamOptions,
+): Promise<string> {
   if (pcm.length < 3200) {
     throw new Error('Audio too short — speak for at least half a second');
   }
 
   const client = createTranscribeStreamingClient();
   try {
-    return await runTranscribeStream(client, pcm);
+    return await runTranscribeStream(client, pcm, opts);
   } finally {
     client.destroy();
   }
 }
 
-async function runTranscribeStream(client: TranscribeStreamingClient, pcm: Buffer): Promise<string> {
-  const audio = getConfig().settings.workflow.llmIntelligence.audio;
-  const stabilize = audio.transcribePartialResultsStabilization !== false;
-  const stability = audio.transcribePartialResultsStability ?? 'high';
+async function runTranscribeStream(
+  client: TranscribeStreamingClient,
+  pcm: Buffer,
+  opts: TranscribeStreamOptions,
+): Promise<string> {
+  const { stabilize, stability } = opts;
 
   const base = {
     MediaEncoding: MediaEncoding.PCM,
@@ -95,25 +103,22 @@ async function runTranscribeStream(client: TranscribeStreamingClient, pcm: Buffe
   };
 
   const command =
-    audio.transcribeLanguageMode === 'identify'
+    opts.languageMode === 'identify'
       ? new StartStreamTranscriptionCommand({
           ...base,
           IdentifyLanguage: true,
-          LanguageOptions: sanitizeLanguageOptions(audio.transcribeLanguageOptions),
-          PreferredLanguage: asLanguageCode(
-            audio.transcribePreferredLanguage?.trim() || audio.transcribeLanguageCode,
-          ),
+          LanguageOptions: sanitizeLanguageOptions(opts.languageOptions),
+          PreferredLanguage: asLanguageCode(opts.languageCode),
         })
       : new StartStreamTranscriptionCommand({
           ...base,
-          LanguageCode: asLanguageCode(audio.transcribeLanguageCode),
+          LanguageCode: asLanguageCode(opts.languageCode),
         });
 
   log.debug(
     {
-      model: audio.transcribeModel,
-      languageMode: audio.transcribeLanguageMode,
-      languageCode: audio.transcribeLanguageCode,
+      languageMode: opts.languageMode,
+      languageCode: opts.languageCode,
       stabilize,
       stability,
       pcmBytes: pcm.length,

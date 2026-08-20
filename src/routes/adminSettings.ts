@@ -62,21 +62,11 @@ const WorkflowPatchSchema = z
             maxTokens: z.number().int().min(256).max(8192).optional(),
           })
           .optional(),
+        // Speech provider selection, models, voices and scopes live under
+        // /api/speech (src/routes/speechProviders.ts) — only the AWS region for
+        // Polly/Transcribe belongs to the workflow block.
         audio: z
-          .object({
-            preferWebkit: z.boolean().optional(),
-            ttsProvider: z.enum(['browser', 'amazon_polly']).optional(),
-            region: z.string().optional(),
-            pollyVoiceId: z.string().min(1).optional(),
-            pollyEngine: z.enum(['standard', 'neural', 'generative']).optional(),
-            transcribeModel: z.enum(['speech_foundation_model']).optional(),
-            transcribeLanguageMode: z.enum(['fixed', 'identify']).optional(),
-            transcribeLanguageCode: z.string().min(1).optional(),
-            transcribeLanguageOptions: z.string().min(2).optional(),
-            transcribePreferredLanguage: z.string().min(2).optional(),
-            transcribePartialResultsStabilization: z.boolean().optional(),
-            transcribePartialResultsStability: z.enum(['low', 'medium', 'high']).optional(),
-          })
+          .object({ region: z.string().optional() })
           .optional(),
         memory: z
           .object({
