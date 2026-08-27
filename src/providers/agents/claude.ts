@@ -419,12 +419,17 @@ export const claudeProvider: AgentProvider = {
       args.push('--resume', project.resumeId);
     }
 
-    // Print mode has no permission UI: without an explicit mode, edits are denied
-    // and the worker silently produces nothing. `ask`/`plan` stay read-only.
+    // Print mode has no permission UI: without an explicit mode, any unapproved
+    // action (edits, Bash, browser tools, …) is silently denied and the worker
+    // hangs or produces nothing. `acceptEdits` only covers file edits — a Bash
+    // command, browser automation, or any other tool call still hits the
+    // (nonexistent) permission prompt and the session goes mute. Agent/voice
+    // mode needs every action pre-approved so it stays fully hands-free;
+    // `ask`/`plan` stay read-only instead.
     if (mode === 'ask' || mode === 'plan') {
       args.push('--permission-mode', 'plan', '--disallowedTools', READ_ONLY_DISALLOWED);
     } else {
-      args.push('--permission-mode', 'acceptEdits');
+      args.push('--permission-mode', 'bypassPermissions');
     }
 
     return withPrompt(args, mode === 'ask' ? buildAskPrompt(prompt) : buildAgentPrompt(prompt, { browser }));
@@ -436,7 +441,11 @@ export const claudeProvider: AgentProvider = {
       args.push('--model', session.activeModel);
     }
     if (project.resumeId) args.push('--resume', project.resumeId);
-    args.push('--permission-mode', 'acceptEdits');
+    // Same reasoning as buildWorkerArgs: the voice session has no UI to answer
+    // a permission prompt, so every action must be pre-approved or the agent
+    // silently stalls the moment it reaches for Bash/browser/anything beyond
+    // a file edit.
+    args.push('--permission-mode', 'bypassPermissions');
     return withPrompt(args, bootPrompt);
   },
 };

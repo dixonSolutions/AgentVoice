@@ -7,6 +7,7 @@
         <div class="approval-header">
           <span class="approval-icon">🤔</span>
           <span class="approval-title">{{ agentName() }} needs your input</span>
+          <button type="button" class="approval-close" aria-label="Dismiss" (click)="dismiss()">✕</button>
         </div>
 
         <p class="approval-question">{{ q.question }}</p>
@@ -67,6 +68,7 @@
         <div class="approval-header">
           <span class="approval-icon">📋</span>
           <span class="approval-title">{{ plan.title }}</span>
+          <button type="button" class="approval-close" aria-label="Dismiss" (click)="dismiss()">✕</button>
         </div>
 
         @if (plan.estimated_impact) {
@@ -169,8 +171,27 @@
   }
 
   .approval-title {
+    flex: 1;
     font-size: 1rem;
     font-weight: 600;
+    color: var(--p-text-color);
+  }
+
+  .approval-close {
+    flex-shrink: 0;
+    border: none;
+    background: transparent;
+    color: var(--p-text-muted-color);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0.4rem;
+    margin: -0.4rem -0.4rem -0.4rem 0;
+    border-radius: 0.4rem;
+  }
+
+  .approval-close:hover {
+    background: var(--p-surface-ground);
     color: var(--p-text-color);
   }
 
