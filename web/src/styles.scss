@@ -193,9 +193,23 @@ body {
 .cv-voice-select-overlay .p-select-header,
 .cv-voice-select-overlay .p-select-option {
   max-width: 100%;
-  overflow: hidden;
+  overflow-x: hidden;
   /* The theme sets nowrap, which would defeat the two-line clamp on details. */
   white-space: normal;
+}
+
+/*
+ * `.p-select-list-container` is also the CDK virtual-scroll viewport when
+ * `[virtualScroll]` is on — it's the element that actually scrolls through
+ * the list. `overflow: hidden` here silences that scroll entirely: on
+ * desktop nobody notices because the filter box narrows the list first, but
+ * on mobile (no wheel, and the panel is often long enough to trip
+ * `virtualScroll`) the list is stuck and un-scrollable. Only clip
+ * horizontally above; vertical scroll must stay on.
+ */
+.cv-voice-select-overlay .p-select-list-container {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .cv-cfg-serve-journal {
