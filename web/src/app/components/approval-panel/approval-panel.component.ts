@@ -135,6 +135,34 @@ export class ApprovalPanelComponent {
     this.showModifyField.update((v) => !v);
   }
 
+  // ── Dismiss ─────────────────────────────────────────────────────────────
+
+  /**
+   * Close the popup without answering it. There is no neutral "no answer" on
+   * the wire — the blocked MCP tool call needs *some* response to unblock —
+   * so a dismiss is reported as the most conservative outcome: "no" for a
+   * yes/no question, the same answer as typing nothing for free text/choice,
+   * and "rejected" for a plan. This mirrors tapping the safe button rather
+   * than leaving the agent (and the user) stuck on an unanswerable card.
+   */
+  protected dismiss(): void {
+    const userInput = this.asUserInput();
+    if (userInput) {
+      this.bridge.sendApprovalResponse(userInput.request_id, { kind: 'user_input', answer: 'no' });
+      this._reset();
+      return;
+    }
+    const plan = this.asPlanApproval();
+    if (plan) {
+      this.bridge.sendApprovalResponse(plan.request_id, {
+        kind: 'plan_approval',
+        decision: 'rejected',
+        notes: 'Dismissed without review',
+      });
+      this._reset();
+    }
+  }
+
   private _reset(): void {
     this.freeText = '';
     this.modifyNotes = '';

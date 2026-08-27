@@ -106,7 +106,7 @@ Codex has no plan mode, so `plan` is refused rather than silently downgraded.
 ```bash
 claude -p --output-format stream-json --verbose \
   --mcp-config <generated>.json --allowedTools mcp__agent-voice \
-  [--model <alias>] [--resume <id>] --permission-mode acceptEdits|plan <prompt>
+  [--model <alias>] [--resume <id>] --permission-mode bypassPermissions|plan <prompt>
 ```
 
 Three flags here are not optional:
@@ -115,7 +115,11 @@ Three flags here are not optional:
 - `--allowedTools mcp__agent-voice` — print mode cannot show a permission
   prompt, so an un-allowlisted MCP tool is denied. Without this, `speak()`,
   `done()` and `next_voice_turn()` are all unavailable and the session is mute.
-- `--permission-mode` — `acceptEdits` for work, `plan` for read-only `ask`.
+- `--permission-mode` — `bypassPermissions` for work, `plan` for read-only
+  `ask`. Print mode has no permission UI at all, so anything less than
+  `bypassPermissions` (e.g. `acceptEdits`) still blocks the first Bash,
+  browser, or other non-edit tool call — the agent stalls mute with no way
+  to approve it. Work mode needs every action pre-approved to stay hands-free.
 
 ## Execution Modes
 
