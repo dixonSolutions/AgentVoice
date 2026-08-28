@@ -2,8 +2,9 @@
 /**
  * A stand-in coding-agent CLI, for integration-testing the bridge end to end.
  *
- * Point `CURSOR_AGENT_PATH` / `CLAUDE_CODE_PATH` / `CODEX_PATH` at this file and
- * the bridge spawns it exactly as it would the real CLI. Everything downstream
+ * Point `CURSOR_AGENT_PATH` / `CLAUDE_CODE_PATH` / `CODEX_PATH` /
+ * `CODEWHALE_PATH` at this file and the bridge spawns it exactly as it would
+ * the real CLI. Everything downstream
  * is production code: the real spawn, the real argv the provider built, the
  * real MCP Streamable HTTP transport, the real tool handlers, the real
  * interrupt hook. Only the model's judgement is replaced by a fixed script.
@@ -21,9 +22,15 @@
  * Behaviour is chosen from argv, the same way a real CLI would read it:
  *   voice mode  — the prompt mentions next_voice_turn
  *   worker mode — anything else (this is what agent_ask spawns)
+ *
+ * Codewhale note: set `CODEWHALE_HOME` to a scratch directory before running
+ * the harness against the codewhale provider. That dialect has to *write* a
+ * session file for the id to be recoverable (see below), and without the
+ * override it would write into the real `~/.codewhale/sessions/` alongside
+ * genuine sessions. The stub refuses to do that and logs instead.
  */
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -35,7 +42,17 @@ const isVoice = /next_voice_turn/.test(prompt);
 
 // ── Which CLI are we imitating? Inferred from the argv the provider built. ──
 
-const dialect = argv[0] === 'exec' ? 'codex' : argv.includes('--workspace') ? 'cursor' : 'claude';
+// Codewhale and Codex both lead with `exec`; only Codewhale passes
+// `--output-format`, so check that first or every Codewhale run is misread as
+// Codex and exercises the wrong parser.
+const dialect =
+  argv[0] === 'exec' && argv.includes('--output-format')
+    ? 'codewhale'
+    : argv[0] === 'exec'
+      ? 'codex'
+      : argv.includes('--workspace')
+        ? 'cursor'
+        : 'claude';
 
 const log = (...a) => process.stderr.write(`[stub:${dialect}] ${a.join(' ')}\n`);
 log('argv:', JSON.stringify(argv.slice(0, -1)));
@@ -52,13 +69,26 @@ function emit(obj) {
 function emitInit() {
   if (dialect === 'codex') {
     emit({ id: '0', msg: { type: 'session_configured', session_id: sessionId, model: 'stub' } });
+  } else if (dialect === 'codewhale') {
+    // Codewhale has no init event at all. `turn_usage` with a 1-based `turn`
+    // is the run-start marker its provider keys off, so that is what the
+    // stub emits — reproducing the real gap rather than papering over it.
+    emit({ type: 'turn_usage', turn: 1, input_tokens: 1200, output_tokens: 64, duration_ms: 900 });
   } else {
     emit({ type: 'system', subtype: 'init', session_id: sessionId, model: 'stub' });
   }
 }
 
 function emitToolStart(name, path) {
-  if (dialect === 'cursor') {
+  if (dialect === 'codewhale') {
+    emit({
+      type: 'tool_use',
+      name: name === 'read' ? 'Read' : 'Write',
+      id: `call-${Math.random().toString(36).slice(2, 8)}`,
+      input: { file_path: path },
+      started_at: new Date().toISOString(),
+    });
+  } else if (dialect === 'cursor') {
     emit({ type: 'tool_call', subtype: 'started', tool_call: { [`${name}ToolCall`]: { args: { path } } } });
   } else if (dialect === 'codex') {
     emit({ id: '1', msg: { type: 'patch_apply_begin', changes: { [path]: {} } } });
@@ -74,9 +104,76 @@ function emitToolStart(name, path) {
 function emitResult(text) {
   if (dialect === 'codex') {
     emit({ id: '9', msg: { type: 'task_complete', last_agent_message: text } });
+  } else if (dialect === 'codewhale') {
+    emit({ type: 'content', content: text });
+    // Faithful to the real CLI: the stream id is a redacted fingerprint, and
+    // the only way the provider can recover a resumable id is the session
+    // store keyed by the (unredacted) workspace.
+    writeCodewhaleSession();
+    emit({ type: 'session_capture', content: '<redacted:9f2c41ab77e05d13>' });
+    emit({
+      type: 'metadata',
+      meta: {
+        receipt_kind: 'terminal',
+        provider: 'deepseek',
+        model: 'stub',
+        route_source: 'stub',
+        workspace: process.cwd(),
+        session_id: '<redacted:9f2c41ab77e05d13>',
+        resume_command: 'codewhale exec --resume <redacted-session-id>',
+        approval_posture: 'auto',
+        sandbox_posture: 'workspace-write',
+        prompt_sha256: 'sha256:stub',
+        duration_ms: 1234,
+        message_count: 2,
+        visible_final_answer_chars: text.length,
+        input_analysis: {},
+      },
+    });
+    emit({ type: 'done' });
   } else {
     emit({ type: 'result', subtype: 'success', session_id: sessionId, result: text, is_error: false });
   }
+}
+
+/**
+ * Write the session file the real `codewhale exec` saves before it emits its
+ * terminal receipt. Guarded on CODEWHALE_HOME so the stub can never drop a
+ * fake session into a real `~/.codewhale/sessions/`.
+ */
+function writeCodewhaleSession() {
+  const home = process.env.CODEWHALE_HOME?.trim();
+  if (!home) {
+    log('CODEWHALE_HOME not set — skipping session-store write; --resume capture will not be exercised');
+    return;
+  }
+  const dir = join(home, 'sessions');
+  const id = `${sessionId}-0000-4000-8000-000000000000`.slice(0, 36);
+  mkdirSync(dir, { recursive: true });
+  const now = new Date().toISOString();
+  writeFileSync(
+    join(dir, `${id}.json`),
+    JSON.stringify(
+      {
+        schema_version: 1,
+        metadata: {
+          id,
+          title: 'stub session',
+          created_at: now,
+          updated_at: now,
+          message_count: 2,
+          total_tokens: 0,
+          model: 'stub',
+          workspace: process.cwd(),
+          mode: 'agent',
+        },
+        messages: [],
+      },
+      null,
+      2,
+    ),
+  );
+  log(`wrote session store entry ${id} for workspace ${process.cwd()}`);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -118,6 +215,25 @@ function resolveMcpEndpoint() {
     const tok = envVar ? process.env[envVar] : undefined;
     if (url && tok) return { url, token: `Bearer ${tok}`, from: `${codexCfg} (token via $${envVar})` };
     if (url) throw new Error(`config.toml points at ${url} but $${envVar} is not set in the spawn env`);
+  }
+
+  // Codewhale reads ~/.codewhale/mcp.json (or $CODEWHALE_HOME / the documented
+  // $DEEPSEEK_MCP_CONFIG override), under either the canonical `servers` key or
+  // its `mcpServers` alias, and takes the token from bearer_token_env_var.
+  if (dialect === 'codewhale') {
+    const cwCfg =
+      process.env.DEEPSEEK_MCP_CONFIG?.trim() ||
+      join(process.env.CODEWHALE_HOME?.trim() || join(homedir(), '.codewhale'), 'mcp.json');
+    if (existsSync(cwCfg)) {
+      const cfg = JSON.parse(readFileSync(cwCfg, 'utf-8'));
+      const entry = (cfg.servers ?? cfg.mcpServers ?? {})['agent-voice'];
+      const envVar = entry?.bearer_token_env_var;
+      const tok = envVar ? process.env[envVar] : undefined;
+      if (entry?.url && tok) {
+        return { url: entry.url, token: `Bearer ${tok}`, from: `${cwCfg} (token via $${envVar})` };
+      }
+      if (entry?.url) throw new Error(`${cwCfg} points at ${entry.url} but $${envVar} is not set in the spawn env`);
+    }
   }
 
   // Cursor reads its own global config.

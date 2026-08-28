@@ -150,7 +150,7 @@ const ALL_SECTIONS: ConfigSection[] = [
     label: 'Agent Client',
     icon: 'pi-microchip-ai',
     description: 'Select the AI coding agent: Cursor, Codex, or Claude Code',
-    keywords: ['agent', 'client', 'cursor', 'codex', 'claude', 'claude-code', 'openai', 'anthropic', 'binary', 'path'],
+    keywords: ['agent', 'client', 'cursor', 'codex', 'claude', 'claude-code', 'codewhale', 'codew', 'openai', 'anthropic', 'deepseek', 'binary', 'path'],
   },
   {
     id: 'serve',

@@ -8,7 +8,7 @@
 MCP registration. This doc covers what was built on top of that: a single
 `AgentProvider` abstraction (`src/providers/agents/`) that adds **phone-driven
 sign-in**, **live model selection**, and **generic MCP tool aliases** for
-Cursor, Codex, and Claude Code — without duplicating logic per CLI.
+Cursor, Codex, Claude Code, and Codewhale — without duplicating logic per CLI.
 
 ## Why
 
@@ -20,7 +20,11 @@ one interface the rest of the app depends on — `executor/agentProcess.ts`,
 `mcp/tools/model.ts`, `mcp/tools/system.ts` and `mcp/tools/session.ts` no longer
 branch on `agentClient`; they call `getActiveProvider()` and let the provider
 file (`cursor.ts` / `codex.ts` / `claude.ts`) own the CLI-specific details.
-Adding a fourth CLI means one new file + one registry entry.
+Adding another CLI means one new file + one registry entry. Codewhale was
+added that way in August 2026 and touched nothing outside
+`providers/agents/codewhale.ts`, the registry map, the `AgentClient` union and
+its label — see [§ Codewhale](#codewhale) for the two CLI quirks that shaped
+the file.
 
 The contract members added in the follow-up pass:
 
@@ -36,12 +40,18 @@ the full interface.
 
 ## Auth flows per CLI
 
-| Flow          | Cursor | Codex | Claude Code |
-| ------------- | :----: | :---: | :---------: |
-| `browser-url` | ✅ (`cursor-agent login`) | — | ✅ (`claude setup-token`, captured automatically) |
-| `device-code` | — | ✅ (`codex login --device-auth`) | — |
-| `token-paste` | — | — | ✅ (paste an existing setup token) |
-| `api-key`     | ✅ (Cursor Dashboard key) | ✅ (OpenAI key) | ✅ (Anthropic key) |
+| Flow          | Cursor | Codex | Claude Code | Codewhale |
+| ------------- | :----: | :---: | :---------: | :-------: |
+| `browser-url` | ✅ (`cursor-agent login`) | — | ✅ (`claude setup-token`, captured automatically) | ✅ (`codewhale login`) |
+| `device-code` | — | ✅ (`codex login --device-auth`) | — | — |
+| `token-paste` | — | — | ✅ (paste an existing setup token) | — |
+| `api-key`     | ✅ (Cursor Dashboard key) | ✅ (OpenAI key) | ✅ (Anthropic key) | ✅ (key for the *active* Codewhale provider) |
+
+Codewhale's `api-key` flow is the one that does not write to AgentVoice's
+`.env`. Codewhale keys are per-provider and live in its own config plus the OS
+keyring, so the pasted value is handed to
+`codewhale auth set --provider <active> --api-key-stdin` instead — right scope,
+right store, and never in argv or shell history.
 
 Each provider declares its own flows via `authFlows()` — the PWA auth card
 never hardcodes provider knowledge, it just renders whatever the active
@@ -87,6 +97,13 @@ truth:
   cross-provider cache).
 - **Codex** / **Claude Code** — probed from the installed CLI at runtime with
   a documented fallback list if the CLI has no `models` subcommand.
+- **Codewhale** — `codewhale model list`, which prints `<model-id> (<provider>)`
+  per line across every configured provider. That read is offline and instant;
+  `codewhale models` hits the live provider API and needs a working key, so it
+  is only the fallback. Entries are keyed by bare model id rather than
+  `provider/model`, because `--model` takes an id and lets Codewhale resolve the
+  route itself — the provider name rides along in the display label so the
+  picker still says where a model came from.
 
 ### REST API (`src/routes/providerModels.ts`)
 
@@ -146,3 +163,74 @@ Before this change, `buildCursorAgentEnv()` unconditionally stripped
 though it needs that variable. Env construction now goes through
 `provider.env(base)`, so each provider only strips the keys that actually
 conflict with it.
+
+## Codewhale
+
+`codewhale` is a Rust coding agent with a first-class headless surface:
+
+```bash
+codewhale exec --auto --output-format stream-json "<prompt>"
+```
+
+It slotted into the existing contract without changing it. Two CLI behaviours
+did shape `providers/agents/codewhale.ts`, and both are worth knowing before
+editing that file.
+
+### The session id is redacted in stream-json
+
+Every other client publishes a resumable id on its stream. Codewhale does not:
+`session_capture.content` and `metadata.session_id` both pass through
+`redacted_identifier_for_log()` and come out as `<redacted:…>` FNV
+fingerprints, and `metadata.resume_command` is the fixed string
+`codewhale exec --resume <redacted-session-id>`. Parsing harder cannot help —
+the value is genuinely not in the stream.
+
+What *is* in the terminal receipt, unredacted, is `metadata.workspace`. So the
+provider reads `~/.codewhale/sessions/*.json` (each carrying
+`metadata.id` / `metadata.workspace` / `metadata.updated_at`) and emits the
+`session` event for the most recently updated session matching that workspace.
+
+This is a heuristic and is documented as one: two concurrent runs in the same
+workspace could race, and the loser would resume the winner's thread. It is
+bounded by AgentVoice running one voice session per project, and
+`executor/resumeGuard.ts` still recovers at runtime. The alternative — no
+resume at all — means every turn starts a cold thread, which is worse.
+
+The same store answers `sessionStatus()`. Codewhale accepts a unique id
+*prefix* as well as a full id (`codewhale sessions` prints 8-char prefixes), so
+the check matches on prefix too.
+
+### There is no run-start event
+
+`init` is what produces the "*Codewhale started working on …*" narration — the
+first thing a hands-free user hears. Codewhale's exec stream has no
+`system/init` equivalent; its first line is whatever the model produced.
+
+`turn_usage` carries a 1-based `turn` field scoped to the run, so `turn === 1`
+is used as the run-start marker. It is stateless (no cross-line bookkeeping in
+a parser shared by every job) and reliable, at the cost of firing after the
+first model call completes rather than at spawn. A few seconds of lateness is
+a much smaller problem than the silence that a missing `init` caused for Codex
+and Claude Code before [`28`](./28-provider-parity-and-branding.md).
+
+### Modes
+
+`supportedModes()` returns `['agent', 'ask']`. `exec` reaches `AppMode::Agent`
+(with `--auto`) or a plain one-shot response (without) — there is no plan mode
+on the headless path, so `plan` is refused rather than silently downgraded, per
+the rule that a read-only-sounding tool name must never run a writing agent.
+
+`ask` is enforced twice over: omitting `--auto` removes the tool surface
+entirely, and `--sandbox read-only` refuses writes even if that ever changes.
+
+### MCP registration
+
+`~/.codewhale/mcp.json`, using `bearer_token_env_var` rather than a literal
+`Authorization` header, so `APP_TOKEN` never lands in the file — Codewhale's own
+MCP docs warn that a literal header value "lives in plain text" there, and users
+paste that file into issues. Same approach as the Codex provider.
+
+One trap: Codewhale's root key is `servers`, with `mcpServers` declared as a
+serde **alias** — one field with two accepted spellings, not two fields.
+Writing both makes the file fail to parse as a duplicate field, so registration
+merges into whichever key the file already uses and deletes the other.

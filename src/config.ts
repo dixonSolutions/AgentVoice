@@ -401,7 +401,7 @@ export const HostingSettingsSchema = z
 
 // ── config.json schema ───────────────────────────────────────────────────────
 
-export const AGENT_CLIENTS = ['cursor', 'codex', 'claude-code'] as const;
+export const AGENT_CLIENTS = ['cursor', 'codex', 'claude-code', 'codewhale'] as const;
 export type AgentClient = (typeof AGENT_CLIENTS)[number];
 
 const SettingsSchema = z.object({

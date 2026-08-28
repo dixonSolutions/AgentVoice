@@ -8,12 +8,14 @@ import { getConfig, type AgentClient, AGENT_CLIENTS } from '../../config.js';
 import { cursorProvider } from './cursor.js';
 import { codexProvider } from './codex.js';
 import { claudeProvider } from './claude.js';
+import { codewhaleProvider } from './codewhale.js';
 import type { AgentProvider } from './types.js';
 
 const PROVIDERS: Record<AgentClient, AgentProvider> = {
   cursor: cursorProvider,
   codex: codexProvider,
   'claude-code': claudeProvider,
+  codewhale: codewhaleProvider,
 };
 
 export function getProvider(client: AgentClient): AgentProvider {

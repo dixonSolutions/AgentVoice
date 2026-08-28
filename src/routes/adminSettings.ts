@@ -323,6 +323,7 @@ export async function registerAdminSettingsRoutes(app: FastifyInstance): Promise
     cursor: 'Cursor',
     codex: 'Codex',
     'claude-code': 'Claude Code',
+    codewhale: 'Codewhale',
   };
 
   function getAgentClientStatus() {

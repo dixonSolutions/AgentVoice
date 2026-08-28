@@ -187,7 +187,7 @@ export interface AdminProject {
 
 // ── Agent Client ───────────────────────────────────────────────────────────
 
-export type AgentClientId = 'cursor' | 'codex' | 'claude-code';
+export type AgentClientId = 'cursor' | 'codex' | 'claude-code' | 'codewhale';
 
 export interface AgentClientInfo {
   id: AgentClientId;
