@@ -1,22 +1,35 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 680" role="img" aria-label="AgentVoice">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="AgentVoice">
   <title>AgentVoice</title>
+  <desc>A speech waveform resolving into a terminal caret.</desc>
+
   <defs>
-    <clipPath id="roundedClip">
-      <rect x="140" y="140" width="400" height="400" rx="72"/>
-    </clipPath>
+    <linearGradient id="av-tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#221f42"/>
+      <stop offset="1" stop-color="#15142a"/>
+    </linearGradient>
+    <linearGradient id="av-wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="0.55" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#c4b5fd"/>
+    </linearGradient>
   </defs>
 
-  <rect x="140" y="140" width="400" height="400" rx="72" fill="#1a1a2e"/>
-  <rect x="140" y="420" width="400" height="120" clip-path="url(#roundedClip)" fill="#7c3aed"/>
-  <rect x="140" y="140" width="400" height="400" rx="72" fill="none" stroke="#7c3aed" stroke-width="2" opacity="0.4"/>
+  <!-- Tile ground sits between the manifest's background_color and theme_color
+       (#1a1a2e) so the PWA splash never flashes a different colour than the icon. -->
+  <rect width="512" height="512" rx="112" fill="url(#av-tile)"/>
 
-  <g clip-path="url(#roundedClip)">
-    <path d="M230 210 L230 400 L280 355 L315 430 L340 418 L305 343 L370 343 Z" transform="translate(4,5)" fill="rgba(0,0,0,0.25)"/>
-    <path d="M230 210 L230 400 L280 355 L315 430 L340 418 L305 343 L370 343 Z" fill="#ffffff"/>
-    <path d="M230 210 L230 400 L280 355 L315 430 L340 418 L305 343 L370 343 Z" fill="none" stroke="#7c3aed" stroke-width="3" stroke-linejoin="round"/>
-  </g>
+  <!-- Waveform. Pill-capped and unevenly tall: speech is organic, so this is a
+       voice trace rather than a tidy equaliser staircase. -->
+    <g fill="url(#av-wave)">
+      <rect x="104" y="204" width="32" height="104" rx="16"/>
+      <rect x="156" y="180" width="32" height="152" rx="16"/>
+      <rect x="208" y="194" width="32" height="124" rx="16"/>
+      <rect x="260" y="154" width="32" height="204" rx="16"/>
+      <rect x="312" y="178" width="32" height="156" rx="16"/>
+    </g>
 
-  <path d="M390 295 Q400 285 400 270 Q400 255 390 245" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.9"/>
-  <path d="M405 310 Q422 292 422 270 Q422 248 405 230" fill="none" stroke="#a78bfa" stroke-width="5" stroke-linecap="round" opacity="0.75"/>
-  <path d="M420 325 Q444 299 444 270 Q444 241 420 215" fill="none" stroke="#a78bfa" stroke-width="4" stroke-linecap="round" opacity="0.45"/>
+  <!-- The caret. Squared off and the only pure white in the mark, against the
+       round violet wave — the one hard edge, and the whole point of it: what
+       you say becomes what the terminal does. -->
+  <rect x="372" y="138" width="36" height="236" rx="8" fill="#ffffff"/>
 </svg>

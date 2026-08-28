@@ -1,10 +1,18 @@
-# AgentVoice
+<p align="center">
+  <img src="./docs/images/banner.png" alt="AgentVoice — self-hosted voice bridge for your coding agent CLI" width="820">
+</p>
 
-_Formerly "Cursor Voice" — see [`docs/26-rename-agentvoice.md`](./docs/26-rename-agentvoice.md)._
+<h1 align="center">AgentVoice</h1>
+
+<p align="center">
+  <em>Formerly "Cursor Voice" — see <a href="./docs/26-rename-agentvoice.md"><code>docs/26-rename-agentvoice.md</code></a>.</em>
+</p>
 
 Self-hosted voice bridge for driving a coding agent CLI —
 [Cursor](https://cursor.com/docs/cli) (`cursor-agent`), [Codex](https://github.com/openai/codex),
-or [Claude Code](https://github.com/anthropics/claude-code) — by **speech, from your phone**.
+[Claude Code](https://github.com/anthropics/claude-code), or
+[Codewhale](https://github.com/dixonSolutions/CodeWhale) (`codewhale`) — by
+**speech, from your phone**.
 
 Speak from an iPhone **native app (CallKit)** or PWA; the active agent CLI is the reasoning
 layer via the **agent-voice MCP server** (`speak`, `done`, `next_voice_turn`) — the MCP
@@ -151,7 +159,7 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 | [`16-mcp-server-agent-as-brain.md`](./docs/16-mcp-server-agent-as-brain.md) | Default Cursor voice workflow |
 | [`11-mcp-tool-surface.md`](./docs/11-mcp-tool-surface.md) | MCP tool inventory |
 | [`20-native-callkit-shell.md`](./docs/20-native-callkit-shell.md) | CallKit native app + push notifications |
-| [`23-multi-agent-client.md`](./docs/23-multi-agent-client.md) | Cursor / Codex / Claude Code CLI setup |
+| [`23-multi-agent-client.md`](./docs/23-multi-agent-client.md) | Cursor / Codex / Claude Code / Codewhale CLI setup |
 | [`24-agent-providers.md`](./docs/24-agent-providers.md) | In-app auth, live model selection, generic MCP tools |
 | [`25-hosting-providers.md`](./docs/25-hosting-providers.md) | Tailscale, Cloudflare, ngrok, Dev Tunnels, LAN, manual |
 | [`26-rename-agentvoice.md`](./docs/26-rename-agentvoice.md) | Cursor Voice → AgentVoice rename notes |
@@ -162,7 +170,7 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 - **Web app:** Angular PWA + vanilla TS voice modules (Vosk, Silero VAD)
 - **Voice I/O:** WebKit STT/TTS; Amazon Polly/Transcribe fallback
 - **Reasoning:** Cursor IDE (`agent_native`) or Bedrock Claude (`llm_intelligence`)
-- **Executor:** Cursor, Codex, or Claude Code CLI (`settings.agentClient`, see [`docs/24-agent-providers.md`](./docs/24-agent-providers.md))
+- **Executor:** Cursor, Codex, Claude Code, or Codewhale CLI (`settings.agentClient`, see [`docs/24-agent-providers.md`](./docs/24-agent-providers.md))
 - **Network:** Tailscale by default; Cloudflare Tunnel, ngrok, Azure Dev Tunnels, LAN, or manual (see [`docs/25-hosting-providers.md`](./docs/25-hosting-providers.md))
 
 ## Configuration

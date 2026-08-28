@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="AgentVoice">
+  <title>AgentVoice</title>
+  <desc>Maskable variant: full-bleed ground, mark inside the safe zone.</desc>
+
+  <!--
+    Maskable icons are cropped by the platform to a circle, squircle or rounded
+    rect of its choosing, so this variant differs from icon.svg in exactly two
+    ways:
+
+      * the ground is full-bleed with square corners — the platform supplies the
+        shape, and baking our own rounding in shows a double border under the mask;
+      * the mark is scaled to 88% so it clears the 80%-diameter safe circle with
+        margin, rather than relying on an untransformed box that only just fits.
+
+    Previously one heavily padded file served `any` and `maskable` both. That
+    kept the mark legal under a mask at the cost of making it ~59% of the tile
+    everywhere else — which is why the favicon read as a speck.
+  -->
+  <defs>
+    <linearGradient id="avm-tile" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#221f42"/>
+      <stop offset="1" stop-color="#15142a"/>
+    </linearGradient>
+    <linearGradient id="avm-wave" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="0.55" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#c4b5fd"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#avm-tile)"/>
+
+  <g transform="translate(256 256) scale(0.88) translate(-256 -256)">
+      <g fill="url(#avm-wave)">
+        <rect x="104" y="204" width="32" height="104" rx="16"/>
+        <rect x="156" y="180" width="32" height="152" rx="16"/>
+        <rect x="208" y="194" width="32" height="124" rx="16"/>
+        <rect x="260" y="154" width="32" height="204" rx="16"/>
+        <rect x="312" y="178" width="32" height="156" rx="16"/>
+      </g>
+    <rect x="372" y="138" width="36" height="236" rx="8" fill="#ffffff"/>
+  </g>
+</svg>

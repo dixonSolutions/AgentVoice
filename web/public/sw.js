@@ -16,7 +16,7 @@
  * MODEL_CACHE_NAME when the bundled model assets themselves change.
  */
 
-const CACHE_NAME = 'agentvoice-v4';
+const CACHE_NAME = 'agentvoice-v5';
 const VOSK_CACHE_NAME = 'agentvoice-vosk-v1';
 const MODEL_CACHE_NAME = 'agentvoice-models-v1';
 const VOSK_MODEL_PATH = '/vosk/model.tar.gz';
@@ -26,6 +26,7 @@ const APP_SHELL = [
   '/',
   '/manifest.json',
   '/icon.svg',
+  '/icon-maskable.svg',
 ];
 
 // ── Install: pre-cache the app shell ──────────────────────────────────────
