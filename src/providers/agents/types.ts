@@ -33,9 +33,60 @@ export interface SpawnOptions {
   browser?: boolean;
 }
 
+/**
+ * One selectable model, exactly as the CLI reports it.
+ *
+ * Nothing here is hardcoded by AgentVoice: every provider builds these from a
+ * live probe of its own CLI (`cursor-agent models`, Claude Code's `initialize`
+ * control response, `codex debug models`, `codewhale model list`). Effort
+ * levels and speed tiers therefore differ per model — Haiku has no effort
+ * knob, Codex's GPT-6 goes up to `ultra`, Cursor only ships `high` for some
+ * thinking models — and the picker shows only what the CLI actually accepts.
+ */
 export interface ModelEntry {
+  /** What gets stored as the active model and handed back to the provider. */
   id: string;
   displayName: string;
+  /** One-line blurb from the CLI catalog (context window, tier, "recommended"…). */
+  description?: string;
+  /** Vendor / family the picker groups under (Anthropic, OpenAI, Cursor, …). */
+  vendor?: string;
+  /**
+   * Effort levels this model accepts, in the CLI's own order. Empty (or absent)
+   * means the CLI exposes no effort knob for this model.
+   */
+  efforts?: string[];
+  /** Level the CLI applies when none is passed — null when it does not say. */
+  defaultEffort?: string | null;
+  /** True when a fast / priority speed tier exists for this model. */
+  fast?: boolean;
+  /**
+   * Cursor bakes effort and speed into the model id (`gpt-5.3-codex-high-fast`).
+   * When present, this is the exhaustive list of (effort, fast) pairs the CLI
+   * offers and the concrete id each one maps to. Providers that take real
+   * `--effort` / speed flags leave it out — every combination of `efforts` ×
+   * `fast` is then valid.
+   */
+  variants?: ModelVariant[];
+}
+
+export interface ModelVariant {
+  /** null = the model's unsuffixed default. */
+  effort: string | null;
+  fast: boolean;
+  /** The id to pass on the command line for this combination. */
+  id: string;
+}
+
+/**
+ * What the user picked: a model plus the effort / speed knobs that apply to
+ * it. `effort: null` means "let the CLI decide", `fast: false` the standard
+ * tier. Stored per session and as the bridge default.
+ */
+export interface ModelSelection {
+  model: string;
+  effort: string | null;
+  fast: boolean;
 }
 
 export interface AgentAbout {
@@ -116,7 +167,11 @@ export interface AgentProvider {
   /** True if this exit code + stderr combination looks like an auth failure. */
   isAuthError(exitCode: number, stderr: string): boolean;
 
-  /** Live model list (never hardcoded — always from the CLI or its config). */
+  /**
+   * Live model list — always probed from the CLI, never hardcoded. Each entry
+   * carries the effort levels and speed tiers the CLI reports for it; the
+   * result is cached per provider (state/models.ts) for `modelCacheTtlMs`.
+   */
   listModels(): Promise<ModelEntry[]>;
   /** False when the CLI manages its own model choice (no --model flag to pass). */
   supportsModelSelection(): boolean;

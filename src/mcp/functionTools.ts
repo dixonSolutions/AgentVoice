@@ -92,11 +92,14 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
     type: 'function',
     name: 'cursor_list_models',
     description:
-      'List AI model IDs (Claude, GPT, etc.) for cursor-agent — NOT execution modes. agent/plan/ask are modes on cursor_submit, not models here.',
+      'List AI model IDs (Claude, GPT, etc.) the active agent CLI reports — NOT execution modes. Each entry carries ' +
+      '`efforts` (effort levels that model accepts; differs per model) and `fast` (whether a fast tier exists). ' +
+      'agent/plan/ask are modes on cursor_submit, not models here.',
     parameters: {
       type: 'object',
       properties: {
         query: { type: 'string', description: 'Filter by model id or display name' },
+        refresh: { type: 'boolean', description: 'Re-probe the CLI instead of using the cached list' },
       },
       required: [],
     },
@@ -105,14 +108,22 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
     type: 'function',
     name: 'cursor_set_model',
     description:
-      'Set the AI model (e.g. claude-opus, gpt-5, auto). Default scope is global: updates the default, all sessions, and future sessions. ' +
-      'Pass scope "session" only when the user explicitly wants this connection/session only. Call cursor_list_models first.',
+      'Set the AI model (e.g. claude-opus, gpt-5, auto) plus optional effort level and fast tier. Default scope is global: updates the default, all sessions, and future sessions. ' +
+      'Pass scope "session" only when the user explicitly wants this connection/session only. Call cursor_list_models first — effort must be one of that model\'s `efforts`.',
     parameters: {
       type: 'object',
       properties: {
         model_id: {
           type: 'string',
           description: 'Exact AI model ID from cursor_list_models (e.g. auto, claude-...). NOT agent/plan/ask.',
+        },
+        effort: {
+          type: 'string',
+          description: 'Effort level from the model\'s `efforts` (e.g. low, medium, high, xhigh, max). "default" = CLI default. Omit to keep current.',
+        },
+        fast: {
+          type: 'boolean',
+          description: 'Request the fast / priority tier — only when the model reports fast: true.',
         },
         scope: {
           type: 'string',

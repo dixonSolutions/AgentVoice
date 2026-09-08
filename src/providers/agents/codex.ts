@@ -17,6 +17,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { childLogger } from '../../log.js';
+import { AUTO_MODEL_ID } from '../../state/models.js';
 import { updateAgentEnvKeys } from '../../state/envFile.js';
 import type { Project, SessionState } from '../../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from '../../executor/agentPrompt.js';
@@ -79,6 +80,109 @@ async function checkAuth(): Promise<AuthCheckResult> {
   } catch (err) {
     return { authenticated: false, email: null, detail: err instanceof Error ? err.message : String(err) };
   }
+}
+
+// ── Model selection ───────────────────────────────────────────────────────
+
+/**
+ * `-m` picks the model; effort and speed have no flags of their own but every
+ * config key can be overridden per run with `-c key=value` (value parsed as
+ * TOML, hence the quotes). `service_tier = "priority"` is what the CLI's own
+ * `/fast` toggle writes.
+ */
+function selectionArgs(session: SessionState): string[] {
+  const args: string[] = [];
+  if (session.activeModel && session.activeModel !== AUTO_MODEL_ID) {
+    args.push('-m', session.activeModel);
+  }
+  if (session.activeEffort) args.push('-c', `model_reasoning_effort="${session.activeEffort}"`);
+  if (session.activeFast) args.push('-c', 'service_tier="priority"');
+  return args;
+}
+
+interface CodexCatalogModel {
+  slug: string;
+  display_name?: string;
+  description?: string;
+  default_reasoning_level?: string;
+  supported_reasoning_levels?: Array<{ effort: string; description?: string }>;
+  visibility?: string;
+  supported_in_api?: boolean;
+  priority?: number;
+  additional_speed_tiers?: string[];
+  service_tiers?: Array<{ id: string; name?: string }>;
+  context_window?: number;
+}
+
+interface CodexCatalog {
+  models: CodexCatalogModel[];
+}
+
+function parseCodexCatalog(raw: string): CodexCatalog {
+  // Some CLI builds print a log line before the JSON — start at the first brace.
+  const start = raw.indexOf('{');
+  if (start < 0) throw new Error('codex debug models printed no JSON');
+  const parsed = JSON.parse(raw.slice(start)) as { models?: unknown };
+  return { models: Array.isArray(parsed.models) ? (parsed.models as CodexCatalogModel[]) : [] };
+}
+
+/** `model = "…"` at the top of ~/.codex/config.toml, if the user set one. */
+function readCodexConfigModel(): string | null {
+  try {
+    const text = readFileSync(join(resolveUserHome(), '.codex', 'config.toml'), 'utf8');
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('[')) break; // past the top-level table
+      const match = trimmed.match(/^model\s*=\s*"([^"]+)"/);
+      if (match) return match[1]!;
+    }
+  } catch {
+    // no config, no default model
+  }
+  return null;
+}
+
+function codexCatalogToEntries(catalog: CodexCatalog): ModelEntry[] {
+  const listed = catalog.models
+    .filter((m) => typeof m.slug === 'string' && m.slug)
+    .filter((m) => (m.visibility ?? 'list') === 'list' && m.supported_in_api !== false)
+    .sort((a, b) => (a.priority ?? 1_000) - (b.priority ?? 1_000));
+
+  const toEntry = (m: CodexCatalogModel): ModelEntry => ({
+    id: m.slug,
+    displayName: m.display_name || m.slug,
+    description: [m.description, m.context_window ? `${Math.round(m.context_window / 1000)}k context` : null]
+      .filter(Boolean)
+      .join(' · ') || undefined,
+    vendor: 'OpenAI',
+    efforts: (m.supported_reasoning_levels ?? []).map((l) => l.effort).filter(Boolean),
+    defaultEffort: m.default_reasoning_level ?? null,
+    fast:
+      (m.service_tiers ?? []).some((t) => t.id === 'priority') ||
+      (m.additional_speed_tiers ?? []).includes('fast'),
+  });
+
+  // "auto" defers to config.toml. When that names a catalog model, the auto
+  // row inherits its knobs so effort/fast still work without picking a model.
+  const configModel = readCodexConfigModel();
+  const configEntry = configModel ? listed.find((m) => m.slug === configModel) : undefined;
+  const auto: ModelEntry = configEntry
+    ? {
+        ...toEntry(configEntry),
+        id: AUTO_MODEL_ID,
+        displayName: `Auto (${configEntry.display_name || configEntry.slug})`,
+        description: `Config default from ~/.codex/config.toml`,
+      }
+    : {
+        id: AUTO_MODEL_ID,
+        displayName: 'Auto (from ~/.codex/config.toml)',
+        description: configModel ? `Config names "${configModel}", which the catalog does not list` : 'Codex picks its configured default',
+        vendor: 'OpenAI',
+        efforts: [],
+        fast: false,
+      };
+
+  return [auto, ...listed.map(toEntry)];
 }
 
 // ── Stream parsing ────────────────────────────────────────────────────────
@@ -420,16 +524,36 @@ export const codexProvider: AgentProvider = {
     return /not logged in|not authenticated|please run.*login|401|unauthorized|sign in/i.test(stderr);
   },
 
+  /**
+   * `codex debug models` renders the CLI's model catalog as JSON — the same
+   * data its `/model` picker uses, refreshed from the backend when signed in.
+   * Each row carries `supported_reasoning_levels`, `default_reasoning_level`
+   * and the speed tiers, so effort and fast availability are per model, from
+   * the CLI. `--bundled` (the catalog shipped inside the binary) is the
+   * fallback when the refresh cannot run (offline, not signed in).
+   */
   async listModels(): Promise<ModelEntry[]> {
-    // Codex has no `codex models` listing command — model choice is config-driven
-    // (~/.codex/config.toml [model_providers]). Surface the common presets so the
-    // picker still has something real to show, and let advanced users set the
-    // model in Codex's own config for anything not listed here.
-    return [
-      { id: 'auto', displayName: 'Auto (from ~/.codex/config.toml)' },
-      { id: 'gpt-5-codex', displayName: 'GPT-5 Codex' },
-      { id: 'o4-mini', displayName: 'o4-mini' },
-    ];
+    let catalog: CodexCatalog | null = null;
+    let lastErr: unknown = null;
+    for (const args of [['debug', 'models'], ['debug', 'models', '--bundled']]) {
+      try {
+        const { stdout } = await execFileAsync(resolver.resolve(), args, {
+          timeout: 25_000,
+          env: codexEnv(process.env),
+          maxBuffer: 16 * 1024 * 1024,
+        });
+        catalog = parseCodexCatalog(stdout);
+        if (catalog.models.length > 0) break;
+      } catch (err) {
+        lastErr = err;
+        log.debug({ args, err }, 'codex model catalog read failed');
+      }
+    }
+    if (!catalog || catalog.models.length === 0) {
+      if (lastErr) throw lastErr;
+      throw new Error('codex debug models returned no models — update the Codex CLI.');
+    }
+    return codexCatalogToEntries(catalog);
   },
 
   // `codex exec -m <model>` overrides the config default per run.
@@ -451,9 +575,7 @@ export const codexProvider: AgentProvider = {
     args.push('--json', '--sandbox', mode === 'ask' ? 'read-only' : 'workspace-write');
     // Worktree runs must not touch the main checkout.
     args.push('--cd', worktree ?? project.path);
-    if (session.activeModel && session.activeModel !== 'auto') {
-      args.push('-m', session.activeModel);
-    }
+    args.push(...selectionArgs(session));
     args.push(mode === 'ask' ? buildAskPrompt(prompt) : buildAgentPrompt(prompt, { browser }));
     return args;
   },
@@ -462,9 +584,7 @@ export const codexProvider: AgentProvider = {
     const args: string[] = ['exec'];
     if (project.resumeId) args.push('resume', project.resumeId);
     args.push('--json', '--sandbox', 'workspace-write', '--cd', project.path);
-    if (session.activeModel && session.activeModel !== 'auto') {
-      args.push('-m', session.activeModel);
-    }
+    args.push(...selectionArgs(session));
     args.push(bootPrompt);
     return args;
   },

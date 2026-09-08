@@ -13,10 +13,13 @@
  * See https://code.claude.com/docs/en/authentication
  */
 
+import { spawn, execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { existsSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { childLogger } from '../../log.js';
+import { AUTO_MODEL_ID } from '../../state/models.js';
 import { updateAgentEnvKeys } from '../../state/envFile.js';
 import type { Project, SessionState } from '../../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from '../../executor/agentPrompt.js';
@@ -51,6 +54,7 @@ import type {
   SpawnOptions,
 } from './types.js';
 
+const execFileAsync = promisify(execFile);
 const log = childLogger('provider:claude');
 
 /** Generated `--mcp-config` file handed to every `claude` spawn. */
@@ -139,6 +143,183 @@ function baseArgs(oneShot: boolean): string[] {
 function withPrompt(args: string[], prompt: string): string[] {
   args.push('--', prompt);
   return args;
+}
+
+/**
+ * `--model` / `--effort` / fast tier for the session's selection.
+ *
+ * Effort is a first-class flag. Fast mode has no flag: in print mode the CLI
+ * reports `fast_mode_disabled_reason: "sdk_opt_in_required"` until the
+ * `fastMode` setting is supplied, and `--settings` accepts inline JSON — so
+ * that is the opt-in. Both are only sent when the catalog says the model
+ * supports them; the picker never offers otherwise, and `resolveSelection`
+ * drops anything stale.
+ */
+function selectionArgs(session: SessionState): string[] {
+  const args: string[] = [];
+  if (session.activeModel && session.activeModel !== AUTO_MODEL_ID) {
+    args.push('--model', session.activeModel);
+  }
+  if (session.activeEffort) args.push('--effort', session.activeEffort);
+  if (session.activeFast) args.push('--settings', JSON.stringify({ fastMode: true }));
+  return args;
+}
+
+// ── Live model catalog ────────────────────────────────────────────────────
+
+interface ClaudeCatalogModel {
+  value: string;
+  resolvedModel?: string;
+  displayName: string;
+  description?: string;
+  supportsEffort?: boolean;
+  supportedEffortLevels?: string[];
+  supportsFastMode?: boolean;
+  disabled?: boolean;
+}
+
+/**
+ * Claude Code has no `models` subcommand, but its stream-json control channel
+ * answers an `initialize` request with the same catalog the interactive
+ * `/model` picker shows — per model: effort support, the accepted effort
+ * levels, and whether fast mode applies. That is the only source used here;
+ * no API call is made (the process is killed as soon as the response lands).
+ */
+async function probeClaudeCatalog(): Promise<ClaudeCatalogModel[]> {
+  const bin = resolver.resolve();
+  const args = [
+    '-p',
+    '--input-format',
+    'stream-json',
+    '--output-format',
+    'stream-json',
+    '--verbose',
+    // The user's MCP servers would all boot for nothing — load none.
+    '--strict-mcp-config',
+    '--mcp-config',
+    JSON.stringify({ mcpServers: {} }),
+  ];
+
+  return new Promise<ClaudeCatalogModel[]>((resolve, reject) => {
+    const child = spawn(bin, args, { env: claudeEnv(process.env), stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+
+    const finish = (err: Error | null, models?: ClaudeCatalogModel[]) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.kill();
+      if (err) reject(err);
+      else resolve(models ?? []);
+    };
+
+    const timer = setTimeout(() => finish(new Error('Claude Code did not answer the model probe in time')), 25_000);
+
+    child.stdout.on('data', (chunk: Buffer) => {
+      stdout += chunk.toString();
+      let nl: number;
+      while ((nl = stdout.indexOf('\n')) >= 0) {
+        const line = stdout.slice(0, nl).trim();
+        stdout = stdout.slice(nl + 1);
+        if (!line) continue;
+        let parsed: Record<string, unknown>;
+        try {
+          parsed = JSON.parse(line) as Record<string, unknown>;
+        } catch {
+          continue;
+        }
+        if (parsed['type'] !== 'control_response') continue;
+        const response = parsed['response'] as Record<string, unknown> | undefined;
+        if (response?.['subtype'] === 'error') {
+          finish(new Error(String(response['error'] ?? 'initialize rejected')));
+          return;
+        }
+        const inner = response?.['response'] as Record<string, unknown> | undefined;
+        const models = inner?.['models'];
+        finish(null, Array.isArray(models) ? (models as ClaudeCatalogModel[]) : []);
+        return;
+      }
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on('error', (err) => finish(err));
+    child.on('exit', (code) => {
+      if (!settled) {
+        const err = new Error(`claude exited (${code}) before answering the model probe: ${stderr.trim().slice(0, 300)}`) as Error & {
+          code?: number;
+          stderr?: string;
+        };
+        err.code = code ?? 1;
+        err.stderr = stderr;
+        finish(err);
+      }
+    });
+
+    child.stdin.write(
+      JSON.stringify({ type: 'control_request', request_id: 'agentvoice-models', request: { subtype: 'initialize' } }) + '\n',
+    );
+  });
+}
+
+/**
+ * Fallback when the control channel is unavailable (older CLI): the option
+ * help still comes from the binary — `--model` names the aliases it accepts
+ * and `--effort` lists its levels — so nothing is invented here either.
+ */
+async function parseClaudeHelp(): Promise<ModelEntry[]> {
+  const { stdout } = await execFileAsync(resolver.resolve(), ['--help'], {
+    timeout: 10_000,
+    env: claudeEnv(process.env),
+  });
+  const text = stdout.replace(/\s+/g, ' ');
+  const effortMatch = text.match(/--effort <level>[^(]*\(([^)]+)\)/);
+  const efforts = effortMatch
+    ? effortMatch[1]!.split(',').map((e) => e.trim()).filter(Boolean)
+    : [];
+  const modelSection = text.match(/--model <model>(.*?)(?= -[-\w])/)?.[1] ?? '';
+  const aliases = [...modelSection.matchAll(/'([a-z][a-z0-9-]*)'/g)]
+    .map((m) => m[1]!)
+    .filter((a) => !a.startsWith('claude-'));
+
+  const entries: ModelEntry[] = [
+    { id: AUTO_MODEL_ID, displayName: 'Default', description: 'Claude Code picks the model', vendor: 'Anthropic', efforts, fast: false },
+  ];
+  for (const alias of aliases) {
+    if (entries.some((e) => e.id === alias)) continue;
+    entries.push({
+      id: alias,
+      displayName: alias.charAt(0).toUpperCase() + alias.slice(1),
+      vendor: 'Anthropic',
+      efforts,
+      fast: false,
+    });
+  }
+  return entries;
+}
+
+function catalogToEntries(models: ClaudeCatalogModel[]): ModelEntry[] {
+  const entries: ModelEntry[] = [];
+  for (const m of models) {
+    if (!m || typeof m.value !== 'string' || m.disabled) continue;
+    // "default" is Claude Code's own "let me pick" row — that is exactly the
+    // shared auto sentinel (no --model flag), so map it rather than pass
+    // "--model default" and hope.
+    const id = m.value === 'default' ? AUTO_MODEL_ID : m.value;
+    if (entries.some((e) => e.id === id)) continue;
+    entries.push({
+      id,
+      displayName: m.displayName || m.value,
+      description: m.description,
+      vendor: 'Anthropic',
+      efforts: m.supportsEffort && Array.isArray(m.supportedEffortLevels) ? [...m.supportedEffortLevels] : [],
+      defaultEffort: null,
+      fast: m.supportsFastMode === true,
+    });
+  }
+  return entries;
 }
 
 // ── Stream parsing ────────────────────────────────────────────────────────
@@ -389,15 +570,20 @@ export const claudeProvider: AgentProvider = {
   },
 
   async listModels(): Promise<ModelEntry[]> {
-    // Claude Code has no CLI model-listing command; expose the documented
-    // aliases. "auto" is the shared no-flag sentinel every provider honours —
-    // it means "let the CLI pick", so no --model is passed.
-    return [
-      { id: 'auto', displayName: 'Auto (subscription plan default)' },
-      { id: 'opus', displayName: 'Claude Opus' },
-      { id: 'sonnet', displayName: 'Claude Sonnet' },
-      { id: 'haiku', displayName: 'Claude Haiku' },
-    ];
+    try {
+      const catalog = await probeClaudeCatalog();
+      const entries = catalogToEntries(catalog);
+      if (entries.length > 0) {
+        log.info({ count: entries.length }, 'claude model catalog probed');
+        return entries;
+      }
+      log.warn('claude initialize response carried no models — falling back to --help');
+    } catch (err) {
+      const execErr = err as { code?: number; stderr?: string };
+      if (this.isAuthError(execErr.code ?? 1, execErr.stderr ?? '')) throw err;
+      log.warn({ err: err instanceof Error ? err.message : String(err) }, 'claude model probe failed — falling back to --help');
+    }
+    return parseClaudeHelp();
   },
 
   // Claude Code takes `--model <alias>`, so the picker is live for it too.
@@ -412,9 +598,7 @@ export const claudeProvider: AgentProvider = {
     const { project, session, prompt, mode = 'agent', oneShot = false, browser } = opts;
     const args = baseArgs(oneShot);
 
-    if (session.activeModel && session.activeModel !== 'auto') {
-      args.push('--model', session.activeModel);
-    }
+    args.push(...selectionArgs(session));
     if (project.resumeId && !oneShot && mode !== 'ask') {
       args.push('--resume', project.resumeId);
     }
@@ -437,9 +621,7 @@ export const claudeProvider: AgentProvider = {
 
   buildVoiceArgs(project: Project, session: SessionState, _pendingTurn?: string, bootPrompt = ''): string[] {
     const args = baseArgs(false);
-    if (session.activeModel && session.activeModel !== 'auto') {
-      args.push('--model', session.activeModel);
-    }
+    args.push(...selectionArgs(session));
     if (project.resumeId) args.push('--resume', project.resumeId);
     // Same reasoning as buildWorkerArgs: the voice session has no UI to answer
     // a permission prompt, so every action must be pre-approved or the agent

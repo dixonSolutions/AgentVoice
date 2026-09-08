@@ -44,6 +44,13 @@ export interface SessionCallbacks {
   onTurnSubmitted?(reason: 'silence' | 'vad' | 'end_word'): void;
   /** User spoke the cancel phrase — turn discarded, mic returns to wake listen. */
   onTurnCancelled?(phrase: string): void;
+  /**
+   * An in-flight capture / transcription was abandoned because of an error
+   * (nothing captured, transcription failed, STT engine error). Nothing was
+   * sent; the mic is back on wake listen. Distinct from onTurnCancelled so the
+   * UI can drop its "processing" state without toasting "Cancelled".
+   */
+  onTurnDiscarded?(reason: string): void;
   onVoiceLog?(event: VoiceSessionLogEvent): void;
   relayToolCall(callId: string, name: string, args: unknown): Promise<unknown>;
   onToolActivity?(event: {

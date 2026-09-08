@@ -236,7 +236,12 @@ export async function buildServer(): Promise<FastifyInstance> {
   /** GET /api/active-project */
   app.get('/api/active-project', async () => {
     const session = getSessionState('default');
-    return { activeProject: session.activeProject, activeModel: session.activeModel };
+    return {
+      activeProject: session.activeProject,
+      activeModel: session.activeModel,
+      activeEffort: session.activeEffort,
+      activeFast: session.activeFast,
+    };
   });
 
   /** POST /api/active-project { project: string } */

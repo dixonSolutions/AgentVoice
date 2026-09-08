@@ -50,6 +50,8 @@ export interface SessionRefResult {
   active_job_id: string | null;
   active_project: string | null;
   active_model: string;
+  active_effort: string | null;
+  active_fast: boolean;
   preferred_spawn_mode: string;
 }
 
@@ -271,6 +273,8 @@ export function makeAgentHandlers(sessionKey: string): AgentToolHandlers {
         active_job_id: activeRun?.refId ?? null,
         active_project: session.activeProject,
         active_model: session.activeModel,
+        active_effort: session.activeEffort,
+        active_fast: session.activeFast,
         preferred_spawn_mode: preferredModeMap.get(sessionKey) ?? 'agent',
       };
     },

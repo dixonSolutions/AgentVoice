@@ -203,33 +203,96 @@
                 </div>
 
                 @if (agentProviders.activeProvider?.supportsModelSelection) {
-                  <div class="cv-voice-picker-block">
-                    @if (agentProviders.loadingModels()) {
-                      <p-message severity="secondary" variant="simple" text="Loading models…" />
+                  <div class="cv-voice-picker-block cv-voice-model-block">
+                    @if (agentProviders.loadingModels() && agentProviders.models().length === 0) {
+                      <p-skeleton height="3.4rem" borderRadius="0.5rem" />
+                      <p-message severity="secondary" variant="simple"
+                        [text]="'Asking ' + agentProviders.activeProviderName() + ' for its models…'" />
                     } @else if (agentProviders.modelsError(); as modelsErr) {
                       <p-message severity="warn" variant="simple" [text]="modelsErr" />
+                      <div class="cv-voice-model-meta">
+                        <span class="cv-cfg-muted">Models come straight from the {{ agentProviders.activeProviderName() }} CLI.</span>
+                        <p-button label="Retry" icon="pi pi-refresh" size="small" [outlined]="true"
+                          [loading]="agentProviders.loadingModels()"
+                          (onClick)="refreshModels()" />
+                      </div>
+                    } @else {
+                      <p-iftalabel>
+                        <p-select id="model-picker"
+                          [options]="modelGroups()"
+                          [group]="true"
+                          optionGroupLabel="label"
+                          optionGroupChildren="items"
+                          optionLabel="label"
+                          optionValue="value"
+                          [ngModel]="selectedModelId"
+                          (ngModelChange)="onModelChange($event)"
+                          [filter]="true"
+                          filterBy="search"
+                          filterPlaceholder="Filter models…"
+                          [overlayOptions]="selectOverlayOptions"
+                          [panelStyleClass]="selectPanelStyleClass"
+                          appendTo="body"
+                          scrollHeight="320px"
+                          emptyFilterMessage="No models match"
+                          placeholder="Select model"
+                          [loading]="agentProviders.loadingModels()"
+                          [disabled]="!isBridgeConnected() || agentProviders.loadingModels() || applyingSelection()">
+                          <ng-template let-group pTemplate="group">
+                            <span class="cv-voice-select-group">{{ group.label }}</span>
+                          </ng-template>
+                          <ng-template let-opt pTemplate="item">
+                            <div class="cv-voice-select-item">
+                              <span>{{ opt.label }}</span>
+                              @if (opt.detail) {
+                                <span class="cv-cfg-muted">{{ opt.detail }}</span>
+                              }
+                            </div>
+                          </ng-template>
+                        </p-select>
+                        <label for="model-picker">Model</label>
+                      </p-iftalabel>
+
+                      @if (effortOptions().length > 0 || selectedModelSupportsFast()) {
+                        <div class="cv-voice-model-knobs" role="group" aria-label="Model settings">
+                          @if (effortOptions().length > 0) {
+                            <div class="cv-voice-model-knob">
+                              <span class="cv-voice-model-knob-label">Effort</span>
+                              <p-selectbutton
+                                [options]="effortOptions()"
+                                optionLabel="label"
+                                optionValue="value"
+                                [ngModel]="selectedEffortValue"
+                                (ngModelChange)="onEffortChange($event)"
+                                [allowEmpty]="false"
+                                [disabled]="!isBridgeConnected() || applyingSelection()" />
+                            </div>
+                          }
+                          @if (selectedModelSupportsFast()) {
+                            <div class="cv-voice-model-knob cv-voice-model-knob--toggle">
+                              <label class="cv-voice-model-knob-label" for="model-fast">Fast</label>
+                              <p-toggleSwitch inputId="model-fast"
+                                [ngModel]="selectedFast"
+                                (ngModelChange)="onFastChange($event)"
+                                [disabled]="!isBridgeConnected() || applyingSelection()" />
+                            </div>
+                          }
+                        </div>
+                      } @else if (selectedModel(); as model) {
+                        <p class="cv-voice-model-note cv-cfg-muted">
+                          {{ model.displayName }} has no effort or speed settings on this CLI.
+                        </p>
+                      }
+
+                      <div class="cv-voice-model-meta">
+                        <span class="cv-cfg-muted">{{ modelSourceHint() }}</span>
+                        <p-button icon="pi pi-refresh" [text]="true" size="small" [rounded]="true"
+                          ariaLabel="Reload models from the CLI"
+                          [loading]="agentProviders.loadingModels()"
+                          [disabled]="!isBridgeConnected()"
+                          (onClick)="refreshModels()" />
+                      </div>
                     }
-                    <p-iftalabel>
-                      <p-select id="model-picker"
-                        [options]="modelOptions()"
-                        optionLabel="label"
-                        optionValue="value"
-                        [ngModel]="selectedModelId"
-                        (ngModelChange)="onModelChange($event)"
-                        [filter]="true"
-                        filterBy="search"
-                        filterPlaceholder="Filter models…"
-                        [virtualScroll]="modelOptions().length > 40"
-                        [virtualScrollItemSize]="40"
-                        [overlayOptions]="selectOverlayOptions"
-                        [panelStyleClass]="selectPanelStyleClass"
-                        appendTo="body"
-                        scrollHeight="280px"
-                        emptyFilterMessage="No models match"
-                        placeholder="Select model"
-                        [disabled]="!isBridgeConnected() || agentProviders.loadingModels()" />
-                      <label for="model-picker">Model</label>
-                    </p-iftalabel>
                   </div>
                 }
               </div>

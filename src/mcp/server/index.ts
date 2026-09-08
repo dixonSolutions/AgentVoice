@@ -417,32 +417,42 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_list_models',
-    'List available AI models. Returns id, displayName, and the currently active model. ' +
-      'Refreshes from CLI cache (TTL-based). ' +
-      'Use to find a model ID before agent_set_model.',
+    'List the AI models the active agent CLI reports, with per-model capabilities: `efforts` (effort levels that ' +
+      'model accepts — differs per model, empty when it has none), `defaultEffort`, and `fast` (whether a fast / ' +
+      'priority tier exists). Also returns the active selection (model + effort + fast) and a spoken-friendly ' +
+      '`active_label`. Use to find a model ID and its valid effort levels before agent_set_model.',
     {
       query: z.string().optional().describe('Filter by id or display name (e.g. "claude", "fast", "thinking").'),
+      refresh: z.boolean().optional().describe('Re-probe the CLI instead of using the cached list.'),
     },
-    async ({ query }) => {
-      const result = await dispatchTool('agent_list_models', { query }, sessionKey);
+    async ({ query, refresh }) => {
+      const result = await dispatchTool('agent_list_models', { query, refresh }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
 
   server.tool(
     'agent_set_model',
-    'Set the AI model. Default scope is global: updates the bridge default, all active sessions, and future sessions. ' +
-      'Use scope "session" only when the user explicitly says they want this session/connection only. ' +
-      'Must be a valid model ID from agent_list_models.',
+    'Set the AI model and, optionally, its effort level and fast tier. Default scope is global: updates the bridge ' +
+      'default, all active sessions, and future sessions. Use scope "session" only when the user explicitly says ' +
+      'they want this session/connection only. model_id must come from agent_list_models; effort must be one of ' +
+      'that model\'s `efforts` (omit to keep the current level, pass null for the CLI default); fast only where the ' +
+      'model reports `fast: true`. Rejected values come back with the accepted ones — read the error aloud.',
     {
-      model_id: z.string().describe('Exact model ID (from agent_list_models, e.g. "claude-opus-4-8-thinking-high").'),
+      model_id: z.string().describe('Exact model ID from agent_list_models (e.g. "opus[1m]", "gpt-5.3-codex", "auto").'),
+      effort: z
+        .string()
+        .nullable()
+        .optional()
+        .describe('Effort level from the model\'s `efforts` list (e.g. "high"). null or "default" = CLI default.'),
+      fast: z.boolean().optional().describe('Request the fast / priority tier (model must report fast: true).'),
       scope: z
         .enum(['global', 'session'])
         .optional()
         .describe('global (default) = default + all sessions. session = this connection only.'),
     },
-    async ({ model_id, scope }) => {
-      const result = await dispatchTool('agent_set_model', { model_id, scope }, sessionKey);
+    async ({ model_id, effort, fast, scope }) => {
+      const result = await dispatchTool('agent_set_model', { model_id, effort, fast, scope }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );

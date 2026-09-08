@@ -17,15 +17,18 @@ const ADMIN_SESSION_KEY = 'default';
 
 const SetModelBody = z.object({
   model_id: z.string().min(1),
+  effort: z.string().nullable().optional(),
+  fast: z.boolean().optional(),
   scope: z.enum(['global', 'session']).optional(),
 });
 
 export async function registerProviderModelRoutes(app: FastifyInstance): Promise<void> {
-  /** GET /api/providers/models?query= — live models for the active provider. */
-  app.get<{ Querystring: { query?: string } }>('/api/providers/models', async (req, reply) => {
-    const activeModel = getSessionState(ADMIN_SESSION_KEY).activeModel;
+  /** GET /api/providers/models?query=&refresh=1 — live models for the active provider. */
+  app.get<{ Querystring: { query?: string; refresh?: string } }>('/api/providers/models', async (req, reply) => {
+    const session = getSessionState(ADMIN_SESSION_KEY);
+    const refresh = req.query.refresh === '1' || req.query.refresh === 'true';
     try {
-      return await handleListModels({ query: req.query.query }, activeModel);
+      return await handleListModels({ query: req.query.query, refresh }, session);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log.warn({ err: message }, 'list models failed');
@@ -33,7 +36,7 @@ export async function registerProviderModelRoutes(app: FastifyInstance): Promise
     }
   });
 
-  /** POST /api/providers/model — set the model (default scope: global). */
+  /** POST /api/providers/model — set model + effort + fast (default scope: global). */
   app.post<{ Body: unknown }>('/api/providers/model', async (req, reply) => {
     const parsed = SetModelBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });

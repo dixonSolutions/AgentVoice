@@ -40,6 +40,9 @@ const MIGRATION_SQL = `
     session_key    TEXT PRIMARY KEY,
     active_project TEXT REFERENCES project(name),
     active_model   TEXT NOT NULL DEFAULT 'auto',
+    -- Effort level / fast tier for active_model (null = CLI default / standard).
+    active_effort  TEXT,
+    active_fast    INTEGER NOT NULL DEFAULT 0,
     updated_at     TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -160,6 +163,24 @@ function migrateServeEventTable(db: Database.Database): void {
   }
 }
 
+/**
+ * Effort / speed knobs joined session_state after the model column. SQLite has
+ * no ADD COLUMN IF NOT EXISTS, so check the table first.
+ */
+function migrateSessionSelectionColumns(db: Database.Database): void {
+  const cols = new Set(
+    (db.prepare('PRAGMA table_info(session_state)').all() as Array<{ name: string }>).map((c) => c.name),
+  );
+  if (!cols.has('active_effort')) {
+    db.exec('ALTER TABLE session_state ADD COLUMN active_effort TEXT');
+    log.info('migrated session_state — added active_effort');
+  }
+  if (!cols.has('active_fast')) {
+    db.exec('ALTER TABLE session_state ADD COLUMN active_fast INTEGER NOT NULL DEFAULT 0');
+    log.info('migrated session_state — added active_fast');
+  }
+}
+
 /** Carry the legacy single-row model_cache (always Cursor) into provider_model_cache once. */
 function migrateProviderModelCache(db: Database.Database): void {
   const legacy = db.prepare('SELECT fetched_at, models_json FROM model_cache WHERE id = 1').get() as
@@ -196,6 +217,7 @@ export function getDb(): Database.Database {
   _db.exec(INDEX_SQL);
 
   migrateProviderModelCache(_db);
+  migrateSessionSelectionColumns(_db);
 
   log.info({ dbPath }, 'database ready');
 

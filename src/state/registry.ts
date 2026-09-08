@@ -13,6 +13,7 @@
 import { existsSync } from 'node:fs';
 import { getDb } from './db.js';
 import { getConfig, type AgentClient, type ProjectConfig } from '../config.js';
+import type { ModelSelection } from '../providers/agents/types.js';
 import { readConfigFile, writeConfigFile } from './configFile.js';
 import { childLogger } from '../log.js';
 import { foldedProjectMatch, projectMatchScore } from './projectMatch.js';
@@ -273,27 +274,49 @@ export interface SessionState {
   sessionKey: string;
   activeProject: string | null;
   activeModel: string;
+  /** Effort level for activeModel — null lets the CLI decide. */
+  activeEffort: string | null;
+  /** Request the CLI's fast / priority tier for activeModel. */
+  activeFast: boolean;
 }
 
-/** Bridge-wide default cursor-agent model (config.json). */
+/** The (model, effort, fast) triple a session runs with. */
+export function sessionSelection(session: SessionState): ModelSelection {
+  return { model: session.activeModel, effort: session.activeEffort, fast: session.activeFast };
+}
+
+/** Bridge-wide default model selection (config.json). */
 export function getDefaultActiveModel(): string {
   return getConfig().settings.defaultActiveModel ?? 'auto';
 }
 
-/** Persist default model for future sessions (config.json). */
-export function persistDefaultActiveModel(model: string): void {
+export function getDefaultSelection(): ModelSelection {
+  const { settings } = getConfig();
+  return {
+    model: settings.defaultActiveModel ?? 'auto',
+    effort: settings.defaultActiveEffort ?? null,
+    fast: settings.defaultActiveFast ?? false,
+  };
+}
+
+/** Persist the default selection for future sessions (config.json). */
+export function persistDefaultSelection(selection: ModelSelection): void {
   const cfg = readConfigFile();
-  cfg.settings.defaultActiveModel = model;
+  cfg.settings.defaultActiveModel = selection.model;
+  cfg.settings.defaultActiveEffort = selection.effort;
+  cfg.settings.defaultActiveFast = selection.fast;
   writeConfigFile(cfg);
 }
 
-/** Update active_model on every stored session connection. */
-export function setActiveModelForAllSessions(model: string): number {
+/** Update the selection on every stored session connection. */
+export function setSelectionForAllSessions(selection: ModelSelection): number {
   const result = getDb()
     .prepare(
-      `UPDATE session_state SET active_model = @model, updated_at = datetime('now')`,
+      `UPDATE session_state
+          SET active_model = @model, active_effort = @effort, active_fast = @fast,
+              updated_at = datetime('now')`,
     )
-    .run({ model });
+    .run({ model: selection.model, effort: selection.effort, fast: selection.fast ? 1 : 0 });
   return result.changes;
 }
 
@@ -310,20 +333,37 @@ export function getSessionState(sessionKey: string): SessionState {
   const db = getDb();
   const row = db
     .prepare('SELECT * FROM session_state WHERE session_key = ?')
-    .get(sessionKey) as { session_key: string; active_project: string | null; active_model: string } | undefined;
+    .get(sessionKey) as
+    | {
+        session_key: string;
+        active_project: string | null;
+        active_model: string;
+        active_effort: string | null;
+        active_fast: number;
+      }
+    | undefined;
 
   if (!row) {
-    const defaultModel = getDefaultActiveModel();
+    const def = getDefaultSelection();
     db.prepare(
-      `INSERT INTO session_state (session_key, active_model) VALUES (?, ?) ON CONFLICT DO NOTHING`,
-    ).run(sessionKey, defaultModel);
-    return { sessionKey, activeProject: null, activeModel: defaultModel };
+      `INSERT INTO session_state (session_key, active_model, active_effort, active_fast)
+       VALUES (?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+    ).run(sessionKey, def.model, def.effort, def.fast ? 1 : 0);
+    return {
+      sessionKey,
+      activeProject: null,
+      activeModel: def.model,
+      activeEffort: def.effort,
+      activeFast: def.fast,
+    };
   }
 
   return {
     sessionKey: row.session_key,
     activeProject: row.active_project,
     activeModel: row.active_model,
+    activeEffort: row.active_effort ?? null,
+    activeFast: row.active_fast === 1,
   };
 }
 
@@ -340,17 +380,19 @@ export function setActiveProject(sessionKey: string, projectName: string): void 
     .run({ sessionKey, project: projectName });
 }
 
-/** Update the active model for a session. */
-export function setActiveModel(sessionKey: string, model: string): void {
+/** Update the active model selection for a session. */
+export function setActiveSelection(sessionKey: string, selection: ModelSelection): void {
   getDb()
     .prepare(
-      `INSERT INTO session_state (session_key, active_model, updated_at)
-       VALUES (@sessionKey, @model, datetime('now'))
+      `INSERT INTO session_state (session_key, active_model, active_effort, active_fast, updated_at)
+       VALUES (@sessionKey, @model, @effort, @fast, datetime('now'))
        ON CONFLICT(session_key) DO UPDATE SET
-         active_model = excluded.active_model,
-         updated_at   = excluded.updated_at`,
+         active_model  = excluded.active_model,
+         active_effort = excluded.active_effort,
+         active_fast   = excluded.active_fast,
+         updated_at    = excluded.updated_at`,
     )
-    .run({ sessionKey, model });
+    .run({ sessionKey, model: selection.model, effort: selection.effort, fast: selection.fast ? 1 : 0 });
 }
 
 /** Copy active project/model from one session key to another (e.g. MCP connection bind). */
@@ -360,6 +402,6 @@ export function cloneSessionState(fromKey: string, toKey: string): void {
     setActiveProject(toKey, from.activeProject);
   }
   if (from.activeModel) {
-    setActiveModel(toKey, from.activeModel);
+    setActiveSelection(toKey, sessionSelection(from));
   }
 }

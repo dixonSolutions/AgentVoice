@@ -118,7 +118,7 @@ async function route(
     case 'agent_manage_projects':
       return handleManageProjects(a);
     case 'agent_list_models':
-      return handleListModels(a, getSessionState(sessionKey).activeModel);
+      return handleListModels(a, getSessionState(sessionKey));
     case 'agent_set_model':
       return handleSetModel(a, sessionKey);
     case 'agent_submit':

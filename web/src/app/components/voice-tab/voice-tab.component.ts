@@ -18,8 +18,11 @@ import { IftaLabel } from '@openng/optimus-ui/iftalabel';
 import { Message } from '@openng/optimus-ui/message';
 import { PrimeTemplate } from '@openng/optimus-ui/api';
 import { Select } from '@openng/optimus-ui/select';
+import { SelectButton } from '@openng/optimus-ui/selectbutton';
+import { Skeleton } from '@openng/optimus-ui/skeleton';
 import { Tag } from '@openng/optimus-ui/tag';
 import { Textarea } from '@openng/optimus-ui/textarea';
+import { ToggleSwitch } from '@openng/optimus-ui/toggleswitch';
 
 import { AppStateService } from '../../services/app-state.service';
 import {
@@ -29,7 +32,7 @@ import {
 } from '../../services/bridge.service';
 import { ToastService } from '../../services/toast.service';
 import { LogService } from '../../services/log.service';
-import { AgentProviderService } from '../../services/agent-provider.service';
+import { AgentProviderService, effortLabel, type ModelSelection } from '../../services/agent-provider.service';
 import { VoiceProvidersService } from '../../services/voice-providers.service';
 import { VoiceSessionService } from '../../services/voice-session.service';
 import { ApprovalPanelComponent } from '../approval-panel/approval-panel.component';
@@ -64,8 +67,22 @@ interface ModelOption {
   value: string;
   title: string;
   label: string;
+  detail?: string;
   search: string;
 }
+
+interface ModelGroup {
+  label: string;
+  items: ModelOption[];
+}
+
+interface EffortOption {
+  label: string;
+  value: string;
+}
+
+/** SelectButton needs a non-null value; this stands in for "let the CLI decide". */
+const DEFAULT_EFFORT_VALUE = '__default__';
 
 @Component({
   selector: 'cv-voice-tab',
@@ -84,8 +101,11 @@ interface ModelOption {
     Message,
     PrimeTemplate,
     Select,
+    SelectButton,
+    Skeleton,
     Tag,
     Textarea,
+    ToggleSwitch,
     ApprovalPanelComponent,
     AuthCardComponent,
     ImageCarouselComponent,
@@ -306,7 +326,9 @@ export class VoiceTabComponent {
       sessionPart = prompt ? `${idShort} — ${prompt}` : idShort;
     }
 
-    return `${project} · ${sessionPart}`;
+    const provider = this.agentProviders.activeProvider;
+    const modelPart = provider?.supportsModelSelection ? ` · ${this.agentProviders.activeLabel()}` : '';
+    return `${project} · ${sessionPart}${modelPart}`;
   });
 
   protected readonly isBridgeConnected = computed(
@@ -339,40 +361,113 @@ export class VoiceTabComponent {
   });
 
   protected selectedModelId: string | null = null;
+  protected selectedEffortValue: string = DEFAULT_EFFORT_VALUE;
+  protected selectedFast = false;
+  protected readonly applyingSelection = signal(false);
 
-  /** Live model list for the active agent CLI — never hardcoded. */
-  protected readonly modelOptions = computed<ModelOption[]>(() => {
-    const models = this.agentProviders.models().map((m) => ({
-      value: m.id,
-      title: m.displayName,
-      label: m.displayName,
-      search: `${m.id} ${m.displayName}`,
-    }));
-    const active = this.agentProviders.activeModel();
-    if (active && !models.some((m) => m.value === active)) {
-      models.unshift({
+  /**
+   * Live model list for the active agent CLI, grouped by vendor — never
+   * hardcoded. "Auto" always leads its group so the CLI-default row is one
+   * tap away.
+   */
+  protected readonly modelGroups = computed<ModelGroup[]>(() => {
+    const providerName = this.agentProviders.activeProviderName();
+    const groups = new Map<string, ModelOption[]>();
+    const order: string[] = [];
+    const push = (label: string, opt: ModelOption) => {
+      let items = groups.get(label);
+      if (!items) {
+        items = [];
+        groups.set(label, items);
+        order.push(label);
+      }
+      items.push(opt);
+    };
+
+    for (const m of this.agentProviders.models()) {
+      push(m.id === 'auto' ? providerName : (m.vendor ?? providerName), {
+        value: m.id,
+        title: m.displayName,
+        label: m.displayName,
+        detail: m.description,
+        search: `${m.id} ${m.displayName} ${m.vendor ?? ''} ${m.description ?? ''} ${(m.variants ?? []).map((v) => v.id).join(' ')}`,
+      });
+    }
+
+    // The active id must always be an option or the trigger renders blank —
+    // e.g. a model from a previous CLI version that is no longer listed.
+    const active = this.agentProviders.activeSelection().model;
+    if (active && !this.agentProviders.modelById(active)) {
+      push(providerName, {
         value: active,
         title: active === 'auto' ? 'Auto' : active,
         label: active === 'auto' ? 'Auto' : active,
+        detail: active === 'auto' ? undefined : 'Not in the current model list',
         search: active,
       });
     }
-    return models;
+
+    return order.map((label) => ({ label, items: groups.get(label)! }));
+  });
+
+  /** Flat view of the grouped options (for lookups). */
+  protected readonly modelOptions = computed<ModelOption[]>(() =>
+    this.modelGroups().flatMap((g) => g.items),
+  );
+
+  protected readonly selectedModel = computed(() => {
+    // Read the signal so the effort row re-computes when the list arrives.
+    this.agentProviders.models();
+    return this.agentProviders.modelById(this.selectedModelId ?? this.agentProviders.activeSelection().model);
+  });
+
+  /**
+   * Effort levels the CLI offers for the selected model, in display order.
+   * Variant-based models (Cursor) only get "Default" when an unsuffixed id
+   * exists; flag-based ones (Claude Code, Codex) always can omit the flag.
+   */
+  protected readonly effortOptions = computed<EffortOption[]>(() => {
+    const model = this.selectedModel();
+    if (!model || model.efforts.length === 0) return [];
+    const levels: Array<string | null> = model.variants
+      ? [...new Set(model.variants.map((v) => v.effort))]
+      : [null, ...model.efforts];
+    // Keep the bridge's order for real levels; "Default" always leads.
+    const ordered = [
+      ...(levels.includes(null) ? [null] : []),
+      ...model.efforts.filter((e) => levels.includes(e)),
+    ];
+    return ordered.map((e) => ({
+      label: e === null ? 'Default' : effortLabel(e),
+      value: e ?? DEFAULT_EFFORT_VALUE,
+    }));
+  });
+
+  protected readonly selectedModelSupportsFast = computed(() => this.selectedModel()?.fast ?? false);
+
+  /** "Live from Cursor" / "Cursor list from 3 min ago" — tells the user how fresh the picker is. */
+  protected readonly modelSourceHint = computed(() => {
+    const provider = this.agentProviders.activeProviderName();
+    const count = this.agentProviders.models().length;
+    const cachedAt = this.agentProviders.modelsCachedAt();
+    if (count === 0) return `No models reported by ${provider}`;
+    if (!cachedAt) return `${count} models · live from ${provider}`;
+    const ageMs = Date.now() - new Date(cachedAt).getTime();
+    const mins = Math.max(0, Math.round(ageMs / 60_000));
+    const age = mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : `${Math.round(mins / 60)} h ago`;
+    return `${count} models · from ${provider} ${age}`;
   });
 
   /**
    * The single place the coding agent identifies itself in the UI, e.g.
-   * "Claude Code · sonnet". Everything else refers to the pipeline or to
-   * AgentVoice — see app/branding.ts.
+   * "Claude Code · Opus (1M context) · High · Fast". Everything else refers to
+   * the pipeline or to AgentVoice — see app/branding.ts.
    */
   protected readonly activeProviderChip = computed(() => {
     const provider = this.agentProviders.activeProvider;
     if (!provider) return null;
     if (!provider.supportsModelSelection) return provider.displayName;
-    const modelId = this.agentProviders.activeModel();
-    const match = this.agentProviders.models().find((m) => m.id === modelId);
-    const modelLabel = match?.displayName ?? modelId;
-    return `${provider.displayName} · ${modelLabel}`;
+    return `${provider.displayName} · ${this.agentProviders.activeLabel()}`;
   });
 
   protected readonly visualizeUserSpeech = computed(() => {
@@ -519,7 +614,10 @@ export class VoiceTabComponent {
       }
     });
     effect(() => {
-      this.selectedModelId = this.agentProviders.activeModel();
+      const active = this.agentProviders.activeSelection();
+      this.selectedModelId = active.model;
+      this.selectedEffortValue = active.effort ?? DEFAULT_EFFORT_VALUE;
+      this.selectedFast = active.fast;
     });
   }
 
@@ -582,13 +680,69 @@ export class VoiceTabComponent {
   protected onModelChange(modelId: string | null): void {
     if (!modelId || modelId === this.selectedModelId) return;
     this.selectedModelId = modelId;
-    void this.agentProviders
-      .setModel(modelId)
-      .then(() => this.toast.info('Model updated', modelId))
-      .catch(() => {
-        this.toast.error('Could not set model');
-        this.selectedModelId = this.agentProviders.activeModel();
-      });
+    // Keep the knobs; the bridge clamps them to what the new model offers and
+    // the response tells us what it actually applied.
+    void this.applySelection({
+      model: modelId,
+      effort: this.effortFromValue(this.selectedEffortValue),
+      fast: this.selectedFast,
+    });
+  }
+
+  protected onEffortChange(value: string | null): void {
+    const next = value ?? DEFAULT_EFFORT_VALUE;
+    if (next === this.selectedEffortValue) return;
+    this.selectedEffortValue = next;
+    void this.applySelection({
+      model: this.selectedModelId ?? this.agentProviders.activeSelection().model,
+      effort: this.effortFromValue(next),
+      fast: this.selectedFast,
+    });
+  }
+
+  protected onFastChange(fast: boolean): void {
+    if (fast === this.selectedFast) return;
+    this.selectedFast = fast;
+    void this.applySelection({
+      model: this.selectedModelId ?? this.agentProviders.activeSelection().model,
+      effort: this.effortFromValue(this.selectedEffortValue),
+      fast,
+    });
+  }
+
+  protected refreshModels(): void {
+    void this.agentProviders.refreshModels({ force: true }).then(() => {
+      if (this.agentProviders.modelsError()) return;
+      this.toast.info('Models reloaded', this.modelSourceHint());
+    });
+  }
+
+  private effortFromValue(value: string | null): string | null {
+    return !value || value === DEFAULT_EFFORT_VALUE ? null : value;
+  }
+
+  private async applySelection(selection: ModelSelection): Promise<void> {
+    this.applyingSelection.set(true);
+    try {
+      const res = await this.agentProviders.setSelection(selection);
+      const asked = selection.effort ?? null;
+      const clamped = res.active.effort !== asked || res.active.fast !== selection.fast;
+      if (clamped) {
+        this.toast.warn('Adjusted to what the CLI offers', res.label);
+      } else {
+        this.toast.info('Model updated', res.label);
+      }
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      this.toast.error('Could not set model', detail);
+      // Snap the controls back to what the bridge is actually running.
+      const active = this.agentProviders.activeSelection();
+      this.selectedModelId = active.model;
+      this.selectedEffortValue = active.effort ?? DEFAULT_EFFORT_VALUE;
+      this.selectedFast = active.fast;
+    } finally {
+      this.applyingSelection.set(false);
+    }
   }
 
   protected handlePtt(): void {

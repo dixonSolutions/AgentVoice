@@ -582,6 +582,17 @@ export class VoiceSessionService {
           'pipeline',
         );
       },
+      onTurnDiscarded: (reason) => {
+        // The error itself was already toasted via onSttError; this only
+        // clears the in-flight state so the Cancel control goes away (#41).
+        this.submittingTurn.set(false);
+        this.vadListening.set(false);
+        this.endPhraseArmed.set(false);
+        this._voiceActivated.set(false);
+        this.toolActivity.set(null);
+        this.syncAppState();
+        this.logs.append('info', 'voice', `Turn discarded — ${reason}`, undefined, 'pipeline');
+      },
       onTurnCancelled: (phrase) => {
         this.submittingTurn.set(false);
         this.vadListening.set(false);
