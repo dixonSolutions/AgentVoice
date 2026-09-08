@@ -54,6 +54,22 @@ export interface ProviderModelsResponse {
   total: number;
 }
 
+export interface PermissionMode {
+  id: string;
+  label: string;
+  description: string;
+  /** phone = prompt relayed to the phone; deny = refused headlessly; never = nothing asks. */
+  prompts: 'phone' | 'deny' | 'never';
+  yolo?: boolean;
+}
+
+export interface PermissionModesResponse {
+  provider: string;
+  displayName: string;
+  active: PermissionMode;
+  modes: PermissionMode[];
+}
+
 interface SetModelResponse {
   ok: boolean;
   active: ModelSelection;
@@ -130,6 +146,11 @@ export class AgentProviderService {
   /** When the bridge last probed the CLI — null when the list was just fetched live. */
   readonly modelsCachedAt = signal<string | null>(null);
 
+  /** Approval policy the active CLI runs with — the list differs per CLI. */
+  readonly permissionModes = signal<PermissionMode[]>([]);
+  readonly activePermissionMode = signal<PermissionMode | null>(null);
+  readonly permissionError = signal<string | null>(null);
+
   get activeProvider(): ProviderSummary | null {
     return this.providers().find((p) => p.id === this.activeProviderId()) ?? null;
   }
@@ -204,6 +225,27 @@ export class AgentProviderService {
     });
     this.activeSelection.set(res.active);
     this.activeLabel.set(res.label);
+    return res;
+  }
+
+  /** Never throws — the permission select degrades to an inline error. */
+  async refreshPermissionModes(): Promise<void> {
+    this.permissionError.set(null);
+    try {
+      const res = await this.bridge.apiGet<PermissionModesResponse>('/api/providers/permission-modes');
+      this.permissionModes.set(res.modes);
+      this.activePermissionMode.set(res.active);
+    } catch (err) {
+      this.permissionError.set(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async setPermissionMode(modeId: string): Promise<PermissionModesResponse> {
+    const res = await this.bridge.apiPost<PermissionModesResponse & { ok: boolean }>('/api/providers/permission-mode', {
+      mode: modeId,
+    });
+    this.permissionModes.set(res.modes);
+    this.activePermissionMode.set(res.active);
     return res;
   }
 

@@ -43,3 +43,6 @@ Thumbs.db
 .idea/
 *.swp
 .angular/
+
+# Claude Code worktrees of other agents — never commit (each is its own checkout)
+.claude/worktrees/

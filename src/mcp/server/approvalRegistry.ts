@@ -14,9 +14,11 @@
  * AgentVoice tool registers with. This registry only owns the user-facing
  * request/response lifecycle.
  *
- * Two request types share the same registry:
- *   - user_input  : free-text / yes-no / choice questions
- *   - plan        : multi-step plan accept / reject / modify
+ * Four request types share the same registry:
+ *   - user_input   : free-text / yes-no / choice questions
+ *   - plan         : multi-step plan accept / reject / modify
+ *   - permission   : a CLI permission prompt (allow / deny) — see approve_permission
+ *   - secret_input : a password prompt from sudo / git / ssh — see routes/askpass.ts
  */
 
 import { randomUUID } from 'node:crypto';
@@ -46,7 +48,45 @@ export interface PlanApprovalRequest {
   estimated_impact?: string;
 }
 
-export type ApprovalRequest = UserInputRequest | PlanApprovalRequest;
+/**
+ * A CLI permission prompt relayed from the agent (Claude Code
+ * `--permission-prompt-tool`). `summary` is the human line for the card
+ * ("npm install"); `input` is the raw tool input, echoed back on allow.
+ */
+export interface PermissionRequest {
+  kind: 'permission';
+  request_id: string;
+  provider: string;
+  tool_name: string;
+  summary: string;
+  input: unknown;
+}
+
+/**
+ * A password prompt from a child process (sudo / git / ssh askpass). The
+ * answer is a secret: it is never logged, never stored, and only ever
+ * travels phone → bridge → helper stdout.
+ */
+export interface SecretInputRequest {
+  kind: 'secret_input';
+  request_id: string;
+  prompt: string;
+  source: 'sudo' | 'git' | 'ssh' | 'other';
+}
+
+export type ApprovalRequest = UserInputRequest | PlanApprovalRequest | PermissionRequest | SecretInputRequest;
+
+export interface PermissionResponse {
+  kind: 'permission';
+  decision: 'allow' | 'deny';
+  message?: string;
+}
+
+export interface SecretInputResponse {
+  kind: 'secret_input';
+  /** null = the user cancelled — the caller fails the prompt. */
+  secret: string | null;
+}
 
 export interface UserInputResponse {
   kind: 'user_input';
@@ -71,7 +111,16 @@ export interface InterruptedByVoiceTurnResponse {
 export type ApprovalResponse =
   | UserInputResponse
   | PlanApprovalResponse
+  | PermissionResponse
+  | SecretInputResponse
   | InterruptedByVoiceTurnResponse;
+
+const REQUEST_TOOL_NAMES: Record<ApprovalRequest['kind'], string> = {
+  user_input: 'request_user_input',
+  plan_approval: 'submit_plan_for_approval',
+  permission: 'approve_permission',
+  secret_input: 'askpass',
+};
 
 interface Deferred {
   resolve: (value: ApprovalResponse) => void;
@@ -101,7 +150,7 @@ export function registerRequest(
   // Register with the shared interrupt hook so a new user turn reaches this
   // tool the same way it reaches any other blocking AgentVoice tool.
   const { id: waitId, interrupted } = registerResolveWait({
-    tool: payload.kind === 'plan_approval' ? 'submit_plan_for_approval' : 'request_user_input',
+    tool: REQUEST_TOOL_NAMES[payload.kind],
     meta: payload,
   });
 

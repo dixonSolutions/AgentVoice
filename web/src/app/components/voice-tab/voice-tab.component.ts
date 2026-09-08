@@ -81,6 +81,13 @@ interface EffortOption {
   value: string;
 }
 
+interface PermissionOption {
+  value: string;
+  label: string;
+  detail: string;
+  search: string;
+}
+
 /** SelectButton needs a non-null value; this stands in for "let the CLI decide". */
 const DEFAULT_EFFORT_VALUE = '__default__';
 
@@ -445,6 +452,47 @@ export class VoiceTabComponent {
 
   protected readonly selectedModelSupportsFast = computed(() => this.selectedModel()?.fast ?? false);
 
+  // ── Permission mode ──────────────────────────────────────────────────────
+
+  protected selectedPermissionMode: string | null = null;
+  protected readonly applyingPermission = signal(false);
+
+  /** The approval policies this CLI can run headlessly — from the bridge, per provider. */
+  protected readonly permissionOptions = computed<PermissionOption[]>(() =>
+    this.agentProviders.permissionModes().map((m) => ({
+      value: m.id,
+      label: m.label,
+      detail: `${m.description} ${this.promptsNote(m.prompts)}`.trim(),
+      search: `${m.id} ${m.label} ${m.description}`,
+    })),
+  );
+
+  /** One line under the select: what a would-be prompt turns into in the active mode. */
+  protected readonly permissionHint = computed(() => {
+    const active = this.agentProviders.activePermissionMode();
+    if (!active) return null;
+    const agent = this.agentProviders.activeProviderName();
+    switch (active.prompts) {
+      case 'phone':
+        return `${agent} sends each permission prompt to this phone — allow or deny on the card, or say "yes" / "no".`;
+      case 'deny':
+        return `${agent} cannot show a prompt headlessly in this mode — anything it would ask about is refused.`;
+      default:
+        return `Nothing asks in this mode. sudo, git and ssh password prompts still come to this phone.`;
+    }
+  });
+
+  private promptsNote(prompts: 'phone' | 'deny' | 'never'): string {
+    switch (prompts) {
+      case 'phone':
+        return '· prompts go to your phone';
+      case 'deny':
+        return '· prompts are refused';
+      default:
+        return '';
+    }
+  }
+
   /** "Live from Cursor" / "Cursor list from 3 min ago" — tells the user how fresh the picker is. */
   protected readonly modelSourceHint = computed(() => {
     const provider = this.agentProviders.activeProviderName();
@@ -599,6 +647,7 @@ export class VoiceTabComponent {
         void this.voiceProviders.refresh();
         void this.agentProviders.refreshProviders();
         void this.agentProviders.refreshModels();
+        void this.agentProviders.refreshPermissionModes();
       }
     });
     effect(() => {
@@ -618,6 +667,9 @@ export class VoiceTabComponent {
       this.selectedModelId = active.model;
       this.selectedEffortValue = active.effort ?? DEFAULT_EFFORT_VALUE;
       this.selectedFast = active.fast;
+    });
+    effect(() => {
+      this.selectedPermissionMode = this.agentProviders.activePermissionMode()?.id ?? null;
     });
   }
 
@@ -708,6 +760,23 @@ export class VoiceTabComponent {
       effort: this.effortFromValue(this.selectedEffortValue),
       fast,
     });
+  }
+
+  protected onPermissionModeChange(modeId: string | null): void {
+    if (!modeId || modeId === this.selectedPermissionMode) return;
+    this.selectedPermissionMode = modeId;
+    this.applyingPermission.set(true);
+    void this.agentProviders
+      .setPermissionMode(modeId)
+      .then((res) => {
+        this.toast.info('Permissions updated', `${res.displayName} · ${res.active.label}`);
+      })
+      .catch((err) => {
+        const detail = err instanceof Error ? err.message : String(err);
+        this.toast.error('Could not set permissions', detail);
+        this.selectedPermissionMode = this.agentProviders.activePermissionMode()?.id ?? null;
+      })
+      .finally(() => this.applyingPermission.set(false));
   }
 
   protected refreshModels(): void {

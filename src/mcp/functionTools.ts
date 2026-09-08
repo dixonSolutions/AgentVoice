@@ -136,6 +136,21 @@ export const FUNCTION_TOOLS: FunctionTool[] = [
     },
   },
 
+  {
+    type: 'function',
+    name: 'agent_permission_mode',
+    description:
+      'Read or change how much the agent CLI may do without asking (permission / approval mode). No args = list the modes this CLI offers and the active one. ' +
+      'Pass mode (an id from modes) to switch. Modes with prompts "phone" relay each permission prompt to the phone.',
+    parameters: {
+      type: 'object',
+      properties: {
+        mode: { type: 'string', description: 'Mode id from the modes list; omit to read.' },
+      },
+      required: [],
+    },
+  },
+
   // ── Execute ───────────────────────────────────────────────────────────
   {
     type: 'function',

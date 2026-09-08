@@ -43,6 +43,7 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`30-speech-output-providers.md`](./30-speech-output-providers.md) | Text-to-speech providers, per-vendor scopes, and language-aware fallback across device and cloud voices | The agent has to speak a language the device has no voice for, or you want a different voice |
 | [`31-service-orchestrator-converter.md`](./31-service-orchestrator-converter.md) | The Service / Orchestrator / Converter / Specializer layering shared by speech in, speech out, and (pending) the agent CLIs | Adding a provider or a selection policy, or working out where vendor knowledge belongs |
 | [`32-environments-vs-projects.md`](./32-environments-vs-projects.md) | Why "run the agent elsewhere" (remote / cloud) collides with the path-based project registry, and the order to add it in | Issue #40, or before touching `projects[].path` |
+| [`33-permissions-and-prompt-relay.md`](./33-permissions-and-prompt-relay.md) | Per-CLI permission modes (run-everything default), Claude Code prompts relayed to the phone, and sudo / git / ssh askpass relay | Changing how much the agent may do unasked, or a prompt is stuck on the host |
 
 ## One-paragraph summary
 

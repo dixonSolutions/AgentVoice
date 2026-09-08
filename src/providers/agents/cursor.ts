@@ -18,6 +18,7 @@ import stripAnsi from 'strip-ansi';
 import { getConfig } from '../../config.js';
 import { childLogger } from '../../log.js';
 import { AUTO_MODEL_ID, getCachedModelsAnyAge, resolveVariantId, sortEfforts } from '../../state/models.js';
+import { activePermissionMode } from './permissions.js';
 import { updateAgentEnvKeys } from '../../state/envFile.js';
 import { sessionSelection, type Project, type SessionState } from '../../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from '../../executor/agentPrompt.js';
@@ -51,6 +52,7 @@ import type {
   AuthStartResult,
   ModelEntry,
   ModelVariant,
+  PermissionModeDescriptor,
   SpawnOptions,
 } from './types.js';
 
@@ -205,6 +207,46 @@ function describeCursorVariants(variants: ModelVariant[]): string | undefined {
   return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
+// ── Permission modes ──────────────────────────────────────────────────────
+
+/**
+ * Cursor's print mode cannot show its approval prompt and has no hook to
+ * relay one, so anything not auto-approved is skipped. `--force` (aka
+ * `--yolo`) used to ride in settings.preRunFlags; the mode owns it now and
+ * the flag list is scrubbed of it (config migration + filter below).
+ */
+const CURSOR_PERMISSION_MODES: readonly (PermissionModeDescriptor & { args: string[] })[] = [
+  {
+    id: 'yolo',
+    label: 'Run everything',
+    description: '--force — every command runs unless a deny rule in cli-config.json matches.',
+    prompts: 'never',
+    yolo: true,
+    args: ['--force'],
+  },
+  {
+    id: 'auto-review',
+    label: 'Auto-review (Smart Auto)',
+    description: "Cursor's server classifier runs safe tool calls; the rest would prompt, which print mode cannot show, so they are skipped.",
+    prompts: 'deny',
+    args: ['--auto-review'],
+  },
+  {
+    id: 'default',
+    label: 'Allow-list only',
+    description: 'Only commands allowed in cli-config.json run; everything else is skipped (no prompt is possible headlessly).',
+    prompts: 'deny',
+    args: [],
+  },
+];
+
+const FORCE_FLAGS = new Set(['--force', '-f', '--yolo']);
+
+function permissionArgs(): string[] {
+  const active = activePermissionMode(cursorProvider);
+  return (CURSOR_PERMISSION_MODES.find((m) => m.id === active.id) ?? CURSOR_PERMISSION_MODES[0]!).args;
+}
+
 /** The printed id for the session's (family, effort, fast) — see groupCursorModels. */
 function resolvedModelArg(session: SessionState): string | null {
   if (!session.activeModel || session.activeModel === AUTO_MODEL_ID) return null;
@@ -259,7 +301,10 @@ function buildWorkerArgs(opts: SpawnOptions): string[] {
   if (mode === 'plan') args.push('--mode', 'plan');
   else if (mode === 'ask') args.push('--mode', 'ask');
 
-  for (const flag of settings.preRunFlags) args.push(flag);
+  args.push(...permissionArgs());
+  for (const flag of settings.preRunFlags) {
+    if (!FORCE_FLAGS.has(flag)) args.push(flag);
+  }
 
   args.push(mode === 'ask' ? buildAskPrompt(prompt) : buildAgentPrompt(prompt, { browser }));
   return args;
@@ -272,8 +317,9 @@ function buildVoiceArgs(project: Project, session: SessionState, pendingTurn?: s
   const model = resolvedModelArg(session);
   if (model) args.push('--model', model);
   if (project.resumeId) args.push('--resume', project.resumeId);
+  args.push(...permissionArgs());
   for (const flag of settings.preRunFlags) {
-    if (!args.includes(flag)) args.push(flag);
+    if (!FORCE_FLAGS.has(flag) && !args.includes(flag)) args.push(flag);
   }
   args.push(bootPrompt);
   void pendingTurn;
@@ -549,6 +595,7 @@ export const cursorProvider: AgentProvider = {
   },
 
   supportsModelSelection: () => true,
+  permissionModes: () => CURSOR_PERMISSION_MODES,
   buildWorkerArgs,
   buildVoiceArgs,
 
