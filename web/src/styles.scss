@@ -154,6 +154,85 @@ body {
   width: 100%;
 }
 
+/* ── Model picker: grouped list + per-model effort / fast knobs ─────── */
+
+.cv-voice-model-block {
+  gap: 0.6rem;
+}
+
+.cv-voice-select-group {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--p-text-muted-color);
+}
+
+.cv-voice-model-knobs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 0.65rem;
+  background: color-mix(in srgb, var(--p-content-background) 70%, transparent);
+}
+
+.cv-voice-model-knob {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.cv-voice-model-knob--toggle {
+  flex: 0 0 auto;
+  align-items: flex-start;
+}
+
+.cv-voice-model-knob-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--p-text-muted-color);
+}
+
+/* Effort levels differ per model (3–7 chips) — let them wrap instead of clipping. */
+.cv-voice-model-knob .p-selectbutton {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.cv-voice-model-knob .p-selectbutton .p-togglebutton {
+  font-size: 0.8125rem;
+  padding-inline: 0.7rem;
+  min-height: 2.25rem;
+}
+
+.cv-voice-model-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  min-height: 2rem;
+}
+
+.cv-voice-model-meta .cv-cfg-muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.cv-voice-model-note {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+
 .cv-voice-select-item {
   display: flex;
   flex-direction: column;

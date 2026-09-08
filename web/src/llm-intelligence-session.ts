@@ -688,13 +688,23 @@ export class LlmIntelligenceSession {
     );
   }
 
-  private recoverCaptureError(): void {
+  /**
+   * Abandon the current capture after an STT failure. Must tell the UI: the
+   * "Cancel" processing control keys off the submit-in-flight state that
+   * onVadDetected / onEndPhraseDetected raised, and nothing else lowers it —
+   * without this the button outlived the failed turn (#41).
+   */
+  private recoverCaptureError(reason = 'transcription failed'): void {
+    const wasSubmitting = this.vadSpeechEndPending || this.endPhrasePending;
     this.vadSpeechEndPending = false;
     this.endPhrasePending = false;
     this.clearEndSubmitTimer();
     this.exitCapturePhase();
     this.turnBuffer?.dispose();
     this.turnBuffer = null;
+    if (wasSubmitting || this.capturingUtterance || this.voiceActivated) {
+      this.cb.onTurnDiscarded?.(reason);
+    }
     void this.returnToWakeListen();
   }
 
@@ -931,7 +941,17 @@ export class LlmIntelligenceSession {
 
     try {
       await this.stt.flushNowAsync();
-    } catch {
+    } catch (err) {
+      // Engine errors already went through onError → recoverCaptureError and
+      // cleared the pending flag. The pre-flight rejections ("no speech
+      // captured", "speech too short") never reach onError, so they left the
+      // turn stuck in "submitting" with a Cancel button and no way out (#41).
+      if (reason === 'vad' ? this.vadSpeechEndPending : this.endPhrasePending) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.voiceLog('stt', 'error', 'Turn not sent', message);
+        this.cb.onSttError?.(message);
+        this.recoverCaptureError(message);
+      }
       return;
     }
 
@@ -984,7 +1004,7 @@ export class LlmIntelligenceSession {
           : 'Speech ended but transcription failed — check Amazon Transcribe config and speak clearly after the wake phrase.',
       );
     }
-    this.recoverCaptureError();
+    this.recoverCaptureError(buffered ? 'transcript too short' : 'transcription failed');
   }
 
   private scheduleVadSubmit(): void {

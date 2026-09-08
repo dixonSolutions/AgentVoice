@@ -63,10 +63,23 @@ export const AgentManageProjectsSchema = z.object({
 
 export const AgentListModelsSchema = z.object({
   query: z.string().optional().describe('Filter models by id or display name (e.g. "claude", "fast")'),
+  refresh: z.boolean().optional().describe('Re-probe the CLI instead of using the cached list'),
 });
 
 export const AgentSetModelSchema = z.object({
   model_id: z.string().describe('Exact model ID to use (from agent_list_models)'),
+  effort: z
+    .string()
+    .nullable()
+    .optional()
+    .describe(
+      'Effort level — must be one of the model\'s `efforts` from agent_list_models (e.g. low, medium, high, xhigh, max). ' +
+        'null / "default" = let the CLI decide. Omit to keep the current level.',
+    ),
+  fast: z
+    .boolean()
+    .optional()
+    .describe('Fast / priority speed tier — only for models reporting `fast: true`. Omit to keep the current setting.'),
   scope: z
     .enum(['global', 'session'])
     .optional()

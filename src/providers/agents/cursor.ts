@@ -17,8 +17,9 @@ import { dirname, join } from 'node:path';
 import stripAnsi from 'strip-ansi';
 import { getConfig } from '../../config.js';
 import { childLogger } from '../../log.js';
+import { AUTO_MODEL_ID, getCachedModelsAnyAge, resolveVariantId, sortEfforts } from '../../state/models.js';
 import { updateAgentEnvKeys } from '../../state/envFile.js';
-import type { Project, SessionState } from '../../state/registry.js';
+import { sessionSelection, type Project, type SessionState } from '../../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from '../../executor/agentPrompt.js';
 import { formatPathForLog, resolveUserHome } from '../../mcp/hostPaths.js';
 import { createBinResolver, homeCandidate } from '../binResolve.js';
@@ -49,6 +50,7 @@ import type {
   AuthFlowId,
   AuthStartResult,
   ModelEntry,
+  ModelVariant,
   SpawnOptions,
 } from './types.js';
 
@@ -65,7 +67,12 @@ const resolver = createBinResolver({
   fallback: 'cursor-agent',
 });
 
-function parseModelsOutput(raw: string): ModelEntry[] {
+interface RawCursorModel {
+  id: string;
+  displayName: string;
+}
+
+function parseModelsOutput(raw: string): RawCursorModel[] {
   return stripAnsi(raw)
     .split('\n')
     .map((l) => l.trim())
@@ -75,6 +82,133 @@ function parseModelsOutput(raw: string): ModelEntry[] {
       return { id: l.slice(0, dashIdx).trim(), displayName: l.slice(dashIdx + 3).trim() };
     })
     .filter((m) => m.id.length > 0);
+}
+
+/**
+ * Effort suffixes Cursor uses in model ids, longest first so `-xhigh` is not
+ * read as `-high`. `extra-high` is Cursor's older spelling of `xhigh`; `none`
+ * is a real tier (reasoning off). The set is only a tokenizer for the *live*
+ * list — a model is offered at a level only when `cursor-agent models`
+ * printed that id.
+ */
+const CURSOR_EFFORT_SUFFIXES: Array<[suffix: string, effort: string]> = [
+  ['extra-high', 'xhigh'],
+  ['minimal', 'minimal'],
+  ['medium', 'medium'],
+  ['xhigh', 'xhigh'],
+  ['ultra', 'ultra'],
+  ['high', 'high'],
+  ['none', 'none'],
+  ['low', 'low'],
+  ['max', 'max'],
+];
+const CURSOR_LABEL_TOKENS = /\b(Extra High|Extra high|Minimal|Medium|Ultra|High|None|Low|Max|Fast)\b/g;
+
+/**
+ * `<family>[-<effort>][-fast]`, with one wrinkle: older Anthropic rows put
+ * `-thinking` *after* the effort (`claude-4.6-opus-high-thinking`) while newer
+ * ones put it before (`claude-opus-5-thinking-high`). Peel a trailing
+ * `-thinking` off first and re-attach it to the family so both spellings land
+ * in one "… Thinking" family.
+ */
+function splitCursorId(id: string): { family: string; effort: string | null; fast: boolean } {
+  let rest = id;
+  let fast = false;
+  if (rest.endsWith('-fast')) {
+    fast = true;
+    rest = rest.slice(0, -'-fast'.length);
+  }
+  let thinkingTail = false;
+  if (rest.endsWith('-thinking')) {
+    thinkingTail = true;
+    rest = rest.slice(0, -'-thinking'.length);
+  }
+  let effort: string | null = null;
+  for (const [suffix, level] of CURSOR_EFFORT_SUFFIXES) {
+    if (rest.endsWith(`-${suffix}`)) {
+      effort = level;
+      rest = rest.slice(0, -(suffix.length + 1));
+      break;
+    }
+  }
+  return { family: thinkingTail ? `${rest}-thinking` : rest, effort, fast };
+}
+
+function cursorVendor(family: string): string {
+  if (family.startsWith('claude')) return 'Anthropic';
+  if (/^(gpt|o\d|codex)/.test(family)) return 'OpenAI';
+  if (family.startsWith('gemini')) return 'Google';
+  if (family.includes('grok')) return 'xAI';
+  if (family.startsWith('composer') || family.startsWith('cursor')) return 'Cursor';
+  if (family.includes('kimi') || family.includes('deepseek') || family.includes('qwen')) return 'Open weights';
+  return 'Other';
+}
+
+/**
+ * `cursor-agent models` prints one row per (model, effort, speed) combination:
+ *
+ *   gpt-5.3-codex-low, gpt-5.3-codex, gpt-5.3-codex-high-fast, …
+ *
+ * Thirty near-identical rows make a poor picker and hide that effort/fast are
+ * knobs. Group them into families and keep every printed id as a variant, so
+ * the picker offers "Codex 5.3" with exactly the levels Cursor ships for it
+ * (some families have only `high`, some have fast on one level only) and the
+ * spawn path maps the choice back to the printed id.
+ */
+export function groupCursorModels(raw: RawCursorModel[]): ModelEntry[] {
+  const families = new Map<string, { displayNames: string[]; variants: ModelVariant[] }>();
+  const order: string[] = [];
+  const entries: ModelEntry[] = [];
+
+  for (const m of raw) {
+    if (m.id === AUTO_MODEL_ID) {
+      entries.push({ id: AUTO_MODEL_ID, displayName: m.displayName || 'Auto', description: 'Cursor picks the model', efforts: [], fast: false });
+      continue;
+    }
+    const { family, effort, fast } = splitCursorId(m.id);
+    let group = families.get(family);
+    if (!group) {
+      group = { displayNames: [], variants: [] };
+      families.set(family, group);
+      order.push(family);
+    }
+    group.variants.push({ effort, fast, id: m.id });
+    group.displayNames.push(m.displayName);
+  }
+
+  for (const family of order) {
+    const group = families.get(family)!;
+    // The plain row ("Codex 5.3") names the family best; otherwise strip the
+    // effort/speed words from whichever row came first.
+    const plain = group.variants.findIndex((v) => v.effort === null && !v.fast);
+    const source = plain >= 0 ? group.displayNames[plain]! : group.displayNames[0]!;
+    const displayName = source.replace(CURSOR_LABEL_TOKENS, '').replace(/\s{2,}/g, ' ').replace(/\s+\(/g, ' (').trim() || family;
+
+    const single = group.variants.length === 1 ? group.variants[0]! : null;
+    entries.push({
+      id: single && single.effort === null && !single.fast ? single.id : family,
+      displayName,
+      vendor: cursorVendor(family),
+      variants: group.variants,
+      description: describeCursorVariants(group.variants),
+    });
+  }
+
+  return entries;
+}
+
+function describeCursorVariants(variants: ModelVariant[]): string | undefined {
+  const efforts = sortEfforts([...new Set(variants.map((v) => v.effort).filter((e): e is string => Boolean(e)))]);
+  const parts: string[] = [];
+  if (efforts.length > 0) parts.push(`effort ${efforts.join(' / ')}`);
+  if (variants.some((v) => v.fast)) parts.push('fast tier');
+  return parts.length > 0 ? parts.join(' · ') : undefined;
+}
+
+/** The printed id for the session's (family, effort, fast) — see groupCursorModels. */
+function resolvedModelArg(session: SessionState): string | null {
+  if (!session.activeModel || session.activeModel === AUTO_MODEL_ID) return null;
+  return resolveVariantId(getCachedModelsAnyAge('cursor') ?? [], sessionSelection(session));
 }
 
 async function checkAuth(): Promise<AuthCheckResult> {
@@ -117,9 +251,8 @@ function buildWorkerArgs(opts: SpawnOptions): string[] {
   ];
 
   if (worktree) args.push('-w', worktree);
-  if (session.activeModel && session.activeModel !== 'auto') {
-    args.push('--model', session.activeModel);
-  }
+  const model = resolvedModelArg(session);
+  if (model) args.push('--model', model);
   if (project.resumeId && !oneShot && mode !== 'ask' && !worktree) {
     args.push('--resume', project.resumeId);
   }
@@ -136,9 +269,8 @@ function buildVoiceArgs(project: Project, session: SessionState, pendingTurn?: s
   const { settings } = getConfig();
   const args: string[] = ['-p', '--output-format', 'stream-json', '--workspace', project.path, '--approve-mcps'];
 
-  if (session.activeModel && session.activeModel !== 'auto') {
-    args.push('--model', session.activeModel);
-  }
+  const model = resolvedModelArg(session);
+  if (model) args.push('--model', model);
   if (project.resumeId) args.push('--resume', project.resumeId);
   for (const flag of settings.preRunFlags) {
     if (!args.includes(flag)) args.push(flag);
@@ -413,7 +545,7 @@ export const cursorProvider: AgentProvider = {
       timeout: 15_000,
       env: cursorEnv(process.env),
     });
-    return parseModelsOutput(stdout);
+    return groupCursorModels(parseModelsOutput(stdout));
   },
 
   supportsModelSelection: () => true,

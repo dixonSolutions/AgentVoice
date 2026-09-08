@@ -418,6 +418,10 @@ const SettingsSchema = z.object({
   defaultMode: z.enum(['agent', 'plan']).default('agent'),
   /** Default model for new sessions on the active CLI (agent_set_model global scope). */
   defaultActiveModel: z.string().min(1).default('auto'),
+  /** Effort level applied with defaultActiveModel — null lets the CLI decide. */
+  defaultActiveEffort: z.string().min(1).nullable().default(null),
+  /** Request the CLI's fast / priority tier with defaultActiveModel. */
+  defaultActiveFast: z.boolean().default(false),
   maxConcurrentJobs: z.number().int().min(1).max(4).default(1),
   jobTimeoutMs: z.number().int().positive().default(600_000),
   planFirst: z.boolean().default(false),

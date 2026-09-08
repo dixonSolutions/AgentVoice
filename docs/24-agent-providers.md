@@ -89,41 +89,131 @@ security is enforced at the API level, not hidden in the UI.
 
 ## Live model selection
 
-Hardcoded model lists are gone. `provider.listModels()` is the only source of
-truth:
+Hardcoded model lists are gone — and so are hardcoded effort levels. Every
+provider answers `listModels()` by asking its own CLI, and every entry carries
+the knobs *that* CLI reports for *that* model:
 
-- **Cursor** — `cursor-agent models`, cached in SQLite (`provider_model_cache`
-  table, keyed by provider id so switching `agentClient` never serves a stale
-  cross-provider cache).
-- **Codex** / **Claude Code** — probed from the installed CLI at runtime with
-  a documented fallback list if the CLI has no `models` subcommand.
-- **Codewhale** — `codewhale model list`, which prints `<model-id> (<provider>)`
-  per line across every configured provider. That read is offline and instant;
-  `codewhale models` hits the live provider API and needs a working key, so it
-  is only the fallback. Entries are keyed by bare model id rather than
-  `provider/model`, because `--model` takes an id and lets Codewhale resolve the
-  route itself — the provider name rides along in the display label so the
-  picker still says where a model came from.
+```ts
+interface ModelEntry {
+  id: string;             // what gets stored / handed back to the provider
+  displayName: string;
+  description?: string;   // the CLI's own blurb ("Opus 5 with 1M context · …")
+  vendor?: string;        // picker group: Anthropic / OpenAI / Google / xAI / …
+  efforts?: string[];     // effort levels this model accepts — [] = no knob
+  defaultEffort?: string | null;
+  fast?: boolean;         // a fast / priority tier exists
+  variants?: ModelVariant[]; // Cursor only — see below
+}
+```
+
+That is why the picker offers `low … max` for Opus and nothing for Haiku,
+`ultra` for GPT-6 on Codex, and only `high` / `max` for Cursor's Claude 4.6
+rows: the CLI said so, in the same probe that produced the list.
+
+| CLI | Where the list comes from | Effort knob | Fast tier |
+| --- | --- | --- | --- |
+| **Cursor** | `cursor-agent models` | baked into the id (`gpt-5.3-codex-high`) | baked into the id (`…-fast`) |
+| **Claude Code** | stream-json `initialize` control response (`models[]`, the same catalog `/model` shows) | `--effort <level>` from `supportedEffortLevels` | `--settings '{"fastMode":true}'` where `supportsFastMode` |
+| **Codex** | `codex debug models` (JSON catalog; `--bundled` fallback when offline) | `-c model_reasoning_effort="<level>"` from `supported_reasoning_levels` | `-c service_tier="priority"` where `service_tiers` lists `priority` |
+| **Codewhale** | `codewhale model list` | none reported | none reported |
+
+**Claude Code** has no `models` subcommand, but its stream-json control channel
+does: `providers/agents/claude.ts` spawns `claude -p --input-format stream-json
+--output-format stream-json` with an empty `--strict-mcp-config`, writes one
+`{"type":"control_request","request":{"subtype":"initialize"}}` line, reads the
+`control_response` (which carries `models[]` with `supportsEffort`,
+`supportedEffortLevels`, `supportsFastMode`, `disabled`) and kills the process.
+No API call is made. The CLI's `default` row maps to the shared `auto`
+sentinel (no `--model`). If the control channel is unavailable (older CLI) the
+provider falls back to parsing `claude --help`, which still lists the accepted
+`--effort` levels and `--model` aliases — nothing is invented either way.
+
+**Codex** reads `codex debug models`, filters `visibility: "list"` /
+`supported_in_api`, and keeps the catalog's `priority` order. The `auto` row
+defers to `~/.codex/config.toml`; when that names a listed model, `auto`
+inherits its levels so "use high effort" works without picking a model first.
+
+**Cursor** prints one row per (model, effort, speed) combination — thirty
+near-identical ids. `groupCursorModels()` folds them into families and keeps
+every printed id as a `variant`:
+
+```
+gpt-5.3-codex        efforts low / high / xhigh · fast tier
+  ├─ gpt-5.3-codex-low        (low, standard)
+  ├─ gpt-5.3-codex            (default, standard)
+  ├─ gpt-5.3-codex-high-fast  (high, fast)
+  └─ …
+```
+
+The family id is what gets stored; at spawn time `resolveVariantId()` maps
+(family, effort, fast) back to the printed id — and to the nearest offered
+pair when the exact one does not exist (`cursor-grok-4.6` has `high` only as
+`high-fast`). Older Anthropic rows put `-thinking` after the effort
+(`claude-4.6-opus-high-thinking`); the tokenizer peels it off and re-attaches
+it so both spellings land in one "… Thinking" family. `extra-high` is read as
+`xhigh`, `none` is a real tier (reasoning off).
+
+### Selection semantics (`state/models.ts`)
+
+A selection is `{ model, effort, fast }`, stored per session
+(`session_state.active_effort` / `active_fast`) and as the bridge default
+(`settings.defaultActiveEffort` / `defaultActiveFast`). `resolveSelection()`
+is the one place that decides whether a request is something the CLI accepts:
+
+- an unlisted effort is refused with the accepted levels when it was asked for
+  explicitly (`strict`), or silently dropped when it was merely inherited from
+  the previous model;
+- `fast` is cleared for models without a fast tier;
+- a concrete Cursor variant id (`claude-opus-5-thinking-high-fast`) is
+  decomposed into family + effort + fast, so old sessions and voice callers
+  that quote a full id keep working.
+
+Both the REST route and the MCP tools return the *applied* selection and a
+spoken-friendly label (`Opus (1M context) · High · Fast`), so the UI and the
+voice agent never claim a level the CLI will not run.
 
 ### REST API (`src/routes/providerModels.ts`)
 
 | Route | Method | Purpose |
 | --- | --- | --- |
-| `/api/providers/models?query=` | GET | Cached/live model list for the active provider + `active_model` + `supports_selection` |
-| `/api/providers/model` | POST | Set the active model (`{ model }`) |
+| `/api/providers/models?query=&refresh=1` | GET | Cached/live model list + `active` `{model, effort, fast}` + `active_label` + `cached_at`. `refresh=1` drops the cache and re-probes the CLI. |
+| `/api/providers/model` | POST | Set the selection (`{ model_id, effort?, fast?, scope? }`) — returns the applied `active` + `label` |
+
+MCP: `agent_list_models(query?, refresh?)` and
+`agent_set_model(model_id, effort?, fast?, scope?)` carry the same fields;
+`prompts/agentvoice/system.md` tells the voice agent to read the accepted
+levels back when a level is refused.
 
 If the CLI is unauthenticated, `GET /api/providers/models` returns **HTTP 400**
 with a human-readable message (not 500) and triggers the same `auth_required`
-push as a failed spawn — the PWA model picker shows the message inline
-(`p-message severity="warn"`) instead of crashing.
+push as a failed spawn — the PWA model picker shows the message inline with a
+Retry button instead of crashing.
 
-The Voice tab shows a model picker (hidden entirely when
-`supportsModelSelection` is false) and an active-model chip:
+### Picker (Voice tab)
+
+Hidden entirely when `supportsModelSelection` is false. Otherwise:
+
+- a **grouped** select (by vendor, `auto` first under the CLI's own name) with
+  the CLI's description under each row and a filter that also matches variant
+  ids;
+- an **Effort** segmented control listing only the levels the selected model
+  reports ("Default" leads when the CLI can be left to decide — for Cursor
+  that means an unsuffixed id exists);
+- a **Fast** switch shown only when the model has a fast tier;
+- a freshness line ("48 models · from Cursor 3 min ago") with a reload button
+  that re-probes the CLI;
+- the active-model chip and the accordion summary both show the applied label
+  (`<Provider> · <Model> · <Effort> · Fast`).
+
+Changing any control posts the whole selection; if the bridge had to adjust it
+the toast says so and the controls snap to what was applied.
 
 Select overlays use `appendTo="body"`, `baseZIndex: 1300` (above the mobile tabbar
-at 1200), and virtual scroll only when the list is long. Item height must match
-multi-line project/session templates (~56px). The active model id (including
-`auto`) is always injected into options so the trigger never renders blank.
+at 1200). Project/session pickers keep virtual scroll for long lists (item
+height must match their multi-line templates, ~56px); the grouped model picker
+does not use it — groups and virtual scroll do not mix, and ~50 families do not
+need it. The active model id (including `auto`) is always injected into options
+so the trigger never renders blank.
 
 Because the overlay renders in `body`, long option text would otherwise stretch
 the panel wider than its field. A `ResizeObserver` on the picker column
@@ -137,7 +227,6 @@ pinned to the viewport edge. Width now follows whatever the layout gives the
 field at any viewport — no fixed caps on the picker column. Option detail text
 wraps to two lines (`white-space: normal` is required; the theme sets `nowrap`
 on options).
-`<Provider> · <Model>`.
 
 ## Generic MCP tool aliases
 
