@@ -233,8 +233,9 @@ const CURSOR_PERMISSION_MODES: readonly (PermissionModeDescriptor & { args: stri
   },
   {
     id: 'default',
-    label: 'Allow-list only',
-    description: 'Only commands allowed in cli-config.json run; everything else is skipped (no prompt is possible headlessly).',
+    label: "Cursor's own rules",
+    description:
+      'No launch flag — Cursor falls back to the allow rules in its own cli-config.json; anything else is skipped (no prompt is possible headlessly).',
     prompts: 'deny',
     args: [],
   },
