@@ -23,6 +23,7 @@ import { childLogger } from '../log.js';
 // Tool handlers
 import { handleListProjects, handleSetProject, handleManageProjects } from './tools/project.js';
 import { handleListModels, handleSetModel } from './tools/model.js';
+import { handlePermissionMode } from './tools/permission.js';
 import { handleCursorSubmit, handleCursorAsk } from './tools/execute.js';
 import { handleCursorRecallAnswer } from './tools/recall.js';
 import { handleCursorStatus, handleCursorStop } from './tools/job.js';
@@ -121,6 +122,8 @@ async function route(
       return handleListModels(a, getSessionState(sessionKey));
     case 'agent_set_model':
       return handleSetModel(a, sessionKey);
+    case 'agent_permission_mode':
+      return handlePermissionMode(a);
     case 'agent_submit':
       return handleCursorSubmit(a, sessionKey, activeProject);
     case 'agent_ask':

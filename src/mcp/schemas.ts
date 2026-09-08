@@ -89,6 +89,10 @@ export const AgentSetModelSchema = z.object({
     ),
 });
 
+export const AgentPermissionModeSchema = z.object({
+  mode: z.string().optional().describe('Permission mode id to switch to (from the `modes` list); omit to read'),
+});
+
 // ── Group: Execute ────────────────────────────────────────────────────────
 
 export const AgentSubmitSchema = z.object({
@@ -219,6 +223,7 @@ export const TOOL_SCHEMAS = {
   agent_manage_projects: AgentManageProjectsSchema,
   agent_list_models: AgentListModelsSchema,
   agent_set_model: AgentSetModelSchema,
+  agent_permission_mode: AgentPermissionModeSchema,
   agent_submit: AgentSubmitSchema,
   agent_ask: AgentAskSchema,
   agent_recall_answer: AgentRecallAnswerSchema,

@@ -45,6 +45,26 @@ function pushPayloadForType(msg: Record<string, unknown>): {
         voip: true,
       };
     }
+    case 'permission_request': {
+      const summary = String(msg['summary'] ?? msg['tool_name'] ?? 'an action');
+      return {
+        title: 'AgentVoice — Permission',
+        body: `Allow ${summary}?`.slice(0, 180),
+        tag: `permission-${msg['request_id'] ?? 'permission'}`,
+        url: '/?tab=voice',
+        voip: true,
+      };
+    }
+    case 'secret_input_request': {
+      const prompt = String(msg['prompt'] ?? 'Password needed');
+      return {
+        title: 'AgentVoice — Password needed',
+        body: prompt.slice(0, 180),
+        tag: `secret-${msg['request_id'] ?? 'secret'}`,
+        url: '/?tab=voice',
+        voip: true,
+      };
+    }
     case 'narration': {
       const kind = msg['kind'] as string | undefined;
       if (kind !== 'job_done' && kind !== 'job_error') return null;
@@ -110,7 +130,11 @@ export async function notifyPhone(payload: object): Promise<NotifyResult> {
 
   const type = msg['type'] as string | undefined;
   const alwaysPush =
-    type === 'user_input_request' || type === 'plan_approval_request' || type === 'auth_required';
+    type === 'user_input_request' ||
+    type === 'plan_approval_request' ||
+    type === 'permission_request' ||
+    type === 'secret_input_request' ||
+    type === 'auth_required';
 
   // Approvals always push (user may be on another app). Skip others if WS live.
   if (ws && isControlSocketOpen() && !alwaysPush) {

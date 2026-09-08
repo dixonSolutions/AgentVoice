@@ -1048,7 +1048,7 @@
 
           <p-fieldset legend="Pre-run flags">
             <p-message severity="secondary" variant="simple"
-              text="Extra flags passed to the Cursor CLI before each job run (Cursor only)." />
+              text="Extra flags passed to the Cursor CLI before each job run (Cursor only). --force / --yolo are not accepted here any more — pick them under Permissions on the Voice tab." />
             <div class="cv-cfg-flags">
               @for (flag of jobsData.preRunFlags; track flag) {
                 <div class="cv-cfg-flag-chip">

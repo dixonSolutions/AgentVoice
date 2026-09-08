@@ -12,6 +12,7 @@
  *   - Session IDs captured from structured output, not TTY scraping.
  */
 
+import { askpassEnv } from './askpass.js';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import stripAnsi from 'strip-ansi';
@@ -115,7 +116,7 @@ export function spawnAgent(incomingOpts: SpawnOptions): AgentHandle {
     // worktree flag, so cwd is what keeps Codex/Claude Code off the main tree.
     cwd: opts.worktree ?? opts.project.path,
     shell: false, // SECURITY: never true
-    env: provider.env(process.env),
+    env: { ...provider.env(process.env), ...askpassEnv() },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 

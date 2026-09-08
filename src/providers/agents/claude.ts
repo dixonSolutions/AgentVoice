@@ -20,6 +20,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { childLogger } from '../../log.js';
 import { AUTO_MODEL_ID } from '../../state/models.js';
+import { activePermissionMode, PERMISSION_PROMPT_TOOL_REF } from './permissions.js';
 import { updateAgentEnvKeys } from '../../state/envFile.js';
 import type { Project, SessionState } from '../../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from '../../executor/agentPrompt.js';
@@ -51,6 +52,7 @@ import type {
   AuthFlowId,
   AuthStartResult,
   ModelEntry,
+  PermissionModeDescriptor,
   SpawnOptions,
 } from './types.js';
 
@@ -162,6 +164,67 @@ function selectionArgs(session: SessionState): string[] {
   }
   if (session.activeEffort) args.push('--effort', session.activeEffort);
   if (session.activeFast) args.push('--settings', JSON.stringify({ fastMode: true }));
+  return args;
+}
+
+// ── Permission modes ──────────────────────────────────────────────────────
+
+/**
+ * `-p` starts in Manual on every plan, so the mode must always be passed.
+ * Modes that can still ask get `--permission-prompt-tool`: Claude Code then
+ * calls our `approve_permission` MCP tool instead of a terminal prompt, and
+ * the bridge relays it to the phone. Our own MCP tools stay pre-approved via
+ * --allowedTools in every mode, so the voice loop never trips a prompt.
+ */
+const CLAUDE_PERMISSION_MODES: readonly (PermissionModeDescriptor & { cliMode: string; relayPrompts: boolean })[] = [
+  {
+    id: 'bypass',
+    label: 'Run everything',
+    description: 'bypassPermissions — every tool call is pre-approved; nothing ever asks.',
+    prompts: 'never',
+    yolo: true,
+    cliMode: 'bypassPermissions',
+    relayPrompts: false,
+  },
+  {
+    id: 'auto',
+    label: 'Auto (classifier)',
+    description: 'A safety classifier approves most actions; anything it will not decide is sent to your phone.',
+    prompts: 'phone',
+    cliMode: 'auto',
+    relayPrompts: true,
+  },
+  {
+    id: 'acceptEdits',
+    label: 'Edits auto, ask for the rest',
+    description: 'File edits and common filesystem commands run freely; other shell commands ask on your phone.',
+    prompts: 'phone',
+    cliMode: 'acceptEdits',
+    relayPrompts: true,
+  },
+  {
+    id: 'manual',
+    label: 'Ask for everything',
+    description: 'Every non-read-only action is sent to your phone to allow or deny.',
+    prompts: 'phone',
+    cliMode: 'manual',
+    relayPrompts: true,
+  },
+  {
+    id: 'dontAsk',
+    label: 'Deny instead of asking',
+    description: 'Only allow-listed and read-only actions run; anything that would ask is refused.',
+    prompts: 'deny',
+    cliMode: 'dontAsk',
+    relayPrompts: false,
+  },
+];
+
+function permissionArgs(): string[] {
+  const active = activePermissionMode(claudeProvider);
+  const mode = CLAUDE_PERMISSION_MODES.find((m) => m.id === active.id) ?? CLAUDE_PERMISSION_MODES[0]!;
+  const args = ['--permission-mode', mode.cliMode];
+  if (mode.relayPrompts) args.push('--permission-prompt-tool', PERMISSION_PROMPT_TOOL_REF);
   return args;
 }
 
@@ -589,6 +652,8 @@ export const claudeProvider: AgentProvider = {
   // Claude Code takes `--model <alias>`, so the picker is live for it too.
   supportsModelSelection: () => true,
 
+  permissionModes: () => CLAUDE_PERMISSION_MODES,
+
   supportedModes: (): readonly AgentMode[] => ['agent', 'plan', 'ask'],
   parseStreamEvent: parseClaudeEvent,
   ensureMcpRegistration: ensureClaudeMcpRegistration,
@@ -613,7 +678,7 @@ export const claudeProvider: AgentProvider = {
     if (mode === 'ask' || mode === 'plan') {
       args.push('--permission-mode', 'plan', '--disallowedTools', READ_ONLY_DISALLOWED);
     } else {
-      args.push('--permission-mode', 'bypassPermissions');
+      args.push(...permissionArgs());
     }
 
     return withPrompt(args, mode === 'ask' ? buildAskPrompt(prompt) : buildAgentPrompt(prompt, { browser }));
@@ -623,11 +688,10 @@ export const claudeProvider: AgentProvider = {
     const args = baseArgs(false);
     args.push(...selectionArgs(session));
     if (project.resumeId) args.push('--resume', project.resumeId);
-    // Same reasoning as buildWorkerArgs: the voice session has no UI to answer
-    // a permission prompt, so every action must be pre-approved or the agent
-    // silently stalls the moment it reaches for Bash/browser/anything beyond
-    // a file edit.
-    args.push('--permission-mode', 'bypassPermissions');
+    // The voice session has no terminal to answer a permission prompt; the
+    // configured mode either pre-approves everything or routes prompts to the
+    // phone via --permission-prompt-tool — never to a prompt nobody can see.
+    args.push(...permissionArgs());
     return withPrompt(args, bootPrompt);
   },
 };

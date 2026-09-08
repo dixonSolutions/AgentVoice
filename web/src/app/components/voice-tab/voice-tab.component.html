@@ -295,6 +295,37 @@
                     }
                   </div>
                 }
+
+                @if (permissionOptions().length > 0) {
+                  <div class="cv-voice-picker-block cv-voice-permission-block">
+                    <p-iftalabel>
+                      <p-select id="permission-picker"
+                        [options]="permissionOptions()"
+                        optionLabel="label"
+                        optionValue="value"
+                        [ngModel]="selectedPermissionMode"
+                        (ngModelChange)="onPermissionModeChange($event)"
+                        [overlayOptions]="selectOverlayOptions"
+                        [panelStyleClass]="selectPanelStyleClass"
+                        appendTo="body"
+                        placeholder="Select permissions"
+                        [disabled]="!isBridgeConnected() || applyingPermission() || permissionOptions().length < 2">
+                        <ng-template let-opt pTemplate="item">
+                          <div class="cv-voice-select-item">
+                            <span>{{ opt.label }}</span>
+                            <span class="cv-cfg-muted">{{ opt.detail }}</span>
+                          </div>
+                        </ng-template>
+                      </p-select>
+                      <label for="permission-picker">Permissions</label>
+                    </p-iftalabel>
+                    @if (agentProviders.permissionError(); as permErr) {
+                      <p-message severity="warn" variant="simple" [text]="permErr" />
+                    } @else if (permissionHint(); as hint) {
+                      <p class="cv-voice-model-note cv-cfg-muted">{{ hint }}</p>
+                    }
+                  </div>
+                }
               </div>
 
               <p-message severity="secondary" variant="simple" [text]="sessionHint()" />
