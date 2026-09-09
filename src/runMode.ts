@@ -6,13 +6,21 @@
  */
 
 import type { RunMode, Settings } from './config.js';
+import { getTlsMaterial, type TlsMaterial } from './tls.js';
 
 export interface RunModeInfo {
   runMode: RunMode;
   backendPort: number;
   webPort: number;
-  /** Local bind URL for the bridge (always 127.0.0.1). */
+  /** Local bind URL for the bridge (always 127.0.0.1). https when `tls` is set. */
   backendUrl: string;
+  /**
+   * Cert/key when the bridge terminates TLS itself, else null. Only ever set in
+   * serve mode — test mode's Angular dev proxy expects a plain-HTTP backend.
+   * Anything constructing a URL to the bridge must branch on this, not assume
+   * http:// — see docs/25-hosting-providers.md.
+   */
+  tls: TlsMaterial | null;
   /** URL the user opens in the browser (test mode: Angular dev server). */
   webUrl: string;
   /** Tailscale / public HTTPS origin (serve mode only, when set). */
@@ -35,12 +43,14 @@ export function getRunModeInfo(settings: Settings): RunModeInfo {
       webPort: test.webPort,
       backendUrl: `http://127.0.0.1:${test.backendPort}`,
       webUrl: `http://localhost:${test.webPort}`,
+      tls: null,
       useDevWebServer: true,
     };
   }
 
   const serve = settings.runModes.serve;
-  const backendUrl = `http://127.0.0.1:${serve.backendPort}`;
+  const tls = getTlsMaterial();
+  const backendUrl = `${tls ? 'https' : 'http'}://127.0.0.1:${serve.backendPort}`;
   const publicBaseUrl = serve.publicBaseUrl;
 
   return {
@@ -48,6 +58,7 @@ export function getRunModeInfo(settings: Settings): RunModeInfo {
     backendPort: serve.backendPort,
     webPort: serve.backendPort,
     backendUrl,
+    tls,
     webUrl: publicBaseUrl ?? backendUrl,
     publicBaseUrl,
     useDevWebServer: false,

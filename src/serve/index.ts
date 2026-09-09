@@ -10,8 +10,11 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawn, type ChildProcess } from 'node:child_process';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { getConfig, type ServeSettings } from '../config.js';
+import { getRunModeInfo } from '../runMode.js';
 import { childLogger } from '../log.js';
 import { writeAudit } from '../state/db.js';
 import {
@@ -197,14 +200,45 @@ async function probeGit(repoDir: string, settings: ServeSettings): Promise<Serve
   };
 }
 
-async function healthCheck(port: number): Promise<{ ok: boolean; detail?: string }> {
-  const url = `http://127.0.0.1:${port}/healthz`;
+/**
+ * GET /healthz on the bridge's own loopback listener.
+ *
+ * Port and scheme both come from runMode: the listener binds
+ * settings.runModes.serve.backendPort, which is independent of env.PORT, and
+ * it speaks HTTPS when a cert is configured (src/tls.ts).
+ *
+ * node:http(s) rather than fetch, because a bring-your-own-cert listener is
+ * typically mkcert- or self-signed and fetch gives no way to relax
+ * verification. Identity is not what this probe establishes — it is a liveness
+ * check against 127.0.0.1, where reaching the port at all is the assurance.
+ */
+async function healthCheck(): Promise<{ ok: boolean; detail?: string }> {
+  const run = getRunModeInfo(getConfig().settings);
+  const url = `${run.backendUrl}/healthz`;
+
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-    if (!res.ok) {
-      return { ok: false, detail: `${res.status} ${res.statusText}` };
+    const response = await new Promise<{ status: number; text: string }>((settle, fail) => {
+      const req = (run.tls ? httpsRequest : httpRequest)(
+        url,
+        { timeout: 8000, ...(run.tls ? { rejectUnauthorized: false } : {}) },
+        (res) => {
+          let text = '';
+          res.setEncoding('utf8');
+          res.on('data', (chunk: string) => {
+            text += chunk;
+          });
+          res.on('end', () => settle({ status: res.statusCode ?? 0, text }));
+        },
+      );
+      req.on('timeout', () => req.destroy(new Error('health check timed out after 8000ms')));
+      req.on('error', fail);
+      req.end();
+    });
+
+    if (response.status < 200 || response.status >= 300) {
+      return { ok: false, detail: `HTTP ${response.status}` };
     }
-    const body = (await res.json()) as { status?: string };
+    const body = JSON.parse(response.text) as { status?: string };
     if (body.status !== 'ok') {
       return { ok: false, detail: `status=${String(body.status)}` };
     }
@@ -459,7 +493,7 @@ export async function serveRestart(): Promise<ServeActionResult> {
 }
 
 export async function serveHealthCheck(): Promise<ServeActionResult> {
-  const { env, settings } = getConfig();
+  const { settings } = getConfig();
   const repoDir = resolveRepoDir(settings.serve);
 
   return withServeLock('manual:health', async (runId) => {
@@ -468,7 +502,7 @@ export async function serveHealthCheck(): Promise<ServeActionResult> {
     } catch {
       // non-fatal
     }
-    const health = await healthCheck(env.PORT);
+    const health = await healthCheck();
     recordStep(
       runId,
       'health_check',

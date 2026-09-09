@@ -45,8 +45,18 @@ const resolver = createBinResolver({
 let runner: ChildProcess | null = null;
 let lastUrl: string | null = null;
 
-function backendPort(): number {
-  return getRunModeInfo(getConfig().settings).backendPort;
+/**
+ * `--url` (plus `--no-tls-verify` when needed) for the local hop.
+ *
+ * Cloudflare terminates TLS at its edge, so a bridge holding its own cert
+ * (src/tls.ts) is redundant — but when one is set the upstream is genuinely
+ * HTTPS, and cloudflared would reject a self-signed or mkcert certificate
+ * without being told to skip verification on loopback.
+ */
+function tunnelUrlArgs(): string[] {
+  const run = getRunModeInfo(getConfig().settings);
+  if (!run.tls) return ['--url', `http://127.0.0.1:${run.backendPort}`];
+  return ['--url', `https://127.0.0.1:${run.backendPort}`, '--no-tls-verify'];
 }
 
 function stopRunner(): void {
@@ -147,13 +157,12 @@ async function setup(
   }
   report('cloudflared found.');
 
-  const port = backendPort();
   const hostname = opts.hostname?.trim();
 
   try {
     if (!hostname) {
       report('Starting a quick tunnel (rotating *.trycloudflare.com URL)...');
-      const url = await startTunnel(['tunnel', '--url', `http://127.0.0.1:${port}`], true);
+      const url = await startTunnel(['tunnel', ...tunnelUrlArgs()], true);
       if (!url) {
         return { ok: false, publicUrl: null, detail: 'cloudflared did not print a tunnel URL in time.' };
       }
@@ -178,7 +187,7 @@ async function setup(
     });
 
     report('Starting the tunnel runner...');
-    await startTunnel(['tunnel', 'run', '--url', `http://127.0.0.1:${port}`, tunnelName], false);
+    await startTunnel(['tunnel', 'run', ...tunnelUrlArgs(), tunnelName], false);
     const publicUrl = `https://${hostname}`;
     lastUrl = publicUrl;
     persistPublicBaseUrl(publicUrl);

@@ -5,9 +5,12 @@
  *
  * Phone mic capture (`getUserMedia`) requires a secure context, and plain
  * HTTP over a LAN IP is not one. `settings.hosting.lan.useTls` generates a
- * mkcert cert for the LAN IP as a starting point; the bridge itself only
- * speaks HTTP today, so terminate TLS with a lightweight reverse proxy
- * (Caddy/nginx) in front using that cert — see docs/25-hosting-providers.md.
+ * mkcert cert for the LAN IP and writes its paths to HTTPS_CERT_PATH /
+ * HTTPS_KEY_PATH, which the bridge serves directly (src/tls.ts) after a
+ * restart — no reverse proxy needed. See docs/25-hosting-providers.md.
+ *
+ * The phone must still trust the mkcert CA, or the browser rejects the cert
+ * before any mic prompt appears; `mkcert -CAROOT` holds the root to install.
  */
 
 import { execFile } from 'node:child_process';
@@ -18,6 +21,7 @@ import { getConfig } from '../../config.js';
 import { getRunModeInfo } from '../../runMode.js';
 import { childLogger } from '../../log.js';
 import { createBinResolver } from '../binResolve.js';
+import { updateHostingEnvKeys } from '../../state/envFile.js';
 import { persistPublicBaseUrl } from './persist.js';
 import type {
   HostingCapabilities,
@@ -58,11 +62,16 @@ function backendPort(): number {
   return getRunModeInfo(getConfig().settings).backendPort;
 }
 
+/** https once a cert is configured and the bridge has been restarted with it. */
+function lanUrl(ip: string): string {
+  const scheme = getRunModeInfo(getConfig().settings).tls ? 'https' : 'http';
+  return `${scheme}://${ip}:${backendPort()}`;
+}
+
 async function detect(): Promise<HostingDetectResult> {
   const ip = findLanIp();
   if (!ip) return { active: false, installed: true, publicUrl: null, detail: 'No LAN interface found' };
-  // The bridge itself only serves HTTP; a fronting reverse proxy owns HTTPS.
-  return { active: true, installed: true, publicUrl: `http://${ip}:${backendPort()}` };
+  return { active: true, installed: true, publicUrl: lanUrl(ip) };
 }
 
 function hasHttpsMaterial(): boolean {
@@ -96,6 +105,7 @@ async function setup(
 
   const wantsTls = getConfig().settings.hosting.lan.useTls;
   const httpUrl = `http://${ip}:${backendPort()}`;
+  const httpsUrl = `https://${ip}:${backendPort()}`;
 
   if (!wantsTls) {
     persistPublicBaseUrl(httpUrl);
@@ -103,17 +113,17 @@ async function setup(
     return {
       ok: true,
       publicUrl: httpUrl,
-      detail: 'HTTP-only. Enable useTls for mkcert cert generation, then front the bridge with a TLS-terminating reverse proxy.',
+      detail: 'HTTP-only. Enable useTls to generate a mkcert certificate and have the bridge serve HTTPS itself.',
     };
   }
 
   if (hasHttpsMaterial()) {
-    persistPublicBaseUrl(httpUrl);
+    persistPublicBaseUrl(httpsUrl);
     onProgress({ message: 'Setup complete — TLS material already present in .env.', done: true });
     return {
       ok: true,
-      publicUrl: httpUrl,
-      detail: 'HTTPS_CERT_PATH/HTTPS_KEY_PATH are set — point your reverse proxy at them; the bridge itself still serves plain HTTP on this port.',
+      publicUrl: httpsUrl,
+      detail: 'HTTPS_CERT_PATH/HTTPS_KEY_PATH are set and the bridge serves them directly. Restart it if you just changed the files.',
     };
   }
 
@@ -136,15 +146,21 @@ async function setup(
       ['-cert-file', certPath, '-key-file', keyPath, ip, 'localhost', '127.0.0.1'],
       { timeout: 20_000, cwd: certDir },
     );
-    persistPublicBaseUrl(httpUrl);
+    // Wire the cert straight into .env so the bridge serves it on next boot;
+    // without this the generated pair would sit on disk unused.
+    updateHostingEnvKeys({ HTTPS_CERT_PATH: certPath, HTTPS_KEY_PATH: keyPath });
+    persistPublicBaseUrl(httpsUrl);
     onProgress({
-      message: `Cert written to ${certPath}. Point a reverse proxy (Caddy/nginx) at it in front of ${httpUrl} for HTTPS.`,
+      message: `Cert written to ${certPath} and wired into .env. Restart the bridge to serve ${httpsUrl}.`,
       done: true,
     });
     return {
       ok: true,
-      publicUrl: httpUrl,
-      detail: `Cert generated but not wired into the bridge — front it with a reverse proxy:\n  cert: ${certPath}\n  key:  ${keyPath}`,
+      publicUrl: httpsUrl,
+      detail:
+        `Cert generated and configured:\n  cert: ${certPath}\n  key:  ${keyPath}\n` +
+        'Restart the bridge to pick it up, and install the mkcert root CA on the phone ' +
+        "(`mkcert -CAROOT`) — otherwise the browser rejects the certificate before it ever asks for the mic.",
     };
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
@@ -159,7 +175,25 @@ async function doctor(): Promise<HostingDoctorResult> {
   checks.push({ label: 'LAN interface found', ok: !!ip, detail: ip ?? undefined });
   checks.push({ label: 'Bridge binds 0.0.0.0 (serve mode)', ok: getConfig().settings.runMode === 'serve' });
   if (getConfig().settings.hosting.lan.useTls) {
-    checks.push({ label: 'HTTPS cert/key configured', ok: hasHttpsMaterial() });
+    const configured = hasHttpsMaterial();
+    checks.push({
+      label: 'HTTPS cert/key configured',
+      ok: configured,
+      detail: configured ? undefined : 'Run setup to generate one with mkcert.',
+    });
+    // Configured-but-not-loaded means the cert was added after this process
+    // booted; the listener stays HTTP until a restart, which is exactly the
+    // state most likely to be mistaken for working HTTPS.
+    const serving = !!getRunModeInfo(getConfig().settings).tls;
+    checks.push({
+      label: 'Bridge is serving HTTPS',
+      ok: serving,
+      detail: serving
+        ? undefined
+        : configured
+          ? 'Cert configured but this process started without it — restart the bridge.'
+          : 'Listener is plain HTTP; phone mic capture needs a secure context.',
+    });
   }
   return { ok: checks.every((c) => c.ok), checks };
 }

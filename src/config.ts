@@ -65,7 +65,11 @@ const EnvSchema = z.object({
   /** HostingProvider secrets — never in config.json since they grant tunnel access. */
   NGROK_AUTHTOKEN: z.string().optional(),
   CLOUDFLARE_TUNNEL_TOKEN: z.string().optional(),
-  /** Optional TLS material for the `lan` hosting provider (e.g. mkcert-issued). */
+  /**
+   * Optional TLS material. Set both and the bridge terminates HTTPS itself
+   * instead of relying on a tunnel or reverse proxy — see src/tls.ts and
+   * docs/25-hosting-providers.md. Setting only one fails at startup.
+   */
   HTTPS_CERT_PATH: z.string().optional(),
   HTTPS_KEY_PATH: z.string().optional(),
 });

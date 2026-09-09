@@ -47,6 +47,8 @@ function stopRunner(): void {
 function startTunnel(port: number, domain?: string): Promise<string | null> {
   return new Promise((resolvePromise) => {
     stopRunner();
+    // Assumes a plain-HTTP upstream. A bridge serving its own cert (src/tls.ts)
+    // is both redundant behind ngrok and unsupported here — doctor() flags it.
     const args = ['http', String(port), '--log=stdout', '--log-format=json'];
     if (domain) args.push(`--domain=${domain}`);
 
@@ -174,6 +176,13 @@ async function doctor(): Promise<HostingDoctorResult> {
   checks.push({ label: 'NGROK_AUTHTOKEN set', ok: !!getConfig().env.NGROK_AUTHTOKEN });
   checks.push({ label: 'Tunnel process running', ok: runner !== null && !runner.killed });
   checks.push({ label: 'Public URL known', ok: !!lastUrl, detail: lastUrl ?? undefined });
+  checks.push({
+    label: 'Bridge serves plain HTTP for the tunnel',
+    ok: !getRunModeInfo(getConfig().settings).tls,
+    detail: getRunModeInfo(getConfig().settings).tls
+      ? 'HTTPS_CERT_PATH/HTTPS_KEY_PATH are set, but this tunnel is started against a plain-HTTP upstream. Unset them — ngrok already provides TLS.'
+      : undefined,
+  });
   return { ok: checks.every((c) => c.ok), checks };
 }
 

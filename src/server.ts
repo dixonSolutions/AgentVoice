@@ -14,10 +14,12 @@
  */
 
 import Fastify from 'fastify';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyServerFactoryHandler } from 'fastify';
 import fastifyWebsocket from '@fastify/websocket';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { createServer as createHttpsServer } from 'node:https';
+import type { Server as HttpServer } from 'node:http';
 import { requireAuth, verifyWsToken, parseWsAuthMessage } from './auth.js';
 import { getDb } from './state/db.js';
 import { getAppVersionInfo } from './state/appVersion.js';
@@ -98,9 +100,26 @@ function refreshCliVersionCache(): void {
 // ── Server factory ────────────────────────────────────────────────────────
 
 export async function buildServer(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false, bodyLimit: 10 * 1024 * 1024 });
   const { settings } = getConfig();
   const run = getRunModeInfo(settings);
+  const tls = run.tls;
+
+  const app = Fastify({
+    logger: false,
+    bodyLimit: 10 * 1024 * 1024,
+    // Bring-your-own-cert HTTPS (src/tls.ts). Fastify's `https` option would
+    // retype this instance as FastifyInstance<https.Server>, which no longer
+    // matches the bare FastifyInstance every src/routes module takes;
+    // serverFactory stays on the default-generic overload, so nothing else
+    // in the codebase changes. https.Server is API-compatible with the
+    // http.Server that Fastify listens on and closes.
+    ...(tls
+      ? {
+          serverFactory: (handler: FastifyServerFactoryHandler) =>
+            createHttpsServer({ cert: tls.cert, key: tls.key }, handler) as unknown as HttpServer,
+        }
+      : {}),
+  });
 
   // Raw PCM uploads for Amazon Transcribe (PWA posts application/octet-stream).
   app.addContentTypeParser(
@@ -491,10 +510,15 @@ export async function startServer(app: FastifyInstance): Promise<string> {
   const { settings } = getConfig();
   const run = getRunModeInfo(settings);
   const host = run.runMode === 'serve' ? '0.0.0.0' : '127.0.0.1';
-  const address = await app.listen({ port: run.backendPort, host });
+  const listenAddress = await app.listen({ port: run.backendPort, host });
+  // Fastify derives that string's scheme from its `https` option, which
+  // serverFactory-based TLS never sets (fastify/lib/server.js), so it would
+  // claim http:// for a genuine HTTPS listener. Correct it from run.tls.
+  const address = run.tls ? listenAddress.replace(/^http:\/\//, 'https://') : listenAddress;
   log.info(
     {
       address,
+      tls: run.tls ? { cert: run.tls.certPath, key: run.tls.keyPath } : null,
       runMode: run.runMode,
       webUrl: run.webUrl,
       angularDev: run.useDevWebServer ? `http://127.0.0.1:${run.webPort} (internal)` : null,

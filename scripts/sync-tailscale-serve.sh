@@ -60,7 +60,15 @@ if [[ "$USE_NGINX_FRONT" == "1" && -n "$SERVE_WEB_PORT" ]] && \
   UPSTREAM_PORT="$SERVE_WEB_PORT"
 fi
 
-TARGET="http://127.0.0.1:${UPSTREAM_PORT}"
+# The bridge serves HTTPS itself when it holds a cert (src/tls.ts). nginx, when
+# fronting, stays plain HTTP. https+insecure:// tells tailscale to proxy to a
+# TLS upstream without verifying it — mkcert/self-signed certs fail otherwise.
+if [[ "$UPSTREAM_PORT" == "$SERVE_BACKEND_PORT" || "$UPSTREAM_PORT" == "$PORT" ]] \
+   && [[ -n "${HTTPS_CERT_PATH:-}" && -n "${HTTPS_KEY_PATH:-}" ]]; then
+  TARGET="https+insecure://127.0.0.1:${UPSTREAM_PORT}"
+else
+  TARGET="http://127.0.0.1:${UPSTREAM_PORT}"
+fi
 STATUS="$(tailscale serve status 2>&1 || true)"
 
 if echo "$STATUS" | grep -q "127.0.0.1:${UPSTREAM_PORT}"; then
