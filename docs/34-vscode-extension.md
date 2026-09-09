@@ -232,6 +232,31 @@ Two layers, both against a real bridge (no mocks of the protocol):
    Token and URL come from `AGENTVOICE_TOKEN` / `AGENTVOICE_BRIDGE_URL`,
    defaulting to the repo `.env` and the dev port.
 
+## Brand assets
+
+The extension does not own any artwork. `web/public/icon.svg` is the single
+authoritative mark for the whole product, and `scripts/gen-icons.mjs`
+rasterizes it to `vscode/media/icon.png` (128px, the size both galleries
+render) alongside the PWA's 192/512 icons. Regenerate with `npm run
+gen-icons`; the PNGs are committed so neither a build nor a release needs
+`sharp`.
+
+Two icons, deliberately:
+
+- `media/icon.png` — the full mark (violet tile, waveform, white caret) for the
+  Marketplace and Open VSX gallery listings, plus a `galleryBanner` in the
+  PWA's own `#1a1a2e` so the listing page matches the app.
+- `media/icon.svg` — the activity-bar icon. VS Code tints activity-bar icons
+  with the theme foreground and dims them when the view is inactive, so this
+  one has to be a single-colour silhouette in `currentColor`; a coloured tile
+  there fights the theme instead of following it. It is the same waveform and
+  caret at the same proportions (the 512px mark's content box scaled by
+  20/304), with the tile and gradient dropped — not a different drawing.
+
+0.1.0 shipped a stand-in icon by mistake; 0.1.1 is that release corrected.
+When the mark changes, edit the SVG in `web/public/` and re-run the generator —
+never hand-edit a PNG, and never draw a separate mark for the desk client.
+
 ## Releasing
 
 `.github/workflows/vscode-extension.yml` has two jobs:
@@ -274,7 +299,7 @@ publisher the token belongs to.
 
 ## Publishing status (September 9, 2026)
 
-- **Marketplace publisher `dixonsolutions`** ("Dixon Solutions", logo set)
+- **Marketplace publisher `dixonsolutions`** ("Dixon Solutions")
   is owned by the Microsoft account that signs in through the
   `dixonSolutions` GitHub login. **`dixonsolutions.agentvoice` 0.1.0 is
   published** — through the Marketplace's web upload (*Manage → New
@@ -290,8 +315,21 @@ publisher the token belongs to.
   namespace `dixonsolutions` exists; the token is the `OVSX_PAT` repo secret.
   Tag `vscode-v0.1.0` ran the release job: GitHub Release with
   `agentvoice-0.1.0.vsix`, Marketplace skipped, **Open VSX publish succeeded**.
-- Release tags are placed on the PR head until PR #45 is merged; the tag is
-  part of `main`'s history once the merge commit lands.
+- PR #45 is merged, so `vscode-v0.1.0` is an ancestor of `main` — the 0.1.0
+  on both galleries corresponds to code that is actually on the main line.
+- **The publisher *profile* logo cannot be set from the web UI.** On
+  *Manage Publishers → Details*, the Save button fires no request at all:
+  clicking it — by mouse, by keyboard, or by calling `.click()` on the
+  underlying `button.ms-CommandBarItem-link`, which is present and not
+  disabled — produces zero network activity and zero console output. It is
+  dead for a plain text edit too, not just for a staged logo, so this is a
+  Marketplace UI defect rather than anything about the image. The publisher
+  API that would bypass it needs the `VSCE_PAT` we cannot mint. This is
+  cosmetic and affects only the publisher profile page: the *extension*
+  listing shows the right icon, because that one ships inside the `.vsix`.
+  (A separate red herring on this machine: the Flatpak file picker first
+  returned "Selected file does not have read permission" because
+  `xdg-document-portal` restarted mid-pick; retrying after it settles works.)
 
 ## Limits and follow-ups
 

@@ -10,8 +10,8 @@
  *   web/public/icon-maskable.svg   — safe-zone mark, `purpose: maskable`
  *   docs/images/banner.svg         — README / social banner
  *
- * Outputs are committed so the PWA and the README work without running this.
- * Re-run only when an SVG changes.
+ * Outputs are committed so the PWA, the README and the VS Code extension all
+ * work without running this. Re-run only when an SVG changes.
  *
  * The banner PNG is generated because GitHub's README pipeline is the one
  * consumer that cannot be relied on to rasterize SVG text identically (or at
@@ -42,6 +42,10 @@ const targets = [
   { src: 'web/public/icon.svg', out: 'web/public/icon-512.png', width: 512 },
   { src: 'web/public/icon-maskable.svg', out: 'web/public/icon-maskable-512.png', width: 512 },
   { src: 'docs/images/banner.svg', out: 'docs/images/banner.png', width: 1200, height: 360 },
+  // The Marketplace gallery icon. Same mark as the PWA — the desk client and
+  // the phone client are one product, so they must not drift apart visually.
+  // 128px is what both the VS Code and Open VSX galleries render at.
+  { src: 'web/public/icon.svg', out: 'vscode/media/icon.png', width: 128 },
 ];
 
 for (const { src, out, width, height } of targets) {
