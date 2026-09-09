@@ -1,12 +1,12 @@
 import {
   Component,
-  ElementRef,
   computed,
   effect,
   inject,
   signal,
   viewChild,
 } from '@angular/core';
+import type { ElementRef } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { Accordion, AccordionContent, AccordionHeader, AccordionPanel } from '@openng/optimus-ui/accordion';

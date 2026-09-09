@@ -1,4 +1,5 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
+import type { OnInit } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
 import { Button } from '@openng/optimus-ui/button';

@@ -51,9 +51,6 @@ export function summarizeTtsInterrupt(snap: TtsInterruptSnapshot): string {
   return parts.join(' · ') || 'assistant speech stopped';
 }
 
-/** ~150 wpm — used to estimate how much of a cut-off line was heard. */
-const MS_PER_WORD_ESTIMATE = 400;
-
 /**
  * Last N words the user heard before barge-in.
  * Uses completed lines plus a time-based estimate for a partial line.

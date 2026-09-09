@@ -1,12 +1,11 @@
 import {
   Component,
-  ElementRef,
-  OnDestroy,
   afterNextRender,
   effect,
   input,
   viewChild,
 } from '@angular/core';
+import type { ElementRef, OnDestroy } from '@angular/core';
 import type { AudioSpectrum } from '../../../voice-audio-meter.js';
 import { APPEARANCE_CHANGED_EVENT } from '../../services/appearance.service';
 
