@@ -11,6 +11,8 @@ import { AgentPanel } from './panel.js';
 import { Commands } from './commands.js';
 import { ChangesProvider, HeadContentProvider, HEAD_SCHEME, openDiff, type ChangedFile } from './changes.js';
 import { SessionsProvider } from './sessions.js';
+import { VoiceSession } from './voice.js';
+import { VoiceCues } from './cues.js';
 
 /** What `activate` returns — used by the integration tests (src/test/suite.ts). */
 export interface AgentVoiceApi {
@@ -29,7 +31,27 @@ export async function activate(context: vscode.ExtensionContext): Promise<AgentV
   const statusBar = new StatusBar(bridge, approvals);
   const changes = new ChangesProvider(bridge);
   const sessions = new SessionsProvider(bridge);
+  // The mic lives here, in the host — a webview has no microphone permission.
+  const cues = new VoiceCues(vscode.Uri.joinPath(context.extensionUri, 'media'));
+  const applyCueSetting = (): void =>
+    cues.setEnabled(vscode.workspace.getConfiguration('agentvoice').get<boolean>('soundEffects') ?? true);
+  applyCueSetting();
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration('agentvoice.soundEffects')) applyCueSetting();
+    }),
+  );
+  const voice = new VoiceSession(bridge, cues);
+  voice.isOutputPlaying = () => panel.speaking;
+  context.subscriptions.push(
+    voice,
+    voice.onState((e) => panel.postVoice(e.state, e.detail, e.wakeWords, e.startWord)),
+    voice.onLevel((level) => panel.postLevel(level)),
+    voice.onHeard(({ text, ignored }) => panel.postHeard(text, ignored)),
+  );
   const commands = new Commands(bridge, approvals, panel);
+  // Saving bridge config must reach the running session, not wait for a restart.
+  commands.onConfigSaved = () => void voice.loadConfig();
 
   context.subscriptions.push(
     bridge,
@@ -44,6 +66,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<AgentV
     vscode.workspace.registerTextDocumentContentProvider(HEAD_SCHEME, new HeadContentProvider()),
     vscode.commands.registerCommand('agentvoice.openDiff', (file?: ChangedFile) => openDiff(file)),
     vscode.commands.registerCommand('agentvoice.selectSession', (node?: unknown) => sessions.selectSession(node as never)),
+    vscode.commands.registerCommand('agentvoice.toggleVoice', () => voice.toggle()),
+    vscode.commands.registerCommand('agentvoice.examineSession', (node?: unknown) => sessions.examineSession(node as never)),
     vscode.commands.registerCommand('agentvoice.refresh', async () => {
       await bridge.refreshState();
       await Promise.all([changes.refreshFromGit(), sessions.refresh()]);

@@ -244,8 +244,13 @@ export interface CursorSessionSummary {
 }
 
 /**
- * Distinct cursor-agent session threads for a project (from job.session_id).
- * Newest activity first. Used by the Voice tab session picker.
+ * Distinct agent threads for a project, newest activity first — used by the
+ * Voice tab session picker and the editor's sessions view.
+ *
+ * Both kinds of run count. Worker jobs (job) carry the prompt that started
+ * them; conversational runs (voice_agent_run) do not, because a spoken turn is
+ * never stored. Listing only the job table meant a project you had only ever
+ * talked to showed no threads at all and offered nothing to resume.
  */
 export function listCursorSessionsForProject(
   projectName: string,
@@ -253,25 +258,31 @@ export function listCursorSessionsForProject(
 ): CursorSessionSummary[] {
   const rows = getDb()
     .prepare(
-      `SELECT
-         j.session_id AS session_id,
-         MAX(j.started_at) AS last_run_at,
+      `WITH runs AS (
+         SELECT session_id, started_at, status, prompt
+           FROM job
+          WHERE project = @project AND session_id IS NOT NULL AND TRIM(session_id) != ''
+         UNION ALL
+         SELECT session_id, started_at, status, NULL AS prompt
+           FROM voice_agent_run
+          WHERE project = @project AND session_id IS NOT NULL AND TRIM(session_id) != ''
+       )
+       SELECT
+         r.session_id AS session_id,
+         MAX(r.started_at) AS last_run_at,
          COUNT(*) AS job_count,
          (
-           SELECT prompt FROM job j2
-           WHERE j2.project = j.project AND j2.session_id = j.session_id
-           ORDER BY j2.started_at DESC LIMIT 1
+           SELECT r2.prompt FROM runs r2
+           WHERE r2.session_id = r.session_id AND r2.prompt IS NOT NULL AND TRIM(r2.prompt) != ''
+           ORDER BY r2.started_at DESC LIMIT 1
          ) AS last_prompt,
          (
-           SELECT status FROM job j2
-           WHERE j2.project = j.project AND j2.session_id = j.session_id
-           ORDER BY j2.started_at DESC LIMIT 1
+           SELECT r3.status FROM runs r3
+           WHERE r3.session_id = r.session_id
+           ORDER BY r3.started_at DESC LIMIT 1
          ) AS last_status
-       FROM job j
-       WHERE j.project = @project
-         AND j.session_id IS NOT NULL
-         AND TRIM(j.session_id) != ''
-       GROUP BY j.session_id
+       FROM runs r
+       GROUP BY r.session_id
        ORDER BY last_run_at DESC
        LIMIT @limit`,
     )
@@ -279,13 +290,14 @@ export function listCursorSessionsForProject(
       session_id: string;
       last_run_at: string;
       job_count: number;
-      last_prompt: string;
+      last_prompt: string | null;
       last_status: string;
     }[];
 
   return rows.map((r) => ({
     sessionId: r.session_id,
-    lastPrompt: r.last_prompt,
+    // A thread that only ever held spoken turns has no prompt to show.
+    lastPrompt: r.last_prompt ?? 'Conversation',
     lastStatus: r.last_status as JobStatus,
     lastRunAt: r.last_run_at,
     jobCount: r.job_count,
@@ -364,6 +376,21 @@ export function listSessionEventLog(
   sessionId: string,
   limit = 500,
 ): SessionLogLine[] {
+  const runs = getDb()
+    .prepare(
+      `SELECT started_at, ended_at, status, pid
+         FROM voice_agent_run
+        WHERE project = @project AND session_id = @sessionId
+        ORDER BY started_at ASC
+        LIMIT @limit`,
+    )
+    .all({ project: projectName, sessionId, limit }) as {
+      started_at: string;
+      ended_at: string | null;
+      status: string;
+      pid: number | null;
+    }[];
+
   const rows = getDb()
     .prepare(
       `SELECT
@@ -415,15 +442,36 @@ export function listSessionEventLog(
     });
   }
 
+  // Spoken turns leave no prompt or event trail — only the run itself. Show it,
+  // so a conversational thread reads as a history rather than an empty page.
+  for (const run of runs) {
+    lines.push({
+      at: run.started_at,
+      level: run.status === 'error' ? 'error' : 'info',
+      summary: `Conversational turn — ${run.status}`,
+      detail: [run.pid ? `pid ${run.pid}` : null, run.ended_at ? `ended ${run.ended_at}` : null]
+        .filter(Boolean)
+        .join(' · '),
+    });
+  }
+  lines.sort((a, b) => a.at.localeCompare(b.at));
+
   return lines;
 }
 
-/** True if this session id has been used on a job for the project. */
+/**
+ * True if this session id has ever run for the project — as a worker job or as
+ * a conversational turn. This gates /select, so it has to recognise both: a
+ * thread you only ever talked to is still a thread you can resume.
+ */
 export function projectHasCursorSession(projectName: string, sessionId: string): boolean {
   const row = getDb()
     .prepare(
       `SELECT 1 AS ok FROM job
-       WHERE project = @project AND session_id = @sessionId
+        WHERE project = @project AND session_id = @sessionId
+        UNION ALL
+       SELECT 1 AS ok FROM voice_agent_run
+        WHERE project = @project AND session_id = @sessionId
        LIMIT 1`,
     )
     .get({ project: projectName, sessionId }) as { ok: number } | undefined;

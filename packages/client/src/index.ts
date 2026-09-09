@@ -5,3 +5,5 @@ export { EventSocket } from './events.js';
 export type { EventSocketOptions, SocketStatus, WebSocketCtor, WebSocketLike } from './events.js';
 export { ReadAlongModel, splitWords, wordIndexAtChar } from './readAlong.js';
 export type { PacingOptions, ReadAlongSnapshot, Segment, SegmentRole, SegmentState } from './readAlong.js';
+export * from './wakeWords.js';
+export * from './cues.js';

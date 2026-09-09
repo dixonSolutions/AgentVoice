@@ -86,6 +86,11 @@
         "icon": "$(comment-discussion)"
       },
       {
+        "command": "agentvoice.configure",
+        "title": "AgentVoice: Configure (bridge settings)",
+        "icon": "$(gear)"
+      },
+      {
         "command": "agentvoice.ask",
         "title": "AgentVoice: Ask the agent…",
         "icon": "$(send)"
@@ -162,6 +167,16 @@
       {
         "command": "agentvoice.selectSession",
         "title": "AgentVoice: Continue this session"
+      },
+      {
+        "command": "agentvoice.toggleVoice",
+        "title": "AgentVoice: Start / stop voice session",
+        "icon": "$(mic)"
+      },
+      {
+        "command": "agentvoice.examineSession",
+        "title": "AgentVoice: Examine this thread",
+        "icon": "$(book)"
       }
     ],
     "menus": {
@@ -193,6 +208,11 @@
           "group": "navigation@3"
         },
         {
+          "command": "agentvoice.configure",
+          "when": "view == agentvoice.panel",
+          "group": "navigation@4"
+        },
+        {
           "command": "agentvoice.refresh",
           "when": "view == agentvoice.changes || view == agentvoice.sessions",
           "group": "navigation"
@@ -213,6 +233,11 @@
           "command": "agentvoice.selectSession",
           "when": "view == agentvoice.sessions && viewItem == session",
           "group": "inline"
+        },
+        {
+          "command": "agentvoice.examineSession",
+          "when": "view == agentvoice.sessions && viewItem == session",
+          "group": "inline"
         }
       ],
       "commandPalette": [
@@ -222,6 +247,10 @@
         },
         {
           "command": "agentvoice.selectSession",
+          "when": "false"
+        },
+        {
+          "command": "agentvoice.examineSession",
           "when": "false"
         },
         {
@@ -261,6 +290,26 @@
           "default": true,
           "description": "Register the bridge's MCP server with the active agent CLI when connecting (same step the phone app runs before a voice session)."
         },
+        "agentvoice.micCommand": {
+          "type": "string",
+          "default": "",
+          "description": "Recorder command for voice sessions. Empty auto-detects parecord, pw-record, arecord then ffmpeg. Must emit raw 16 kHz mono signed 16-bit little-endian PCM on stdout."
+        },
+        "agentvoice.micNoiseFloor": {
+          "type": "number",
+          "default": 0,
+          "description": "Speech threshold as a raw RMS value. 0 (default) measures your room for 700 ms at session start and sets the bar just above it — which adapts to mic gain and distance. Set a number only to override that."
+        },
+        "agentvoice.soundEffects": {
+          "type": "boolean",
+          "default": true,
+          "description": "Play the short cues the phone uses — arming, submitting, cancelling and errors. Same sounds, played by the extension host."
+        },
+        "agentvoice.micSilenceMs": {
+          "type": "number",
+          "default": 1200,
+          "description": "Silence before a spoken turn is submitted. The bridge value (turnSubmit.silenceMs) assumes a real VAD; this plain RMS gate needs longer so pauses inside a sentence do not split it into several turns."
+        },
         "agentvoice.readAloud": {
           "type": "string",
           "enum": [
@@ -273,7 +322,7 @@
             "Play the bridge's configured text-to-speech provider (Config → Speech) in the panel.",
             "Use the editor's built-in speechSynthesis voices (availability depends on the OS)."
           ],
-          "default": "off",
+          "default": "bridge",
           "description": "How the agent's spoken lines are voiced at the desk."
         },
         "agentvoice.pacer": {

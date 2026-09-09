@@ -17,6 +17,7 @@ import { voiceTurnQueue, type EnqueueDelivery } from '../mcp/server/turnQueue.js
 import { resetTurnSpeakTracking } from '../mcp/server/voiceToolHandlers.js';
 import type { TtsInterruptContext } from '../voice/ttsInterrupt.js';
 import { getSessionState, resolveProject } from '../state/registry.js';
+import { recordTurn } from '../state/turns.js';
 import { publishEvent } from '../state/eventBus.js';
 import { childLogger } from '../log.js';
 import {
@@ -114,6 +115,8 @@ export function submitAgentNativeTurn(rawText: string, opts: SubmitTurnOptions):
   );
   // Every desk client sees every turn, whichever surface typed or spoke it.
   publishEvent({ type: 'user_turn', text, source: opts.source, delivery, run_id: out.run_id });
+  // …and every turn is kept, so a client opened later can replay the thread.
+  recordTurn({ project: out.project, sessionId: out.session_id, role: 'user', text, source: opts.source });
   return out;
 }
 

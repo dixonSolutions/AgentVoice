@@ -17,6 +17,8 @@ import { getConfig } from '../../config.js';
 import { notifyPhone } from '../../push/notifyPhone.js';
 import { voiceTurnQueue } from './turnQueue.js';
 import { getActiveProvider } from '../../providers/agents/registry.js';
+import { getActiveVoiceAgent } from '../../executor/voiceAgent.js';
+import { recordTurn } from '../../state/turns.js';
 
 const log = childLogger('mcp:server:voiceTools');
 
@@ -258,6 +260,11 @@ export function handleSpeak(args: SpeakArgs): SpeakResult {
   console.log(`[voice] ◀ speak: "${text.slice(0, 120)}${text.length > 120 ? '…' : ''}"`);
   broadcastToVoiceSessions({ type: 'speak', text });
   broadcastToVoiceSessions({ type: 'assistant_transcript', text });
+  // Keep what was actually said — this is the only record of a spoken reply.
+  const speaking = getActiveVoiceAgent();
+  if (speaking?.project) {
+    recordTurn({ project: speaking.project, sessionId: speaking.sessionId ?? null, role: 'agent', text });
+  }
 
   const result: SpeakResult = { ok: true, sessions: activeSessions.size };
   pendingTurnNotice(result);

@@ -9,6 +9,10 @@
   --mono: var(--vscode-editor-font-family);
 }
 * { box-sizing: border-box; }
+/* Author rules beat the UA stylesheet, so any class that sets `display` (the
+   composer controls, the pen dialog) silently defeated the `hidden` attribute —
+   the dialog opened on load and Cancel did nothing. Settle it once, here. */
+[hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
 body {
   display: flex; flex-direction: column;
@@ -47,14 +51,6 @@ body {
 .seg .w { transition: color .12s linear; }
 .empty { opacity: .55; font-style: italic; }
 
-.activity { max-height: 34%; overflow-y: auto; border-top: 1px solid var(--border); padding: 4px 10px 6px; font-size: 11px; }
-.activity-head { display: flex; justify-content: space-between; opacity: .7; margin-bottom: 2px; position: sticky; top: 0; background: var(--vscode-sideBar-background); }
-.activity ul { list-style: none; margin: 0; padding: 0; font-family: var(--mono); }
-.activity li { padding: 1px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.activity li .k { opacity: .55; margin-right: 6px; }
-.activity li.write { color: var(--vscode-gitDecoration-modifiedResourceForeground, var(--fg)); }
-.activity li.error { color: var(--vscode-errorForeground); }
-.activity li a { color: inherit; text-decoration: underline dotted; cursor: pointer; }
 
 #foot { border-top: 1px solid var(--border); padding: 6px 10px 8px; }
 .thinking { font-size: 11px; opacity: .8; margin-bottom: 4px; }
@@ -87,3 +83,50 @@ button.link { background: none; color: var(--accent); padding: 2px 4px; }
 button:disabled { opacity: .5; cursor: default; }
 .tools { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 11px; }
 .muted { opacity: .6; }
+
+/* Composer controls — session / model / permissions, above the input. The
+   sidebar is narrow, so they wrap and each select is free to shrink to zero
+   rather than forcing the panel to scroll sideways. */
+.controls { display: flex; flex-wrap: wrap; gap: 4px 8px; margin-bottom: 6px; }
+.ctl { display: flex; align-items: center; gap: 4px; min-width: 0; flex: 1 1 120px; }
+.ctl-label { font-size: 10px; text-transform: uppercase; letter-spacing: .04em; opacity: .6; white-space: nowrap; }
+.ctl-check { flex: 0 0 auto; }
+.ctl select {
+  flex: 1; min-width: 0; max-width: 100%;
+  font-family: inherit; font-size: 11px;
+  color: var(--vscode-dropdown-foreground); background: var(--vscode-dropdown-background);
+  border: 1px solid var(--vscode-dropdown-border, var(--border)); border-radius: 4px; padding: 2px 4px;
+}
+.ctl select:focus { outline: 1px solid var(--vscode-focusBorder); }
+.ctl select:disabled { opacity: .5; }
+
+/* Explicit per-turn read state — the word shading only covers the line being
+   spoken, so scrolled-back turns need a marker of their own. */
+.seg[data-unread="yes"] { border-left: 2px solid var(--accent); padding-left: 7px; }
+.seg[data-unread="no"].agent { border-left: 2px solid transparent; padding-left: 7px; }
+
+/* Orb stage — the bottom quarter of the panel, and the primary input.
+   No prompt box: tapping the orb starts and stops the session. */
+.orbstage { position: relative; height: 25vh; min-height: 130px; max-height: 260px;
+            display: flex; align-items: center; justify-content: center; margin: 4px 0 2px; }
+.orbstage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.orbhit { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+          width: 62%; aspect-ratio: 1; border-radius: 50%; background: transparent; padding: 0; cursor: pointer; }
+.orbhit:hover { background: rgba(255, 255, 255, .04); }
+.orb-label { position: absolute; bottom: 4px; left: 0; right: 0; text-align: center;
+             font-size: 11px; opacity: .7; pointer-events: none; }
+.orbstage[data-state="error"] .orb-label { color: var(--vscode-errorForeground); opacity: 1; }
+.orbstage .pen { position: absolute; right: 4px; bottom: 2px; font-size: 15px; padding: 3px 7px;
+                 background: none; color: var(--accent); }
+
+/* Pen dialog — typing is the exception, so it floats over the panel. */
+.penbox { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; justify-content: center;
+          background: rgba(0, 0, 0, .45); padding: 12px; }
+.penbox-card textarea { min-height: 68px; }
+.penbox-card { width: 100%; max-width: 420px; background: var(--bg-soft); border: 1px solid var(--border);
+               border-radius: 6px; padding: 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); }
+.penbox-head { font-size: 11px; opacity: .7; margin-bottom: 6px; }
+.penbox-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+/* Armed: between the start word and the submit word, the orb is collecting. */
+.orbstage[data-state="armed"] .orb-label { color: var(--accent); opacity: 1; }

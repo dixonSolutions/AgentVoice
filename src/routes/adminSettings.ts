@@ -34,6 +34,8 @@ import {
 } from '../executor/agentProcess.js';
 import { getAwsKeyStatus, updateAwsEnvKeys, isAwsConfigured } from '../state/envFile.js';
 import { getDb } from '../state/db.js';
+import { AUTO_MODEL_ID, getCachedModelsAnyAge, isValidModelId } from '../state/models.js';
+import { getDefaultSelection, persistDefaultSelection, setSelectionForAllSessions } from '../state/registry.js';
 import { childLogger } from '../log.js';
 import {
   resolveAwsAuth,
@@ -343,6 +345,30 @@ export async function registerAdminSettingsRoutes(app: FastifyInstance): Promise
     return getAgentClientStatus();
   });
 
+  /**
+   * The selected model is bridge-wide, but model ids are not: "sonnet" means
+   * nothing to Cursor and "claude-4.6-sonnet-medium" means nothing to Claude
+   * Code. Left alone, switching clients carries the old CLI's id across and
+   * every spawn dies with "There's an issue with the selected model".
+   *
+   * So on each switch, keep the selection only if the new provider's cached
+   * catalog actually lists it; otherwise fall back to `auto`, which passes no
+   * --model flag and is therefore valid for all four providers. No CLI is
+   * spawned here — an unknown catalog resolves to `auto` rather than blocking
+   * the switch on a probe.
+   */
+  function reconcileModelForClient(client: AgentClient): string | null {
+    const current = getDefaultSelection();
+    if (current.model === AUTO_MODEL_ID) return null;
+    const cached = getCachedModelsAnyAge(client);
+    if (cached && isValidModelId(cached, current.model)) return null;
+    const fallback = { model: AUTO_MODEL_ID, effort: null, fast: false };
+    persistDefaultSelection(fallback);
+    setSelectionForAllSessions(fallback);
+    log.info({ client, was: current.model }, 'active model does not exist on the new client — reset to auto');
+    return current.model;
+  }
+
   const AgentClientPatchSchema = z.object({ client: z.enum(AGENT_CLIENTS) }).strict();
 
   app.patch<{ Body: unknown }>('/api/admin/agent-client', async (req, reply) => {
@@ -353,8 +379,9 @@ export async function registerAdminSettingsRoutes(app: FastifyInstance): Promise
     const cfg = readConfigFile();
     cfg.settings.agentClient = parsed.data.client;
     writeConfigFile(cfg);
-    log.info({ client: parsed.data.client }, 'agent client updated');
-    return { ok: true, ...getAgentClientStatus() };
+    const resetModel = reconcileModelForClient(parsed.data.client);
+    log.info({ client: parsed.data.client, resetModel }, 'agent client updated');
+    return { ok: true, resetModel, ...getAgentClientStatus() };
   });
 
   // ── Database Stats ────────────────────────────────────────────────────

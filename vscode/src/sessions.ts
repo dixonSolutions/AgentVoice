@@ -7,6 +7,13 @@ import * as vscode from 'vscode';
 import type { JobHistoryEntry, SessionEntry } from '@agentvoice/client';
 import { errorMessage, type BridgeConnection } from './bridge.js';
 
+interface SessionLogEntry {
+  at: string;
+  level: string;
+  summary: string;
+  detail?: string;
+}
+
 type Node =
   | { kind: 'group'; id: string; label: string; icon: string }
   | { kind: 'voice'; label: string; description: string }
@@ -98,6 +105,8 @@ export class SessionsProvider implements vscode.TreeDataProvider<Node>, vscode.D
         item.tooltip = `${s.session_id}\n${s.last_prompt}`;
         item.iconPath = new vscode.ThemeIcon(node.active ? 'debug-breakpoint-log' : 'history');
         item.contextValue = 'session';
+        // Clicking reads the thread; resuming is the deliberate action.
+        item.command = { command: 'agentvoice.examineSession', title: 'Examine thread', arguments: [node] };
         return item;
       }
       case 'info': {
@@ -136,6 +145,31 @@ export class SessionsProvider implements vscode.TreeDataProvider<Node>, vscode.D
     return this.sessions.length
       ? this.sessions.map((session) => ({ kind: 'session', session, active: session.session_id === this.activeSession, project: this.sessionsProject ?? '' }))
       : [{ kind: 'info', label: this.sessionsProject ? 'No threads yet' : 'No project selected' }];
+  }
+
+  /** Open a thread's history as a document — spoken turns included. */
+  async examineSession(node: Node | undefined): Promise<void> {
+    if (!node || node.kind !== 'session') return;
+    const s = node.session;
+    const query = new URLSearchParams({ project: node.project, session_id: s.session_id });
+    const { entries } = await this.bridge.http.get<{ entries: SessionLogEntry[] }>(
+      `/api/agent-sessions/logs?${query}`,
+    );
+    const header = [
+      `Thread ${s.session_id}`,
+      `Project: ${node.project}`,
+      `Runs:    ${s.job_count} · last ${new Date(s.last_run_at).toLocaleString()} · ${s.last_status}`,
+      node.active ? 'This is the active thread — the next turn continues it.' : '',
+      '',
+    ].filter(Boolean);
+    const body = entries.length
+      ? entries.map((e) => `${e.at}  [${e.level}] ${e.summary}${e.detail ? `\n${' '.repeat(21)}${e.detail}` : ''}`)
+      : ['(no recorded activity for this thread)'];
+    const doc = await vscode.workspace.openTextDocument({
+      content: [...header, ...body].join('\n'),
+      language: 'log',
+    });
+    await vscode.window.showTextDocument(doc, { preview: true });
   }
 
   async selectSession(node: Node | undefined): Promise<void> {

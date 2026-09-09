@@ -321,6 +321,13 @@ async function probeClaudeCatalog(): Promise<ClaudeCatalogModel[]> {
       }
     });
 
+    // A CLI that dies on startup — a half-installed binary, a bad path — tears
+    // the pipe down before this write lands. An unhandled EPIPE on stdin is an
+    // uncaught exception, which would take the whole bridge down with it; the
+    // exit handler above already reports the real reason, so absorb it here.
+    child.stdin.on('error', (err: Error) => {
+      if (!stderr) stderr = err.message;
+    });
     child.stdin.write(
       JSON.stringify({ type: 'control_request', request_id: 'agentvoice-models', request: { subtype: 'initialize' } }) + '\n',
     );

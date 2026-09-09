@@ -126,6 +126,20 @@ const MIGRATION_SQL = `
     ended_at    TEXT
   );
 
+  -- Conversation transcript. Spoken turns leave no other trace: the CLI keeps
+  -- its own thread in a private format and voice_agent_run stores only process
+  -- rows, so without this a reopened panel has nothing to show.
+  CREATE TABLE IF NOT EXISTS turn (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    project    TEXT NOT NULL,
+    session_id TEXT,
+    role       TEXT NOT NULL CHECK (role IN ('user', 'agent')),
+    text       TEXT NOT NULL,
+    source     TEXT,
+    at         TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_turn_project_at ON turn(project, id);
+
   -- Serve self-hosting run log (rebase / restart / health steps).
   CREATE TABLE IF NOT EXISTS serve_event (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,

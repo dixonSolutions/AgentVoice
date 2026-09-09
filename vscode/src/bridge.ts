@@ -35,7 +35,7 @@ export function readSettings(): ExtensionSettings {
     bridgeUrl: (cfg.get<string>('bridgeUrl') ?? 'http://127.0.0.1:8787').replace(/\/$/, ''),
     autoRegisterWorkspace: cfg.get<boolean>('autoRegisterWorkspace') ?? true,
     prepareOnConnect: cfg.get<boolean>('prepareOnConnect') ?? true,
-    readAloud: cfg.get<'off' | 'bridge' | 'browser'>('readAloud') ?? 'off',
+    readAloud: cfg.get<'off' | 'bridge' | 'browser'>('readAloud') ?? 'bridge',
     pacer: cfg.get<boolean>('pacer') ?? true,
     notifications: cfg.get<boolean>('notifications') ?? true,
     contextMaxChars: cfg.get<number>('contextMaxChars') ?? 12000,

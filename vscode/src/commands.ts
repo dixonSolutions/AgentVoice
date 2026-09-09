@@ -9,6 +9,7 @@ import type { ApprovalRequest, ModelEntry } from '@agentvoice/client';
 import { errorMessage, readSettings, type BridgeConnection } from './bridge.js';
 import type { ApprovalRelay } from './approvals.js';
 import type { AgentPanel } from './panel.js';
+import { SettingsView } from './settings.js';
 
 function workspaceRelative(uri: vscode.Uri): string {
   const folder = vscode.workspace.getWorkspaceFolder(uri);
@@ -25,6 +26,18 @@ function clip(text: string, max: number): { text: string; clipped: boolean } {
 }
 
 export class Commands {
+  private settings: SettingsView | null = null;
+  /** Called when bridge config is saved, so the voice session can re-read it. */
+  onConfigSaved: (() => void) | null = null;
+
+  private configure(): Promise<void> {
+    if (!this.settings) {
+      this.settings = new SettingsView(this.bridge);
+      this.settings.onSaved(() => this.onConfigSaved?.());
+    }
+    return this.settings.show();
+  }
+
   constructor(
     private readonly bridge: BridgeConnection,
     private readonly approvals: ApprovalRelay,
@@ -38,6 +51,7 @@ export class Commands {
     reg('agentvoice.connect', () => this.bridge.connect());
     reg('agentvoice.setToken', () => this.setToken());
     reg('agentvoice.openPanel', () => this.panel.reveal());
+    reg('agentvoice.configure', () => this.configure());
     reg('agentvoice.ask', () => this.ask());
     reg('agentvoice.sendSelection', () => this.sendSelection());
     reg('agentvoice.sendFile', () => this.sendFile());
@@ -382,6 +396,7 @@ export class Commands {
       { label: '$(history) New session (fresh thread)', cmd: 'agentvoice.newSession' },
       { label: '$(debug-stop) Stop the agent', cmd: 'agentvoice.stopAgent' },
       { label: '$(key) Set bridge token', cmd: 'agentvoice.setToken' },
+      { label: '$(settings-gear) Configure…', description: 'all bridge settings', cmd: 'agentvoice.configure' },
       { label: '$(output) Show log', cmd: '__log' },
     );
     const pick = await vscode.window.showQuickPick(items, { title: `AgentVoice — ${this.bridge.status}` });

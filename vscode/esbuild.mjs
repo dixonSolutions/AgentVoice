@@ -3,10 +3,29 @@
 import * as esbuild from 'esbuild';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { mkdirSync, copyFileSync, existsSync } from 'node:fs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const watch = process.argv.includes('--watch');
 const clientAlias = { '@agentvoice/client': resolve(here, '../packages/client/src/index.ts') };
+
+// Voice cues ship with the extension but are owned by the web app, so copy
+// rather than fork them — a second set would drift the moment one is retuned.
+function copyCues() {
+  const from = resolve(here, '../web/public/sounds');
+  const to = resolve(here, 'media/sounds');
+  if (!existsSync(from)) {
+    console.warn('[cues] web/public/sounds missing — the panel will run silent');
+    return;
+  }
+  mkdirSync(to, { recursive: true });
+  for (const file of ['listening.mp3', 'sent.mp3', 'cancel.mp3', 'error.mp3', 'LICENSE.txt']) {
+    const src = resolve(from, file);
+    if (existsSync(src)) copyFileSync(src, resolve(to, file));
+  }
+  console.log('[cues] copied voice cues into media/sounds');
+}
+copyCues();
 
 const host = {
   entryPoints: [resolve(here, 'src/extension.ts')],

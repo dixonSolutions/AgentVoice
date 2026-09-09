@@ -9,6 +9,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { getConfig } from '../config.js';
+import { listTurns } from '../state/turns.js';
 import { submitAgentNativeTurn, TurnError } from '../executor/agentTurns.js';
 import { deskStateSnapshot } from './eventsSocket.js';
 import { getJobsHistory } from '../executor/jobManager.js';
@@ -23,6 +24,25 @@ const TurnBody = z.object({
 });
 
 export async function registerTurnRoutes(app: FastifyInstance): Promise<void> {
+  /**
+   * GET /api/turns?project=&session_id=&limit= — the stored transcript, oldest
+   * first, so a client that opens later can replay the conversation instead of
+   * starting on a blank page.
+   */
+  app.get<{ Querystring: { project?: string; session_id?: string; limit?: string } }>(
+    '/api/turns',
+    async (req, reply) => {
+      const project = req.query.project?.trim();
+      if (!project) return reply.code(400).send({ error: 'Query parameter "project" is required' });
+      const limit = Number.parseInt(req.query.limit ?? '', 10);
+      const turns = listTurns(project, {
+        sessionId: req.query.session_id?.trim() || null,
+        limit: Number.isFinite(limit) ? limit : undefined,
+      });
+      return { project, turns };
+    },
+  );
+
   app.post<{ Body: unknown }>('/api/turns', async (req, reply) => {
     const parsed = TurnBody.safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: parsed.error.message });

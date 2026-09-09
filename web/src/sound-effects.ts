@@ -6,20 +6,18 @@
  *
  * Use playVoiceCueNow() at recognition time (Vosk / VAD) — must not await STT.
  */
+import { CUE_FILENAME, VOICE_CUES, shouldPlayCue, type VoiceCue } from '@agentvoice/client';
 import { unlockAudioContext } from './audio.js';
 
-export type VoiceCue = 'listening' | 'sent' | 'cancel' | 'error';
+export type { VoiceCue };
 
-const CUE_FILES: Record<VoiceCue, string> = {
-  listening: '/sounds/listening.mp3',
-  sent: '/sounds/sent.mp3',
-  cancel: '/sounds/cancel.mp3',
-  error: '/sounds/error.mp3',
-};
+/** Which cues exist and what they are called is shared — see cues.ts. */
+const CUE_FILES: Record<VoiceCue, string> = Object.fromEntries(
+  VOICE_CUES.map((cue) => [cue, `/sounds/${CUE_FILENAME[cue]}`]),
+) as Record<VoiceCue, string>;
 
 /** HTMLAudio volume cap (files are already boosted in prepare-voice-cues.sh). */
 const PLAYBACK_VOLUME = 1;
-const DEBOUNCE_MS = 450;
 
 const lastPlayedAt: Partial<Record<VoiceCue, number>> = {};
 const audioEls = new Map<VoiceCue, HTMLAudioElement>();
@@ -52,7 +50,7 @@ export async function preloadVoiceCues(): Promise<void> {
   try {
     await unlockAudioContext();
     await Promise.all(
-      (Object.keys(CUE_FILES) as VoiceCue[]).map(async (cue) => {
+      VOICE_CUES.map(async (cue) => {
         await primeAudioElement(getOrCreateAudio(cue));
       }),
     );
@@ -68,10 +66,7 @@ export async function preloadVoiceCues(): Promise<void> {
 export function playVoiceCueNow(cue: VoiceCue, opts?: { force?: boolean }): void {
   try {
     const now = Date.now();
-    if (!opts?.force) {
-      const last = lastPlayedAt[cue];
-      if (last !== undefined && now - last < DEBOUNCE_MS) return;
-    }
+    if (!shouldPlayCue(lastPlayedAt[cue], now, opts)) return;
     lastPlayedAt[cue] = now;
 
     const el = getOrCreateAudio(cue);
