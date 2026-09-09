@@ -13,7 +13,7 @@
  */
 
 import { getConfig } from '../config.js';
-import { addJobEvent } from '../state/jobs.js';
+import { addJobEvent, type JobEventKind } from '../state/jobs.js';
 import { childLogger } from '../log.js';
 import { getActiveProvider } from '../providers/agents/registry.js';
 import type { AgentStreamEvent, NormalizedToolCall } from '../providers/agents/events.js';
@@ -157,7 +157,7 @@ export class Watcher {
     this.inMemoryEvents.push({ ts: new Date().toISOString(), kind, text });
     if (this.inMemoryEvents.length > 40) this.inMemoryEvents.shift();
     if (this.recordEvents) {
-      addJobEvent(this.jobId, kind as import('../state/jobs.js').JobEventKind, payload);
+      addJobEvent(this.jobId, kind as JobEventKind, payload);
     }
   }
 

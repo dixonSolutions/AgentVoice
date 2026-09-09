@@ -7,6 +7,7 @@
  *   /api/*                   — Bearer-authenticated REST endpoints
  *   /ws/control              — authenticated control WebSocket (voice model relay)
  *   /ws/intelligence         — authenticated WebSocket (llm_intelligence workflow)
+ *   /ws/events               — authenticated multi-client desk socket (IDE extension, docs/34)
  *   GET|POST|DELETE /mcp     — MCP Streamable HTTP server (the agent CLI registers this)
  *
  * All /api/* and /mcp routes require a valid Bearer token (see auth.ts).
@@ -51,7 +52,12 @@ import { registerMcpServer } from './mcp/server/index.js';
 import { attachDevWebProxy, registerProductionWeb } from './webDispatch.js';
 import { registerControlSocket } from './state/controlSocket.js';
 import { registerPushRoutes } from './routes/push.js';
-import { resolveRequest } from './mcp/server/approvalRegistry.js';
+import { registerApprovalRoutes } from './routes/approvals.js';
+import { registerTurnRoutes } from './routes/turns.js';
+import { registerToolRoutes } from './routes/tools.js';
+import { registerWorkspaceRoutes } from './routes/workspace.js';
+import { registerEventsSocket } from './routes/eventsSocket.js';
+import { applyApprovalResponse } from './mcp/server/approvalResponses.js';
 import { getImage, readImageBytes, clearImages } from './mcp/server/imageRegistry.js';
 import { getActiveProvider } from './providers/agents/registry.js';
 
@@ -288,6 +294,12 @@ export async function buildServer(): Promise<FastifyInstance> {
   await registerHostingAdminRoutes(app);
   await registerSpeechProviderRoutes(app);
   registerPushRoutes(app);
+  await registerApprovalRoutes(app);
+  await registerTurnRoutes(app);
+  await registerToolRoutes(app);
+  registerWorkspaceRoutes(app);
+  // Desk clients (VS Code / Cursor extension) — multi-client, never displaces the phone.
+  registerEventsSocket(app);
 
   /** GET /api/settings — non-secret operational settings. */
   app.get('/api/settings', async () => {
@@ -391,38 +403,12 @@ export async function buildServer(): Promise<FastifyInstance> {
           return;
         }
 
-        // PWA → bridge: user answered an agent question or approved a plan
+        // PWA → bridge: user answered an agent question / plan / permission / password.
+        // Shared with /ws/events and POST /api/approvals — first answer wins.
         if (msg['type'] === 'approval_response') {
           const request_id = typeof msg['request_id'] === 'string' ? msg['request_id'] : null;
-          const response = msg['response'];
-          if (request_id && response && typeof response === 'object') {
-            const r = response as Record<string, unknown>;
-            const kind = r['kind'] as string | undefined;
-            let resolved = false;
-            if (kind === 'user_input' && typeof r['answer'] === 'string') {
-              resolved = resolveRequest(request_id, { kind: 'user_input', answer: r['answer'] });
-            } else if (kind === 'plan_approval' && typeof r['decision'] === 'string') {
-              resolved = resolveRequest(request_id, {
-                kind: 'plan_approval',
-                decision: r['decision'] as 'approved' | 'rejected' | 'modified',
-                notes: typeof r['notes'] === 'string' ? r['notes'] : undefined,
-              });
-            } else if (kind === 'permission' && (r['decision'] === 'allow' || r['decision'] === 'deny')) {
-              resolved = resolveRequest(request_id, {
-                kind: 'permission',
-                decision: r['decision'],
-                message: typeof r['message'] === 'string' ? r['message'] : undefined,
-              });
-            } else if (kind === 'secret_input') {
-              // The secret is handed straight to the waiting askpass helper — it is
-              // not logged here or anywhere downstream.
-              resolved = resolveRequest(request_id, {
-                kind: 'secret_input',
-                secret: typeof r['secret'] === 'string' ? r['secret'] : null,
-              });
-            }
-            socket.send(JSON.stringify({ type: 'approval_ack', request_id, ok: resolved }));
-          }
+          const resolved = request_id ? applyApprovalResponse(request_id, msg['response'], 'phone').ok : false;
+          socket.send(JSON.stringify({ type: 'approval_ack', request_id, ok: resolved }));
           return;
         }
 

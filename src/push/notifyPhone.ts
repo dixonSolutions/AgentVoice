@@ -7,6 +7,7 @@ import { listPushSubscriptions } from '../state/pushStore.js';
 import { sendWebPush } from './webPush.js';
 import { sendApnsPush } from './apns.js';
 import { childLogger } from '../log.js';
+import { publishEvent } from '../state/eventBus.js';
 
 const log = childLogger('notify-phone');
 
@@ -112,6 +113,9 @@ function shouldSendPush(msg: Record<string, unknown>): boolean {
  */
 export async function notifyPhone(payload: object): Promise<NotifyResult> {
   const msg = payload as Record<string, unknown>;
+  // Desk clients (/ws/events) see everything the phone is told — approvals,
+  // narration, images — without registering as the phone.
+  if (typeof msg['type'] === 'string') publishEvent(msg as { type: string });
   const ws = pushToPhone(payload);
   const result: NotifyResult = { ws, webPush: 0, apns: 0 };
 

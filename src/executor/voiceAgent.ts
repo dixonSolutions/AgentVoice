@@ -38,6 +38,7 @@ import {
   type SessionState,
 } from '../state/registry.js';
 import type { AgentStreamEvent } from '../providers/agents/events.js';
+import { publishEvent } from '../state/eventBus.js';
 
 const log = childLogger('voice-agent');
 
@@ -87,6 +88,28 @@ export interface ActiveVoiceAgent {
 }
 
 let activeVoiceAgent: ActiveVoiceAgent | null = null;
+
+export interface VoiceAgentExitInfo {
+  runId: string;
+  project: string;
+  exitCode: number;
+  /** True when the bridge killed it (killVoiceAgent) rather than the CLI finishing on its own. */
+  stopped: boolean;
+}
+
+const exitHooks = new Set<(info: VoiceAgentExitInfo) => void>();
+
+/**
+ * Run after a voice agent process has fully gone (state cleared, turn_complete
+ * sent). executor/agentTurns.ts uses this to respawn with any turn that was
+ * queued while the process was already on its way out.
+ */
+export function registerVoiceAgentExitHook(fn: (info: VoiceAgentExitInfo) => void): () => void {
+  exitHooks.add(fn);
+  return () => {
+    exitHooks.delete(fn);
+  };
+}
 
 export function isVoiceAgentRunning(): boolean {
   return activeVoiceAgent !== null;
@@ -250,6 +273,11 @@ export function spawnVoiceAgent(
     }
 
     for (const event of events) {
+      // Desk clients render the raw stream (assistant text, tool calls, result).
+      // Every Claude line repeats the session id — publish it once.
+      if (event.kind !== 'session' || event.sessionId !== capturedSessionId) {
+        publishEvent({ type: 'agent_event', source: 'voice', run_id: runId, pid, project: project.name, event });
+      }
       if (event.kind === 'session') {
         const sid = event.sessionId;
         if (sid === capturedSessionId) continue;
@@ -280,8 +308,10 @@ export function spawnVoiceAgent(
   });
 
   let killTimer: ReturnType<typeof setTimeout> | null = null;
+  let stoppedByBridge = false;
 
   function kill(): void {
+    stoppedByBridge = true;
     log.info({ pid, runId }, 'killing voice agent');
     child.kill('SIGTERM');
     killTimer = setTimeout(() => {
@@ -382,6 +412,15 @@ export function spawnVoiceAgent(
 
     for (const cb of eventListeners) {
       cb({ type: 'exit', exitCode });
+    }
+
+    const info: VoiceAgentExitInfo = { runId, project: project.name, exitCode, stopped: stoppedByBridge };
+    for (const hook of exitHooks) {
+      try {
+        hook(info);
+      } catch (err) {
+        log.warn({ err, runId }, 'voice agent exit hook failed');
+      }
     }
   });
 

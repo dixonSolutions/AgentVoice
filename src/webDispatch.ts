@@ -14,6 +14,8 @@ import type { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import httpProxy from 'http-proxy';
 import { existsSync } from 'node:fs';
+import type { ServerResponse } from 'node:http';
+import type { Socket } from 'node:net';
 import { childLogger } from './log.js';
 
 const log = childLogger('web-dispatch');
@@ -24,7 +26,7 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
   'Cross-Origin-Embedder-Policy': 'require-corp',
 } as const;
 
-const BACKEND_WS_PATHS = ['/ws/control', '/ws/intelligence'] as const;
+const BACKEND_WS_PATHS = ['/ws/control', '/ws/intelligence', '/ws/events'] as const;
 
 function pathnameOf(url: string): string {
   return url.split('?')[0] ?? url;
@@ -51,7 +53,7 @@ export function attachDevWebProxy(app: FastifyInstance, webPort: number): void {
 
   proxy.on('error', (err, req, res) => {
     log.warn({ err, url: req.url }, 'dev web proxy error');
-    const response = res as import('node:http').ServerResponse | undefined;
+    const response = res as ServerResponse | undefined;
     if (response && typeof response.writeHead === 'function' && !response.headersSent) {
       response.writeHead(502, { 'Content-Type': 'text/plain' });
       response.end(
@@ -60,7 +62,7 @@ export function attachDevWebProxy(app: FastifyInstance, webPort: number): void {
       return;
     }
     // WebSocket upgrade failures pass a Socket — not a ServerResponse.
-    const socket = res as import('node:net').Socket | undefined;
+    const socket = res as Socket | undefined;
     if (socket && typeof socket.destroy === 'function') {
       socket.destroy();
     }
