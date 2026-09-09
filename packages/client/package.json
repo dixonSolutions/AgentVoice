@@ -1,0 +1,10 @@
+{
+  "name": "@agentvoice/client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared TypeScript client for the AgentVoice bridge — protocol types, HTTP client, desk event socket, read-along transcript model. Consumed by the PWA and the VS Code / Cursor extension via tsconfig paths (no build step).",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "sideEffects": false
+}
