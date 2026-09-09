@@ -17,11 +17,12 @@
     "gen-vapid-keys": "bash scripts/gen-vapid-keys.sh",
     "mobile:sync": "npm run build:web && cd mobile && npm install --legacy-peer-deps && npx cap sync",
     "prepare:vosk": "node scripts/download-vosk-model.mjs",
-    "lint": "eslint src web/src",
-    "typecheck": "tsc --noEmit && npx tsc --noEmit -p web/tsconfig.app.json",
+    "lint": "eslint src web/src packages/client/src vscode/src",
+    "typecheck": "tsc --noEmit && npx tsc --noEmit -p web/tsconfig.app.json && npx tsc --noEmit -p packages/client/tsconfig.json && npx tsc --noEmit -p vscode/tsconfig.json",
     "stop": "bash scripts/stop.sh",
     "start:service": "bash scripts/start.sh",
-    "start": "NODE_ENV=production node dist/index.js"
+    "start": "NODE_ENV=production node dist/index.js",
+    "build:vscode": "cd vscode && npm install --no-audit --no-fund && npm run package"
   },
   "dependencies": {
     "@angular/animations": "^22.0.1",
