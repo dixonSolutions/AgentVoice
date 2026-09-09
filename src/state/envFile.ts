@@ -100,8 +100,8 @@ export const HOSTING_ENV_KEYS: EnvKeyField[] = [
     secret: true,
     optional: true,
   },
-  { envVar: 'HTTPS_CERT_PATH', label: 'TLS certificate path (lan provider)', minLength: 1, secret: false, optional: true },
-  { envVar: 'HTTPS_KEY_PATH', label: 'TLS private key path (lan provider)', minLength: 1, secret: false, optional: true },
+  { envVar: 'HTTPS_CERT_PATH', label: 'TLS certificate path (bridge serves HTTPS)', minLength: 1, secret: false, optional: true },
+  { envVar: 'HTTPS_KEY_PATH', label: 'TLS private key path (bridge serves HTTPS)', minLength: 1, secret: false, optional: true },
 ];
 
 /** Read raw .env file into a key→value map (does not merge process.env). */

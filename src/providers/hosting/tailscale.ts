@@ -94,12 +94,27 @@ async function getPublicUrl(): Promise<string | null> {
   return status?.dnsName ? `https://${status.dnsName}` : null;
 }
 
+/**
+ * Proxy target for `tailscale serve`.
+ *
+ * Tailscale already terminates TLS at the tailnet edge, so a bridge that also
+ * holds its own cert (src/tls.ts) is redundant — but if one is configured, the
+ * upstream really is HTTPS and the scheme has to say so. `https+insecure://`
+ * skips verification on the loopback hop, which self-signed and mkcert certs
+ * would otherwise fail.
+ */
+function serveTargetUrl(): string {
+  const run = getRunModeInfo(getConfig().settings);
+  const scheme = run.tls ? 'https+insecure' : 'http';
+  return `${scheme}://127.0.0.1:${run.backendPort}`;
+}
+
 async function sync(): Promise<void> {
   const port = backendPort();
   const current = await serveTarget();
   if (current === String(port)) return;
   await execFileAsync(resolver.resolve(), ['serve', 'reset'], { timeout: 8_000 }).catch(() => {});
-  await execFileAsync(resolver.resolve(), ['serve', '--bg', `http://127.0.0.1:${port}`], {
+  await execFileAsync(resolver.resolve(), ['serve', '--bg', serveTargetUrl()], {
     timeout: 8_000,
   });
 }
@@ -189,6 +204,16 @@ async function doctor(): Promise<HostingDoctorResult> {
     ok: port === wantPort,
     detail: port ? `currently → 127.0.0.1:${port}` : 'not configured',
   });
+
+  if (getRunModeInfo(getConfig().settings).tls) {
+    checks.push({
+      label: 'Bridge TLS is redundant behind Tailscale',
+      ok: true,
+      detail:
+        'HTTPS_CERT_PATH/HTTPS_KEY_PATH are set, so the loopback hop is encrypted twice. ' +
+        'Harmless, but you can unset them and let tailscale serve own TLS.',
+    });
+  }
 
   return { ok: checks.every((c) => c.ok), checks };
 }

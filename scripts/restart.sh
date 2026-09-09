@@ -63,6 +63,33 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 PORT="${PORT:-8787}"
 
+# The listener binds settings.runModes.serve.backendPort from config.json, which
+# is independent of .env's PORT — probing PORT reports a false failure whenever
+# the two differ. Fall back to PORT only if config.json can't be read.
+CONFIG_FILE="${CONFIG_PATH:-${PROJECT_DIR}/config.json}"
+BACKEND_PORT="$(
+  python3 - "$CONFIG_FILE" <<'PY' 2>/dev/null || true
+import json, sys
+try:
+    with open(sys.argv[1]) as fh:
+        print(json.load(fh)["settings"]["runModes"]["serve"]["backendPort"])
+except Exception:
+    pass
+PY
+)"
+BACKEND_PORT="${BACKEND_PORT:-$PORT}"
+
+# The bridge serves HTTPS itself when it holds a cert (src/tls.ts). Those certs
+# are usually mkcert- or self-signed, so -k: this is a loopback liveness probe,
+# not an identity check.
+if [[ -n "${HTTPS_CERT_PATH:-}" && -n "${HTTPS_KEY_PATH:-}" ]]; then
+  SCHEME="https"
+  CURL_TLS_OPTS=(-k)
+else
+  SCHEME="http"
+  CURL_TLS_OPTS=()
+fi
+
 # Detect the Node binary used by the service (if installed)
 SERVICE_NODE=""
 SERVICE_FILE="${HOME}/.config/systemd/user/agentvoice.service"
@@ -139,12 +166,12 @@ fi
 section "Health check"
 
 sleep 2
-HEALTHZ="http://127.0.0.1:${PORT}/healthz"
-if curl -sf --max-time 5 "$HEALTHZ" | python3 -m json.tool 2>/dev/null; then
+HEALTHZ="${SCHEME}://127.0.0.1:${BACKEND_PORT}/healthz"
+if curl -sf "${CURL_TLS_OPTS[@]}" --max-time 5 "$HEALTHZ" | python3 -m json.tool 2>/dev/null; then
   ok "Bridge healthy at ${HEALTHZ}"
 else
   warn "Health check failed at ${HEALTHZ} — bridge may still be starting."
-  warn "Retry: curl ${HEALTHZ}"
+  warn "Retry: curl ${CURL_TLS_OPTS[*]:+${CURL_TLS_OPTS[*]} }${HEALTHZ}"
 fi
 
 # ── 4. Tailscale Serve (serve mode / split-host upstream) ─────────────────

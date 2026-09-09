@@ -16,8 +16,9 @@ import type {
   HostingSetupResult,
 } from './types.js';
 
+/** Already scheme-correct: backendUrl is https when the bridge holds a cert. */
 function localUrl(): string {
-  return `http://127.0.0.1:${getRunModeInfo(getConfig().settings).backendPort}`;
+  return getRunModeInfo(getConfig().settings).backendUrl;
 }
 
 async function detect(): Promise<HostingDetectResult> {

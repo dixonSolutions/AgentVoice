@@ -186,6 +186,13 @@ async function doctor(): Promise<HostingDoctorResult> {
   checks.push({ label: 'Logged in', ok: await isLoggedIn() });
   checks.push({ label: 'Tunnel process running', ok: runner !== null && !runner.killed });
   checks.push({ label: 'Public URL known', ok: !!lastUrl, detail: lastUrl ?? undefined });
+  checks.push({
+    label: 'Bridge serves plain HTTP for the tunnel',
+    ok: !getRunModeInfo(getConfig().settings).tls,
+    detail: getRunModeInfo(getConfig().settings).tls
+      ? 'HTTPS_CERT_PATH/HTTPS_KEY_PATH are set, but the tunnel is hosted against a plain-HTTP port. Unset them — Dev Tunnels already provides TLS.'
+      : undefined,
+  });
   return { ok: checks.every((c) => c.ok), checks };
 }
 

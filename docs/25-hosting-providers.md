@@ -21,9 +21,9 @@ the full interface.
 | Cloudflare Tunnel | `cloudflare` | ✅ `cloudflared` | ✅ | ✅ (public internet) | Quick tunnel (rotating URL) or named tunnel (stable hostname, needs `cloudflared tunnel login` once) |
 | ngrok | `ngrok` | ✅ `ngrok` | ✅ | ✅ (public internet) | Needs `NGROK_AUTHTOKEN` in `.env`; free tier rotates the URL unless you reserve a domain |
 | Azure Dev Tunnels | `devtunnel` | ✅ `devtunnel` | ✅ | ✅ (public internet) | Persistent tunnel ID reused across restarts, unlike ngrok free tier |
-| LAN | `lan` | — | — (see below) | Local network only | Advertises `http://<lan-ip>:<port>`; phone mic capture needs HTTPS — see below |
-| Local | `local` | — | — | This machine only | Loopback-only, matches `npm run dev` — explicit "just testing" choice |
-| Manual | `manual` | — | — | Depends on your proxy | Bring your own reverse proxy (nginx/Caddy); just stores the URL you give it. Safe fallback when nothing else is detected. |
+| LAN | `lan` | — | ✅ with `useTls` | Local network only | Generates a mkcert cert and serves it directly — see below |
+| Local | `local` | — | ✅ with a cert | This machine only | Loopback-only, matches `npm run dev` — explicit "just testing" choice |
+| Manual | `manual` | — | ✅ with a cert | Depends on your proxy | Bring your own reverse proxy (nginx/Caddy), or set `HTTPS_CERT_PATH`/`HTTPS_KEY_PATH` and let the bridge terminate TLS. Safe fallback when nothing else is detected. |
 
 ## Zero-touch migration for existing Tailscale users
 
@@ -79,16 +79,64 @@ This is a distinct namespace from the pre-existing `/api/admin/hosting` (ports
 + `runMode` only, see `docs/21-serve-self-hosting.md`) — that endpoint is
 unchanged.
 
-## LAN provider and HTTPS
+## Native HTTPS (bring your own cert)
 
 Phone mic capture (`getUserMedia`) requires a secure context, which plain HTTP
-over a LAN IP is not. Turning on `settings.hosting.lan.useTls` and running
-setup generates a [mkcert](https://github.com/FiloSottile/mkcert) certificate
-for the LAN IP — but the bridge itself only speaks HTTP; adding native HTTPS
-support to the Fastify server was attempted and reverted (it forces a
-different `FastifyInstance` generic type, which cascades through the entire
-codebase). **Front the bridge with a lightweight reverse proxy** (Caddy/nginx)
-using the generated cert if you need LAN HTTPS today.
+over a LAN IP or a bare public IP is not. Every tunnel provider above supplies
+that for free by terminating TLS at its edge. Without a tunnel, set both:
+
+```bash
+HTTPS_CERT_PATH=/path/to/cert.pem
+HTTPS_KEY_PATH=/path/to/key.pem
+```
+
+and the bridge terminates TLS itself — no reverse proxy needed. Setting only
+one is a startup error rather than a silent fallback to HTTP, since serving
+plaintext to an operator who believes otherwise is the worse failure.
+
+This is honoured in **serve mode only**; test mode is the local dev profile,
+where the Angular dev server proxies to a plain-HTTP backend.
+
+`src/tls.ts` loads the material and `RunModeInfo.tls` carries it. Anything
+building a URL to the bridge must branch on it rather than assume `http://` —
+`runMode.backendUrl` already does.
+
+> **Implementation note.** Fastify's `https` option is deliberately not used:
+> it selects the `FastifyHttpsOptions` overload, which retypes the instance as
+> `FastifyInstance<https.Server>` and stops matching the bare `FastifyInstance`
+> that every `src/routes` module accepts — the cascade that sank an earlier
+> attempt. `src/server.ts` passes `serverFactory` instead, which stays on the
+> default-generic overload, so the ~36 annotations across the codebase are
+> untouched. One consequence: `app.listen()`'s returned address derives its
+> scheme from the unset `https` option, so `startServer` corrects it before
+> logging.
+
+### With the LAN provider
+
+`settings.hosting.lan.useTls` + setup generates a
+[mkcert](https://github.com/FiloSottile/mkcert) certificate for the LAN IP,
+writes the two paths into `.env`, and advertises an `https://` URL. **Restart
+the bridge** to pick it up — `doctor()` reports "Bridge is serving HTTPS" as
+failing until you do, which distinguishes "cert configured" from "cert in use."
+
+The phone must also trust the mkcert root CA (`mkcert -CAROOT`), or the browser
+rejects the certificate before it ever prompts for the mic.
+
+### With a tunnel provider
+
+Redundant — the tunnel already terminates TLS, so a cert on the bridge just
+encrypts the loopback hop twice. It is handled rather than forbidden:
+`tailscale serve` is pointed at `https+insecure://`, and `cloudflared` gets
+`--no-tls-verify`. ngrok and Dev Tunnels still assume a plain-HTTP upstream and
+their `doctor()` flags the combination — unset the two variables for those.
+
+### Public IP without a tunnel
+
+Native TLS covers the listener, but not certificate *lifecycle*: there is no
+ACME client in the bridge, so a Let's Encrypt cert is yours to renew. Caddy
+does issuance and renewal in a few lines and adds rate limiting and security
+headers the bridge does not have. For internet-facing hosting, prefer it (or a
+tunnel); native TLS is aimed at LAN and at certs you already manage.
 
 ## Adding a new provider
 
