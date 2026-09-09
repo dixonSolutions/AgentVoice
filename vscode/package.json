@@ -2,7 +2,7 @@
   "name": "agentvoice",
   "displayName": "AgentVoice",
   "description": "Desk client for the AgentVoice bridge: answer your coding agent's permission prompts, send editor context, follow its spoken replies with read-along shading, and review its edits — Cursor, Codex, Claude Code and Codewhale through one bridge.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "dixonsolutions",
   "license": "MIT",
   "private": true,

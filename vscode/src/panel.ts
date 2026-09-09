@@ -174,7 +174,7 @@ export class AgentPanel implements vscode.WebviewViewProvider, vscode.Disposable
 <footer id="foot">
   <div id="thinking" class="thinking" hidden><span class="dot"></span> thinking…</div>
   <div class="composer">
-    <textarea id="input" rows="2" placeholder="Type to the agent… (Enter to send, Shift+Enter for newline)"></textarea>
+    <textarea id="input" rows="1" placeholder="Message the agent…" title="Enter to send, Shift+Enter for a newline"></textarea>
     <button id="send" class="primary" title="Send">Send</button>
   </div>
   <div class="tools">
