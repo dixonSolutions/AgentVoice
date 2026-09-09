@@ -46,3 +46,11 @@ Thumbs.db
 
 # Claude Code worktrees of other agents — never commit (each is its own checkout)
 .claude/worktrees/
+
+# VS Code / Cursor extension build output (vscode/ has its own .gitignore too)
+vscode/dist/
+vscode/node_modules/
+*.vsix
+
+# Local editor workspace settings (per checkout)
+/.vscode/
