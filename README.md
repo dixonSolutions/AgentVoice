@@ -5,6 +5,12 @@
 <h1 align="center">AgentVoice</h1>
 
 <p align="center">
+  <a href="https://marketplace.visualstudio.com/items?itemName=dixonsolutions.agentvoice"><img src="https://vsmarketplacebadges.dev/version-short/dixonsolutions.agentvoice.svg?style=flat&color=2f2a5e&label=VS%20Code" alt="VS Code Marketplace version"></a>
+  <a href="https://open-vsx.org/extension/dixonsolutions/agentvoice"><img src="https://img.shields.io/open-vsx/v/dixonsolutions/agentvoice?logo=eclipseide&logoColor=white&label=Open%20VSX&color=2f2a5e" alt="Open VSX version"></a>
+  <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f2a5e" alt="MIT license"></a>
+</p>
+
+<p align="center">
   <em>Formerly "Cursor Voice" — see <a href="./docs/26-rename-agentvoice.md"><code>docs/26-rename-agentvoice.md</code></a>.</em>
 </p>
 
@@ -51,6 +57,42 @@ Bridge (Node/TS) ── VoiceTurnQueue ── MCP /mcp ──► Cursor voice ag
 **Default workflow:** `agent_native` — see [`docs/16-mcp-server-agent-as-brain.md`](./docs/16-mcp-server-agent-as-brain.md).
 
 **Alternate:** `llm_intelligence` — Claude on Bedrock orchestrates tools.
+
+## At the desk: the VS Code / Cursor extension
+
+The phone is half the story. **[AgentVoice on the VS Code
+Marketplace](https://marketplace.visualstudio.com/items?itemName=dixonsolutions.agentvoice)**
+is the desk client for the same bridge — answer the agent's permission prompts
+without reaching for your phone, send the selection or the open file as a turn,
+follow its spoken replies with read-along shading, and review what it wrote as
+native diffs.
+
+```bash
+# VS Code
+code --install-extension dixonsolutions.agentvoice
+
+# Cursor, VSCodium and other Open VSX editors
+cursor --install-extension dixonsolutions.agentvoice
+codium --install-extension dixonsolutions.agentvoice
+```
+
+Or search **AgentVoice** in the Extensions view (`Ctrl+Shift+X`), or grab the
+`.vsix` from the [latest release](https://github.com/dixonSolutions/AgentVoice/releases)
+and `code --install-extension agentvoice-<version>.vsix`.
+
+| | |
+| --- | --- |
+| **Marketplace** | <https://marketplace.visualstudio.com/items?itemName=dixonsolutions.agentvoice> |
+| **Open VSX** (Cursor, VSCodium) | <https://open-vsx.org/extension/dixonsolutions/agentvoice> |
+
+It needs a bridge running on the same machine: set `agentvoice.bridgeUrl`, run
+**AgentVoice: Set bridge token** to paste your `APP_TOKEN` (stored in VS Code's
+SecretStorage, never in settings), then **AgentVoice: Connect to bridge**.
+The extension is a client only — it spawns no CLI of its own, and it registers
+as its own voice session, so the read-along transcript and `speak()` work with
+no phone connected. It does not replace the
+phone: both surfaces see the same approvals, and the first answer wins. Full
+design in [`docs/34-vscode-extension.md`](./docs/34-vscode-extension.md).
 
 ## Quick start (dev)
 
