@@ -232,6 +232,45 @@ Two layers, both against a real bridge (no mocks of the protocol):
    Token and URL come from `AGENTVOICE_TOKEN` / `AGENTVOICE_BRIDGE_URL`,
    defaulting to the repo `.env` and the dev port.
 
+## Releasing
+
+`.github/workflows/vscode-extension.yml` has two jobs:
+
+- **check** — on every pull request and push to `main`: root `npm ci`,
+  `npm run typecheck`, `npm run lint`, then `npm ci && npm run package` in
+  `vscode/` (typecheck, esbuild bundles, `vsce package`). The `.vsix` is
+  uploaded as a workflow artifact (`agentvoice.vsix`) so any PR build can be
+  installed by hand.
+- **release** — on a tag `vscode-vX.Y.Z`: same build, a GitHub Release with
+  `agentvoice-X.Y.Z.vsix` attached, then `vsce publish` (Marketplace) and
+  `ovsx publish` (Open VSX). Each publish step runs only when its secret is
+  set (`VSCE_PAT`, `OVSX_PAT`); otherwise it is skipped with a warning, so the
+  GitHub Release alone works before the publisher accounts exist. The job
+  fails if the tag does not match `vscode/package.json`.
+
+To cut a release:
+
+```bash
+cd vscode
+npm version patch          # or minor / major — updates package.json + lock, no git tag (private package)
+# add the entry to vscode/CHANGELOG.md, commit, merge to main, then:
+git tag vscode-v$(node -p "require('./package.json').version")
+git push origin main --tags
+```
+
+`workflow_dispatch` with `publish: true` publishes the build of any ref
+without a tag (no GitHub Release is created in that case).
+
+Secrets (repository settings → Actions):
+
+| Secret | Where it comes from |
+| --- | --- |
+| `VSCE_PAT` | Azure DevOps personal access token with *Marketplace → Manage* scope, for the `dixonsolutions` publisher (`vsce login` is not needed; the token is passed with `-p`) |
+| `OVSX_PAT` | open-vsx.org access token; the `dixonsolutions` namespace must exist first (`npx ovsx create-namespace dixonsolutions -p $OVSX_PAT`) |
+
+The publisher id in `vscode/package.json` must match the Marketplace
+publisher the token belongs to.
+
 ## Limits and follow-ups
 
 1. **Notifications cannot be dismissed programmatically.** If the phone
@@ -250,11 +289,12 @@ Two layers, both against a real bridge (no mocks of the protocol):
    turn (`stop`), which is what the phone does; there is no hard-kill REST
    route for the voice agent on purpose (`stop_agent` is gated on a recent
    user stop command).
-6. Publish: Marketplace + Open VSX (`vsce publish`, `ovsx publish`) once the
-   publisher account exists; `npm run build:vscode` produces the `.vsix`.
-7. Pre-existing lint errors in `web/src` (unused imports in four components,
-   `MS_PER_WORD_ESTIMATE`) were left alone — outside this change's scope;
-   `src/`, `packages/`, `vscode/` lint clean.
+6. Publish: the release workflow (see *Releasing*) handles Marketplace +
+   Open VSX once the `VSCE_PAT` / `OVSX_PAT` secrets exist; until then the
+   GitHub Release carries the `.vsix`. `npm run build:vscode` builds it locally.
+7. `npm run lint` is error-free across `src/`, `web/src`, `packages/` and
+   `vscode/` (the four `web/src` type-only-import errors and the unused
+   `MS_PER_WORD_ESTIMATE` were fixed on this branch).
 
 ## Files
 

@@ -1,0 +1,144 @@
+# VS Code / Cursor extension — check on every PR and push to main; release on a
+# `vscode-vX.Y.Z` tag (GitHub Release with the .vsix, then Marketplace and
+# Open VSX when the publisher secrets exist). See docs/34-vscode-extension.md,
+# section "Releasing".
+name: vscode-extension
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['vscode-v*']
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the built .vsix to the Marketplace / Open VSX (needs VSCE_PAT / OVSX_PAT)'
+        type: boolean
+        default: false
+
+concurrency:
+  group: vscode-extension-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: typecheck, lint, package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            vscode/package-lock.json
+
+      # Root install: the repo-wide typecheck and lint cover src/, web/,
+      # packages/client and vscode/src (better-sqlite3 uses a prebuilt binary
+      # on ubuntu-latest / Node 22 and falls back to node-gyp, which the runner
+      # has the toolchain for). The Angular app is type-checked, not built.
+      - name: Install (root)
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Install (vscode)
+        working-directory: vscode
+        run: npm ci --no-audit --no-fund
+
+      # typecheck + esbuild bundle (host, webview, tests) + vsce package
+      - name: Package extension
+        working-directory: vscode
+        run: npm run package
+
+      - name: Show package contents
+        working-directory: vscode
+        run: npx @vscode/vsce ls --no-dependencies
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agentvoice.vsix
+          path: vscode/agentvoice.vsix
+          if-no-files-found: error
+
+  release:
+    name: release
+    if: startsWith(github.ref, 'refs/tags/vscode-v') || github.event_name == 'workflow_dispatch'
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+      IS_TAG: ${{ startsWith(github.ref, 'refs/tags/vscode-v') }}
+      DO_PUBLISH: ${{ startsWith(github.ref, 'refs/tags/vscode-v') || inputs.publish == true }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: agentvoice.vsix
+          path: vscode
+
+      - name: Check the tag matches vscode/package.json
+        if: env.IS_TAG == 'true'
+        run: |
+          set -eu
+          pkg="$(node -p "require('./vscode/package.json').version")"
+          tag="${GITHUB_REF_NAME#vscode-v}"
+          echo "package.json: $pkg  tag: $tag"
+          if [ "$pkg" != "$tag" ]; then
+            echo "::error::tag vscode-v$tag does not match vscode/package.json version $pkg (bump with 'npm version' in vscode/)"
+            exit 1
+          fi
+
+      - name: Version for the release
+        id: ver
+        run: echo "version=$(node -p "require('./vscode/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Rename artifact
+        working-directory: vscode
+        run: cp agentvoice.vsix "agentvoice-${{ steps.ver.outputs.version }}.vsix"
+
+      - name: GitHub Release
+        if: env.IS_TAG == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: VS Code extension ${{ steps.ver.outputs.version }}
+          body: |
+            AgentVoice for VS Code and Cursor ${{ steps.ver.outputs.version }}.
+
+            Install: `code --install-extension agentvoice-${{ steps.ver.outputs.version }}.vsix` (or `cursor --install-extension …`).
+            Changes: see `vscode/CHANGELOG.md`.
+          files: |
+            vscode/agentvoice-${{ steps.ver.outputs.version }}.vsix
+            vscode/agentvoice.vsix
+
+      - name: Publish to the VS Code Marketplace
+        if: env.DO_PUBLISH == 'true' && env.VSCE_PAT != ''
+        working-directory: vscode
+        run: |
+          npm ci --no-audit --no-fund
+          npx @vscode/vsce publish --packagePath agentvoice.vsix -p "$VSCE_PAT"
+
+      - name: Skip Marketplace (VSCE_PAT not set)
+        if: env.DO_PUBLISH == 'true' && env.VSCE_PAT == ''
+        run: echo "::warning::VSCE_PAT secret is empty - not publishing to the VS Code Marketplace"
+
+      - name: Publish to Open VSX
+        if: env.DO_PUBLISH == 'true' && env.OVSX_PAT != ''
+        working-directory: vscode
+        run: |
+          npm ci --no-audit --no-fund
+          npx ovsx publish agentvoice.vsix -p "$OVSX_PAT"
+
+      - name: Skip Open VSX (OVSX_PAT not set)
+        if: env.DO_PUBLISH == 'true' && env.OVSX_PAT == ''
+        run: echo "::warning::OVSX_PAT secret is empty - not publishing to Open VSX"

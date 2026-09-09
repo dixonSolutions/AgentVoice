@@ -1,7 +1,7 @@
 {
   "name": "agentvoice",
   "displayName": "AgentVoice",
-  "description": "Desk client for the AgentVoice bridge: answer your coding agent's permission prompts, send editor context, follow its spoken replies with read-along shading, and review its edits \u2014 Cursor, Codex, Claude Code and Codewhale through one bridge.",
+  "description": "Desk client for the AgentVoice bridge: answer your coding agent's permission prompts, send editor context, follow its spoken replies with read-along shading, and review its edits — Cursor, Codex, Claude Code and Codewhale through one bridge.",
   "version": "0.1.0",
   "publisher": "dixonsolutions",
   "license": "MIT",
@@ -83,7 +83,7 @@
       },
       {
         "command": "agentvoice.ask",
-        "title": "AgentVoice: Ask the agent\u2026",
+        "title": "AgentVoice: Ask the agent…",
         "icon": "$(send)"
       },
       {
@@ -266,7 +266,7 @@
           ],
           "enumDescriptions": [
             "Silent: the transcript brightens at reading pace.",
-            "Play the bridge's configured text-to-speech provider (Config \u2192 Speech) in the panel.",
+            "Play the bridge's configured text-to-speech provider (Config → Speech) in the panel.",
             "Use the editor's built-in speechSynthesis voices (availability depends on the OS)."
           ],
           "default": "off",
@@ -314,6 +314,7 @@
     "esbuild": "^0.25.0",
     "glob": "^11.1.0",
     "mocha": "^11.8.0",
+    "ovsx": "^1.1.1",
     "typescript": "~5.8.0"
   }
 }
