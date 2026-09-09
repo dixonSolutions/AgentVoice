@@ -299,7 +299,7 @@ publisher the token belongs to.
 
 ## Publishing status (September 9, 2026)
 
-- **Marketplace publisher `dixonsolutions`** ("Dixon Solutions", logo set)
+- **Marketplace publisher `dixonsolutions`** ("Dixon Solutions")
   is owned by the Microsoft account that signs in through the
   `dixonSolutions` GitHub login. **`dixonsolutions.agentvoice` 0.1.0 is
   published** — through the Marketplace's web upload (*Manage → New
@@ -315,8 +315,21 @@ publisher the token belongs to.
   namespace `dixonsolutions` exists; the token is the `OVSX_PAT` repo secret.
   Tag `vscode-v0.1.0` ran the release job: GitHub Release with
   `agentvoice-0.1.0.vsix`, Marketplace skipped, **Open VSX publish succeeded**.
-- Release tags are placed on the PR head until PR #45 is merged; the tag is
-  part of `main`'s history once the merge commit lands.
+- PR #45 is merged, so `vscode-v0.1.0` is an ancestor of `main` — the 0.1.0
+  on both galleries corresponds to code that is actually on the main line.
+- **The publisher *profile* logo cannot be set from the web UI.** On
+  *Manage Publishers → Details*, the Save button fires no request at all:
+  clicking it — by mouse, by keyboard, or by calling `.click()` on the
+  underlying `button.ms-CommandBarItem-link`, which is present and not
+  disabled — produces zero network activity and zero console output. It is
+  dead for a plain text edit too, not just for a staged logo, so this is a
+  Marketplace UI defect rather than anything about the image. The publisher
+  API that would bypass it needs the `VSCE_PAT` we cannot mint. This is
+  cosmetic and affects only the publisher profile page: the *extension*
+  listing shows the right icon, because that one ships inside the `.vsix`.
+  (A separate red herring on this machine: the Flatpak file picker first
+  returned "Selected file does not have read permission" because
+  `xdg-document-portal` restarted mid-pick; retrying after it settles works.)
 
 ## Limits and follow-ups
 
