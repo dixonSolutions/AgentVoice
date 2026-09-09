@@ -42,20 +42,12 @@ import {
 import { getSpeechOutputSpecializer } from '../providers/speech/output/orchestrator.js';
 import { createMemory, type ConversationMemory } from './memory.js';
 import { runIntelligenceTurn as runOrchestratorTurn, type OrchestratorCallbacks } from './orchestrator.js';
-import { voiceTurnQueue } from '../mcp/server/turnQueue.js';
 import { parseTtsInterrupt } from '../voice/ttsInterrupt.js';
 import {
   registerTurnCompleteHook,
   registerVoiceSession,
-  resetTurnSpeakTracking,
 } from '../mcp/server/voiceToolHandlers.js';
-import {
-  spawnVoiceAgent,
-  isVoiceAgentRunning,
-  getActiveVoiceAgent,
-  refreshProjectForVoice,
-} from '../executor/voiceAgent.js';
-import { resolveProject, getSessionState } from '../state/registry.js';
+import { submitAgentNativeTurn, TurnError } from '../executor/agentTurns.js';
 
 const log = childLogger('intelligence:ws');
 
@@ -238,63 +230,24 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
             const isInterrupt =
               Boolean(msg['is_interrupt']) && phraseInterrupt && !ttsInterrupt;
 
-            const bridgeSession = getSessionState(sessionKey);
-            let project = resolveProject(bridgeSession.activeProject ?? '');
-            const agentAlreadyRunning = isVoiceAgentRunning();
-
-            if (!agentAlreadyRunning) {
-              if (!project) {
-                send(socket, {
-                  type: 'speak',
-                  text: 'No project is selected. Choose a project in the voice tab first.',
-                });
-                send(socket, { type: 'thinking', value: false });
-                send(socket, { type: 'turn_complete' });
-                intelSession.busy = false;
-                return;
-              }
-
-              // New agent process — reset speak tracking and drop orphaned queue
-              // items from a previous run that never called next_voice_turn().
-              resetTurnSpeakTracking();
-              voiceTurnQueue.clear();
-
-              project = refreshProjectForVoice(project);
-              try {
-                spawnVoiceAgent(project, bridgeSession, text);
-              } catch (err) {
-                const message = err instanceof Error ? err.message : String(err);
-                log.error({ err, sessionKey }, 'voice agent spawn failed');
-                send(socket, {
-                  type: 'speak',
-                  text: `Could not start ${getActiveProvider().displayName}: ${message}`,
-                });
-                send(socket, { type: 'error', message });
-                send(socket, { type: 'thinking', value: false });
-                send(socket, { type: 'turn_complete' });
-                intelSession.busy = false;
-                return;
-              }
-            } else {
-              // Follow-up while the same agent is still alive: do NOT reset
-              // spokeThisTurn. Clearing it made exit-fallback think the agent
-              // never spoke and TTS Cursor's internal assistant/planning text.
-              // Tracking resets when next_voice_turn() actually delivers a turn.
-              voiceTurnQueue.enqueue(text, { isInterrupt, ttsInterrupt });
+            // Spawn-or-queue is shared with the desk surfaces (executor/agentTurns.ts).
+            try {
+              submitAgentNativeTurn(text, { sessionKey, source: 'phone', isInterrupt, ttsInterrupt });
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              const code = err instanceof TurnError ? err.code : 'ERROR';
+              send(socket, {
+                type: 'speak',
+                text:
+                  code === 'NO_PROJECT'
+                    ? 'No project is selected. Choose a project in the voice tab first.'
+                    : message,
+              });
+              if (code !== 'NO_PROJECT') send(socket, { type: 'error', message });
+              send(socket, { type: 'thinking', value: false });
+              send(socket, { type: 'turn_complete' });
+              intelSession.busy = false;
             }
-
-            const va = getActiveVoiceAgent();
-
-            log.info(
-              {
-                sessionKey,
-                runId: va?.runId,
-                pid: va?.pid,
-                sessionId: va?.sessionId,
-                delivery: agentAlreadyRunning ? 'queue' : 'spawn_prompt',
-              },
-              'agent_native turn delivered',
-            );
             return;
           }
 

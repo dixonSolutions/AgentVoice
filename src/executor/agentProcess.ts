@@ -22,6 +22,7 @@ import { getActiveProvider, getProvider } from '../providers/agents/registry.js'
 import type { SpawnOptions } from '../providers/agents/types.js';
 import type { AgentStreamEvent } from '../providers/agents/events.js';
 import { guardResumeId, handleStaleSessionExit } from './resumeGuard.js';
+import { publishEvent } from '../state/eventBus.js';
 
 export { AGENT_CLIENTS };
 export type { AgentClient, SpawnOptions };
@@ -163,6 +164,8 @@ export function spawnAgent(incomingOpts: SpawnOptions): AgentHandle {
     }
 
     for (const event of events) {
+      // Every Claude line repeats the session id — publish it once.
+      const publish = event.kind !== 'session' || event.sessionId !== capturedSessionId;
       if (event.kind === 'session') {
         capturedSessionId = event.sessionId;
       } else if (event.kind === 'result' && event.text) {
@@ -171,6 +174,17 @@ export function spawnAgent(incomingOpts: SpawnOptions): AgentHandle {
         // Fallback summary: the last thing the agent actually said.
         capturedSummary = event.text;
       }
+
+      // Desk clients follow worker jobs (file writes, commands) the same way.
+      if (publish) publishEvent({
+        type: 'agent_event',
+        source: 'worker',
+        pid,
+        project: opts.project.name,
+        mode: opts.mode ?? 'agent',
+        worktree: opts.worktree ?? null,
+        event,
+      });
 
       for (const cb of eventListeners) {
         cb(event);

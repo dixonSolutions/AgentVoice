@@ -44,6 +44,7 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`31-service-orchestrator-converter.md`](./31-service-orchestrator-converter.md) | The Service / Orchestrator / Converter / Specializer layering shared by speech in, speech out, and (pending) the agent CLIs | Adding a provider or a selection policy, or working out where vendor knowledge belongs |
 | [`32-environments-vs-projects.md`](./32-environments-vs-projects.md) | Why "run the agent elsewhere" (remote / cloud) collides with the path-based project registry, and the order to add it in | Issue #40, or before touching `projects[].path` |
 | [`33-permissions-and-prompt-relay.md`](./33-permissions-and-prompt-relay.md) | Per-CLI permission modes (run-everything default), Claude Code prompts relayed to the phone, and sudo / git / ssh askpass relay | Changing how much the agent may do unasked, or a prompt is stuck on the host |
+| [`34-vscode-extension.md`](./34-vscode-extension.md) | The desk client: VS Code / Cursor extension, `/ws/events` multi-client socket, typed turns, approvals in the editor, read-along transcript, workspace-as-project, shared `packages/client` | Working at the editor instead of the phone, adding a third frontend, or touching the desk protocol |
 
 ## One-paragraph summary
 

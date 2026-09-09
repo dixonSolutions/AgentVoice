@@ -17,6 +17,13 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ['dist/**', 'web/dist/**', 'node_modules/**'],
+    // Extension host + webview: browser/DOM globals and the vscode API.
+    files: ['vscode/src/**/*.ts', 'packages/client/src/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+  {
+    ignores: ['dist/**', 'web/dist/**', 'node_modules/**', 'vscode/dist/**', 'vscode/node_modules/**'],
   },
 );

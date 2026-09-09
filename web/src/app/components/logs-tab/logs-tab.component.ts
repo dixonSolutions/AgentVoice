@@ -8,7 +8,7 @@ import { ScrollPanel } from '@openng/optimus-ui/scrollpanel';
 import { SelectButton } from '@openng/optimus-ui/selectbutton';
 import { Tag } from '@openng/optimus-ui/tag';
 
-import type { LogCategory, LogEntry, LogLevel } from '../../services/log.service';
+import type { LogCategory, LogLevel } from '../../services/log.service';
 import { LogService } from '../../services/log.service';
 import { ToastService } from '../../services/toast.service';
 

@@ -1,5 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { Subject } from 'rxjs';
+import { approvalFromPush, type ApprovalRequest, type ApprovalResponse } from '@agentvoice/client';
 export type WsStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 export type WorkflowId = 'agent_native' | 'llm_intelligence';
@@ -78,70 +79,23 @@ export interface NarrationEvent {
 }
 
 // ── Approval push types ────────────────────────────────────────────────────
+//
+// Shared with the VS Code / Cursor extension through packages/client — one
+// definition of what an approval card is, however many frontends render it.
 
-export type InputType = 'yesno' | 'choice' | 'freetext';
-
-export interface UserInputRequest {
-  kind: 'user_input';
-  request_id: string;
-  question: string;
-  input_type: InputType;
-  options?: string[];
-}
-
-export interface PlanApprovalRequest {
-  kind: 'plan_approval';
-  request_id: string;
-  title: string;
-  steps: string[];
-  estimated_impact?: string;
-}
-
-/** A CLI permission prompt relayed from the agent (Claude Code --permission-prompt-tool). */
-export interface PermissionRequest {
-  kind: 'permission';
-  request_id: string;
-  provider: string;
-  tool_name: string;
-  summary: string;
-  input: unknown;
-}
-
-/** A password prompt from sudo / git / ssh inside the agent's shell. */
-export interface SecretInputRequest {
-  kind: 'secret_input';
-  request_id: string;
-  prompt: string;
-  source: 'sudo' | 'git' | 'ssh' | 'other';
-  agent?: string;
-}
-
-export type ApprovalRequest = UserInputRequest | PlanApprovalRequest | PermissionRequest | SecretInputRequest;
-
-export interface UserInputResponse {
-  kind: 'user_input';
-  answer: string;
-}
-
-export interface PlanApprovalResponse {
-  kind: 'plan_approval';
-  decision: 'approved' | 'rejected' | 'modified';
-  notes?: string;
-}
-
-export interface PermissionResponse {
-  kind: 'permission';
-  decision: 'allow' | 'deny';
-  message?: string;
-}
-
-export interface SecretInputResponse {
-  kind: 'secret_input';
-  /** null = cancelled; the prompt fails on the host. */
-  secret: string | null;
-}
-
-export type ApprovalResponse = UserInputResponse | PlanApprovalResponse | PermissionResponse | SecretInputResponse;
+export type {
+  InputType,
+  UserInputRequest,
+  PlanApprovalRequest,
+  PermissionRequest,
+  SecretInputRequest,
+  ApprovalRequest,
+  UserInputResponse,
+  PlanApprovalResponse,
+  PermissionResponse,
+  SecretInputResponse,
+  ApprovalResponse,
+} from '@agentvoice/client';
 
 // ── Image carousel push types ─────────────────────────────────────────────
 
@@ -631,56 +585,15 @@ export class BridgeService {
         break;
       }
 
-      case 'user_input_request': {
-        const req: UserInputRequest = {
-          kind: 'user_input',
-          request_id: msg['request_id'] as string,
-          question: msg['question'] as string,
-          input_type: msg['input_type'] as InputType,
-          options: Array.isArray(msg['options']) ? (msg['options'] as string[]) : undefined,
-        };
-        this.approvalRequest$.next(req);
-        this.pendingApproval.set(req);
-        break;
-      }
-
-      case 'plan_approval_request': {
-        const req: PlanApprovalRequest = {
-          kind: 'plan_approval',
-          request_id: msg['request_id'] as string,
-          title: msg['title'] as string,
-          steps: msg['steps'] as string[],
-          estimated_impact: typeof msg['estimated_impact'] === 'string' ? msg['estimated_impact'] : undefined,
-        };
-        this.approvalRequest$.next(req);
-        this.pendingApproval.set(req);
-        break;
-      }
-
-      case 'permission_request': {
-        const req: PermissionRequest = {
-          kind: 'permission',
-          request_id: msg['request_id'] as string,
-          provider: typeof msg['provider'] === 'string' ? msg['provider'] : 'Agent',
-          tool_name: typeof msg['tool_name'] === 'string' ? msg['tool_name'] : 'tool',
-          summary: typeof msg['summary'] === 'string' ? msg['summary'] : '',
-          input: msg['input'],
-        };
-        this.approvalRequest$.next(req);
-        this.pendingApproval.set(req);
-        break;
-      }
-
+      case 'user_input_request':
+      case 'plan_approval_request':
+      case 'permission_request':
       case 'secret_input_request': {
-        const req: SecretInputRequest = {
-          kind: 'secret_input',
-          request_id: msg['request_id'] as string,
-          prompt: typeof msg['prompt'] === 'string' ? msg['prompt'] : 'Password:',
-          source: (msg['source'] as SecretInputRequest['source']) ?? 'other',
-          agent: typeof msg['agent'] === 'string' ? msg['agent'] : undefined,
-        };
-        this.approvalRequest$.next(req);
-        this.pendingApproval.set(req);
+        const req = approvalFromPush(msg);
+        if (req) {
+          this.approvalRequest$.next(req);
+          this.pendingApproval.set(req);
+        }
         break;
       }
 
