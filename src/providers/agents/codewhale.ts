@@ -59,6 +59,7 @@ import type {
   AuthFlowId,
   AuthStartResult,
   ModelEntry,
+  PermissionModeDescriptor,
   SpawnOptions,
 } from './types.js';
 
@@ -652,6 +653,17 @@ export const codewhaleProvider: AgentProvider = {
   },
 
   supportsModelSelection: () => true,
+
+  /** `exec --auto` is the only headless agent mode Codewhale has: auto-approve everything. */
+  permissionModes: (): readonly PermissionModeDescriptor[] => [
+    {
+      id: 'auto',
+      label: 'Run everything',
+      description: '--auto — tool-backed agent mode with auto-approvals; the sandbox policy still applies.',
+      prompts: 'never',
+      yolo: true,
+    },
+  ],
 
   /**
    * `agent` and `ask` only.

@@ -124,6 +124,72 @@
         }
       }
 
+      <!-- ── Permission prompt (CLI) ─────────────────────────── -->
+      @if (asPermission(); as perm) {
+        <div class="approval-header">
+          <span class="approval-icon">🔐</span>
+          <span class="approval-title">{{ perm.provider }} wants to use {{ perm.tool_name }}</span>
+          <button type="button" class="approval-close" aria-label="Deny and dismiss" (click)="dismiss()">✕</button>
+        </div>
+
+        <pre class="approval-summary">{{ perm.summary }}</pre>
+        <p class="approval-question">Allow this action? You can also say "yes" or "no".</p>
+
+        <div class="approval-actions">
+          <p-button
+            label="Allow"
+            severity="success"
+            icon="pi pi-check"
+            (onClick)="allowPermission()"
+          />
+          <p-button
+            label="Deny"
+            severity="danger"
+            icon="pi pi-ban"
+            (onClick)="denyPermission()"
+          />
+        </div>
+      }
+
+      <!-- ── Password prompt (sudo / git / ssh) ──────────────── -->
+      @if (asSecretInput(); as secretReq) {
+        <div class="approval-header">
+          <span class="approval-icon">🔑</span>
+          <span class="approval-title">{{ secretTitle(secretReq) }}</span>
+          <button type="button" class="approval-close" aria-label="Cancel" (click)="dismiss()">✕</button>
+        </div>
+
+        <pre class="approval-summary">{{ secretReq.prompt }}</pre>
+        <p class="approval-question">
+          Typed here only — sent to the bridge once and handed straight to the waiting prompt. Never stored.
+        </p>
+
+        <div class="approval-freetext">
+          <p-password
+            inputId="approval-secret"
+            [(ngModel)]="secret"
+            [feedback]="false"
+            [toggleMask]="true"
+            placeholder="Password"
+            autocomplete="current-password"
+            (keyup.enter)="submitSecret()"
+            styleClass="w-full"
+          />
+          <p-button
+            label="Send"
+            icon="pi pi-send"
+            [disabled]="!secret"
+            (onClick)="submitSecret()"
+          />
+          <p-button
+            label="Cancel"
+            severity="secondary"
+            [outlined]="true"
+            (onClick)="cancelSecret()"
+          />
+        </div>
+      }
+
     </div>
   </div>
 }
@@ -193,6 +259,21 @@
   .approval-close:hover {
     background: var(--p-surface-ground);
     color: var(--p-text-color);
+  }
+
+  .approval-summary {
+    margin: 0 0 0.5rem;
+    padding: 0.6rem 0.75rem;
+    border-radius: 0.5rem;
+    background: var(--p-surface-ground);
+    border: 1px solid var(--p-content-border-color);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-height: 9rem;
+    overflow-y: auto;
   }
 
   .approval-question {

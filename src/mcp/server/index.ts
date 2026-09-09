@@ -53,13 +53,40 @@ import { dispatchTool } from '../handlers.js';
 import { agentVoiceMcpInstructions } from '../agentVoicePrompt.js';
 import { MCP_ENTRY_VERSION, MCP_SERVER_NAME } from '../../providers/agents/mcpRegistration.js';
 import { bindVoiceAgentMcpSession } from '../../executor/voiceAgent.js';
-import { registerRequest, type UserInputRequest, type PlanApprovalRequest } from './approvalRegistry.js';
+import { registerRequest, type UserInputRequest, type PlanApprovalRequest, type PermissionRequest } from './approvalRegistry.js';
+import { PERMISSION_PROMPT_TOOL } from '../../providers/agents/permissions.js';
+import { getActiveProvider } from '../../providers/agents/registry.js';
 import { notifyPhone } from '../../push/notifyPhone.js';
 import { instrumentMcpToolLogging } from './toolLogging.js';
 import { handleShowImages } from './imageToolHandlers.js';
 import { voiceTurnQueue } from './turnQueue.js';
 
 const log = childLogger('mcp:server');
+
+/** One human line for a permission card: the command, the file, or a trimmed JSON. */
+function summarizeToolUse(toolName: string, input: unknown): string {
+  const obj = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  const pick = (...keys: string[]) => {
+    for (const k of keys) {
+      const v = obj[k];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return null;
+  };
+  const detail =
+    pick('command', 'file_path', 'path', 'notebook_path', 'url', 'pattern', 'query', 'description') ??
+    (Object.keys(obj).length > 0 ? JSON.stringify(obj) : '');
+  const line = detail ? `${toolName}: ${detail}` : toolName;
+  return line.length > 240 ? `${line.slice(0, 237)}…` : line;
+}
+
+/** Spoken answer to an open permission prompt → allow / deny / unrelated. */
+function classifySpokenDecision(text: string): 'allow' | 'deny' | 'other' {
+  const t = text.trim().toLowerCase().replace(/[.!,]+$/g, '');
+  if (/^(yes|yeah|yep|yup|sure|ok|okay|allow|approve|approved|go ahead|do it|fine|please do|confirm)( .{0,20})?$/.test(t)) return 'allow';
+  if (/^(no|nope|nah|deny|denied|reject|stop|don't|do not|cancel|never)( .{0,20})?$/.test(t)) return 'deny';
+  return 'other';
+}
 
 function voiceToolResponse(result: { error?: string; message?: string; [key: string]: unknown }) {
   const text = JSON.stringify(result);
@@ -457,6 +484,21 @@ function buildMcpServer(sessionKey: string): McpServer {
     },
   );
 
+  server.tool(
+    'agent_permission_mode',
+    'Read or change how much the active agent CLI may do without asking (its permission / approval mode). ' +
+      'Call with no arguments to list the modes this CLI offers (they differ per CLI) and the active one. ' +
+      'Pass `mode` (an id from `modes`) to change it — "run everything" is the default; modes marked prompts: "phone" ' +
+      'send each permission prompt to the phone for the user to allow or deny.',
+    {
+      mode: z.string().optional().describe('Mode id from `modes` to switch to. Omit to just read.'),
+    },
+    async ({ mode }) => {
+      const result = await dispatchTool('agent_permission_mode', { mode }, sessionKey);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
   // ── Execution ──────────────────────────────────────────────────────────
 
   server.tool(
@@ -817,6 +859,83 @@ function buildMcpServer(sessionKey: string): McpServer {
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { content: [{ type: 'text', text: JSON.stringify({ request_id, error: message }) }] };
+      }
+    },
+  );
+
+  /**
+   * Claude Code's `--permission-prompt-tool` target. The CLI — not the model —
+   * calls this whenever its permission mode would show a prompt; the answer
+   * has to be a JSON string of `{behavior:"allow", updatedInput?}` or
+   * `{behavior:"deny", message}`. The prompt is relayed to the phone as a
+   * `permission` approval card; a spoken yes/no while it is open counts too.
+   */
+  server.tool(
+    PERMISSION_PROMPT_TOOL,
+    'Internal: the agent CLI calls this for its own permission prompts (Claude Code --permission-prompt-tool). ' +
+      'The user allows or denies on the phone. Do not call this yourself — to ask the user something, use request_user_input.',
+    {
+      tool_name: z.string().describe('Tool the CLI wants to run (Bash, Edit, WebFetch, …).'),
+      input: z.unknown().optional().describe('The tool input as the CLI would run it.'),
+      tool_use_id: z.string().optional(),
+    },
+    async ({ tool_name, input }) => {
+      const provider = getActiveProvider();
+      const summary = summarizeToolUse(tool_name, input);
+      const { request_id, promise } = registerRequest((id) => {
+        const req: PermissionRequest = {
+          kind: 'permission',
+          request_id: id,
+          provider: provider.displayName,
+          tool_name,
+          summary,
+          input: input ?? null,
+        };
+        void notifyPhone({ type: 'permission_request', ...req });
+        return req;
+      }, 300_000);
+      void notifyPhone({
+        type: 'narration',
+        kind: 'permission',
+        text: `${provider.displayName} wants to run ${summary}. Say yes or no, or answer on your phone.`,
+      });
+      log.info({ request_id, tool_name, summary: summary.slice(0, 120) }, 'permission prompt relayed to phone');
+
+      const decision = (behavior: 'allow' | 'deny', message?: string) => ({
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              behavior === 'allow'
+                ? { behavior, updatedInput: input ?? {} }
+                : { behavior, message: message ?? 'The user denied this action from their phone.' },
+            ),
+          },
+        ],
+      });
+
+      try {
+        const response = await promise;
+        if (response.kind === 'permission') {
+          log.info({ request_id, decision: response.decision }, 'permission prompt answered');
+          return decision(response.decision, response.message);
+        }
+        if (response.kind === 'interrupted_by_voice_turn') {
+          const spoken = classifySpokenDecision(response.user_turn);
+          log.info({ request_id, spoken, text: response.user_turn.slice(0, 80) }, 'permission prompt answered by voice');
+          if (spoken === 'allow') return decision('allow');
+          return decision(
+            'deny',
+            spoken === 'deny'
+              ? 'The user said no.'
+              : `The user did not answer the permission prompt; they said: "${response.user_turn.slice(0, 200)}". Treat that as their new request.`,
+          );
+        }
+        return decision('deny', 'Unexpected response to the permission prompt.');
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log.warn({ request_id, err: message }, 'permission prompt not answered');
+        return decision('deny', `Nobody answered the permission prompt (${message}). Do not retry it.`);
       }
     },
   );

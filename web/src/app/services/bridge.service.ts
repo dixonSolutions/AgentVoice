@@ -97,7 +97,26 @@ export interface PlanApprovalRequest {
   estimated_impact?: string;
 }
 
-export type ApprovalRequest = UserInputRequest | PlanApprovalRequest;
+/** A CLI permission prompt relayed from the agent (Claude Code --permission-prompt-tool). */
+export interface PermissionRequest {
+  kind: 'permission';
+  request_id: string;
+  provider: string;
+  tool_name: string;
+  summary: string;
+  input: unknown;
+}
+
+/** A password prompt from sudo / git / ssh inside the agent's shell. */
+export interface SecretInputRequest {
+  kind: 'secret_input';
+  request_id: string;
+  prompt: string;
+  source: 'sudo' | 'git' | 'ssh' | 'other';
+  agent?: string;
+}
+
+export type ApprovalRequest = UserInputRequest | PlanApprovalRequest | PermissionRequest | SecretInputRequest;
 
 export interface UserInputResponse {
   kind: 'user_input';
@@ -110,7 +129,19 @@ export interface PlanApprovalResponse {
   notes?: string;
 }
 
-export type ApprovalResponse = UserInputResponse | PlanApprovalResponse;
+export interface PermissionResponse {
+  kind: 'permission';
+  decision: 'allow' | 'deny';
+  message?: string;
+}
+
+export interface SecretInputResponse {
+  kind: 'secret_input';
+  /** null = cancelled; the prompt fails on the host. */
+  secret: string | null;
+}
+
+export type ApprovalResponse = UserInputResponse | PlanApprovalResponse | PermissionResponse | SecretInputResponse;
 
 // ── Image carousel push types ─────────────────────────────────────────────
 
@@ -620,6 +651,33 @@ export class BridgeService {
           title: msg['title'] as string,
           steps: msg['steps'] as string[],
           estimated_impact: typeof msg['estimated_impact'] === 'string' ? msg['estimated_impact'] : undefined,
+        };
+        this.approvalRequest$.next(req);
+        this.pendingApproval.set(req);
+        break;
+      }
+
+      case 'permission_request': {
+        const req: PermissionRequest = {
+          kind: 'permission',
+          request_id: msg['request_id'] as string,
+          provider: typeof msg['provider'] === 'string' ? msg['provider'] : 'Agent',
+          tool_name: typeof msg['tool_name'] === 'string' ? msg['tool_name'] : 'tool',
+          summary: typeof msg['summary'] === 'string' ? msg['summary'] : '',
+          input: msg['input'],
+        };
+        this.approvalRequest$.next(req);
+        this.pendingApproval.set(req);
+        break;
+      }
+
+      case 'secret_input_request': {
+        const req: SecretInputRequest = {
+          kind: 'secret_input',
+          request_id: msg['request_id'] as string,
+          prompt: typeof msg['prompt'] === 'string' ? msg['prompt'] : 'Password:',
+          source: (msg['source'] as SecretInputRequest['source']) ?? 'other',
+          agent: typeof msg['agent'] === 'string' ? msg['agent'] : undefined,
         };
         this.approvalRequest$.next(req);
         this.pendingApproval.set(req);

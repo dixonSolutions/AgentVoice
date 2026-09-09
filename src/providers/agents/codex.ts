@@ -18,6 +18,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { childLogger } from '../../log.js';
 import { AUTO_MODEL_ID } from '../../state/models.js';
+import { activePermissionMode } from './permissions.js';
 import { updateAgentEnvKeys } from '../../state/envFile.js';
 import type { Project, SessionState } from '../../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from '../../executor/agentPrompt.js';
@@ -45,6 +46,7 @@ import type {
   AuthFlowId,
   AuthStartResult,
   ModelEntry,
+  PermissionModeDescriptor,
   SpawnOptions,
 } from './types.js';
 
@@ -80,6 +82,44 @@ async function checkAuth(): Promise<AuthCheckResult> {
   } catch (err) {
     return { authenticated: false, email: null, detail: err instanceof Error ? err.message : String(err) };
   }
+}
+
+// ── Permission modes ──────────────────────────────────────────────────────
+
+/**
+ * `codex exec` is non-interactive: an approval request nobody can answer is
+ * denied. There is no headless hook to relay it, so the choice is between
+ * bypassing approvals, letting Codex's own reviewer decide, or accepting the
+ * denials. `ask` jobs always run `--sandbox read-only` with no bypass.
+ */
+const CODEX_PERMISSION_MODES: readonly (PermissionModeDescriptor & { args: string[] })[] = [
+  {
+    id: 'full',
+    label: 'Run everything',
+    description: 'No approvals, no sandbox — commands run directly on the host.',
+    prompts: 'never',
+    yolo: true,
+    args: ['--dangerously-bypass-approvals-and-sandbox'],
+  },
+  {
+    id: 'approve-for-me',
+    label: 'Auto-review',
+    description: 'Codex reviews each approval request itself inside the workspace-write sandbox.',
+    prompts: 'never',
+    args: ['--approve-for-me', '--sandbox', 'workspace-write'],
+  },
+  {
+    id: 'workspace',
+    label: 'Workspace sandbox',
+    description: 'Writes stay inside the project; anything that would need approval is refused (no prompt is possible headlessly).',
+    prompts: 'deny',
+    args: ['--sandbox', 'workspace-write'],
+  },
+];
+
+function permissionArgs(): string[] {
+  const active = activePermissionMode(codexProvider);
+  return (CODEX_PERMISSION_MODES.find((m) => m.id === active.id) ?? CODEX_PERMISSION_MODES[0]!).args;
 }
 
 // ── Model selection ───────────────────────────────────────────────────────
@@ -559,6 +599,8 @@ export const codexProvider: AgentProvider = {
   // `codex exec -m <model>` overrides the config default per run.
   supportsModelSelection: () => true,
 
+  permissionModes: () => CODEX_PERMISSION_MODES,
+
   // Codex has no plan mode; `ask` is enforced with a read-only sandbox.
   supportedModes: (): readonly AgentMode[] => ['agent', 'ask'],
   parseStreamEvent: parseCodexEvent,
@@ -572,7 +614,9 @@ export const codexProvider: AgentProvider = {
     if (project.resumeId && !oneShot && mode !== 'ask' && !worktree) {
       args.push('resume', project.resumeId);
     }
-    args.push('--json', '--sandbox', mode === 'ask' ? 'read-only' : 'workspace-write');
+    args.push('--json');
+    if (mode === 'ask') args.push('--sandbox', 'read-only');
+    else args.push(...permissionArgs());
     // Worktree runs must not touch the main checkout.
     args.push('--cd', worktree ?? project.path);
     args.push(...selectionArgs(session));
@@ -583,7 +627,7 @@ export const codexProvider: AgentProvider = {
   buildVoiceArgs(project: Project, session: SessionState, _pendingTurn?: string, bootPrompt = ''): string[] {
     const args: string[] = ['exec'];
     if (project.resumeId) args.push('resume', project.resumeId);
-    args.push('--json', '--sandbox', 'workspace-write', '--cd', project.path);
+    args.push('--json', ...permissionArgs(), '--cd', project.path);
     args.push(...selectionArgs(session));
     args.push(bootPrompt);
     return args;

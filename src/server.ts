@@ -45,6 +45,8 @@ import { registerServeRoutes } from './routes/serve.js';
 import { registerProjectsAdminRoutes } from './routes/projectsAdmin.js';
 import { registerProviderAuthRoutes } from './routes/providerAuth.js';
 import { registerProviderModelRoutes } from './routes/providerModels.js';
+import { registerProviderPermissionRoutes } from './routes/providerPermissions.js';
+import { registerAskpassRoutes } from './routes/askpass.js';
 import { registerHostingAdminRoutes } from './routes/hostingAdmin.js';
 import { registerSpeechProviderRoutes } from './routes/speechProviders.js';
 import { registerMcpServer } from './mcp/server/index.js';
@@ -300,6 +302,8 @@ export async function buildServer(): Promise<FastifyInstance> {
   await registerProjectsAdminRoutes(app);
   await registerProviderAuthRoutes(app);
   await registerProviderModelRoutes(app);
+  await registerProviderPermissionRoutes(app);
+  await registerAskpassRoutes(app);
   await registerHostingAdminRoutes(app);
   await registerSpeechProviderRoutes(app);
   registerPushRoutes(app);
@@ -421,6 +425,19 @@ export async function buildServer(): Promise<FastifyInstance> {
                 kind: 'plan_approval',
                 decision: r['decision'] as 'approved' | 'rejected' | 'modified',
                 notes: typeof r['notes'] === 'string' ? r['notes'] : undefined,
+              });
+            } else if (kind === 'permission' && (r['decision'] === 'allow' || r['decision'] === 'deny')) {
+              resolved = resolveRequest(request_id, {
+                kind: 'permission',
+                decision: r['decision'],
+                message: typeof r['message'] === 'string' ? r['message'] : undefined,
+              });
+            } else if (kind === 'secret_input') {
+              // The secret is handed straight to the waiting askpass helper — it is
+              // not logged here or anywhere downstream.
+              resolved = resolveRequest(request_id, {
+                kind: 'secret_input',
+                secret: typeof r['secret'] === 'string' ? r['secret'] : null,
               });
             }
             socket.send(JSON.stringify({ type: 'approval_ack', request_id, ok: resolved }));

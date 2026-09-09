@@ -96,6 +96,29 @@ export interface AgentAbout {
   osArch: string;
 }
 
+// ── Permission modes ────────────────────────────────────────────────────────
+
+/**
+ * One way a CLI can be told how much to do without asking. Every CLI has a
+ * "run everything" option; what else exists — a classifier, edits-only, ask
+ * for everything — differs per CLI, so each provider declares its own list
+ * and owns the argv for each entry.
+ */
+export interface PermissionModeDescriptor {
+  id: string;
+  label: string;
+  description: string;
+  /**
+   * What happens when the CLI would normally ask:
+   *  - phone: the prompt is relayed to the phone (Claude Code --permission-prompt-tool)
+   *  - deny:  the CLI is headless and simply refuses that action
+   *  - never: nothing asks in this mode (run-everything / auto-reviewed)
+   */
+  prompts: 'phone' | 'deny' | 'never';
+  /** The run-everything option — the default unless the user picks otherwise. */
+  yolo?: boolean;
+}
+
 // ── Auth contract ───────────────────────────────────────────────────────────
 
 /**
@@ -175,6 +198,14 @@ export interface AgentProvider {
   listModels(): Promise<ModelEntry[]>;
   /** False when the CLI manages its own model choice (no --model flag to pass). */
   supportsModelSelection(): boolean;
+
+  /**
+   * Permission / approval modes this CLI can run headlessly, run-everything
+   * first. `buildWorkerArgs` / `buildVoiceArgs` read the configured mode via
+   * providers/agents/permissions.ts; read-only job modes (`ask`, `plan`)
+   * always keep their own guarantees regardless of the permission mode.
+   */
+  permissionModes(): readonly PermissionModeDescriptor[];
 
   /** Build headless worker argv (jobManager / agent_ask). */
   buildWorkerArgs(opts: SpawnOptions): string[];

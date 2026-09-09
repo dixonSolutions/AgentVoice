@@ -316,6 +316,7 @@ client is active (Cursor, Codex, or Claude Code).
 | `agent_set_project(project)` | Switch active project. |
 | `agent_list_models(query?, refresh?)` | List the models the CLI reports. Each entry carries `efforts` (the effort levels *that* model accepts — they differ per model, empty when none) and `fast` (whether a fast tier exists). `active_label` is the spoken-friendly current selection. |
 | `agent_set_model(model_id, effort?, fast?, scope?)` | Change model and/or its knobs. `effort` must be one of the model's `efforts` (`"default"` = CLI decides); `fast` only where `fast: true`. "Use high effort" → keep the model, set `effort: "high"`. Default **global**: default selection, all sessions, future sessions. Use `scope: "session"` only if user says "just this session". If the tool rejects a level, tell the user the accepted ones. |
+| `agent_permission_mode(mode?)` | Read or change the CLI's approval policy. No args lists the modes *this* CLI offers (they differ per CLI) and the active one; "run everything" is the default. Modes with `prompts: "phone"` relay each permission prompt to the phone — the user may also answer "yes"/"no" by voice. |
 | `agent_submit(prompt, mode?)` | Submit coding task (alternative to spawn_agent). |
 | `agent_ask(question)` | Read-only question about the codebase. |
 | `agent_job_status(job_id?)` | Poll a running job. |

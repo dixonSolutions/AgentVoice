@@ -429,7 +429,16 @@ const SettingsSchema = z.object({
   maxConcurrentJobs: z.number().int().min(1).max(4).default(1),
   jobTimeoutMs: z.number().int().positive().default(600_000),
   planFirst: z.boolean().default(false),
-  preRunFlags: z.array(z.string()).default(['--force', '--trust']),
+  /**
+   * Extra Cursor flags. `--force` / `--yolo` used to live here; the permission
+   * mode below owns them now (migrated out at load).
+   */
+  preRunFlags: z.array(z.string()).default(['--trust']),
+  /**
+   * Permission / approval mode per agent client (see provider.permissionModes()).
+   * Absent = the provider's run-everything default.
+   */
+  permissionModes: z.record(z.string(), z.string()).default({}),
   modelCacheTtlMs: z.number().int().positive().default(3_600_000),
   narratorEnabled: z.boolean().default(true),
   narratorCadenceMs: z.number().int().positive().default(15_000),
@@ -737,6 +746,15 @@ function migrateRawConfig(raw: unknown): unknown {
     if (s['defaultActiveModel'] === undefined || String(s['defaultActiveModel']).trim() === '') {
       s['defaultActiveModel'] = 'auto';
       log.info('Migrated config — added default settings.defaultActiveModel');
+    }
+
+    if (Array.isArray(s['preRunFlags'])) {
+      const flags = s['preRunFlags'] as unknown[];
+      const kept = flags.filter((f) => f !== '--force' && f !== '-f' && f !== '--yolo');
+      if (kept.length !== flags.length) {
+        s['preRunFlags'] = kept;
+        log.info('Migrated config — moved --force out of preRunFlags (permission mode owns it now)');
+      }
     }
 
     if (s['agentClient'] === undefined) {

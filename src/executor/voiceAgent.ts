@@ -9,6 +9,7 @@
  * See docs/16-mcp-server-agent-as-brain.md § Phase 3.
  */
 
+import { askpassEnv } from './askpass.js';
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import stripAnsi from 'strip-ansi';
@@ -195,7 +196,7 @@ export function spawnVoiceAgent(
   const child = spawn(agentBin, args, {
     cwd: project.path,
     shell: false,
-    env: provider.env(process.env),
+    env: { ...provider.env(process.env), ...askpassEnv() },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
 
