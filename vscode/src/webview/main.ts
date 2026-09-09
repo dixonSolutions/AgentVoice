@@ -482,10 +482,30 @@ window.addEventListener('message', (ev: MessageEvent<Record<string, unknown>>) =
 
 // ── Composer ──────────────────────────────────────────────────────────────
 
+/**
+ * Match the textarea's height to its content, so it starts one line tall and
+ * grows as you type. `overflow-y: hidden` plus a `max-height` in the CSS means
+ * it never shows a scrollbar until it has earned one — a scrollbar (or the
+ * native resize grabber) costs more width than the field can spare in a
+ * sidebar this narrow.
+ */
+function autoGrow(): void {
+  input.style.height = 'auto';
+  // Everything here is `box-sizing: border-box`, but scrollHeight excludes the
+  // border — assign it raw and the field ends up a border short of its content
+  // and scrolls forever.
+  const cs = getComputedStyle(input);
+  const border = parseFloat(cs.borderTopWidth) + parseFloat(cs.borderBottomWidth);
+  input.style.height = `${input.scrollHeight + border}px`;
+  // Past max-height the CSS clamps us, so hand scrolling back at that point.
+  input.style.overflowY = input.scrollHeight > input.clientHeight ? 'auto' : 'hidden';
+}
+
 function send(): void {
   const text = input.value.trim();
   if (!text) return;
   input.value = '';
+  autoGrow();
   sendBtn.disabled = true;
   thinkingEl.hidden = false;
   vscode.postMessage({ type: 'turn', text });
@@ -499,6 +519,8 @@ input.addEventListener('keydown', (e) => {
     send();
   }
 });
+input.addEventListener('input', autoGrow);
+autoGrow();
 $('stop').addEventListener('click', () => vscode.postMessage({ type: 'command', command: 'agentvoice.stopAgent' }));
 $('read').addEventListener('click', () => {
   if (config.readAloud === 'off') {

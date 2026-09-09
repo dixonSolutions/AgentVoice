@@ -66,6 +66,14 @@ textarea, input[type=text], input[type=password] {
   color: var(--vscode-input-foreground); background: var(--vscode-input-background);
   border: 1px solid var(--vscode-input-border, transparent); border-radius: 4px; padding: 5px 7px; resize: vertical; width: 100%;
 }
+/* The composer grows with what you type (see autoGrow in webview/main.ts), so
+   it starts one line tall and never shows a scrollbar or a resize grabber —
+   the sidebar is narrow enough that either one eats the whole field. */
+.composer textarea {
+  flex: 1; min-width: 0; width: auto;
+  resize: none; overflow-y: hidden;
+  max-height: 40vh; line-height: 1.4;
+}
 textarea:focus, input:focus { outline: 1px solid var(--vscode-focusBorder); }
 button {
   font-family: inherit; font-size: 12px; color: var(--vscode-button-secondaryForeground); background: var(--vscode-button-secondaryBackground);
