@@ -236,7 +236,8 @@ Two layers, both against a real bridge (no mocks of the protocol):
 
 `.github/workflows/vscode-extension.yml` has two jobs:
 
-- **check** — on every pull request and push to `main`: root `npm ci`,
+- **check** — on every pull request and push to `main`: root `npm ci
+  --legacy-peer-deps` (same peer-dependency stance as `scripts/setup.sh`),
   `npm run typecheck`, `npm run lint`, then `npm ci && npm run package` in
   `vscode/` (typecheck, esbuild bundles, `vsce package`). The `.vsix` is
   uploaded as a workflow artifact (`agentvoice.vsix`) so any PR build can be

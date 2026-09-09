@@ -39,8 +39,11 @@ jobs:
       # packages/client and vscode/src (better-sqlite3 uses a prebuilt binary
       # on ubuntu-latest / Node 22 and falls back to node-gyp, which the runner
       # has the toolchain for). The Angular app is type-checked, not built.
+      # --legacy-peer-deps: @openng/optimus-ui declares a peer on
+      # @angular/cdk ^21 while the app is on Angular 22; scripts/setup.sh and
+      # scripts/restart.sh install the same way.
       - name: Install (root)
-        run: npm ci --no-audit --no-fund
+        run: npm ci --no-audit --no-fund --legacy-peer-deps
 
       - name: Typecheck
         run: npm run typecheck
