@@ -4,6 +4,14 @@ All notable changes to the AgentVoice extension for VS Code and Cursor.
 Releases are tagged `vscode-vX.Y.Z` in the
 [AgentVoice repository](https://github.com/dixonSolutions/AgentVoice).
 
+## 0.1.2
+
+- Fix the composer in the **Agent** panel. Its placeholder was longer than the
+  two rows it was given, so it rendered clipped mid-sentence next to a resize
+  grabber and a scrollbar — most of a field that is only about 180px wide in a
+  sidebar. It now starts one line tall, grows with what you type up to 40vh,
+  and carries the Enter / Shift+Enter hint in its tooltip.
+
 ## 0.1.1
 
 - Ship the real AgentVoice mark. The gallery icon is now generated from the
