@@ -274,22 +274,24 @@ publisher the token belongs to.
 
 ## Publishing status (September 9, 2026)
 
-- **Marketplace publisher `dixonsolutions` exists** ("Dixon Solutions"), owned by
-  the Microsoft account that signs in through the `dixonSolutions` GitHub
-  login. **`dixonsolutions.agentvoice` 0.1.0 is published** — through the
-  Marketplace's web upload (*Manage → New extension → Visual Studio Code →
-  agentvoice.vsix*), not the pipeline.
-- **No `VSCE_PAT` yet.** Azure DevOps will not create an organization for that
-  account without a linked Azure subscription (billing), and a Personal Access
-  Token can only be minted inside an organization. Until a subscription is
-  linked (or an existing org is used), the release job's Marketplace step
-  skips with a warning and new versions are uploaded by hand.
-- **Open VSX: not published.** Login with GitHub works, but publishing requires
-  an Eclipse Foundation account plus the signed Open VSX Publisher Agreement,
-  which nobody has created. Namespace `dixonsolutions` does not exist yet.
-  Once an Eclipse account exists: sign the agreement on the Open VSX profile
-  page, generate a token, `gh secret set OVSX_PAT`, and
-  `npx ovsx create-namespace dixonsolutions -p …`.
+- **Marketplace publisher `dixonsolutions`** ("Dixon Solutions", logo set)
+  is owned by the Microsoft account that signs in through the
+  `dixonSolutions` GitHub login. **`dixonsolutions.agentvoice` 0.1.0 is
+  published** — through the Marketplace's web upload (*Manage → New
+  extension → Visual Studio Code → agentvoice.vsix*). Installing from the
+  Marketplace (`code --install-extension dixonsolutions.agentvoice`) verified.
+- **No `VSCE_PAT`.** Azure DevOps will not create an organization for that
+  account without a linked Azure subscription (billing), and a Personal
+  Access Token can only be minted inside an organization. Until a
+  subscription is linked, the release job's Marketplace step skips with a
+  warning and new versions are uploaded by hand.
+- **Open VSX: published by the pipeline.** An Eclipse Foundation account
+  (`dixonsolutions`, GitHub linked) signed the Open VSX Publisher Agreement;
+  namespace `dixonsolutions` exists; the token is the `OVSX_PAT` repo secret.
+  Tag `vscode-v0.1.0` ran the release job: GitHub Release with
+  `agentvoice-0.1.0.vsix`, Marketplace skipped, **Open VSX publish succeeded**.
+- Release tags are placed on the PR head until PR #45 is merged; the tag is
+  part of `main`'s history once the merge commit lands.
 
 ## Limits and follow-ups
 
