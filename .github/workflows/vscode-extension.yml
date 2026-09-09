@@ -45,15 +45,17 @@ jobs:
       - name: Install (root)
         run: npm ci --no-audit --no-fund --legacy-peer-deps
 
+      # vscode/ deps first: the root typecheck and lint scripts also cover
+      # vscode/src, which resolves @types/vscode from vscode/node_modules.
+      - name: Install (vscode)
+        working-directory: vscode
+        run: npm ci --no-audit --no-fund
+
       - name: Typecheck
         run: npm run typecheck
 
       - name: Lint
         run: npm run lint
-
-      - name: Install (vscode)
-        working-directory: vscode
-        run: npm ci --no-audit --no-fund
 
       # typecheck + esbuild bundle (host, webview, tests) + vsce package
       - name: Package extension
