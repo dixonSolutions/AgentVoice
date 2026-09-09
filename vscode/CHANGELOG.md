@@ -4,6 +4,14 @@ All notable changes to the AgentVoice extension for VS Code and Cursor.
 Releases are tagged `vscode-vX.Y.Z` in the
 [AgentVoice repository](https://github.com/dixonSolutions/AgentVoice).
 
+## 0.1.1
+
+- Ship the real AgentVoice mark. The gallery icon is now generated from the
+  same authoritative `web/public/icon.svg` the PWA uses (via
+  `scripts/gen-icons.mjs`), instead of a stand-in drawn for the first release,
+  and the activity-bar icon is that mark's silhouette rather than a generic
+  microphone. Adds a gallery banner in the product's `#1a1a2e`.
+
 ## 0.1.0
 
 First release.

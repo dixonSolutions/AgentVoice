@@ -1,1 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z"/><path d="M6 11a6 6 0 0 0 12 0"/><path d="M12 17v3"/><path d="M4 8h1M19 8h1M3.5 13h1M19.5 13h1"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-label="AgentVoice">
+  <title>AgentVoice</title>
+  <!--
+    The activity-bar mark: the same waveform-and-caret as web/public/icon.svg,
+    with the tile and the violet gradient dropped. VS Code tints activity-bar
+    icons with the foreground colour and dims them when the view is inactive,
+    so this has to be a single-colour silhouette in currentColor — a coloured
+    tile here would fight the theme instead of following it.
+
+    Geometry is the 512px brand mark's content box (x 104..408, y 138..374)
+    scaled by 20/304 and centred, so the proportions match the gallery icon.
+  -->
+  <g fill="currentColor">
+    <rect x="2.00" y="8.59" width="2.11" height="6.84" rx="1.05"/>
+    <rect x="5.42" y="7.01" width="2.11" height="10.00" rx="1.05"/>
+    <rect x="8.85" y="7.94" width="2.11" height="8.16" rx="1.05"/>
+    <rect x="12.27" y="5.30" width="2.11" height="13.42" rx="1.05"/>
+    <rect x="15.69" y="6.88" width="2.11" height="10.26" rx="1.05"/>
+  </g>
+  <!-- The caret keeps its hard edge: the one square corner in the mark. -->
+  <rect x="19.64" y="4.25" width="2.37" height="15.53" rx="0.53" fill="currentColor"/>
+</svg>

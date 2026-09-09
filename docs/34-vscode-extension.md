@@ -232,6 +232,31 @@ Two layers, both against a real bridge (no mocks of the protocol):
    Token and URL come from `AGENTVOICE_TOKEN` / `AGENTVOICE_BRIDGE_URL`,
    defaulting to the repo `.env` and the dev port.
 
+## Brand assets
+
+The extension does not own any artwork. `web/public/icon.svg` is the single
+authoritative mark for the whole product, and `scripts/gen-icons.mjs`
+rasterizes it to `vscode/media/icon.png` (128px, the size both galleries
+render) alongside the PWA's 192/512 icons. Regenerate with `npm run
+gen-icons`; the PNGs are committed so neither a build nor a release needs
+`sharp`.
+
+Two icons, deliberately:
+
+- `media/icon.png` — the full mark (violet tile, waveform, white caret) for the
+  Marketplace and Open VSX gallery listings, plus a `galleryBanner` in the
+  PWA's own `#1a1a2e` so the listing page matches the app.
+- `media/icon.svg` — the activity-bar icon. VS Code tints activity-bar icons
+  with the theme foreground and dims them when the view is inactive, so this
+  one has to be a single-colour silhouette in `currentColor`; a coloured tile
+  there fights the theme instead of following it. It is the same waveform and
+  caret at the same proportions (the 512px mark's content box scaled by
+  20/304), with the tile and gradient dropped — not a different drawing.
+
+0.1.0 shipped a stand-in icon by mistake; 0.1.1 is that release corrected.
+When the mark changes, edit the SVG in `web/public/` and re-run the generator —
+never hand-edit a PNG, and never draw a separate mark for the desk client.
+
 ## Releasing
 
 `.github/workflows/vscode-extension.yml` has two jobs:
