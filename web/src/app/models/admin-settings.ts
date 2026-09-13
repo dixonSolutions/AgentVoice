@@ -72,7 +72,12 @@ export interface ServeSettings {
 
 export type ServeOutcome = 'ok' | 'skipped' | 'no_changes' | 'error';
 
-export type ServeActionId = 'pull' | 'restart' | 'health';
+/**
+ * `update` and `stash-update` both run scripts/update.sh — the single update
+ * path (fetch, rebase, deps, build, restart). `stash-update` stashes local
+ * changes first and pops them afterwards.
+ */
+export type ServeActionId = 'update' | 'stash-update' | 'restart' | 'health';
 
 export interface ServeRunResult {
   runId: string;
@@ -89,15 +94,56 @@ export interface ServeGitSnapshot {
   trackBranch: string;
   defaultBranch: string | null;
   dirty: boolean;
+  /** Commits on HEAD that origin/<trackBranch> does not have. */
   ahead: number;
+  /** Commits on origin/<trackBranch> that HEAD does not have. */
   behind: number;
   currentCommit: string | null;
+  shortCommit: string | null;
+  commitSubject: string | null;
+  commitDate: string | null;
+  upstreamCommit: string | null;
+  /** Modified, staged and untracked paths, capped at 100. */
+  localChanges: string[];
+  /** Uncapped count — localChanges may be truncated. */
+  localChangeCount: number;
+  /** How many files the incoming commits touch. */
+  incomingCount: number;
+  /** localChanges ∩ files the incoming commits touch — what a rebase fights over. */
+  conflictFiles: string[];
+  /** Uncapped count — conflictFiles may be truncated. */
+  conflictCount: number;
+  fetchedAt: string | null;
+}
+
+export type InstallMode = 'git' | 'npm' | 'unknown';
+
+/** How the bridge was installed — decides which update controls make sense. */
+export interface InstallModeInfo {
+  mode: InstallMode;
+  root: string;
+  reason: string;
+  global: boolean;
+  updateCommand: string;
+}
+
+/** Where an npm install stands against the registry. The git analogue is ServeGitSnapshot. */
+export interface ServeNpmSnapshot {
+  installed: string;
+  latest: string | null;
+  updateAvailable: boolean;
+  checkedAt: string;
+  error?: string;
 }
 
 export interface ServeStatus {
   running: boolean;
   lastRun: ServeRunResult | null;
   git: ServeGitSnapshot | null;
+  npm: ServeNpmSnapshot | null;
+  install: InstallModeInfo;
+  /** Run id of the update currently in flight, if any. */
+  updateRunId: string | null;
 }
 
 export interface ServeServiceLogs {

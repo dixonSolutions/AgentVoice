@@ -1692,6 +1692,18 @@ body {
   opacity: 0.85;
 }
 
+/* Conflicting / locally-changed paths in the Serve status card. Capped height
+   so a repo with a hundred dirty files does not push the buttons off-screen. */
+.cv-cfg-serve-files {
+  margin: 0;
+  padding: 0 0 0 1rem;
+  max-height: 9rem;
+  overflow-y: auto;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--p-text-muted-color);
+}
+
 .cv-cfg-muted {
   color: var(--p-text-muted-color);
   font-size: 0.875rem;

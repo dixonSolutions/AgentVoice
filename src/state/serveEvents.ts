@@ -34,6 +34,21 @@ export function addServeEvent(params: {
     });
 }
 
+/**
+ * How many steps of `runId` are already stored.
+ *
+ * This is the ingest cursor for `scripts/update.sh`'s NDJSON step log: the
+ * script appends in order and the bridge inserts in order, so "already
+ * recorded" is a count, not a diff — and it survives the restart that the
+ * update itself performs mid-run.
+ */
+export function countServeEventsForRun(runId: string): number {
+  const row = getDb()
+    .prepare('SELECT COUNT(*) AS n FROM serve_event WHERE run_id = ?')
+    .get(runId) as { n: number } | undefined;
+  return row?.n ?? 0;
+}
+
 export function listServeEvents(limit = 50): ServeEventRow[] {
   const capped = Math.min(Math.max(limit, 1), 200);
   return getDb()

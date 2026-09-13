@@ -113,8 +113,13 @@ export class AdminService {
 
   // ── Serve ────────────────────────────────────────────────────────────────
 
-  getServe(): Promise<{ serve: ServeSettings; status: ServeStatus }> {
-    return this.get('/api/admin/serve');
+  /**
+   * `fetch: true` hits origin first — the only way ahead/behind and the
+   * conflicting-file list describe the repo as it is right now rather than as
+   * of the last fetch. Costs a network round trip, so it is opt-in.
+   */
+  getServe(opts: { fetch?: boolean } = {}): Promise<{ serve: ServeSettings; status: ServeStatus }> {
+    return this.get(`/api/admin/serve${opts.fetch ? '?fetch=1' : ''}`);
   }
 
   patchServe(

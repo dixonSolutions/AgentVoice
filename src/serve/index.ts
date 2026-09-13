@@ -1,15 +1,21 @@
 /**
  * Serve — manual self-hosting maintenance (no heartbeat, no auto-update).
  *
- * In-app actions: rebase onto origin/<branch> (default: origin's default
- * branch, else main), restart via scripts/restart.sh, health check, and live
+ * There is exactly one update path: `scripts/update.sh`. Both in-app update
+ * buttons run that script (the stash one adds `--stash`), and so does anyone
+ * running it by hand. The bridge's job here is the part the script cannot do —
+ * pre-flight refusal, and mirroring the script's step log into `serve_event`
+ * across the restart that kills this very process.
+ *
+ * Other in-app actions: restart via scripts/restart.sh, health check, and live
  * journalctl logs. See docs/21-serve-self-hosting.md
  */
 
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { join, resolve } from 'node:path';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { promisify } from 'node:util';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { simpleGit, type SimpleGit } from 'simple-git';
@@ -17,10 +23,18 @@ import { getConfig, type ServeSettings } from '../config.js';
 import { getRunModeInfo } from '../runMode.js';
 import { childLogger } from '../log.js';
 import { writeAudit } from '../state/db.js';
+import { getAppVersionInfo } from '../state/appVersion.js';
 import {
   addServeEvent,
+  countServeEventsForRun,
   type ServeEventStatus,
 } from '../state/serveEvents.js';
+
+import {
+  canSelfUpdate,
+  detectInstallMode,
+  type InstallModeInfo,
+} from './installMode.js';
 
 const log = childLogger('serve');
 
@@ -28,11 +42,37 @@ const log = childLogger('serve');
 const FALLBACK_TRACK_BRANCH = 'main';
 
 /** Fixed unit name — never interpolated from user input. */
+const execFileAsync = promisify(execFile);
+
+/** Our own name on the registry — what `npm view` and `npm install` target. */
+const PACKAGE_NAME = 'agentvoice';
+
 const SERVICE_UNIT = 'agentvoice.service';
+
+/** How long to let the registry answer before giving up on a version check. */
+const REGISTRY_TIMEOUT_MS = 8000;
+
+/** The one update script. Nothing else pulls, builds or restarts. */
+const UPDATE_SCRIPT = 'scripts/update.sh';
+
+/** NDJSON step log written by update.sh and mirrored into `serve_event`. */
+const UPDATE_LOG = 'data/serve-update.jsonl';
+
+/** How often the bridge drains the script's step log while a run is live. */
+const UPDATE_POLL_MS = 1500;
+
+/** A run with no `finish` line after this long is treated as dead, not live. */
+const UPDATE_STALE_MS = 30 * 60 * 1000;
+
+/** Long file lists are for a human to skim, not to scroll — cap the payload. */
+const MAX_LISTED_FILES = 100;
 
 export type ServeOutcome = 'ok' | 'skipped' | 'no_changes' | 'error';
 
-export type ServeActionId = 'pull' | 'restart' | 'health';
+export type ServeActionId = 'update' | 'stash-update' | 'restart' | 'health';
+
+/** Update modes, one per Serve button. `stash-update` adds `--stash`. */
+export type ServeUpdateMode = Extract<ServeActionId, 'update' | 'stash-update'>;
 
 export interface ServeRunResult {
   runId: string;
@@ -58,15 +98,63 @@ export interface ServeGitSnapshot {
   /** Origin's advertised default branch (`origin/HEAD`), when known. */
   defaultBranch: string | null;
   dirty: boolean;
+  /** Commits on HEAD that `origin/<trackBranch>` does not have. */
   ahead: number;
+  /** Commits on `origin/<trackBranch>` that HEAD does not have. */
   behind: number;
   currentCommit: string | null;
+  /** First 8 characters of `currentCommit`, for display. */
+  shortCommit: string | null;
+  commitSubject: string | null;
+  /** ISO author date of HEAD. */
+  commitDate: string | null;
+  /** Tip of `origin/<trackBranch>` as of the last fetch. */
+  upstreamCommit: string | null;
+  /**
+   * Modified, staged and untracked paths in the working tree, capped at
+   * {@link MAX_LISTED_FILES}. `localChangeCount` is the uncapped total.
+   */
+  localChanges: string[];
+  localChangeCount: number;
+  /** How many files the incoming commits touch. */
+  incomingCount: number;
+  /**
+   * `localChanges` ∩ files touched by `HEAD..origin/<trackBranch>` — the files
+   * a rebase would actually fight over. This is what makes "Rebase & update"
+   * unsafe and "Stash, rebase & update" the honest choice. Capped like
+   * `localChanges`; `conflictCount` is the uncapped total.
+   */
+  conflictFiles: string[];
+  conflictCount: number;
+  /** ISO timestamp of the fetch this snapshot is based on, when it did one. */
+  fetchedAt: string | null;
+}
+
+/**
+ * Where an npm install stands relative to the registry.
+ *
+ * The git equivalent is ServeGitSnapshot — branch, commit, ahead/behind. An
+ * npm install has none of those; "am I current" is one semver comparison.
+ */
+export interface ServeNpmSnapshot {
+  installed: string;
+  latest: string | null;
+  updateAvailable: boolean;
+  checkedAt: string;
+  /** Why `latest` is null — offline, registry down, package not published yet. */
+  error?: string;
 }
 
 export interface ServeStatus {
   running: boolean;
   lastRun: ServeRunResult | null;
   git: ServeGitSnapshot | null;
+  /** Populated for npm installs; null for a clone, which uses `git` instead. */
+  npm: ServeNpmSnapshot | null;
+  /** How this bridge was installed, and therefore how it updates. */
+  install: InstallModeInfo;
+  /** Run id of the update currently in flight, if any. */
+  updateRunId: string | null;
 }
 
 export interface ServeServiceLogs {
@@ -80,6 +168,9 @@ export interface ServeServiceLogs {
 let _running = false;
 let _lastRun: ServeRunResult | null = null;
 let _lastGit: ServeGitSnapshot | null = null;
+/** Set while `scripts/update.sh` is in flight; cleared when it writes `finish`. */
+let _updateRunId: string | null = null;
+let _updateTimer: ReturnType<typeof setInterval> | null = null;
 
 function resolveRepoDir(settings: ServeSettings): string {
   return resolve(settings.repoDir?.trim() || process.cwd());
@@ -154,10 +245,62 @@ function recordStep(
   });
 }
 
-async function probeGit(repoDir: string, settings: ServeSettings): Promise<ServeGitSnapshot> {
+function splitLines(text: string): string[] {
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+}
+
+/**
+ * Files a rebase onto `upstreamRef` would fight over: dirty locally **and**
+ * touched by the commits about to land. Two different questions — `git status`
+ * for the working tree, `HEAD..upstream` for what is coming — intersected.
+ */
+async function computeConflictFiles(
+  git: SimpleGit,
+  localChanges: readonly string[],
+  upstreamRef: string,
+): Promise<{ conflictFiles: string[]; incomingCount: number }> {
+  if (localChanges.length === 0) return { conflictFiles: [], incomingCount: 0 };
+  let incoming: string[];
+  try {
+    incoming = splitLines(await git.raw(['diff', '--name-only', `HEAD..${upstreamRef}`]));
+  } catch {
+    return { conflictFiles: [], incomingCount: 0 };
+  }
+  const incomingSet = new Set(incoming);
+  return {
+    conflictFiles: localChanges.filter((path) => incomingSet.has(path)),
+    incomingCount: incoming.length,
+  };
+}
+
+async function probeGit(
+  repoDir: string,
+  settings: ServeSettings,
+  opts: { fetch?: boolean } = {},
+): Promise<ServeGitSnapshot> {
   const git = simpleGit({ baseDir: repoDir });
+
+  let fetchedAt: string | null = null;
+  if (opts.fetch) {
+    try {
+      await git.fetch(['--prune', 'origin']);
+      fetchedAt = new Date().toISOString();
+      try {
+        await git.raw(['remote', 'set-head', 'origin', '-a']);
+      } catch {
+        // origin/HEAD refresh is best-effort — the fetch already succeeded
+      }
+    } catch (err) {
+      log.warn({ err }, 'git fetch failed during snapshot');
+    }
+  }
+
   const defaultBranch = await detectDefaultBranch(git);
   const trackBranch = resolveTrackBranch(settings, defaultBranch);
+  const upstreamRef = `origin/${trackBranch}`;
   let headBranch = trackBranch;
   try {
     headBranch = (await git.revparse(['--abbrev-ref', 'HEAD'])).trim() || trackBranch;
@@ -165,38 +308,107 @@ async function probeGit(repoDir: string, settings: ServeSettings): Promise<Serve
     // keep trackBranch
   }
 
+  const empty: ServeGitSnapshot = {
+    repoDir,
+    branch: headBranch,
+    trackBranch,
+    defaultBranch,
+    dirty: false,
+    ahead: 0,
+    behind: 0,
+    currentCommit: null,
+    shortCommit: null,
+    commitSubject: null,
+    commitDate: null,
+    upstreamCommit: null,
+    localChanges: [],
+    localChangeCount: 0,
+    incomingCount: 0,
+    conflictFiles: [],
+    conflictCount: 0,
+    fetchedAt,
+  };
+
   let status;
   try {
     status = await git.status();
   } catch {
-    return {
-      repoDir,
-      branch: headBranch,
-      trackBranch,
-      defaultBranch,
-      dirty: false,
-      ahead: 0,
-      behind: 0,
-      currentCommit: null,
-    };
+    return empty;
   }
 
   let currentCommit: string | null = null;
+  let commitSubject: string | null = null;
+  let commitDate: string | null = null;
   try {
-    currentCommit = (await git.revparse(['HEAD'])).trim();
+    const line = (await git.raw(['log', '-1', '--pretty=%H%x1f%s%x1f%aI'])).trim();
+    const [sha, subject, date] = line.split('\u001f');
+    currentCommit = sha?.trim() || null;
+    commitSubject = subject?.trim() || null;
+    commitDate = date?.trim() || null;
   } catch {
-    currentCommit = null;
+    // unborn branch — no HEAD commit yet
   }
 
+  let upstreamCommit: string | null = null;
+  try {
+    upstreamCommit = (await git.revparse([upstreamRef])).trim() || null;
+  } catch {
+    upstreamCommit = null;
+  }
+
+  // `git status` counts ahead/behind against HEAD's own upstream, which is not
+  // necessarily origin/<trackBranch>. Count against the branch we rebase onto.
+  let ahead = status.ahead;
+  let behind = status.behind;
+  if (upstreamCommit && currentCommit) {
+    try {
+      const counts = (await git.raw([
+        'rev-list',
+        '--left-right',
+        '--count',
+        `HEAD...${upstreamRef}`,
+      ])).trim();
+      const [left, right] = counts.split(/\s+/);
+      ahead = Number(left) || 0;
+      behind = Number(right) || 0;
+    } catch {
+      // keep git.status()'s numbers
+    }
+  }
+
+  // Staged, unstaged, renamed and untracked — everything a rebase would trip on.
+  const localChanges = [
+    ...new Set([
+      ...status.modified,
+      ...status.created,
+      ...status.deleted,
+      ...status.not_added,
+      ...status.conflicted,
+      ...status.staged,
+      ...status.renamed.map((r) => r.to),
+    ]),
+  ].sort();
+
+  const { conflictFiles, incomingCount } = upstreamCommit
+    ? await computeConflictFiles(git, localChanges, upstreamRef)
+    : { conflictFiles: [], incomingCount: 0 };
+
   return {
-    repoDir,
+    ...empty,
     branch: status.current || headBranch,
-    trackBranch,
-    defaultBranch,
     dirty: !status.isClean(),
-    ahead: status.ahead,
-    behind: status.behind,
+    ahead,
+    behind,
     currentCommit,
+    shortCommit: currentCommit ? currentCommit.slice(0, 8) : null,
+    commitSubject,
+    commitDate,
+    upstreamCommit,
+    localChanges: localChanges.slice(0, MAX_LISTED_FILES),
+    localChangeCount: localChanges.length,
+    incomingCount,
+    conflictFiles: conflictFiles.slice(0, MAX_LISTED_FILES),
+    conflictCount: conflictFiles.length,
   };
 }
 
@@ -308,166 +520,484 @@ function assertRepoDir(repoDir: string, runId: string): boolean {
   return true;
 }
 
-/**
- * Fetch origin and rebase onto origin/<trackBranch>.
- * Origin is the source of truth; dirty trees are stashed around the rebase.
- */
-async function stepGitRebase(
-  repoDir: string,
-  settings: ServeSettings,
-  runId: string,
-): Promise<{ outcome: ServeOutcome; detail: string }> {
-  const git = simpleGit({ baseDir: repoDir });
-  let snapshot = await probeGit(repoDir, settings);
-  _lastGit = snapshot;
-  const branch = snapshot.trackBranch;
-  recordStep(
-    runId,
-    'git_status',
-    snapshot.dirty ? 'warn' : 'ok',
-    `head=${snapshot.branch} track=${branch} default=${snapshot.defaultBranch ?? 'unset'} ahead=${snapshot.ahead} behind=${snapshot.behind} dirty=${snapshot.dirty}`,
-  );
+// ── The update script: spawn it, then mirror its step log ──────────────────
 
+interface UpdateLogLine {
+  runId?: unknown;
+  ts?: unknown;
+  step?: unknown;
+  status?: unknown;
+  detail?: unknown;
+}
+
+function updateLogPath(repoDir: string): string {
+  return join(repoDir, UPDATE_LOG);
+}
+
+function readUpdateLog(repoDir: string): UpdateLogLine[] {
+  const path = updateLogPath(repoDir);
+  if (!existsSync(path)) return [];
+  let text: string;
   try {
-    await git.fetch('origin');
+    text = readFileSync(path, 'utf8');
+  } catch {
+    return [];
+  }
+  const rows: UpdateLogLine[] = [];
+  for (const line of splitLines(text)) {
     try {
-      await git.raw(['remote', 'set-head', 'origin', '-a']);
+      rows.push(JSON.parse(line) as UpdateLogLine);
     } catch {
-      // origin/HEAD refresh is best-effort — fetch already succeeded
+      // a torn last line while the script is mid-write — it will be complete
+      // on the next poll
     }
-    snapshot = await probeGit(repoDir, settings);
-    _lastGit = snapshot;
-    recordStep(runId, 'git_fetch', 'ok', `origin/${snapshot.trackBranch}`);
-  } catch (err) {
-    const detail = err instanceof Error ? err.message : String(err);
-    recordStep(runId, 'git_fetch', 'error', detail);
-    return { outcome: 'error', detail: `Git fetch failed — ${detail}` };
+  }
+  return rows;
+}
+
+function toEventStatus(value: unknown): ServeEventStatus {
+  return value === 'ok' || value === 'skip' || value === 'warn' || value === 'error'
+    ? value
+    : 'ok';
+}
+
+/**
+ * Copy any not-yet-recorded step lines from the script's NDJSON log into
+ * `serve_event`, which is what the Serve page renders.
+ *
+ * The count of rows already stored for this run is the cursor. The script
+ * appends in order and we insert in order, so the same file can be drained
+ * repeatedly — including after the restart that killed the process mid-run —
+ * without duplicating a single step. Returns the run's terminal state, if it
+ * has reached one.
+ */
+function ingestUpdateLog(repoDir: string): {
+  runId: string | null;
+  finished: boolean;
+  outcome: ServeOutcome;
+  summary: string;
+  lastTs: string | null;
+} {
+  const rows = readUpdateLog(repoDir);
+  const runId = rows.length > 0 ? String(rows[rows.length - 1]?.runId ?? '') || null : null;
+  if (!runId) {
+    return { runId: null, finished: false, outcome: 'ok', summary: '', lastTs: null };
   }
 
-  const trackBranch = snapshot.trackBranch;
-  const upstreamRef = `origin/${trackBranch}`;
-  let upstreamCommit: string | null = null;
+  const forRun = rows.filter((row) => String(row.runId ?? '') === runId);
+  const already = countServeEventsForRun(runId);
+  for (const row of forRun.slice(already)) {
+    addServeEvent({
+      runId,
+      step: String(row.step ?? 'step'),
+      status: toEventStatus(row.status),
+      detail: row.detail ? String(row.detail) : undefined,
+    });
+  }
+
+  const last = forRun[forRun.length - 1];
+  const finishRow = [...forRun].reverse().find((row) => row.step === 'finish');
+  return {
+    runId,
+    finished: Boolean(finishRow),
+    outcome: toEventStatus(finishRow?.status) === 'error' ? 'error' : 'ok',
+    summary: finishRow?.detail ? String(finishRow.detail) : '',
+    lastTs: last?.ts ? String(last.ts) : null,
+  };
+}
+
+function stopUpdateWatch(): void {
+  if (_updateTimer) clearInterval(_updateTimer);
+  _updateTimer = null;
+}
+
+/**
+ * Drain the script's log every {@link UPDATE_POLL_MS} until it finishes.
+ *
+ * The bridge is usually killed by the script's own `systemctl restart` long
+ * before the run ends; `startServe()` resumes the same watch on boot, so the
+ * step log the UI polls ends up complete either way.
+ */
+function watchUpdateRun(repoDir: string, runId: string): void {
+  stopUpdateWatch();
+  _updateRunId = runId;
+  _running = true;
+
+  const drain = (): void => {
+    let state;
+    try {
+      state = ingestUpdateLog(repoDir);
+    } catch (err) {
+      log.warn({ err }, 'could not ingest update step log');
+      return;
+    }
+    if (state.runId !== runId) return;
+
+    const stale = state.lastTs
+      ? Date.now() - Date.parse(state.lastTs) > UPDATE_STALE_MS
+      : false;
+    if (!state.finished && !stale) return;
+
+    stopUpdateWatch();
+    _updateRunId = null;
+    _running = false;
+    _lastRun = {
+      runId,
+      trigger: 'manual',
+      startedAt: _lastRun?.runId === runId ? _lastRun.startedAt : new Date().toISOString(),
+      finishedAt: new Date().toISOString(),
+      outcome: state.finished ? state.outcome : 'error',
+      summary: state.finished
+        ? state.summary
+        : 'Update stopped reporting — check the service logs',
+    };
+    void refreshGitSnapshot().catch(() => undefined);
+  };
+
+  _updateTimer = setInterval(drain, UPDATE_POLL_MS);
+  _updateTimer.unref?.();
+  drain();
+}
+
+/**
+ * Run `scripts/update.sh` — the one update path.
+ *
+ * Everything that can fail cheaply is checked here first, because once the
+ * script is detached the only channel left is the step log. In particular a
+ * dirty tree is refused outright in `update` mode: that is the whole point of
+ * having a separate "Stash, rebase & update" button.
+ */
+async function startUpdateRun(
+  repoDir: string,
+  settings: ServeSettings,
+  mode: ServeUpdateMode,
+  runId: string,
+): Promise<{ outcome: ServeOutcome; detail: string }> {
+  const script = join(repoDir, UPDATE_SCRIPT);
+  if (!existsSync(script)) {
+    recordStep(runId, 'preflight', 'error', `${UPDATE_SCRIPT} missing at ${script}`);
+    return { outcome: 'error', detail: `Update script not found at ${script}` };
+  }
+
+  let snapshot: ServeGitSnapshot;
   try {
-    upstreamCommit = (await git.revparse([upstreamRef])).trim();
+    snapshot = await probeGit(repoDir, settings, { fetch: true });
+    _lastGit = snapshot;
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    recordStep(runId, 'git_rebase', 'error', `missing ${upstreamRef}: ${detail}`);
+    recordStep(runId, 'preflight', 'error', detail);
+    return { outcome: 'error', detail: `Could not read repository state — ${detail}` };
+  }
+
+  const upstreamRef = `origin/${snapshot.trackBranch}`;
+  if (!snapshot.upstreamCommit) {
+    recordStep(runId, 'preflight', 'error', `${upstreamRef} not found`);
     return {
       outcome: 'error',
       detail: `Upstream ${upstreamRef} not found — set a track branch or push ${FALLBACK_TRACK_BRANCH}`,
     };
   }
 
-  if (snapshot.currentCommit && upstreamCommit && snapshot.currentCommit === upstreamCommit && !snapshot.ahead) {
-    recordStep(runId, 'git_rebase', 'skip', `already at ${upstreamRef}`);
-    return { outcome: 'no_changes', detail: `Already up to date with ${upstreamRef}` };
+  if (mode === 'update' && snapshot.dirty) {
+    const list = (snapshot.conflictCount > 0 ? snapshot.conflictFiles : snapshot.localChanges)
+      .slice(0, 10)
+      .join(', ');
+    const detail = snapshot.conflictCount > 0
+      ? `${snapshot.conflictCount} local change(s) also changed upstream (${list}) — use “Stash, rebase & update”`
+      : `${snapshot.localChangeCount} local change(s) would block the rebase (${list}) — use “Stash, rebase & update” or commit them`;
+    recordStep(runId, 'preflight', 'error', detail);
+    return { outcome: 'error', detail };
   }
 
-  let stashed = false;
-  if (snapshot.dirty) {
-    try {
-      await git.stash(['push', '-u', '-m', `agentvoice serve rebase ${new Date().toISOString()}`]);
-      stashed = true;
-      recordStep(runId, 'git_stash', 'ok', 'stashed local changes before rebase');
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      recordStep(runId, 'git_stash', 'error', detail);
-      return { outcome: 'error', detail: `Could not stash dirty tree — ${detail}` };
-    }
-  }
-
+  // Truncate first: the log is the run's transcript, and `ingestUpdateLog`
+  // reads it whole. A leftover previous run would replay into this one.
+  const logPath = updateLogPath(repoDir);
   try {
-    // During rebase, "ours" is the upstream (origin). Trust origin on conflicts.
-    await git.rebase(['-X', 'ours', upstreamRef]);
-    recordStep(runId, 'git_rebase', 'ok', `rebased onto ${upstreamRef}`);
+    mkdirSync(dirname(logPath), { recursive: true });
+    writeFileSync(logPath, '', 'utf8');
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
-    try {
-      await git.rebase(['--abort']);
-    } catch {
-      // already clean or no rebase in progress
-    }
-    recordStep(runId, 'git_rebase', 'error', detail);
-    if (stashed) {
-      try {
-        await git.stash(['pop']);
-        recordStep(runId, 'git_stash_pop', 'ok', 'restored stash after failed rebase');
-      } catch (popErr) {
-        const popDetail = popErr instanceof Error ? popErr.message : String(popErr);
-        recordStep(runId, 'git_stash_pop', 'warn', popDetail);
-      }
-    }
-    _lastGit = await probeGit(repoDir, settings);
-    return { outcome: 'error', detail: `Git rebase failed — ${detail}` };
+    recordStep(runId, 'preflight', 'error', `cannot write ${logPath}: ${detail}`);
+    return { outcome: 'error', detail: `Cannot write the update log at ${logPath}` };
   }
 
-  if (stashed) {
-    try {
-      await git.stash(['pop']);
-      recordStep(runId, 'git_stash_pop', 'ok', 'restored local stash after rebase');
-    } catch (err) {
-      const detail = err instanceof Error ? err.message : String(err);
-      recordStep(runId, 'git_stash_pop', 'warn', detail);
-    }
+  const args = [
+    script,
+    '--repo', repoDir,
+    '--branch', snapshot.trackBranch,
+    '--run-id', runId,
+    '--log-file', logPath,
+    ...(mode === 'stash-update' ? ['--stash'] : []),
+  ];
+  const spawned = spawnDetachedFromService(repoDir, args);
+  if (!spawned.ok) {
+    recordStep(runId, 'preflight', 'error', spawned.detail);
+    return { outcome: 'error', detail: `Could not start the update — ${spawned.detail}` };
   }
 
-  _lastGit = await probeGit(repoDir, settings);
-  return { outcome: 'ok', detail: `Rebased onto ${upstreamRef}` };
+  watchUpdateRun(repoDir, runId);
+  const verb = mode === 'stash-update' ? 'Stash, rebase & update' : 'Rebase & update';
+  return {
+    outcome: 'ok',
+    detail: `${verb} started — ${snapshot.behind} commit(s) behind ${upstreamRef}. Watch the step log; the bridge restarts at the end.`,
+  };
 }
 
 async function withServeLock<T>(
   label: string,
   fn: (runId: string) => Promise<T>,
+  opts: { recordStart?: boolean } = {},
 ): Promise<T> {
   if (_running) {
     throw new Error('Serve is already running');
   }
   _running = true;
   const runId = randomUUID();
-  recordStep(runId, 'start', 'ok', label);
+  if (opts.recordStart !== false) recordStep(runId, 'start', 'ok', label);
   try {
     return await fn(runId);
   } finally {
-    _running = false;
+    // An update run outlives this call: the detached script holds the lock
+    // until it writes `finish`, and watchUpdateRun is what releases it.
+    if (!_updateRunId) _running = false;
   }
 }
 
-export async function refreshGitSnapshot(): Promise<ServeGitSnapshot> {
+/**
+ * Re-read the repository state. `fetch` costs a network round trip but is the
+ * only way the ahead/behind counts and the conflict set mean anything.
+ */
+let _lastNpm: ServeNpmSnapshot | null = null;
+
+export async function refreshGitSnapshot(
+  opts: { fetch?: boolean } = {},
+): Promise<ServeGitSnapshot> {
   const { settings } = getConfig();
   const repoDir = resolveRepoDir(settings.serve);
-  _lastGit = await probeGit(repoDir, settings.serve);
+  _lastGit = await probeGit(repoDir, settings.serve, opts);
   return _lastGit;
 }
 
+/**
+ * Ask the registry what the newest published version is.
+ *
+ * Deliberately tolerant: a bridge on a home network is often offline, and a
+ * failed version check must degrade to "cannot tell" rather than making the
+ * whole status endpoint fail. The installed version always comes back.
+ */
+export async function refreshNpmSnapshot(): Promise<ServeNpmSnapshot> {
+  const installed = getAppVersionInfo().appVersion;
+  const snapshot: ServeNpmSnapshot = {
+    installed,
+    latest: null,
+    updateAvailable: false,
+    checkedAt: new Date().toISOString(),
+  };
+
+  try {
+    const { stdout } = await execFileAsync(
+      'npm',
+      ['view', PACKAGE_NAME, 'version', '--registry=https://registry.npmjs.org/'],
+      { timeout: REGISTRY_TIMEOUT_MS },
+    );
+    const latest = stdout.trim();
+    if (latest) {
+      snapshot.latest = latest;
+      snapshot.updateAvailable = compareSemver(latest, installed) > 0;
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // A 404 is not a fault — it just means nothing has been published yet.
+    snapshot.error = /E404|404 Not Found/.test(message)
+      ? `${PACKAGE_NAME} is not published to the registry yet`
+      : `Could not reach the npm registry: ${message.split('\n')[0]}`;
+  }
+
+  _lastNpm = snapshot;
+  return snapshot;
+}
+
+/** -1 / 0 / 1, comparing only the numeric release part. Prereleases sort low. */
+function compareSemver(a: string, b: string): number {
+  const parse = (v: string): number[] =>
+    v.split('-')[0]!.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const [x, y] = [parse(a), parse(b)];
+  for (let i = 0; i < 3; i++) {
+    const diff = (x[i] ?? 0) - (y[i] ?? 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+  // Same release numbers: a prerelease is older than the plain version.
+  const preA = a.includes('-');
+  const preB = b.includes('-');
+  if (preA === preB) return 0;
+  return preA ? -1 : 1;
+}
+
 export function getServeStatus(): ServeStatus {
+  const install = detectInstallMode();
+  // Report only the snapshot that describes this install. An npm install
+  // sitting in a directory that happens to be inside someone's repo would
+  // otherwise answer with a branch and commit that say nothing about the
+  // code actually running.
+  const isGit = install.mode === 'git';
   return {
     running: _running,
     lastRun: _lastRun,
-    git: _lastGit,
+    git: isGit ? _lastGit : null,
+    npm: isGit ? null : _lastNpm,
+    install,
+    updateRunId: _updateRunId,
   };
 }
 
-export async function serveGitPull(): Promise<ServeActionResult> {
+/**
+ * Both update buttons land here. `update` rebases a clean tree; `stash-update`
+ * stashes first and pops afterwards. One script, one flag of difference.
+ */
+export async function serveUpdate(mode: ServeUpdateMode): Promise<ServeActionResult> {
+  const install = detectInstallMode();
+
+  // An npm install has no repo to rebase and no working tree to stash, so both
+  // buttons collapse to the same thing there: ask npm for the newer version.
+  if (install.mode === 'npm') return serveNpmUpdate(install);
+  if (!canSelfUpdate(install)) {
+    return withServeLock(`manual:${mode}`, async (runId) => {
+      const detail =
+        `Cannot update automatically — ${install.reason}. ` +
+        'Reinstall with npm, or run this from a git clone.';
+      recordStep(runId, 'finish', 'error', detail);
+      return { runId, outcome: 'error' as const, detail };
+    });
+  }
+
   const { settings } = getConfig();
   const serveSettings = settings.serve;
   const repoDir = resolveRepoDir(serveSettings);
 
-  return withServeLock('manual:rebase', async (runId) => {
-    if (!assertRepoDir(repoDir, runId)) {
-      return { runId, outcome: 'error' as const, detail: 'Invalid repo directory' };
+  // The script writes its own `start` step under the same run id; a second one
+  // here would throw off the ingest cursor.
+  return withServeLock(
+    `manual:${mode}`,
+    async (runId) => {
+      if (!assertRepoDir(repoDir, runId)) {
+        return { runId, outcome: 'error' as const, detail: 'Invalid repo directory' };
+      }
+      const result = await startUpdateRun(repoDir, serveSettings, mode, runId);
+      if (result.outcome === 'error') {
+        recordStep(runId, 'finish', 'error', result.detail);
+        _lastRun = {
+          runId,
+          trigger: 'manual',
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          outcome: 'error',
+          summary: result.detail,
+        };
+      } else if (_lastRun?.runId !== runId) {
+        // A script that failed instantly has already been drained into
+        // _lastRun by watchUpdateRun — do not paper over it with "started".
+        _lastRun = {
+          runId,
+          trigger: 'manual',
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+          outcome: 'ok',
+          summary: result.detail,
+        };
+      }
+      return { runId, outcome: result.outcome, detail: result.detail };
+    },
+    { recordStart: false },
+  );
+}
+
+/**
+ * Update an npm install: let npm replace the package, then restart the unit.
+ *
+ * Unlike the git path this is not a detached script — `npm install` is short,
+ * and the bridge is only killed afterwards by the restart, so the step log can
+ * be written inline and will survive.
+ */
+async function serveNpmUpdate(install: InstallModeInfo): Promise<ServeActionResult> {
+  return withServeLock('manual:update', async (runId) => {
+    recordStep(runId, 'install_mode', 'ok', `npm install (${install.reason})`);
+
+    const snapshot = await refreshNpmSnapshot();
+    if (snapshot.error) {
+      recordStep(runId, 'registry_check', 'warn', snapshot.error);
+    } else {
+      recordStep(
+        runId,
+        'registry_check',
+        'ok',
+        `installed ${snapshot.installed}, latest ${snapshot.latest ?? 'unknown'}`,
+      );
     }
-    const result = await stepGitRebase(repoDir, serveSettings, runId);
-    recordStep(runId, 'finish', result.outcome === 'error' ? 'error' : 'ok', result.detail);
-    _lastRun = {
-      runId,
-      trigger: 'manual',
-      startedAt: new Date().toISOString(),
-      finishedAt: new Date().toISOString(),
-      outcome: result.outcome,
-      summary: result.detail,
-    };
-    return { runId, outcome: result.outcome, detail: result.detail };
+
+    if (snapshot.latest && !snapshot.updateAvailable) {
+      const detail = `Already on ${snapshot.installed} — nothing newer published`;
+      recordStep(runId, 'finish', 'ok', detail);
+      _lastRun = finishedRun(runId, 'ok', detail);
+      return { runId, outcome: 'no_changes' as const, detail };
+    }
+
+    const args = ['install', ...(install.global ? ['-g'] : []), `${PACKAGE_NAME}@latest`];
+    try {
+      await execFileAsync('npm', [...args, '--no-audit', '--no-fund'], {
+        timeout: 10 * 60_000,
+        maxBuffer: 8 * 1024 * 1024,
+      });
+      recordStep(runId, 'npm_install', 'ok', `npm ${args.join(' ')}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const detail = `npm ${args.join(' ')} failed: ${message.split('\n')[0]}`;
+      recordStep(runId, 'npm_install', 'error', detail);
+      recordStep(runId, 'finish', 'error', detail);
+      _lastRun = finishedRun(runId, 'error', detail);
+      return { runId, outcome: 'error' as const, detail };
+    }
+
+    const restarted = await restartServiceUnit(runId);
+    const detail = restarted
+      ? `Updated to ${snapshot.latest ?? 'the latest version'} and restarted`
+      : `Updated to ${snapshot.latest ?? 'the latest version'} — restart it to pick it up`;
+    recordStep(runId, 'finish', restarted ? 'ok' : 'warn', detail);
+    _lastRun = finishedRun(runId, 'ok', detail);
+    return { runId, outcome: 'ok' as const, detail };
   });
+}
+
+function finishedRun(runId: string, outcome: ServeOutcome, summary: string): ServeRunResult {
+  const at = new Date().toISOString();
+  return { runId, trigger: 'manual', startedAt: at, finishedAt: at, outcome, summary };
+}
+
+/**
+ * Restart the service directly, for installs with no scripts/ directory.
+ * User unit first, then the system unit via passwordless sudo — the same order
+ * scripts/update.sh uses, so the two paths cannot disagree about which unit wins.
+ */
+async function restartServiceUnit(runId: string): Promise<boolean> {
+  const attempts: Array<{ label: string; cmd: string; args: string[] }> = [
+    { label: 'user unit', cmd: 'systemctl', args: ['--user', 'restart', SERVICE_UNIT] },
+    { label: 'system unit', cmd: 'sudo', args: ['-n', 'systemctl', 'restart', SERVICE_UNIT] },
+  ];
+  for (const attempt of attempts) {
+    try {
+      await execFileAsync(attempt.cmd, attempt.args, { timeout: 60_000 });
+      recordStep(runId, 'restart', 'ok', `${attempt.label} restarted`);
+      return true;
+    } catch {
+      // Try the next one; only the last failure is worth reporting.
+    }
+  }
+  recordStep(
+    runId,
+    'restart',
+    'warn',
+    `no ${SERVICE_UNIT} could be restarted — install one with scripts/install-systemd.sh, or restart by hand`,
+  );
+  return false;
 }
 
 export async function serveRestart(): Promise<ServeActionResult> {
@@ -475,6 +1005,15 @@ export async function serveRestart(): Promise<ServeActionResult> {
   const repoDir = resolveRepoDir(settings.serve);
 
   return withServeLock('manual:restart', async (runId) => {
+    // Only a clone has scripts/restart.sh (which also rebuilds). Anywhere else,
+    // the unit is the only thing to restart.
+    if (detectInstallMode().mode !== 'git') {
+      const ok = await restartServiceUnit(runId);
+      const detail = ok ? 'Service restarted' : 'Could not restart the service';
+      recordStep(runId, 'finish', ok ? 'ok' : 'error', detail);
+      _lastRun = finishedRun(runId, ok ? 'ok' : 'error', detail);
+      return { runId, outcome: ok ? ('ok' as const) : ('error' as const), detail };
+    }
     const outcome = await triggerRestart(repoDir, runId);
     const detail = outcome === 'ok'
       ? 'Restart script spawned (build + systemd restart)'
@@ -498,7 +1037,11 @@ export async function serveHealthCheck(): Promise<ServeActionResult> {
 
   return withServeLock('manual:health', async (runId) => {
     try {
-      await refreshGitSnapshot();
+      if (detectInstallMode().mode === 'git') {
+        await refreshGitSnapshot();
+      } else {
+        await refreshNpmSnapshot();
+      }
     } catch {
       // non-fatal
     }
@@ -523,8 +1066,9 @@ export async function serveHealthCheck(): Promise<ServeActionResult> {
 
 export async function runServeAction(action: ServeActionId): Promise<ServeActionResult> {
   switch (action) {
-    case 'pull':
-      return serveGitPull();
+    case 'update':
+    case 'stash-update':
+      return serveUpdate(action);
     case 'restart':
       return serveRestart();
     case 'health':
@@ -641,8 +1185,35 @@ export async function followServeServiceLogs(opts: {
   };
 }
 
-/** Refresh git snapshot on boot (no scheduler). */
+/**
+ * Boot hook (no scheduler).
+ *
+ * Also resumes the step log of an update that was still running when its own
+ * `systemctl restart` killed us — without this, every update's log would stop
+ * at the restart step and the UI would look like the run vanished.
+ */
 export async function startServe(): Promise<void> {
+  const { settings } = getConfig();
+  const repoDir = resolveRepoDir(settings.serve);
+  try {
+    const pending = ingestUpdateLog(repoDir);
+    if (pending.runId && !pending.finished) {
+      log.info({ runId: pending.runId }, 'resuming update step log after restart');
+      watchUpdateRun(repoDir, pending.runId);
+    } else if (pending.runId) {
+      _lastRun = {
+        runId: pending.runId,
+        trigger: 'manual',
+        startedAt: pending.lastTs ?? new Date().toISOString(),
+        finishedAt: pending.lastTs ?? new Date().toISOString(),
+        outcome: pending.outcome,
+        summary: pending.summary,
+      };
+    }
+  } catch (err) {
+    log.warn({ err }, 'could not resume update step log');
+  }
+
   try {
     await refreshGitSnapshot();
   } catch (err) {
