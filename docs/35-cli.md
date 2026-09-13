@@ -200,3 +200,23 @@ is already too late, and `detectInstallMode()`'s first call would print a JSON
 log line into the middle of `status --json`.
 
 The CLI adds no runtime dependencies.
+
+
+## `prepare-vosk`
+
+Wake words need Vosk's small English model — about 41 MB of weights. It is **not
+in the published tarball**: bundling it would more than double the download for
+every install, including the many that never turn wake words on.
+
+```bash
+agentvoice prepare-vosk           # fetch it
+agentvoice prepare-vosk --force   # fetch it again
+```
+
+It lands where this install actually serves static assets from — `web/public/`
+in a clone, so it survives the next `ng build`, and `web/dist/` in an installed
+package, which has no build step to run. The PWA asks for `/vosk/model.tar.gz`
+either way.
+
+Without it, wake words are unavailable and on-screen Speak / Cancel still work,
+which is what `touchControls` already falls back to.

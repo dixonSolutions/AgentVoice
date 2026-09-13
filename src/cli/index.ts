@@ -29,6 +29,7 @@ import { tokenCommand } from './commands/token.js';
 import { updateCommand, UPDATE_FLAGS } from './commands/update.js';
 import { bold, cyan, dim, fail, note, say } from './out.js';
 import { packageVersion, gitVersion } from './versions.js';
+import { prepareVoskCommand } from './commands/vosk.js';
 
 const USAGE = `
   ${bold(cyan('agentvoice'))} — self-hosted voice bridge for agent CLIs
@@ -46,6 +47,7 @@ const USAGE = `
     doctor [--json]        Check Node, the native binding, config, CLI and port
     update [--stash]       Update this install the way it was installed
     token [--new]          Print the pairing token, or mint a fresh one
+    prepare-vosk [--force] Fetch the wake-word model (~41 MB, not bundled)
     version                Package version (plus the commit, in a clone)
     help                   This screen
 
@@ -54,6 +56,7 @@ const USAGE = `
     -n, --lines N          Journal lines to show (logs, default 80)
     -f, --follow           Follow the journal (logs)
     --new                  Rotate the APP_TOKEN (token)
+    --force                Re-download even if present (prepare-vosk)
     --stash                Stash local changes across a git update
     --dry-run              Report what an update would do, change nothing
     --branch <name>        Rebase onto origin/<name> (git installs)
@@ -142,6 +145,14 @@ async function dispatch(argv: string[]): Promise<void> {
       const parsed = parseArgs(args);
       rejectUnknown(parsed, ['new']);
       process.exitCode = tokenCommand({ rotate: parsed.switches.has('new') });
+      return;
+    }
+
+    case 'prepare-vosk':
+    case 'prepare:vosk': {
+      const parsed = parseArgs(args);
+      rejectUnknown(parsed, ['force']);
+      await prepareVoskCommand({ force: parsed.switches.has('force') });
       return;
     }
 

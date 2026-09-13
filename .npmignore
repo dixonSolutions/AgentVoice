@@ -23,3 +23,9 @@ node_modules/
 *.tsbuildinfo
 .angular/
 *.vsix
+
+# The Vosk wake-word model is 41 MB of downloadable weights, not code. Shipping
+# it would more than double the tarball for a feature that is off until someone
+# turns it on. `agentvoice prepare-vosk` fetches it on demand.
+web/dist/vosk/model.tar.gz
+web/public/vosk/model.tar.gz
