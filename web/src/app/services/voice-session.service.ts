@@ -62,6 +62,10 @@ export class VoiceSessionService {
 
   private _session: ActiveSession | null = null;
   private prepareAbort: AbortController | null = null;
+  /** In-flight startSession(), so concurrent callers join it instead of racing. */
+  private startPromise: Promise<void> | null = null;
+  /** Set when a start bailed with its own explanation, to suppress a vaguer one. */
+  private startAttemptFailed = false;
   private readonly keepalive = new SessionKeepAlive();
   private keepaliveWired = false;
   /** Reconnect intelligence session after OS background suspend (not user hang-up). */
@@ -178,7 +182,23 @@ export class VoiceSessionService {
     this.syncAppState();
   }
 
-  async startSession(): Promise<void> {
+  /**
+   * Start the session, or join a start that is already running.
+   *
+   * Callers that need a live session before doing their own work (the typed
+   * composer, most importantly) used to get an immediate return here while a
+   * start was still in flight, see a null session, and drop the message.
+   */
+  startSession(): Promise<void> {
+    if (this._session) return Promise.resolve();
+    if (this.startPromise) return this.startPromise;
+    this.startPromise = this.runStartSession().finally(() => {
+      this.startPromise = null;
+    });
+    return this.startPromise;
+  }
+
+  private async runStartSession(): Promise<void> {
     if (this._session || this.sessionConnecting()) return;
 
     this.ensureKeepAliveWiring();
@@ -199,6 +219,7 @@ export class VoiceSessionService {
     const project = this.bridge.activeProject();
     if (!project) {
       this.toast.error('Select a project', 'Choose a project in the dropdown before tapping the orb.');
+      this.startAttemptFailed = true;
       return;
     }
 
@@ -241,6 +262,7 @@ export class VoiceSessionService {
       const detail = err instanceof Error ? err.message : String(err);
       this.toast.error('Could not prepare voice session', detail);
       this.notifyVoiceError(detail);
+      this.startAttemptFailed = true;
       this.sessionConnecting.set(false);
       this.sessionPrepActive.set(false);
       return;
@@ -286,6 +308,7 @@ export class VoiceSessionService {
       this.logs.append('error', 'voice', 'Could not start intelligence session', detail);
       this.toast.error('Could not start voice', detail);
       this.notifyVoiceError(detail);
+      this.startAttemptFailed = true;
       this.stopSession();
     } finally {
       this.sessionConnecting.set(false);
@@ -342,12 +365,19 @@ export class VoiceSessionService {
     const trimmed = text.trim();
     if (!trimmed) return false;
 
-    if (!this._session && !this.sessionConnecting()) {
+    if (!this._session) {
+      // Joins an in-flight start rather than racing past it.
       await this.startSession();
     }
     const session = this._session;
     if (session instanceof LlmIntelligenceSession) {
       return session.sendTextTurn(trimmed);
+    }
+    // startSession() already said why it could not connect (no project, prepare
+    // failed). Telling the user to tap the orb on top of that is just noise.
+    if (this.startAttemptFailed) {
+      this.startAttemptFailed = false;
+      return false;
     }
     this.toast.warn('Not connected', 'Tap the orb to start a voice session first.');
     return false;

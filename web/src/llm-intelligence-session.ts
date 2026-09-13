@@ -390,6 +390,9 @@ export class LlmIntelligenceSession {
       this.voiceActivated = true;
       this.cb.onActivated?.('(typed input)');
     }
+    // Typed turns get the same send cue as spoken ones — submitting a message
+    // should sound the same whichever way you wrote it.
+    playVoiceCueNow('sent');
     this.cb.onUserTranscript(trimmed);
     this.sendUserTurn(trimmed);
     return true;
