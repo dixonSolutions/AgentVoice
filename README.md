@@ -89,6 +89,34 @@ Then edit `~/.agentvoice/config.json` to point at your projects (absolute
 paths) and restart. Requires **Node 20+** and one of the agent CLIs —
 `cursor-agent`, `codex`, `claude`, or `codewhale` — on your `PATH`.
 
+## The `agentvoice` command
+
+Booting the bridge is only the default. The same command manages the install:
+
+```bash
+agentvoice status          # install, version, service, port, health — one screen
+agentvoice doctor          # Node, native binding, config, agent CLI, port
+agentvoice restart         # bounce the systemd unit
+agentvoice logs -f         # follow the service journal
+agentvoice update          # rebase a clone, or npm-install a newer package
+agentvoice token --new     # rotate the pairing token
+```
+
+`status` is the one to reach for first. It reports how AgentVoice was installed
+and therefore how it updates, the version (branch and drift for a clone, the
+registry's `latest` for an npm install), whether the service is running and
+since when, the port it is listening on and where that port came from, what
+`/healthz` says, and whether a pairing token is configured — never the token
+itself. Add `--json` for machine output. It exits `1` when the bridge is not
+answering, so `agentvoice status >/dev/null` works as a liveness probe.
+
+`update` follows the install rather than guessing: a clone runs
+`scripts/update.sh` (pass `--stash` to carry local changes across the rebase),
+an npm install runs `npm install -g agentvoice@latest`, and an install that is
+neither says so instead of doing something destructive.
+
+Full reference: [`docs/35-cli.md`](./docs/35-cli.md).
+
 ## Quick start (dev)
 
 ```bash
@@ -200,6 +228,7 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 | [`24-agent-providers.md`](./docs/24-agent-providers.md) | In-app auth, live model selection (per-model effort / fast from each CLI), generic MCP tools |
 | [`25-hosting-providers.md`](./docs/25-hosting-providers.md) | Tailscale, Cloudflare, ngrok, Dev Tunnels, LAN, manual |
 | [`33-permissions-and-prompt-relay.md`](./docs/33-permissions-and-prompt-relay.md) | Permission modes per CLI, permission prompts and sudo passwords relayed to the phone |
+| [`35-cli.md`](./docs/35-cli.md) | The `agentvoice` management CLI |
 | [`26-rename-agentvoice.md`](./docs/26-rename-agentvoice.md) | Cursor Voice → AgentVoice rename notes |
 
 ## Stack
