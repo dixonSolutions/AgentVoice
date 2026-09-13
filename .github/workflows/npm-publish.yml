@@ -1,6 +1,17 @@
-# npm package — check on every PR and push to main; publish to the npm registry
-# on a `v*` tag. Replaces the old vscode-extension workflow: the bridge now
-# ships as `agentvoice` on npm, not as a .vsix on the Marketplace.
+# npm package — check every PR, and release from main.
+#
+# Three ways a release happens, all ending in the same publish:
+#
+#   push to main   — if package.json's version is not on the registry yet, it
+#                    is published and tagged. Bump the version in a PR and the
+#                    merge ships it; merge anything else and nothing happens.
+#   workflow_dispatch with a bump — bumps the version on main first, then the
+#                    same path. For releasing without a version-bump PR.
+#   a `v*` tag     — the explicit route, kept so an old tag still works.
+#
+# The registry is the source of truth for "has this shipped", so re-running a
+# workflow, or pushing to main again, can never double-publish or fail on a
+# version that is already out.
 name: npm-publish
 
 on:
@@ -9,8 +20,16 @@ on:
     branches: [main]
     tags: ['v*']
   workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump to apply to main before releasing'
+        type: choice
+        default: none
+        options: [none, patch, minor, major]
 
 concurrency:
+  # Releases mutate main (version bump, tag) — never run two at once. PR checks
+  # are safe to cancel; a half-finished release is not.
   group: npm-publish-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
@@ -29,7 +48,7 @@ jobs:
 
       # --legacy-peer-deps: @openng/optimus-ui declares a peer on
       # @angular/cdk ^21 while the app is on Angular 22; scripts/setup.sh and
-      # scripts/restart.sh install the same way.
+      # scripts/update.sh install the same way.
       # better-sqlite3 uses a prebuilt binary on ubuntu-latest / Node 22 and
       # falls back to node-gyp, which the runner has the toolchain for.
       - name: Install
@@ -52,6 +71,18 @@ jobs:
       - name: Pack
         run: npm pack --ignore-scripts
 
+      # The Vosk wake-word model is excluded by a "files" negation. It is 41 MB
+      # and would more than double the tarball, so if it ever reappears the
+      # package has silently regressed — fail here rather than on the registry.
+      - name: Assert the wake-word model is not bundled
+        run: |
+          set -eu
+          if npm pack --dry-run --ignore-scripts 2>&1 | grep -q 'vosk/model.tar.gz'; then
+            echo "::error::web/dist/vosk/model.tar.gz is in the tarball — check the files negation in package.json"
+            exit 1
+          fi
+          echo "wake-word model correctly excluded"
+
       - name: Show package contents
         run: npm pack --dry-run --ignore-scripts
 
@@ -61,18 +92,26 @@ jobs:
           path: '*.tgz'
           if-no-files-found: error
 
-  publish:
-    name: publish to npm
-    if: startsWith(github.ref, 'refs/tags/v')
+  release:
+    name: release
+    # Everything except PR checks. Whether it actually publishes is decided by
+    # the registry, below — not by the trigger.
+    if: github.event_name != 'pull_request'
     needs: check
     runs-on: ubuntu-latest
     permissions:
+      # Pushing the version bump and the tag back to main.
       contents: write
-      # Required for npm provenance: the publish is signed with a Sigstore
-      # attestation tying the tarball to this workflow run and commit.
+      # npm provenance: the publish is signed with a Sigstore attestation tying
+      # the tarball to this workflow run and this commit.
       id-token: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Tags and the bump commit are pushed from here, so the checkout needs
+          # a token with write access and the full history to push onto.
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v5
         with:
@@ -81,36 +120,104 @@ jobs:
           cache-dependency-path: package-lock.json
           registry-url: 'https://registry.npmjs.org'
 
-      - name: Check the tag matches package.json
+      # Manual release: move the version on main first, so the commit that
+      # produced the published tarball is the one main points at.
+      - name: Bump the version on main
+        if: github.event_name == 'workflow_dispatch' && inputs.bump != 'none'
         run: |
           set -eu
-          pkg="$(node -p "require('./package.json').version")"
-          tag="${GITHUB_REF_NAME#v}"
-          echo "package.json: $pkg  tag: $tag"
-          if [ "$pkg" != "$tag" ]; then
-            echo "::error::tag v$tag does not match package.json version $pkg (bump with 'npm version')"
-            exit 1
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          npm version "${{ inputs.bump }}" --no-git-tag-version
+          version="$(node -p "require('./package.json').version")"
+          git add package.json package-lock.json
+          # [skip ci]: this push would otherwise re-trigger the workflow. The
+          # registry guard would stop it publishing twice anyway, but a second
+          # pointless run is still noise.
+          git commit -m "Release ${version} [skip ci]"
+          git push origin HEAD:main
+
+      - name: Resolve the version to release
+        id: v
+        run: |
+          set -eu
+          version="$(node -p "require('./package.json').version")"
+
+          # A tag release must agree with package.json, or the thing published
+          # is not the thing the tag names.
+          if [ "${GITHUB_REF_TYPE:-}" = tag ]; then
+            tag="${GITHUB_REF_NAME#v}"
+            if [ "$version" != "$tag" ]; then
+              echo "::error::tag v${tag} does not match package.json version ${version} (bump with 'npm version')"
+              exit 1
+            fi
+          fi
+
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Releasing version ${version}"
+
+      # The registry, not the trigger, decides whether there is anything to do.
+      # This is what makes a push to main safe: merge a change with no version
+      # bump and this step simply reports "already published" and stops.
+      - name: Has this version already shipped?
+        id: shipped
+        run: |
+          set -eu
+          version="${{ steps.v.outputs.version }}"
+          if npm view "agentvoice@${version}" version >/dev/null 2>&1; then
+            echo "already=true" >> "$GITHUB_OUTPUT"
+            echo "agentvoice@${version} is already on the registry — nothing to publish."
+          else
+            echo "already=false" >> "$GITHUB_OUTPUT"
+            echo "agentvoice@${version} is not published yet."
           fi
 
       - name: Install
+        if: steps.shipped.outputs.already == 'false'
         run: npm ci --no-audit --no-fund --legacy-peer-deps
 
       # prepublishOnly (typecheck + lint + build) runs as part of `npm publish`,
       # so dist/ and web/dist/ can never be stale in a published tarball.
+      #
+      # NPM_TOKEN must be a granular token with "Bypass two-factor
+      # authentication" enabled. npm rejects a publish from any other token with
+      # a 403 even when the account itself has no 2FA configured.
       - name: Publish
+        if: steps.shipped.outputs.already == 'false'
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # Tag after publishing, not before: a tag pointing at a release that
+      # failed halfway is worse than no tag.
+      - name: Tag the release
+        if: steps.shipped.outputs.already == 'false' && github.ref_type != 'tag'
+        run: |
+          set -eu
+          version="${{ steps.v.outputs.version }}"
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git tag -a "v${version}" -m "AgentVoice v${version}"
+          git push origin "v${version}"
+
       - name: Pack for the GitHub Release
+        if: steps.shipped.outputs.already == 'false'
         run: npm pack --ignore-scripts
 
       - name: GitHub Release
+        if: steps.shipped.outputs.already == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          name: AgentVoice ${{ github.ref_name }}
+          tag_name: v${{ steps.v.outputs.version }}
+          name: AgentVoice v${{ steps.v.outputs.version }}
           body: |
-            AgentVoice ${{ github.ref_name }} is on npm.
+            AgentVoice v${{ steps.v.outputs.version }} is on npm.
 
-            Install: `npm install -g agentvoice` (or run it once with `npx agentvoice`).
+            ```bash
+            npm install -g agentvoice     # then: agentvoice status
+            npx agentvoice                # or run it once
+            ```
+
+            The wake-word model is not bundled — run `agentvoice prepare-vosk`
+            if you want wake words.
           files: '*.tgz'
