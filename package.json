@@ -46,6 +46,7 @@
     "build": "npm run build:backend && npm run build:web",
     "build:backend": "tsup",
     "build:web": "ng build agentvoice-web --configuration production",
+    "cli": "node bin/agentvoice.mjs",
     "dev": "bash scripts/dev.sh",
     "dev:web": "ng serve agentvoice-web",
     "gen-icons": "node scripts/gen-icons.mjs",
