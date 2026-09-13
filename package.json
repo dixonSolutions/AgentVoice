@@ -2,8 +2,43 @@
   "name": "agentvoice",
   "version": "0.1.0",
   "description": "Self-hosted voice bridge for Cursor, Codex, and Claude Code CLIs",
+  "keywords": [
+    "voice",
+    "agent",
+    "cli",
+    "bridge",
+    "self-hosted",
+    "cursor",
+    "codex",
+    "claude-code",
+    "speech-to-text",
+    "text-to-speech",
+    "mcp",
+    "pwa"
+  ],
+  "homepage": "https://github.com/dixonSolutions/AgentVoice#readme",
+  "bugs": {
+    "url": "https://github.com/dixonSolutions/AgentVoice/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dixonSolutions/AgentVoice.git"
+  },
+  "author": "dixonSolutions",
   "license": "MIT",
   "type": "module",
+  "bin": {
+    "agentvoice": "./bin/agentvoice.mjs"
+  },
+  "files": [
+    "bin/",
+    "dist/",
+    "web/dist/",
+    "config.example.json",
+    "cli-config.example.json",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -17,12 +52,12 @@
     "gen-vapid-keys": "bash scripts/gen-vapid-keys.sh",
     "mobile:sync": "npm run build:web && cd mobile && npm install --legacy-peer-deps && npx cap sync",
     "prepare:vosk": "node scripts/download-vosk-model.mjs",
-    "lint": "eslint src web/src packages/client/src vscode/src",
-    "typecheck": "tsc --noEmit && npx tsc --noEmit -p web/tsconfig.app.json && npx tsc --noEmit -p packages/client/tsconfig.json && npx tsc --noEmit -p vscode/tsconfig.json",
+    "lint": "eslint src web/src packages/client/src",
+    "typecheck": "tsc --noEmit && npx tsc --noEmit -p web/tsconfig.app.json && npx tsc --noEmit -p packages/client/tsconfig.json",
     "stop": "bash scripts/stop.sh",
     "start:service": "bash scripts/start.sh",
     "start": "NODE_ENV=production node dist/index.js",
-    "build:vscode": "cd vscode && npm install --no-audit --no-fund && npm run package"
+    "prepublishOnly": "npm run typecheck && npm run lint && npm run build"
   },
   "dependencies": {
     "@angular/animations": "^22.0.1",

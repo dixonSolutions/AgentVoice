@@ -1,0 +1,116 @@
+# npm package — check on every PR and push to main; publish to the npm registry
+# on a `v*` tag. Replaces the old vscode-extension workflow: the bridge now
+# ships as `agentvoice` on npm, not as a .vsix on the Marketplace.
+name: npm-publish
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  check:
+    name: typecheck, lint, build, pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # --legacy-peer-deps: @openng/optimus-ui declares a peer on
+      # @angular/cdk ^21 while the app is on Angular 22; scripts/setup.sh and
+      # scripts/restart.sh install the same way.
+      # better-sqlite3 uses a prebuilt binary on ubuntu-latest / Node 22 and
+      # falls back to node-gyp, which the runner has the toolchain for.
+      - name: Install
+        run: npm ci --no-audit --no-fund --legacy-peer-deps
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # dist/ (tsup bundle) + web/dist/ (Angular production build) — both are
+      # in the published "files" allowlist, so the pack below is only
+      # meaningful once they exist.
+      - name: Build
+        run: npm run build
+
+      # --ignore-scripts: the build already ran above; prepublishOnly would
+      # otherwise repeat the whole typecheck/lint/build cycle here.
+      - name: Pack
+        run: npm pack --ignore-scripts
+
+      - name: Show package contents
+        run: npm pack --dry-run --ignore-scripts
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: agentvoice-npm-tarball
+          path: '*.tgz'
+          if-no-files-found: error
+
+  publish:
+    name: publish to npm
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # Required for npm provenance: the publish is signed with a Sigstore
+      # attestation tying the tarball to this workflow run and commit.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Check the tag matches package.json
+        run: |
+          set -eu
+          pkg="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME#v}"
+          echo "package.json: $pkg  tag: $tag"
+          if [ "$pkg" != "$tag" ]; then
+            echo "::error::tag v$tag does not match package.json version $pkg (bump with 'npm version')"
+            exit 1
+          fi
+
+      - name: Install
+        run: npm ci --no-audit --no-fund --legacy-peer-deps
+
+      # prepublishOnly (typecheck + lint + build) runs as part of `npm publish`,
+      # so dist/ and web/dist/ can never be stale in a published tarball.
+      - name: Publish
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Pack for the GitHub Release
+        run: npm pack --ignore-scripts
+
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: AgentVoice ${{ github.ref_name }}
+          body: |
+            AgentVoice ${{ github.ref_name }} is on npm.
+
+            Install: `npm install -g agentvoice` (or run it once with `npx agentvoice`).
+          files: '*.tgz'

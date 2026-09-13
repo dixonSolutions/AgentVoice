@@ -17,13 +17,13 @@ export default tseslint.config(
     },
   },
   {
-    // Extension host + webview: browser/DOM globals and the vscode API.
-    files: ['vscode/src/**/*.ts', 'packages/client/src/**/*.ts'],
+    // Shared wire client: runs in the browser too, so DOM/any escape hatches.
+    files: ['packages/client/src/**/*.ts'],
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
     },
   },
   {
-    ignores: ['dist/**', 'web/dist/**', 'node_modules/**', 'vscode/dist/**', 'vscode/node_modules/**'],
+    ignores: ['dist/**', 'web/dist/**', 'node_modules/**'],
   },
 );
