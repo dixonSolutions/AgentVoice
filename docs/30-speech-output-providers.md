@@ -113,3 +113,36 @@ automatically on first load: `ttsProvider: "browser"` becomes
 `provider: "browser"` with `amazon_polly` as the fallback, and the Polly voice
 and engine move into `voices` and `models`. Nothing to edit by hand — see
 `migrateAudioSettings` in [`src/config.ts`](../src/config.ts).
+
+## How much gets read aloud
+
+The provider chain above decides *which voice* speaks. `settings.voice.tts.readAloud`
+decides *how much* it has to say — everything beyond the agent's own replies is
+optional, and how much of it you want depends on whether you are watching the
+screen or walking away from it.
+
+```jsonc
+"voice": { "tts": { "readAloud": "replies" } }
+```
+
+| Mode | What you hear |
+| --- | --- |
+| `replies` | Only what the agent chose to say through `speak()`. The default. |
+| `titles` | Plus a line per action — "Reading main.py". |
+| `summary` | The headline plus the opening of what the action produced. |
+| `everything` | The headline plus all of it. |
+
+The bridge already sends every action to the phone as a headline plus whatever
+it produced (`tool_activity`: `label` and `detail`), so this is a purely local
+decision — no extra round-trip, and it applies to every provider equally.
+Only `start` and `error` are spoken: announcing `done` as well doubles every
+action, and by then you have already heard what it was.
+
+`everything` is genuinely everything. A long file read aloud takes as long as it
+takes, and the speech queue will run behind the agent — that is the mode working,
+not failing. One action contributes at most 20 000 characters; past that the line
+ends with "the rest is in the log" rather than silently stopping. Content is split
+on paragraph and sentence boundaries so the queue plays it in order, instead of
+being truncated the way a single over-long reply would be.
+
+Change it in Config → Agent voice (TTS), or `PATCH /api/voice/tts { "readAloud": … }`.

@@ -139,6 +139,18 @@ export const VoiceTtsSchema = z.object({
   errorSoundEnabled: z.boolean().default(true),
   /** Speak error messages aloud via TTS (independent of agentVoiceEnabled). */
   errorSpeakEnabled: z.boolean().default(true),
+  /**
+   * How much of the agent's work gets read aloud, beyond its actual replies.
+   *
+   *   replies    — only what the agent says through speak(). The default.
+   *   titles     — plus a one-line headline per action ("Reading main.py").
+   *   summary    — headline plus the opening of what the action produced.
+   *   everything — headline plus the whole thing, read out in full.
+   *
+   * `everything` is genuinely everything: a long file read aloud takes as long
+   * as it takes, and the queue will run behind the agent.
+   */
+  readAloud: z.enum(['replies', 'titles', 'summary', 'everything']).default('replies'),
   /** Server defaults for browser TTS — per-device overrides live in PWA localStorage. */
   webkit: WebkitTtsDefaultsSchema.default({}),
 }).default({});
@@ -648,6 +660,7 @@ function migrateRawConfig(raw: unknown): unknown {
         agentVoiceEnabled: true,
         errorSoundEnabled: true,
         errorSpeakEnabled: true,
+        readAloud: 'replies',
         webkit: { rate: 1.02, pitch: 1, volume: 1, lang: 'en-US' },
       };
       log.info('Migrated config — added default settings.voice.tts');
@@ -663,6 +676,7 @@ function migrateRawConfig(raw: unknown): unknown {
       }
       if (tts['errorSoundEnabled'] === undefined) tts['errorSoundEnabled'] = true;
       if (tts['errorSpeakEnabled'] === undefined) tts['errorSpeakEnabled'] = true;
+      if (tts['readAloud'] === undefined) tts['readAloud'] = 'replies';
       // Drop legacy barge-in volume ducking (deafen) — always full volume; wake pauses TTS.
       if ('interruptMode' in tts || 'interruptDeafenFactor' in tts) {
         delete tts['interruptMode'];

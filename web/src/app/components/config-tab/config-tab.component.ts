@@ -473,6 +473,17 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     { label: 'Off', value: 'off' },
   ];
 
+  protected readonly readAloudOptions: Array<{
+    label: string;
+    value: 'replies' | 'titles' | 'summary' | 'everything';
+  }> = [
+    { label: 'Replies only', value: 'replies' },
+    { label: 'Titles', value: 'titles' },
+    { label: 'Summary', value: 'summary' },
+    { label: 'Everything', value: 'everything' },
+  ];
+
+  protected readAloud: 'replies' | 'titles' | 'summary' | 'everything' = 'replies';
   protected agentVoiceEnabled = true;
   protected errorSoundEnabled = true;
   protected errorSpeakEnabled = true;
@@ -567,6 +578,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     this.userName = data?.userName ?? '';
     if (data?.tts) {
       this.agentVoiceEnabled = data.tts.agentVoiceEnabled;
+      this.readAloud = data.tts.readAloud ?? 'replies';
       this.errorSoundEnabled = data.tts.errorSoundEnabled ?? true;
       this.errorSpeakEnabled = data.tts.errorSpeakEnabled ?? true;
       this.webkitRate = data.tts.webkit.rate;
@@ -619,6 +631,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     try {
       await this.voiceProviders.updateVoiceTts({
         agentVoiceEnabled: this.agentVoiceEnabled,
+        readAloud: this.readAloud,
         errorSoundEnabled: this.errorSoundEnabled,
         errorSpeakEnabled: this.errorSpeakEnabled,
         webkit: {

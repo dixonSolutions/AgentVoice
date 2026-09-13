@@ -24,6 +24,8 @@ export interface WebkitTtsDefaults {
 export interface VoiceTtsSettings {
   agentVoiceEnabled: boolean;
   errorSoundEnabled: boolean;
+  /** How much of the agent's work is read aloud beyond its replies. */
+  readAloud?: 'replies' | 'titles' | 'summary' | 'everything';
   errorSpeakEnabled: boolean;
   webkit: WebkitTtsDefaults;
 }

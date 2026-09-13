@@ -220,6 +220,15 @@
           <p-message severity="secondary" variant="simple"
             text="Wake during speech pauses TTS at full volume — cancel resumes, submit sends what you heard. Volume is never ducked." />
 
+          <p-iftalabel>
+            <p-select id="cfg-read-aloud" [(ngModel)]="readAloud"
+              [options]="readAloudOptions" optionLabel="label" optionValue="value"
+              [disabled]="!isBridgeConnected() || !agentVoiceEnabled" />
+            <label for="cfg-read-aloud">Read the agent's work aloud</label>
+          </p-iftalabel>
+          <p-message severity="secondary" variant="simple"
+            text="Replies only speaks what the agent chose to say. Titles adds a line per action — &quot;Reading main.py&quot;. Summary adds the opening of what each action produced. Everything reads all of it, which for a long file takes as long as it takes." />
+
           <div class="cv-cfg-toggle-row">
             <p-toggleSwitch id="cfg-error-sound" [(ngModel)]="errorSoundEnabled"
               [disabled]="!isBridgeConnected()" />

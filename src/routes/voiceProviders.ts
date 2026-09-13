@@ -19,7 +19,14 @@ const log = childLogger('api:voice');
 
 function handleError(err: unknown): { status: number; message: string } {
   const message = err instanceof Error ? err.message : String(err);
-  const clientErrors = ['Invalid wake phrase', 'cannot be empty', 'Invalid on-screen', 'Provide touchControls'];
+  const clientErrors = [
+    'Invalid wake phrase',
+    'cannot be empty',
+    'Invalid on-screen',
+    'Provide touchControls',
+    'Invalid TTS settings',
+    'Invalid userName',
+  ];
   const status = clientErrors.some((s) => message.includes(s)) ? 400 : 500;
   return { status, message };
 }

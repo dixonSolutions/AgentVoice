@@ -51,6 +51,56 @@ export function textForSpeech(text: string): string {
   return `${body.trimEnd()} …`;
 }
 
+/** Longest run of read-everything content we will queue from one action. */
+const READ_EVERYTHING_MAX_CHARS = 20_000;
+
+/**
+ * Split long content into speakable lines.
+ *
+ * textForSpeech() truncates at MAX_TTS_CHARS, which is right for a reply but
+ * wrong for read-everything: the point there is to hear all of it. Break on
+ * paragraph, then sentence, then — only if a single sentence is still too long
+ * — on whitespace, so the queue plays the whole thing in order.
+ */
+export function chunkForSpeech(text: string, maxChars = MAX_TTS_CHARS): string[] {
+  const clean = stripSpeakPrefix(text);
+  if (!clean) return [];
+
+  const capped =
+    clean.length > READ_EVERYTHING_MAX_CHARS
+      ? `${clean.slice(0, READ_EVERYTHING_MAX_CHARS).trimEnd()} … the rest is in the log.`
+      : clean;
+
+  const chunks: string[] = [];
+  let rest = capped;
+  while (rest.length > maxChars) {
+    const window = rest.slice(0, maxChars);
+    const breakAt = Math.max(
+      window.lastIndexOf('\n\n'),
+      window.lastIndexOf('. '),
+      window.lastIndexOf('\n'),
+    );
+    const cut = breakAt > maxChars * 0.3 ? breakAt + 1 : window.lastIndexOf(' ');
+    const end = cut > 0 ? cut : maxChars;
+    chunks.push(rest.slice(0, end).trim());
+    rest = rest.slice(end).trim();
+  }
+  if (rest) chunks.push(rest);
+  return chunks.filter(Boolean);
+}
+
+/** The opening of a longer body — roughly what you would skim before deciding. */
+export function openingForSpeech(text: string, maxChars = 240): string {
+  const clean = stripSpeakPrefix(text).replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  if (clean.length <= maxChars) return clean;
+  const window = clean.slice(0, maxChars);
+  const sentenceEnd = window.lastIndexOf('. ');
+  if (sentenceEnd > maxChars * 0.4) return window.slice(0, sentenceEnd + 1);
+  const wordEnd = window.lastIndexOf(' ');
+  return `${window.slice(0, wordEnd > 0 ? wordEnd : maxChars).trimEnd()} …`;
+}
+
 /**
  * Sequential TTS queue — rapid speak() calls pile up and play one after another
  * without canceling in-flight audio. Tracks what was heard for barge-in interrupts.

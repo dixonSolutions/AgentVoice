@@ -97,6 +97,7 @@ const VoiceTtsBodySchema = z.object({
   cursorVoiceEnabled: z.boolean().optional(),
   errorSoundEnabled: z.boolean().optional(),
   errorSpeakEnabled: z.boolean().optional(),
+  readAloud: z.enum(['replies', 'titles', 'summary', 'everything']).optional(),
   webkit: z
     .object({
       rate: z.number().min(0.1).max(10).optional(),
@@ -174,6 +175,7 @@ export function setVoiceTts(raw: unknown): VoiceSettingsResponse {
       agentVoiceEnabled: true,
       errorSoundEnabled: true,
       errorSpeakEnabled: true,
+      readAloud: 'replies' as const,
       webkit: { rate: 1.02, pitch: 1, volume: 1, lang: 'en-US' },
     };
     voice.tts = {
@@ -181,6 +183,7 @@ export function setVoiceTts(raw: unknown): VoiceSettingsResponse {
         parsed.data.agentVoiceEnabled ?? parsed.data.cursorVoiceEnabled ?? current.agentVoiceEnabled,
       errorSoundEnabled: parsed.data.errorSoundEnabled ?? current.errorSoundEnabled ?? true,
       errorSpeakEnabled: parsed.data.errorSpeakEnabled ?? current.errorSpeakEnabled ?? true,
+      readAloud: parsed.data.readAloud ?? current.readAloud ?? 'replies',
       webkit: {
         ...current.webkit,
         ...(parsed.data.webkit ?? {}),

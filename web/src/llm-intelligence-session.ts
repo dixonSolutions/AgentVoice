@@ -18,6 +18,8 @@ import type { SessionCallbacks, VoiceAgentStatusEvent, VoiceLogLevel, VoiceLogSu
 import { type TurnSubmit, type WakeWords, resolveWakeConfidenceThreshold, textContainsWakePhrase } from './wake-words.js';
 import {
   cancelTtsFallback,
+  chunkForSpeech,
+  openingForSpeech,
   stopAllTts,
   TtsPile,
   prepareSpeechSynthesisForPlayback,
@@ -60,10 +62,14 @@ import {
   type WebkitTtsDefaults,
 } from './browser-tts-settings.js';
 
+/** How much of the agent's work is read aloud beyond its actual replies. */
+export type ReadAloudMode = 'replies' | 'titles' | 'summary' | 'everything';
+
 export interface VoiceTtsSettings {
   agentVoiceEnabled: boolean;
   errorSoundEnabled: boolean;
   errorSpeakEnabled: boolean;
+  readAloud?: ReadAloudMode;
   webkit: WebkitTtsDefaults;
 }
 
@@ -1173,13 +1179,10 @@ export class LlmIntelligenceSession {
         const tool = String(msg['tool'] ?? '');
         const phase = msg['phase'] as 'start' | 'done' | 'error' | undefined;
         const label = String(msg['label'] ?? tool);
+        const detail = typeof msg['detail'] === 'string' ? msg['detail'] : undefined;
         if (phase && tool) {
-          this.cb.onToolActivity?.({
-            tool,
-            phase,
-            label,
-            detail: typeof msg['detail'] === 'string' ? msg['detail'] : undefined,
-          });
+          this.cb.onToolActivity?.({ tool, phase, label, detail });
+          this.readActivityAloud(label, detail, phase);
         }
         break;
       }
@@ -1267,6 +1270,47 @@ export class LlmIntelligenceSession {
   }
 
   /** Queue speak lines from MCP — piles and plays sequentially. */
+  /**
+   * Read the agent's work aloud, as far as settings.voice.tts.readAloud asks.
+   *
+   * The bridge already sends every action as a headline plus whatever it
+   * produced, so how much of that reaches your ears is purely a local choice:
+   *   replies    — nothing here; only what the agent chose to say.
+   *   titles     — the headline. "Reading main.py."
+   *   summary    — the headline and the opening of the output.
+   *   everything — the headline and all of it, split across several lines so
+   *                the queue plays it in order instead of truncating it.
+   *
+   * Only start and error are spoken. Announcing 'done' as well doubles every
+   * action, and by then you have already heard what it was.
+   */
+  private readActivityAloud(
+    label: string,
+    detail: string | undefined,
+    phase: 'start' | 'done' | 'error',
+  ): void {
+    const mode = this.ttsSettings.readAloud ?? 'replies';
+    if (mode === 'replies') return;
+    if (!this.ttsSettings.agentVoiceEnabled) return;
+    if (phase !== 'start' && phase !== 'error') return;
+
+    const title = label.trim();
+    if (!title) return;
+    const headline = phase === 'error' ? `${title} failed` : title;
+    const body = detail?.trim() ?? '';
+
+    if (mode === 'titles' || !body) {
+      this.enqueueSpeak(headline);
+      return;
+    }
+    if (mode === 'summary') {
+      this.enqueueSpeak(`${headline}. ${openingForSpeech(body)}`);
+      return;
+    }
+    this.enqueueSpeak(headline);
+    for (const chunk of chunkForSpeech(body)) this.enqueueSpeak(chunk);
+  }
+
   private enqueueSpeak(text: string): void {
     if (!this.ttsSettings.agentVoiceEnabled) return;
     this.ttsPile.enqueue(text);

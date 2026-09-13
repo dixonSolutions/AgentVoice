@@ -73,6 +73,7 @@
         "agentVoiceEnabled": true,
         "errorSoundEnabled": true,
         "errorSpeakEnabled": true,
+        "readAloud": "replies",
         "webkit": {
           "rate": 1.02,
           "pitch": 1,
