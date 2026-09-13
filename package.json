@@ -28,7 +28,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "agentvoice": "./bin/agentvoice.mjs"
+    "agentvoice": "bin/agentvoice.mjs"
   },
   "files": [
     "bin/",
