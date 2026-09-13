@@ -1,0 +1,25 @@
+# The published tarball is defined by the "files" allowlist in package.json.
+# This file exists so npm does NOT fall back to .gitignore, which ignores
+# dist/ and web/dist/ — exactly the build output the package must ship.
+#
+# Belt-and-braces denies for anything secret or machine-local that could
+# otherwise be pulled in by a stray "files" entry.
+
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+config.json
+data/
+logs/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+.claude/
+.cursor/
+node_modules/
+*.tsbuildinfo
+.angular/
+*.vsix

@@ -5,8 +5,8 @@
 <h1 align="center">AgentVoice</h1>
 
 <p align="center">
-  <a href="https://marketplace.visualstudio.com/items?itemName=dixonsolutions.agentvoice"><img src="https://vsmarketplacebadges.dev/version-short/dixonsolutions.agentvoice.svg?style=flat&color=2f2a5e&label=VS%20Code" alt="VS Code Marketplace version"></a>
-  <a href="https://open-vsx.org/extension/dixonsolutions/agentvoice"><img src="https://img.shields.io/open-vsx/v/dixonsolutions/agentvoice?logo=eclipseide&logoColor=white&label=Open%20VSX&color=2f2a5e" alt="Open VSX version"></a>
+  <a href="https://www.npmjs.com/package/agentvoice"><img src="https://img.shields.io/npm/v/agentvoice?logo=npm&logoColor=white&label=npm&color=2f2a5e" alt="npm version"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/agentvoice?logo=nodedotjs&logoColor=white&color=2f2a5e" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f2a5e" alt="MIT license"></a>
 </p>
 
@@ -58,41 +58,36 @@ Bridge (Node/TS) ── VoiceTurnQueue ── MCP /mcp ──► Cursor voice ag
 
 **Alternate:** `llm_intelligence` — Claude on Bedrock orchestrates tools.
 
-## At the desk: the VS Code / Cursor extension
+## Install
 
-The phone is half the story. **[AgentVoice on the VS Code
-Marketplace](https://marketplace.visualstudio.com/items?itemName=dixonsolutions.agentvoice)**
-is the desk client for the same bridge — answer the agent's permission prompts
-without reaching for your phone, send the selection or the open file as a turn,
-follow its spoken replies with read-along shading, and review what it wrote as
-native diffs.
+AgentVoice ships as an npm package. The bridge and the built web app come in
+the same tarball — no checkout, no build step:
 
 ```bash
-# VS Code
-code --install-extension dixonsolutions.agentvoice
+# Run it once, without installing
+npx agentvoice
 
-# Cursor, VSCodium and other Open VSX editors
-cursor --install-extension dixonsolutions.agentvoice
-codium --install-extension dixonsolutions.agentvoice
+# Or install the `agentvoice` command globally
+npm install -g agentvoice
+agentvoice
 ```
 
-Or search **AgentVoice** in the Extensions view (`Ctrl+Shift+X`), or grab the
-`.vsix` from the [latest release](https://github.com/dixonSolutions/AgentVoice/releases)
-and `code --install-extension agentvoice-<version>.vsix`.
+On its first run the bridge creates a **home directory** — `~/.agentvoice`,
+or `$AGENTVOICE_HOME` if you set one — seeds `config.json` from the packaged
+example, generates a random `APP_TOKEN` into `~/.agentvoice/.env`, and prints
+that token once. Then it starts up and logs the address it is listening on
+(`http://127.0.0.1:5089` with the default `test` profile). Open that address —
+the PWA is served from the same port — and paste the token when it asks you to
+pair.
 
-| | |
-| --- | --- |
-| **Marketplace** | <https://marketplace.visualstudio.com/items?itemName=dixonsolutions.agentvoice> |
-| **Open VSX** (Cursor, VSCodium) | <https://open-vsx.org/extension/dixonsolutions/agentvoice> |
+Everything the bridge writes — `config.json`, `data/state.db`, logs — stays in
+that home directory, so `npm update -g agentvoice` never touches your state.
+Run `agentvoice` from a directory that already has a `config.json` (a repo
+checkout, say) and it uses that directory instead.
 
-It needs a bridge running on the same machine: set `agentvoice.bridgeUrl`, run
-**AgentVoice: Set bridge token** to paste your `APP_TOKEN` (stored in VS Code's
-SecretStorage, never in settings), then **AgentVoice: Connect to bridge**.
-The extension is a client only — it spawns no CLI of its own, and it registers
-as its own voice session, so the read-along transcript and `speak()` work with
-no phone connected. It does not replace the
-phone: both surfaces see the same approvals, and the first answer wins. Full
-design in [`docs/34-vscode-extension.md`](./docs/34-vscode-extension.md).
+Then edit `~/.agentvoice/config.json` to point at your projects (absolute
+paths) and restart. Requires **Node 20+** and one of the agent CLIs —
+`cursor-agent`, `codex`, `claude`, or `codewhale` — on your `PATH`.
 
 ## Quick start (dev)
 
@@ -204,7 +199,6 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 | [`23-multi-agent-client.md`](./docs/23-multi-agent-client.md) | Cursor / Codex / Claude Code / Codewhale CLI setup |
 | [`24-agent-providers.md`](./docs/24-agent-providers.md) | In-app auth, live model selection (per-model effort / fast from each CLI), generic MCP tools |
 | [`25-hosting-providers.md`](./docs/25-hosting-providers.md) | Tailscale, Cloudflare, ngrok, Dev Tunnels, LAN, manual |
-| [`34-vscode-extension.md`](./docs/34-vscode-extension.md) | VS Code / Cursor extension — approvals, editor context, read-along transcript, diffs at the desk |
 | [`33-permissions-and-prompt-relay.md`](./docs/33-permissions-and-prompt-relay.md) | Permission modes per CLI, permission prompts and sudo passwords relayed to the phone |
 | [`26-rename-agentvoice.md`](./docs/26-rename-agentvoice.md) | Cursor Voice → AgentVoice rename notes |
 
