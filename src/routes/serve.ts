@@ -23,6 +23,7 @@ import {
   getServeServiceLogs,
   getServeStatus,
   refreshGitSnapshot,
+  refreshNpmSnapshot,
   runServeAction,
   type ServeActionId,
 } from '../serve/index.js';
@@ -108,13 +109,20 @@ export async function registerServeRoutes(app: FastifyInstance): Promise<void> {
     const { serve } = getConfig().settings;
     const wantFetch = req.query.fetch === '1' || req.query.fetch === 'true';
     let status = getServeStatus();
-    if (wantFetch || !status.git) {
-      try {
-        await refreshGitSnapshot({ fetch: wantFetch });
+    // A clone is described by its git snapshot, an npm install by its version
+    // against the registry. Probing the wrong one only wastes a subprocess.
+    try {
+      if (status.install.mode === 'git') {
+        if (wantFetch || !status.git) {
+          await refreshGitSnapshot({ fetch: wantFetch });
+          status = getServeStatus();
+        }
+      } else if (wantFetch || !status.npm) {
+        await refreshNpmSnapshot();
         status = getServeStatus();
-      } catch {
-        // git snapshot optional on read
       }
+    } catch {
+      // Both snapshots are optional on read — never fail the status endpoint.
     }
     return { serve, status };
   });

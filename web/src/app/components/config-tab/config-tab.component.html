@@ -674,6 +674,28 @@
                     @if (serveStatus.lastRun; as last) {
                       <p-message severity="secondary" variant="simple" [text]="last.summary" />
                     }
+                    <div class="cv-cfg-serve-git">
+                      <span class="cv-cfg-muted">install</span>
+                      <p-tag [value]="serveInstallMode" [severity]="serveIsGitInstall ? 'info' : 'secondary'" />
+                      <span class="cv-cfg-muted">{{ serveInstallReason }}</span>
+                    </div>
+                    @if (serveIsNpmInstall) {
+                      <div class="cv-cfg-serve-git">
+                        <span class="cv-cfg-muted">version</span>
+                        <strong>{{ serveInstalledVersion }}</strong>
+                        @if (serveLatestVersion) {
+                          <span class="cv-cfg-muted">latest {{ serveLatestVersion }}</span>
+                        }
+                        @if (serveUpdateAvailable) {
+                          <p-tag value="update available" severity="warn" />
+                        } @else if (serveLatestVersion) {
+                          <p-tag value="up to date" severity="success" />
+                        }
+                      </div>
+                      @if (serveRegistryError) {
+                        <p-message severity="secondary" variant="simple" [text]="serveRegistryError" />
+                      }
+                    }
                     @if (serveStatus.git; as git) {
                       <div class="cv-cfg-serve-git">
                         <span class="cv-cfg-muted">HEAD</span>
@@ -741,6 +763,7 @@
                   </div>
                 }
 
+                @if (serveIsGitInstall) {
                 <p-fieldset legend="Repository">
                   <p-message severity="secondary" variant="simple"
                     [text]="'Update rebases onto origin/' + serveTrackBranch + '. Leave branch blank to follow origin default (' + serveBranchPlaceholder + '). Choice is saved.'" />
@@ -763,31 +786,60 @@
                     [disabled]="!canUseApi()"
                     (onClick)="onSaveServe()" />
                 </p-fieldset>
+                }
 
                 <p-fieldset legend="Update">
-                  <p-message severity="secondary" variant="simple"
-                    [text]="'Both buttons run the one update script (scripts/update.sh): fetch, rebase onto origin/' + serveTrackBranch + ', install dependencies, build, restart the service. Manual only — no heartbeat, no scheduled pull.'" />
                   @if (serveUpdateRunId) {
                     <p-message severity="info" variant="simple"
                       text="Update running — the bridge restarts itself at the end, so the page may briefly lose connection. Steps appear in the Logs tab." />
                   }
-                  <div class="cv-cfg-serve-action-grid">
-                    <p-button label="Rebase &amp; update" icon="pi pi-download"
-                      [loading]="runningUpdate"
-                      [disabled]="!canUseApi() || serveBusy || serveHasLocalChanges"
-                      (onClick)="onServeAction('update')" />
-                    <!-- Secondary until there is something to stash, then it is
-                         the only button that can actually run. -->
-                    <p-button label="Stash, rebase &amp; update" icon="pi pi-inbox"
-                      [severity]="serveHasLocalChanges ? 'warn' : 'secondary'"
-                      [outlined]="!serveHasLocalChanges"
-                      [loading]="runningStashUpdate"
-                      [disabled]="!canUseApi() || serveBusy"
-                      (onClick)="onServeAction('stash-update')" />
-                  </div>
-                  @if (serveHasLocalChanges) {
+
+                  <!-- A clone rebases; an npm install asks the registry. The two
+                       have no operations in common, so neither borrows the
+                       other's buttons. -->
+                  @if (serveIsGitInstall) {
                     <p-message severity="secondary" variant="simple"
-                      text="“Rebase &amp; update” is disabled while the working tree is dirty — git rebase would refuse. The stash option saves your changes, rebases, then pops them back." />
+                      [text]="'Both buttons run the one update script (scripts/update.sh): fetch, rebase onto origin/' + serveTrackBranch + ', install dependencies, build, restart the service. Manual only — no heartbeat, no scheduled pull.'" />
+                    <div class="cv-cfg-serve-action-grid">
+                      <p-button label="Rebase &amp; update" icon="pi pi-download"
+                        [loading]="runningUpdate"
+                        [disabled]="!canUseApi() || serveBusy || serveHasLocalChanges"
+                        (onClick)="onServeAction('update')" />
+                      <!-- Secondary until there is something to stash, then it is
+                           the only button that can actually run. -->
+                      <p-button label="Stash, rebase &amp; update" icon="pi pi-inbox"
+                        [severity]="serveHasLocalChanges ? 'warn' : 'secondary'"
+                        [outlined]="!serveHasLocalChanges"
+                        [loading]="runningStashUpdate"
+                        [disabled]="!canUseApi() || serveBusy"
+                        (onClick)="onServeAction('stash-update')" />
+                    </div>
+                    @if (serveHasLocalChanges) {
+                      <p-message severity="secondary" variant="simple"
+                        text="“Rebase &amp; update” is disabled while the working tree is dirty — git rebase would refuse. The stash option saves your changes, rebases, then pops them back." />
+                    }
+                  } @else if (serveIsNpmInstall) {
+                    <p-message severity="secondary" variant="simple"
+                      [text]="'Runs ' + serveUpdateCommand + ', then restarts the service. There is no repository here to rebase and nothing to stash.'" />
+                    <div class="cv-cfg-serve-action-grid">
+                      <p-button
+                        [label]="serveUpdateAvailable && serveLatestVersion
+                          ? ('Update to ' + serveLatestVersion)
+                          : 'Check and update'"
+                        icon="pi pi-download"
+                        [severity]="serveUpdateAvailable ? 'primary' : 'secondary'"
+                        [outlined]="!serveUpdateAvailable"
+                        [loading]="runningUpdate"
+                        [disabled]="!canUseApi() || serveBusy"
+                        (onClick)="onServeAction('update')" />
+                    </div>
+                    @if (!serveUpdateAvailable && serveLatestVersion) {
+                      <p-message severity="secondary" variant="simple"
+                        [text]="'Already on ' + serveInstalledVersion + ' — nothing newer has been published.'" />
+                    }
+                  } @else {
+                    <p-message severity="warn" variant="simple"
+                      [text]="'Cannot update automatically — ' + serveInstallReason + '. Reinstall with npm, or run from a git clone.'" />
                   }
                 </p-fieldset>
 

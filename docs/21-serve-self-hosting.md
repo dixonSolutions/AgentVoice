@@ -227,3 +227,41 @@ handler and return `index.html` with a `text/html` type for `.js` and `.css`).
 - [`src/serve/index.ts`](../src/serve/index.ts) — git snapshot + conflict set, update spawn, step-log ingest, restart, health, journal follow
 - [`src/routes/serve.ts`](../src/routes/serve.ts) — admin routes + live log SSE
 - [`src/state/serveEvents.ts`](../src/state/serveEvents.ts) — SQLite step log
+
+
+## Two kinds of install, two kinds of update
+
+Everything above describes a **git clone**: `scripts/update.sh` fetches, rebases
+onto `origin/<branch>`, installs, builds and restarts, and the page identifies
+the running code by branch and commit.
+
+An **npm install** (`npm i -g agentvoice`) has none of that. There is no repo to
+rebase, no working tree to stash, and no commit to show. Updating means asking
+the registry whether something newer is published and letting npm replace the
+package; the version is one semver string.
+
+The bridge works out which it is at startup — see
+[`src/serve/installMode.ts`](../src/serve/installMode.ts). Detection is
+structural, not a config flag: a `.git` at the package root means a clone, and
+living under `node_modules` means npm put it there. A config file gets copied
+between machines, but this has to describe the install that is actually running.
+
+| | git clone | npm install |
+| --- | --- | --- |
+| Identity | branch, commit, ahead/behind | installed version vs registry `latest` |
+| Update | `scripts/update.sh` (`--stash` for a dirty tree) | `npm install [-g] agentvoice@latest` |
+| Buttons | "Rebase & update" / "Stash, rebase & update" | one — "Update to *x.y.z*" |
+| Restart | `scripts/restart.sh` — rebuilds, then restarts the unit | `systemctl restart` directly; there is nothing to build |
+
+`GET /api/admin/serve` carries `status.install` (mode, root, reason, the update
+command) plus exactly one of `status.git` or `status.npm` — never both, so a
+surface cannot accidentally show a branch that has nothing to do with the code
+running. The Serve page switches on it; so does `agentvoice update`
+(see [docs/35](./35-cli.md)).
+
+Anything that is neither — an extracted tarball, a container image — reports
+`unknown`. It can still restart and report health, but it will say plainly that
+it cannot update itself rather than guessing.
+
+A registry check that fails (offline, registry down, nothing published yet)
+degrades to "cannot tell" and never fails the status endpoint.

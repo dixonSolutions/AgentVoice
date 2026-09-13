@@ -1015,6 +1015,53 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     return this.serveStatus?.git?.commitSubject ?? '';
   }
 
+  // ── Install mode ────────────────────────────────────────────────────────
+  //
+  // A clone updates by rebasing and knows itself by a branch and a commit. An
+  // npm install has neither; it compares one version against the registry.
+  // Showing rebase controls to an npm install would offer operations that
+  // cannot run, so the whole section switches on this.
+
+  protected get serveInstallMode(): 'git' | 'npm' | 'unknown' {
+    return this.serveStatus?.install?.mode ?? 'git';
+  }
+
+  protected get serveIsGitInstall(): boolean {
+    return this.serveInstallMode === 'git';
+  }
+
+  protected get serveIsNpmInstall(): boolean {
+    return this.serveInstallMode === 'npm';
+  }
+
+  protected get serveCanUpdate(): boolean {
+    return this.serveInstallMode !== 'unknown';
+  }
+
+  protected get serveInstallReason(): string {
+    return this.serveStatus?.install?.reason ?? '';
+  }
+
+  protected get serveUpdateCommand(): string {
+    return this.serveStatus?.install?.updateCommand ?? '';
+  }
+
+  protected get serveInstalledVersion(): string {
+    return this.serveStatus?.npm?.installed ?? '';
+  }
+
+  protected get serveLatestVersion(): string | null {
+    return this.serveStatus?.npm?.latest ?? null;
+  }
+
+  protected get serveUpdateAvailable(): boolean {
+    return this.serveStatus?.npm?.updateAvailable === true;
+  }
+
+  protected get serveRegistryError(): string {
+    return this.serveStatus?.npm?.error ?? '';
+  }
+
   protected async loadServe(opts: { fetch?: boolean } = {}): Promise<void> {
     const seq = ++this.serveLoadSeq;
     this.loadingServe = true;

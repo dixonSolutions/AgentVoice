@@ -116,10 +116,32 @@ export interface ServeGitSnapshot {
   fetchedAt: string | null;
 }
 
+export type InstallMode = 'git' | 'npm' | 'unknown';
+
+/** How the bridge was installed — decides which update controls make sense. */
+export interface InstallModeInfo {
+  mode: InstallMode;
+  root: string;
+  reason: string;
+  global: boolean;
+  updateCommand: string;
+}
+
+/** Where an npm install stands against the registry. The git analogue is ServeGitSnapshot. */
+export interface ServeNpmSnapshot {
+  installed: string;
+  latest: string | null;
+  updateAvailable: boolean;
+  checkedAt: string;
+  error?: string;
+}
+
 export interface ServeStatus {
   running: boolean;
   lastRun: ServeRunResult | null;
   git: ServeGitSnapshot | null;
+  npm: ServeNpmSnapshot | null;
+  install: InstallModeInfo;
   /** Run id of the update currently in flight, if any. */
   updateRunId: string | null;
 }

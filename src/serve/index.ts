@@ -14,7 +14,8 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { execFile, spawn, type ChildProcess } from 'node:child_process';
+import { promisify } from 'node:util';
 import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { simpleGit, type SimpleGit } from 'simple-git';
@@ -22,11 +23,18 @@ import { getConfig, type ServeSettings } from '../config.js';
 import { getRunModeInfo } from '../runMode.js';
 import { childLogger } from '../log.js';
 import { writeAudit } from '../state/db.js';
+import { getAppVersionInfo } from '../state/appVersion.js';
 import {
   addServeEvent,
   countServeEventsForRun,
   type ServeEventStatus,
 } from '../state/serveEvents.js';
+
+import {
+  canSelfUpdate,
+  detectInstallMode,
+  type InstallModeInfo,
+} from './installMode.js';
 
 const log = childLogger('serve');
 
@@ -34,7 +42,15 @@ const log = childLogger('serve');
 const FALLBACK_TRACK_BRANCH = 'main';
 
 /** Fixed unit name — never interpolated from user input. */
+const execFileAsync = promisify(execFile);
+
+/** Our own name on the registry — what `npm view` and `npm install` target. */
+const PACKAGE_NAME = 'agentvoice';
+
 const SERVICE_UNIT = 'agentvoice.service';
+
+/** How long to let the registry answer before giving up on a version check. */
+const REGISTRY_TIMEOUT_MS = 8000;
 
 /** The one update script. Nothing else pulls, builds or restarts. */
 const UPDATE_SCRIPT = 'scripts/update.sh';
@@ -114,10 +130,29 @@ export interface ServeGitSnapshot {
   fetchedAt: string | null;
 }
 
+/**
+ * Where an npm install stands relative to the registry.
+ *
+ * The git equivalent is ServeGitSnapshot — branch, commit, ahead/behind. An
+ * npm install has none of those; "am I current" is one semver comparison.
+ */
+export interface ServeNpmSnapshot {
+  installed: string;
+  latest: string | null;
+  updateAvailable: boolean;
+  checkedAt: string;
+  /** Why `latest` is null — offline, registry down, package not published yet. */
+  error?: string;
+}
+
 export interface ServeStatus {
   running: boolean;
   lastRun: ServeRunResult | null;
   git: ServeGitSnapshot | null;
+  /** Populated for npm installs; null for a clone, which uses `git` instead. */
+  npm: ServeNpmSnapshot | null;
+  /** How this bridge was installed, and therefore how it updates. */
+  install: InstallModeInfo;
   /** Run id of the update currently in flight, if any. */
   updateRunId: string | null;
 }
@@ -732,6 +767,8 @@ async function withServeLock<T>(
  * Re-read the repository state. `fetch` costs a network round trip but is the
  * only way the ahead/behind counts and the conflict set mean anything.
  */
+let _lastNpm: ServeNpmSnapshot | null = null;
+
 export async function refreshGitSnapshot(
   opts: { fetch?: boolean } = {},
 ): Promise<ServeGitSnapshot> {
@@ -741,11 +778,74 @@ export async function refreshGitSnapshot(
   return _lastGit;
 }
 
+/**
+ * Ask the registry what the newest published version is.
+ *
+ * Deliberately tolerant: a bridge on a home network is often offline, and a
+ * failed version check must degrade to "cannot tell" rather than making the
+ * whole status endpoint fail. The installed version always comes back.
+ */
+export async function refreshNpmSnapshot(): Promise<ServeNpmSnapshot> {
+  const installed = getAppVersionInfo().appVersion;
+  const snapshot: ServeNpmSnapshot = {
+    installed,
+    latest: null,
+    updateAvailable: false,
+    checkedAt: new Date().toISOString(),
+  };
+
+  try {
+    const { stdout } = await execFileAsync(
+      'npm',
+      ['view', PACKAGE_NAME, 'version', '--registry=https://registry.npmjs.org/'],
+      { timeout: REGISTRY_TIMEOUT_MS },
+    );
+    const latest = stdout.trim();
+    if (latest) {
+      snapshot.latest = latest;
+      snapshot.updateAvailable = compareSemver(latest, installed) > 0;
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    // A 404 is not a fault — it just means nothing has been published yet.
+    snapshot.error = /E404|404 Not Found/.test(message)
+      ? `${PACKAGE_NAME} is not published to the registry yet`
+      : `Could not reach the npm registry: ${message.split('\n')[0]}`;
+  }
+
+  _lastNpm = snapshot;
+  return snapshot;
+}
+
+/** -1 / 0 / 1, comparing only the numeric release part. Prereleases sort low. */
+function compareSemver(a: string, b: string): number {
+  const parse = (v: string): number[] =>
+    v.split('-')[0]!.split('.').map((n) => Number.parseInt(n, 10) || 0);
+  const [x, y] = [parse(a), parse(b)];
+  for (let i = 0; i < 3; i++) {
+    const diff = (x[i] ?? 0) - (y[i] ?? 0);
+    if (diff !== 0) return diff > 0 ? 1 : -1;
+  }
+  // Same release numbers: a prerelease is older than the plain version.
+  const preA = a.includes('-');
+  const preB = b.includes('-');
+  if (preA === preB) return 0;
+  return preA ? -1 : 1;
+}
+
 export function getServeStatus(): ServeStatus {
+  const install = detectInstallMode();
+  // Report only the snapshot that describes this install. An npm install
+  // sitting in a directory that happens to be inside someone's repo would
+  // otherwise answer with a branch and commit that say nothing about the
+  // code actually running.
+  const isGit = install.mode === 'git';
   return {
     running: _running,
     lastRun: _lastRun,
-    git: _lastGit,
+    git: isGit ? _lastGit : null,
+    npm: isGit ? null : _lastNpm,
+    install,
     updateRunId: _updateRunId,
   };
 }
@@ -755,6 +855,21 @@ export function getServeStatus(): ServeStatus {
  * stashes first and pops afterwards. One script, one flag of difference.
  */
 export async function serveUpdate(mode: ServeUpdateMode): Promise<ServeActionResult> {
+  const install = detectInstallMode();
+
+  // An npm install has no repo to rebase and no working tree to stash, so both
+  // buttons collapse to the same thing there: ask npm for the newer version.
+  if (install.mode === 'npm') return serveNpmUpdate(install);
+  if (!canSelfUpdate(install)) {
+    return withServeLock(`manual:${mode}`, async (runId) => {
+      const detail =
+        `Cannot update automatically — ${install.reason}. ` +
+        'Reinstall with npm, or run this from a git clone.';
+      recordStep(runId, 'finish', 'error', detail);
+      return { runId, outcome: 'error' as const, detail };
+    });
+  }
+
   const { settings } = getConfig();
   const serveSettings = settings.serve;
   const repoDir = resolveRepoDir(serveSettings);
@@ -796,11 +911,109 @@ export async function serveUpdate(mode: ServeUpdateMode): Promise<ServeActionRes
   );
 }
 
+/**
+ * Update an npm install: let npm replace the package, then restart the unit.
+ *
+ * Unlike the git path this is not a detached script — `npm install` is short,
+ * and the bridge is only killed afterwards by the restart, so the step log can
+ * be written inline and will survive.
+ */
+async function serveNpmUpdate(install: InstallModeInfo): Promise<ServeActionResult> {
+  return withServeLock('manual:update', async (runId) => {
+    recordStep(runId, 'install_mode', 'ok', `npm install (${install.reason})`);
+
+    const snapshot = await refreshNpmSnapshot();
+    if (snapshot.error) {
+      recordStep(runId, 'registry_check', 'warn', snapshot.error);
+    } else {
+      recordStep(
+        runId,
+        'registry_check',
+        'ok',
+        `installed ${snapshot.installed}, latest ${snapshot.latest ?? 'unknown'}`,
+      );
+    }
+
+    if (snapshot.latest && !snapshot.updateAvailable) {
+      const detail = `Already on ${snapshot.installed} — nothing newer published`;
+      recordStep(runId, 'finish', 'ok', detail);
+      _lastRun = finishedRun(runId, 'ok', detail);
+      return { runId, outcome: 'no_changes' as const, detail };
+    }
+
+    const args = ['install', ...(install.global ? ['-g'] : []), `${PACKAGE_NAME}@latest`];
+    try {
+      await execFileAsync('npm', [...args, '--no-audit', '--no-fund'], {
+        timeout: 10 * 60_000,
+        maxBuffer: 8 * 1024 * 1024,
+      });
+      recordStep(runId, 'npm_install', 'ok', `npm ${args.join(' ')}`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const detail = `npm ${args.join(' ')} failed: ${message.split('\n')[0]}`;
+      recordStep(runId, 'npm_install', 'error', detail);
+      recordStep(runId, 'finish', 'error', detail);
+      _lastRun = finishedRun(runId, 'error', detail);
+      return { runId, outcome: 'error' as const, detail };
+    }
+
+    const restarted = await restartServiceUnit(runId);
+    const detail = restarted
+      ? `Updated to ${snapshot.latest ?? 'the latest version'} and restarted`
+      : `Updated to ${snapshot.latest ?? 'the latest version'} — restart it to pick it up`;
+    recordStep(runId, 'finish', restarted ? 'ok' : 'warn', detail);
+    _lastRun = finishedRun(runId, 'ok', detail);
+    return { runId, outcome: 'ok' as const, detail };
+  });
+}
+
+function finishedRun(runId: string, outcome: ServeOutcome, summary: string): ServeRunResult {
+  const at = new Date().toISOString();
+  return { runId, trigger: 'manual', startedAt: at, finishedAt: at, outcome, summary };
+}
+
+/**
+ * Restart the service directly, for installs with no scripts/ directory.
+ * User unit first, then the system unit via passwordless sudo — the same order
+ * scripts/update.sh uses, so the two paths cannot disagree about which unit wins.
+ */
+async function restartServiceUnit(runId: string): Promise<boolean> {
+  const attempts: Array<{ label: string; cmd: string; args: string[] }> = [
+    { label: 'user unit', cmd: 'systemctl', args: ['--user', 'restart', SERVICE_UNIT] },
+    { label: 'system unit', cmd: 'sudo', args: ['-n', 'systemctl', 'restart', SERVICE_UNIT] },
+  ];
+  for (const attempt of attempts) {
+    try {
+      await execFileAsync(attempt.cmd, attempt.args, { timeout: 60_000 });
+      recordStep(runId, 'restart', 'ok', `${attempt.label} restarted`);
+      return true;
+    } catch {
+      // Try the next one; only the last failure is worth reporting.
+    }
+  }
+  recordStep(
+    runId,
+    'restart',
+    'warn',
+    `no ${SERVICE_UNIT} could be restarted — install one with scripts/install-systemd.sh, or restart by hand`,
+  );
+  return false;
+}
+
 export async function serveRestart(): Promise<ServeActionResult> {
   const { settings } = getConfig();
   const repoDir = resolveRepoDir(settings.serve);
 
   return withServeLock('manual:restart', async (runId) => {
+    // Only a clone has scripts/restart.sh (which also rebuilds). Anywhere else,
+    // the unit is the only thing to restart.
+    if (detectInstallMode().mode !== 'git') {
+      const ok = await restartServiceUnit(runId);
+      const detail = ok ? 'Service restarted' : 'Could not restart the service';
+      recordStep(runId, 'finish', ok ? 'ok' : 'error', detail);
+      _lastRun = finishedRun(runId, ok ? 'ok' : 'error', detail);
+      return { runId, outcome: ok ? ('ok' as const) : ('error' as const), detail };
+    }
     const outcome = await triggerRestart(repoDir, runId);
     const detail = outcome === 'ok'
       ? 'Restart script spawned (build + systemd restart)'
@@ -824,7 +1037,11 @@ export async function serveHealthCheck(): Promise<ServeActionResult> {
 
   return withServeLock('manual:health', async (runId) => {
     try {
-      await refreshGitSnapshot();
+      if (detectInstallMode().mode === 'git') {
+        await refreshGitSnapshot();
+      } else {
+        await refreshNpmSnapshot();
+      }
     } catch {
       // non-fatal
     }
