@@ -21,6 +21,7 @@ import { childLogger } from '../log.js';
 import { agentVoiceRuleBody } from '../mcp/agentVoicePrompt.js';
 import { MCP_SERVER_NAME } from '../providers/agents/mcpRegistration.js';
 import {
+  broadcastToVoiceSessions,
   broadcastVoiceAgentStatus,
   broadcastVoiceTurnIdle,
   hadSpeakThisTurn,
@@ -37,10 +38,30 @@ import {
   type Project,
   type SessionState,
 } from '../state/registry.js';
-import type { AgentStreamEvent } from '../providers/agents/events.js';
+import {
+  describeToolStart,
+  toolStartDetail,
+  type AgentStreamEvent,
+} from '../providers/agents/events.js';
 import { publishEvent } from '../state/eventBus.js';
 
 const log = childLogger('voice-agent');
+
+/**
+ * Is this the agent calling one of *our* MCP tools?
+ *
+ * speak/done/next_voice_turn show up in the CLI's stream like any other tool
+ * call, so announcing tool activity would prefix every spoken reply with
+ * "Running mcp__agent-voice__speak". The bridge already knows about these —
+ * they are how it is being talked to — so they are never news.
+ *
+ * Name shapes across the CLIs: `mcp__agent-voice__speak` (Claude Code),
+ * `agent-voice.speak`, `agent-voice/speak`.
+ */
+function isOwnMcpTool(name: string): boolean {
+  const normalized = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  return normalized.includes(MCP_SERVER_NAME);
+}
 
 const VOICE_BOOT_SUFFIX =
   `\n\n---\nThe ${MCP_SERVER_NAME} MCP server (AgentVoice) is connected. ` +
@@ -298,6 +319,31 @@ export function spawnVoiceAgent(
         lastAssistantText = event.text;
       } else if (event.kind === 'result' && event.text) {
         lastAssistantText = event.text;
+      } else if (event.kind === 'tool_start' && !isOwnMcpTool(event.tool.name)) {
+        // The phone has never been told what the agent is *doing* in
+        // agent_native — only what it chose to say. Read-aloud (see
+        // settings.voice.tts.readAloud) has no material without this, and the
+        // desk surfaces get a live activity line for free.
+        broadcastToVoiceSessions({
+          type: 'tool_activity',
+          tool: event.tool.name,
+          phase: 'start',
+          label: describeToolStart(event.tool),
+          ...(toolStartDetail(event.tool) ? { detail: toolStartDetail(event.tool) } : {}),
+        });
+      } else if (event.kind === 'tool_done' && !isOwnMcpTool(event.tool.name)) {
+        // Only worth sending when it carries something the start did not: the
+        // output, or the news that the call failed. Otherwise it is one more
+        // event per tool call saying nothing.
+        if (event.output || event.success === false) {
+          broadcastToVoiceSessions({
+            type: 'tool_activity',
+            tool: event.tool.name,
+            phase: event.success === false ? 'error' : 'done',
+            label: event.success === false ? 'Tool call failed' : 'Tool output',
+            ...(event.output ? { detail: event.output } : {}),
+          });
+        }
       }
     }
   });

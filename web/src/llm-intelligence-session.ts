@@ -1292,22 +1292,30 @@ export class LlmIntelligenceSession {
     const mode = this.ttsSettings.readAloud ?? 'replies';
     if (mode === 'replies') return;
     if (!this.ttsSettings.agentVoiceEnabled) return;
-    if (phase !== 'start' && phase !== 'error') return;
 
-    const title = label.trim();
-    if (!title) return;
-    const headline = phase === 'error' ? `${title} failed` : title;
     const body = detail?.trim() ?? '';
 
-    if (mode === 'titles' || !body) {
-      this.enqueueSpeak(headline);
+    // Announce work as it starts — that is the part you want to hear without
+    // waiting, and in every mode above `replies`.
+    if (phase === 'start') {
+      const title = label.trim();
+      if (title) this.enqueueSpeak(title);
       return;
     }
+
+    if (phase === 'error') {
+      this.enqueueSpeak(label.trim() || 'A tool call failed');
+      return;
+    }
+
+    // `done` is the only event carrying what the tool actually produced, so it
+    // is where summary and everything get their material. The headline was
+    // already spoken at start; repeating it here would just stutter.
+    if (mode === 'titles' || !body) return;
     if (mode === 'summary') {
-      this.enqueueSpeak(`${headline}. ${openingForSpeech(body)}`);
+      this.enqueueSpeak(openingForSpeech(body));
       return;
     }
-    this.enqueueSpeak(headline);
     for (const chunk of chunkForSpeech(body)) this.enqueueSpeak(chunk);
   }
 

@@ -40,7 +40,8 @@ import {
 } from './mcpRegistration.js';
 import {
   extractContentText,
-  extractToolUses,
+  extractToolUsesWithIds,
+  type NormalizedToolCall,
   logUnhandledEvent,
   type AgentStreamEvent,
 } from './events.js';
@@ -394,6 +395,50 @@ function catalogToEntries(models: ClaudeCatalogModel[]): ModelEntry[] {
 
 // ── Stream parsing ────────────────────────────────────────────────────────
 
+/**
+ * Text of a tool_result block. Claude sends either a bare string or the same
+ * content-block array the assistant uses, so both shapes have to be handled or
+ * half the results come back empty.
+ */
+/**
+ * tool_use id → the call it described, so the matching tool_result can report
+ * which tool it came from. Bounded because a long session would otherwise grow
+ * this forever, and a result always follows its call closely.
+ */
+const MAX_PENDING_TOOL_USES = 64;
+const pendingToolUses = new Map<string, NormalizedToolCall>();
+
+function rememberToolUse(id: string, tool: NormalizedToolCall): void {
+  pendingToolUses.set(id, tool);
+  while (pendingToolUses.size > MAX_PENDING_TOOL_USES) {
+    const oldest = pendingToolUses.keys().next().value;
+    if (oldest === undefined) break;
+    pendingToolUses.delete(oldest);
+  }
+}
+
+function takeToolUse(id: string): NormalizedToolCall | undefined {
+  const tool = pendingToolUses.get(id);
+  if (tool) pendingToolUses.delete(id);
+  return tool;
+}
+
+function toolResultText(content: unknown): string | undefined {
+  if (typeof content === 'string') return content.trim() || undefined;
+  if (!Array.isArray(content)) return undefined;
+  const parts: string[] = [];
+  for (const part of content) {
+    if (typeof part === 'string') {
+      parts.push(part);
+    } else if (typeof part === 'object' && part !== null) {
+      const block = part as { type?: string; text?: unknown };
+      if (block.type === 'text' && typeof block.text === 'string') parts.push(block.text);
+    }
+  }
+  const joined = parts.join('\n').trim();
+  return joined || undefined;
+}
+
 function parseClaudeEvent(raw: Record<string, unknown>): AgentStreamEvent[] {
   const events: AgentStreamEvent[] = [];
 
@@ -411,8 +456,9 @@ function parseClaudeEvent(raw: Record<string, unknown>): AgentStreamEvent[] {
   }
 
   if (type === 'assistant') {
-    for (const tool of extractToolUses(raw['message'])) {
-      events.push({ kind: 'tool_start', tool });
+    for (const call of extractToolUsesWithIds(raw['message'])) {
+      if (call.id) rememberToolUse(call.id, call.tool);
+      events.push({ kind: 'tool_start', tool: call.tool });
     }
     const text = extractContentText(raw['message']);
     if (text) events.push({ kind: 'assistant_text', text });
@@ -425,12 +471,21 @@ function parseClaudeEvent(raw: Record<string, unknown>): AgentStreamEvent[] {
     if (Array.isArray(content)) {
       for (const part of content) {
         if (typeof part !== 'object' || part === null) continue;
-        const block = part as { type?: string; is_error?: boolean };
+        const block = part as {
+          type?: string;
+          is_error?: boolean;
+          content?: unknown;
+          tool_use_id?: unknown;
+        };
         if (block.type !== 'tool_result') continue;
+        const output = toolResultText(block.content);
+        const origin =
+          typeof block.tool_use_id === 'string' ? takeToolUse(block.tool_use_id) : undefined;
         events.push({
           kind: 'tool_done',
-          tool: { name: 'tool_result', action: 'other' },
+          tool: origin ?? { name: 'tool_result', action: 'other' },
           success: block.is_error !== true,
+          ...(output ? { output } : {}),
         });
       }
     }

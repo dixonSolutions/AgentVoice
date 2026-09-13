@@ -132,11 +132,22 @@ screen or walking away from it.
 | `summary` | The headline plus the opening of what the action produced. |
 | `everything` | The headline plus all of it. |
 
-The bridge already sends every action to the phone as a headline plus whatever
-it produced (`tool_activity`: `label` and `detail`), so this is a purely local
-decision — no extra round-trip, and it applies to every provider equally.
-Only `start` and `error` are spoken: announcing `done` as well doubles every
-action, and by then you have already heard what it was.
+The headline is spoken when the action starts; the content when it finishes,
+because `done` is the only event carrying what the tool actually produced. The
+headline is not repeated there — it would only stutter.
+
+Where the activity comes from depends on the workflow. Under `llm_intelligence`
+the orchestrator runs the tools and reports them directly. Under `agent_native`
+the CLI's own tool calls are read off its stream by
+[`parseStreamEvent`](../src/providers/agents/events.ts), which every provider
+implements, so all four behave the same. The agent's calls to *our* MCP tools
+(`speak`, `done`, `next_voice_turn`) are filtered out — they are how the bridge
+is being talked to, never news.
+
+Tool *output* is read where the CLI reports it: Claude Code's `tool_result`
+blocks and Codex's `exec_command_end`. Cursor and Codewhale announce the action
+but have no output to read, so `summary` and `everything` behave as `titles`
+there until their CLIs expose it.
 
 `everything` is genuinely everything. A long file read aloud takes as long as it
 takes, and the speech queue will run behind the agent — that is the mode working,

@@ -41,7 +41,13 @@ export type AgentStreamEvent =
   /** Run started (first event of a run); carries the model when the CLI reports one. */
   | { kind: 'init'; model?: string }
   | { kind: 'tool_start'; tool: NormalizedToolCall }
-  | { kind: 'tool_done'; tool: NormalizedToolCall; success?: boolean }
+  /**
+   * A tool finished. `output` is what it produced, when the CLI reports it —
+   * that is the only place the *content* of a read or a command run is
+   * available, and read-aloud "everything" has nothing to say without it.
+   * Absent where a CLI reports only that the call ended.
+   */
+  | { kind: 'tool_done'; tool: NormalizedToolCall; success?: boolean; output?: string }
   /** Free-form assistant prose (used for the mute-agent TTS fallback). */
   | { kind: 'assistant_text'; text: string }
   /** Run finished; `text` is the final summary when the CLI provides one. */
@@ -172,7 +178,66 @@ export function extractToolUses(message: unknown): NormalizedToolCall[] {
   return calls;
 }
 
+/**
+ * Same as extractToolUses, but keeps each block's `id` so a later
+ * `tool_result` can be matched back to the call that produced it. Without the
+ * pairing, every result looks like an anonymous "tool_result" and there is no
+ * way to tell one tool's output from another's.
+ */
+export function extractToolUsesWithIds(
+  message: unknown,
+): Array<{ id: string | undefined; tool: NormalizedToolCall; name: string }> {
+  if (typeof message !== 'object' || message === null) return [];
+  const content = (message as { content?: unknown }).content;
+  if (!Array.isArray(content)) return [];
+  const calls: Array<{ id: string | undefined; tool: NormalizedToolCall; name: string }> = [];
+  for (const part of content) {
+    if (typeof part !== 'object' || part === null) continue;
+    const block = part as { type?: string; name?: string; input?: unknown; id?: unknown };
+    if (block.type !== 'tool_use' || typeof block.name !== 'string') continue;
+    const input =
+      typeof block.input === 'object' && block.input !== null
+        ? (block.input as Record<string, unknown>)
+        : undefined;
+    calls.push({
+      id: typeof block.id === 'string' ? block.id : undefined,
+      tool: normalizeToolCall(block.name, input),
+      name: block.name,
+    });
+  }
+  return calls;
+}
+
 /** One-time debug breadcrumb for stream shapes no provider recognised. */
 export function logUnhandledEvent(provider: string, raw: Record<string, unknown>): void {
   log.debug({ provider, type: raw['type'], keys: Object.keys(raw).slice(0, 8) }, 'unhandled stream event');
+}
+
+// ── Spoken descriptions ───────────────────────────────────────────────────
+//
+// The narrator describes finished work in the past tense ("wrote foo.ts").
+// Read-aloud announces work as it starts, so it needs the present tense —
+// hearing "wrote main.py" the instant a read begins is actively misleading.
+
+/** Present-tense headline for a tool call that just started. */
+export function describeToolStart(tool: NormalizedToolCall): string {
+  switch (tool.action) {
+    case 'write':
+      return tool.path ? `Writing ${tool.path}` : 'Writing a file';
+    case 'read':
+      return tool.path ? `Reading ${tool.path}` : 'Reading a file';
+    case 'search':
+      return tool.path ? `Searching ${tool.path}` : 'Searching the codebase';
+    case 'shell':
+      return tool.command ? `Running ${tool.command.slice(0, 80)}` : 'Running a command';
+    case 'task':
+      return `Starting ${tool.subagent ?? 'a subagent'}`;
+    default:
+      return `Running ${tool.name}`;
+  }
+}
+
+/** What the phone shows/says alongside the headline, when there is anything. */
+export function toolStartDetail(tool: NormalizedToolCall): string | undefined {
+  return tool.command ?? tool.path ?? tool.subagent;
 }

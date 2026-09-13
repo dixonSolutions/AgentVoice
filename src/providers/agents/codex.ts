@@ -36,6 +36,7 @@ import {
 import {
   logUnhandledEvent,
   normalizeToolCall,
+  pickString,
   type AgentStreamEvent,
 } from './events.js';
 import type {
@@ -275,13 +276,23 @@ function parseCodexEvent(raw: Record<string, unknown>): AgentStreamEvent[] {
       events.push({ kind: 'tool_start', tool: normalizeToolCall('exec_command', msg ?? undefined) });
       return events;
 
-    case 'exec_command_end':
+    case 'exec_command_end': {
+      // Codex spells the captured output differently across versions; take the
+      // first that is actually there rather than guessing one.
+      const output = pickString(msg ?? undefined, [
+        'aggregated_output',
+        'formatted_output',
+        'stdout',
+        'output',
+      ])?.trim();
       events.push({
         kind: 'tool_done',
         tool: normalizeToolCall('exec_command', msg ?? undefined),
         success: msg?.['exit_code'] === 0,
+        ...(output ? { output } : {}),
       });
       return events;
+    }
 
     case 'patch_apply_begin': {
       const changes = msg?.['changes'];
