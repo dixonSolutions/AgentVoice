@@ -175,3 +175,30 @@ from what the vendor declares, and transport, auth and retry come from the
 shared HTTP specializer. If the API is OpenAI-shaped, `openAiTranscriptionCall`
 ([`http.ts`](../src/providers/speech/http.ts)) is most of the work — see
 [`groq.ts`](../src/providers/speech/input/vendors/groq.ts).
+
+## Checking the round trip
+
+`scripts/audio-loop-test.sh` says a sentence with the configured speech-out
+engine, hears it back through the configured speech-in engine, and reports how
+much of it survived.
+
+```bash
+APP_TOKEN=… bash scripts/audio-loop-test.sh
+```
+
+It runs each phrase twice:
+
+- **digital** — synthesize, convert to PCM16LE/16 kHz, `POST /api/intelligence/transcribe`.
+  This exercises both provider chains and your credentials, nothing else.
+- **acoustic** — synthesize, play it through the default sink, record that sink's
+  monitor, and transcribe *that*. This exercises the machine's audio path too:
+  the part that is silently broken when the providers are fine and you still
+  hear nothing.
+
+Word error rate is reported per leg — digital fails over 25%, acoustic over 40%,
+since a real speaker-and-microphone path legitimately loses the occasional
+leading word. Spoken numbers and digits compare equal, because "forty two"
+coming back as "42" is correct output rather than a recognition error.
+
+Needs `ffmpeg`, `paplay` and `parecord`; the acoustic leg is skipped when there
+is no default sink.
