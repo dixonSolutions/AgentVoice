@@ -678,25 +678,52 @@
                       <div class="cv-cfg-serve-git">
                         <span class="cv-cfg-muted">HEAD</span>
                         <strong>{{ git.branch }}</strong>
+                        @if (git.shortCommit) {
+                          <code class="cv-cfg-serve-commit">{{ git.shortCommit }}</code>
+                        }
                         <span class="cv-cfg-muted">track {{ git.trackBranch }}</span>
                         @if (git.defaultBranch && git.defaultBranch !== git.trackBranch) {
                           <span class="cv-cfg-muted">origin default {{ git.defaultBranch }}</span>
                         }
                         <span class="cv-cfg-muted">ahead {{ git.ahead }} · behind {{ git.behind }}</span>
                         @if (git.dirty) {
-                          <p-tag value="dirty" severity="warn" />
-                        }
-                        @if (git.currentCommit) {
-                          <code class="cv-cfg-serve-commit">{{ git.currentCommit.slice(0, 8) }}</code>
+                          <p-tag [value]="git.localChangeCount + ' local change' + (git.localChangeCount === 1 ? '' : 's')" severity="warn" />
                         }
                       </div>
+                      @if (git.commitSubject) {
+                        <div class="cv-cfg-serve-git">
+                          <span class="cv-cfg-muted">{{ git.commitSubject }}</span>
+                        </div>
+                      }
+                      @if (git.currentCommit) {
+                        <code class="cv-cfg-serve-commit">{{ git.currentCommit }}</code>
+                      }
+                      <!-- Dirty locally AND touched by the incoming commits: the
+                           files a plain rebase would actually fight over. -->
+                      @if (git.conflictCount > 0) {
+                        <p-message severity="warn" variant="simple"
+                          [text]="git.conflictCount + ' local change(s) are also changed by the incoming commits — a plain rebase will refuse. Use “Stash, rebase & update”.'" />
+                        <ul class="cv-cfg-serve-files">
+                          @for (file of git.conflictFiles; track file) {
+                            <li><code>{{ file }}</code></li>
+                          }
+                        </ul>
+                      } @else if (git.localChangeCount > 0) {
+                        <p-message severity="secondary" variant="simple"
+                          [text]="git.localChangeCount + ' local change(s), none of them touched by the incoming commits — but a rebase still needs a clean tree, so use “Stash, rebase & update”.'" />
+                        <ul class="cv-cfg-serve-files">
+                          @for (file of git.localChanges; track file) {
+                            <li><code>{{ file }}</code></li>
+                          }
+                        </ul>
+                      }
                     }
                     <div class="cv-cfg-row-actions">
                       <p-button label="Refresh" icon="pi pi-refresh"
                         severity="secondary" [outlined]="true"
                         [loading]="loadingServe"
                         [disabled]="!canUseApi()"
-                        (onClick)="loadServe()" />
+                        (onClick)="loadServe({ fetch: true })" />
                       <p-button label="Health check" icon="pi pi-heart"
                         severity="secondary" [outlined]="true"
                         [loading]="runningHealth || pingingHealth"
@@ -716,7 +743,7 @@
 
                 <p-fieldset legend="Repository">
                   <p-message severity="secondary" variant="simple"
-                    [text]="'Rebase fetches origin and rebases onto origin/' + serveTrackBranch + '. Leave branch blank to follow origin default (' + serveBranchPlaceholder + '). Choice is saved.'" />
+                    [text]="'Update rebases onto origin/' + serveTrackBranch + '. Leave branch blank to follow origin default (' + serveBranchPlaceholder + '). Choice is saved.'" />
                   <p-iftalabel>
                     <input pInputText id="cfg-serve-branch"
                       [(ngModel)]="serveBranch"
@@ -737,14 +764,37 @@
                     (onClick)="onSaveServe()" />
                 </p-fieldset>
 
-                <p-fieldset legend="Actions">
+                <p-fieldset legend="Update">
                   <p-message severity="secondary" variant="simple"
-                    text="Manual only — no heartbeat or scheduled pull. Restart runs scripts/restart.sh (build + systemd). Rebase trusts origin." />
+                    [text]="'Both buttons run the one update script (scripts/update.sh): fetch, rebase onto origin/' + serveTrackBranch + ', install dependencies, build, restart the service. Manual only — no heartbeat, no scheduled pull.'" />
+                  @if (serveUpdateRunId) {
+                    <p-message severity="info" variant="simple"
+                      text="Update running — the bridge restarts itself at the end, so the page may briefly lose connection. Steps appear in the Logs tab." />
+                  }
                   <div class="cv-cfg-serve-action-grid">
-                    <p-button [label]="'Rebase onto origin/' + serveTrackBranch" icon="pi pi-download"
-                      [loading]="runningPull"
+                    <p-button label="Rebase &amp; update" icon="pi pi-download"
+                      [loading]="runningUpdate"
+                      [disabled]="!canUseApi() || serveBusy || serveHasLocalChanges"
+                      (onClick)="onServeAction('update')" />
+                    <!-- Secondary until there is something to stash, then it is
+                         the only button that can actually run. -->
+                    <p-button label="Stash, rebase &amp; update" icon="pi pi-inbox"
+                      [severity]="serveHasLocalChanges ? 'warn' : 'secondary'"
+                      [outlined]="!serveHasLocalChanges"
+                      [loading]="runningStashUpdate"
                       [disabled]="!canUseApi() || serveBusy"
-                      (onClick)="onServeAction('pull')" />
+                      (onClick)="onServeAction('stash-update')" />
+                  </div>
+                  @if (serveHasLocalChanges) {
+                    <p-message severity="secondary" variant="simple"
+                      text="“Rebase &amp; update” is disabled while the working tree is dirty — git rebase would refuse. The stash option saves your changes, rebases, then pops them back." />
+                  }
+                </p-fieldset>
+
+                <p-fieldset legend="Service">
+                  <p-message severity="secondary" variant="simple"
+                    text="Restart runs scripts/restart.sh (build + systemd restart) without touching git." />
+                  <div class="cv-cfg-serve-action-grid">
                     <p-button label="Restart service" icon="pi pi-replay"
                       severity="secondary" [outlined]="true"
                       [loading]="runningRestart"
@@ -955,6 +1005,12 @@
                 </p-fieldset>
 
                 <p-fieldset legend="Action log">
+                  @if (serveUpdateRunId) {
+                    <div class="cv-cfg-serve-status-row">
+                      <p-tag value="Update running" severity="info" />
+                      <span class="cv-cfg-muted">polling every 2s — the bridge restarts mid-run</span>
+                    </div>
+                  }
                   @if (serveEvents.length > 0) {
                     <div class="cv-cfg-audit-list">
                       @for (entry of serveEvents; track entry.id) {
@@ -975,7 +1031,7 @@
                   } @else {
                     <div class="cv-cfg-empty">
                       <i class="pi pi-history"></i>
-                      <span>No serve activity yet — rebase, restart, or health-check to populate this log.</span>
+                      <span>No serve activity yet — update, restart, or health-check to populate this log.</span>
                     </div>
                   }
                 </p-fieldset>

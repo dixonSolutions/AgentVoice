@@ -164,9 +164,16 @@ different ports and can run **side by side** — no `EADDRINUSE` collision.
 - `npm run start:service` — starts the host service back up, health-checked. Windows: `scripts\start.ps1`.
 
 **Serve** (manual self-hosting maintenance): Config tab → **Serve** — health
-check, live `journalctl` logs, restart via `scripts/restart.sh`, and rebase onto
-`origin/main` (or a saved track branch / origin's default). No heartbeat or
-scheduled auto-update.
+check, live `journalctl` logs, restart via `scripts/restart.sh`, and **update**
+via `scripts/update.sh`. No heartbeat or scheduled auto-update.
+
+`scripts/update.sh` is the single update path — fetch, rebase onto
+`origin/<branch>`, install deps, build, restart the systemd unit (user or
+system, auto-detected). The Serve page offers it as two buttons, **Rebase &
+update** and **Stash, rebase & update**; the second adds `--stash` and is the
+one to use when the working tree is dirty. Running the script by hand does
+exactly the same thing. It emits an NDJSON step log the bridge mirrors into
+`serve_event`, so progress survives the restart the update itself performs.
 See [`21-serve-self-hosting.md`](./21-serve-self-hosting.md).
 
 `GET /healthz` returns `runMode`, `backendUrl`, `webUrl`, `useDevWebServer`, plus

@@ -211,7 +211,7 @@ else
   echo -e "${RED}${BLD}${FAILURES} check(s) failed.${NC} Fix the items above, then re-run: bash scripts/doctor.sh"
   echo ""
   echo -e "${BLD}Quick fix order:${NC}"
-  echo "  0. Run repair script:   bash scripts/fix-hosting.sh"
+  echo "  0. Rebuild + restart:   bash scripts/update.sh --force   (or --stash if the tree is dirty)"
   echo "  1. Enable MagicDNS:     https://login.tailscale.com/admin/dns"
   echo "  2. Enable HTTPS certs:  same page → HTTPS Certificates"
   echo "  3. Enable Serve:        run 'tailscale serve --bg http://127.0.0.1:${SERVE_UPSTREAM_PORT}' and follow the link"

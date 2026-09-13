@@ -4,10 +4,13 @@
  * Routes:
  *   GET  /api/admin/serve              — config + live status
  *   PATCH /api/admin/serve             — update serve settings (branch / repoDir)
- *   POST /api/admin/serve/action       — rebase, restart, or health
+ *   POST /api/admin/serve/action       — update, stash-update, restart, or health
  *   GET  /api/admin/serve/events       — recent step log
  *   GET  /api/admin/serve/logs         — journalctl snapshot
  *   GET  /api/admin/serve/logs/stream  — live journalctl -f (SSE)
+ *
+ * `update` and `stash-update` both run scripts/update.sh — the single update
+ * path. They replaced the old `pull` action, which only rebased.
  */
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
@@ -47,7 +50,7 @@ const ServePatchSchema = z
 
 const ServeActionSchema = z
   .object({
-    action: z.enum(['pull', 'restart', 'health']),
+    action: z.enum(['update', 'stash-update', 'restart', 'health']),
   })
   .strict();
 
@@ -99,12 +102,15 @@ function sseHeaders(req: FastifyRequest): Record<string, string> {
 }
 
 export async function registerServeRoutes(app: FastifyInstance): Promise<void> {
-  app.get('/api/admin/serve', async () => {
+  // `?fetch=1` hits the network first, which is the only way ahead/behind and
+  // the conflicting-file set reflect what is actually on origin right now.
+  app.get<{ Querystring: { fetch?: string } }>('/api/admin/serve', async (req) => {
     const { serve } = getConfig().settings;
+    const wantFetch = req.query.fetch === '1' || req.query.fetch === 'true';
     let status = getServeStatus();
-    if (!status.git) {
+    if (wantFetch || !status.git) {
       try {
-        await refreshGitSnapshot();
+        await refreshGitSnapshot({ fetch: wantFetch });
         status = getServeStatus();
       } catch {
         // git snapshot optional on read

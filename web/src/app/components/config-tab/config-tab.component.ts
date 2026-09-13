@@ -409,6 +409,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     if (this.hostingSetupPollTimer) clearTimeout(this.hostingSetupPollTimer);
     this.hostingProgressSub?.unsubscribe();
     this.stopJournalStream();
+    this.stopServeUpdateFollow();
   }
 
   private async loadSection(id: SectionId): Promise<void> {
@@ -964,9 +965,13 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected serveRepoDir = '';
   protected pingResult: { ok: boolean; latencyMs: number; error?: string } | null = null;
   protected pingingHealth = false;
-  protected runningPull = false;
+  protected runningUpdate = false;
+  protected runningStashUpdate = false;
   protected runningRestart = false;
   protected runningHealth = false;
+  /** Run id of the update whose step log we are following, if any. */
+  protected serveUpdateRunId: string | null = null;
+  private serveEventPollTimer: ReturnType<typeof setTimeout> | null = null;
   protected readonly journalEl = viewChild<ElementRef<HTMLPreElement>>('journalEl');
   protected journalLines: string[] = [];
   protected journalLive = false;
@@ -992,12 +997,30 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     return this.serveStatus?.git?.defaultBranch || 'main';
   }
 
-  protected async loadServe(): Promise<void> {
+  /** Files dirty locally AND touched by the incoming commits. */
+  protected get serveConflictFiles(): string[] {
+    return this.serveStatus?.git?.conflictFiles ?? [];
+  }
+
+  protected get serveLocalChanges(): string[] {
+    return this.serveStatus?.git?.localChanges ?? [];
+  }
+
+  /** Anything uncommitted makes "Rebase & update" refuse — so it drives the UI. */
+  protected get serveHasLocalChanges(): boolean {
+    return (this.serveStatus?.git?.localChangeCount ?? 0) > 0;
+  }
+
+  protected get serveCommitSubject(): string {
+    return this.serveStatus?.git?.commitSubject ?? '';
+  }
+
+  protected async loadServe(opts: { fetch?: boolean } = {}): Promise<void> {
     const seq = ++this.serveLoadSeq;
     this.loadingServe = true;
     try {
       const [serveRes, events, hosting] = await Promise.all([
-        this.admin.getServe(),
+        this.admin.getServe({ fetch: opts.fetch }),
         this.admin.getServeEvents(40),
         this.admin.getHosting(),
       ]);
@@ -1008,6 +1031,11 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       this.serveBranch = serveRes.serve.branch ?? '';
       this.serveRepoDir = serveRes.serve.repoDir ?? '';
       this.hostingData = hosting;
+      // An update started before this page was opened (or before a reload) is
+      // still worth following — the bridge keeps its run id in the status.
+      if (serveRes.status.updateRunId && !this.serveUpdateRunId) {
+        this.followServeUpdate(serveRes.status.updateRunId);
+      }
     } catch (err) {
       if (seq !== this.serveLoadSeq) return;
       this.toast.error('Could not load serve settings', err instanceof Error ? err.message : String(err));
@@ -1324,10 +1352,14 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   }
 
   protected async onServeAction(action: ServeActionId): Promise<void> {
+    const isUpdate = action === 'update' || action === 'stash-update';
     const setLoading = (v: boolean): void => {
       switch (action) {
-        case 'pull':
-          this.runningPull = v;
+        case 'update':
+          this.runningUpdate = v;
+          break;
+        case 'stash-update':
+          this.runningStashUpdate = v;
           break;
         case 'restart':
           this.runningRestart = v;
@@ -1339,7 +1371,9 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     };
     setLoading(true);
     try {
-      if (action === 'pull') {
+      if (isUpdate) {
+        // The branch field is what the script will rebase onto — persist
+        // whatever is typed before handing over.
         await this.admin.patchServe({
           branch: this.serveBranch.trim(),
           repoDir: this.serveRepoDir.trim(),
@@ -1352,12 +1386,58 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       } else {
         this.toast.success('Action completed', res.detail);
       }
-      await this.loadServe();
+      if (isUpdate && res.outcome !== 'error') {
+        // The update outlives this request — it ends by restarting the bridge.
+        // Follow its step log instead of pretending the button finished it.
+        this.followServeUpdate(res.runId);
+      } else {
+        await this.loadServe();
+      }
     } catch (err) {
       this.toast.error('Action failed', err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
+  }
+
+  /**
+   * Poll the serve step log until the run writes `finish`.
+   *
+   * Requests fail for a few seconds in the middle of every update — that is the
+   * bridge restarting itself — so a failed poll is not the end of the run.
+   */
+  private followServeUpdate(runId: string): void {
+    this.stopServeUpdateFollow();
+    this.serveUpdateRunId = runId;
+    const deadline = Date.now() + 30 * 60 * 1000;
+
+    const poll = async (): Promise<void> => {
+      if (this.serveUpdateRunId !== runId) return;
+      let done = false;
+      try {
+        const events = await this.admin.getServeEvents(80);
+        this.serveEvents = events.entries;
+        done = events.entries.some((e) => e.run_id === runId && e.step === 'finish');
+        this.cdr.markForCheck();
+      } catch {
+        // bridge is mid-restart — keep waiting
+      }
+      if (done || Date.now() > deadline) {
+        this.serveUpdateRunId = null;
+        this.serveEventPollTimer = null;
+        await this.loadServe({ fetch: true });
+        return;
+      }
+      this.serveEventPollTimer = setTimeout(() => void poll(), 2000);
+    };
+
+    this.serveEventPollTimer = setTimeout(() => void poll(), 1000);
+  }
+
+  private stopServeUpdateFollow(): void {
+    if (this.serveEventPollTimer) clearTimeout(this.serveEventPollTimer);
+    this.serveEventPollTimer = null;
+    this.serveUpdateRunId = null;
   }
 
   protected async onPingHealth(): Promise<void> {
@@ -1377,9 +1457,11 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
 
   protected get serveBusy(): boolean {
     return (
-      this.runningPull ||
+      this.runningUpdate ||
+      this.runningStashUpdate ||
       this.runningRestart ||
       this.runningHealth ||
+      this.serveUpdateRunId !== null ||
       (this.serveStatus?.running ?? false)
     );
   }
