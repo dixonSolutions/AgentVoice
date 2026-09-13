@@ -2,6 +2,8 @@
  * Browser speech API capability checks — WebKit STT/TTS require a secure context.
  */
 
+import { browserTtsHasAnyVoice } from './browser-tts-settings.js';
+
 function getSpeechRecognitionCtor(): (new () => unknown) | null {
   if (typeof window === 'undefined') return null;
   const w = window as Window & {
@@ -63,10 +65,13 @@ export function webkitSttSkipReason(): string | null {
   return null;
 }
 
-/** Sync check: WebKit TTS API + secure context. */
+/** Sync check: WebKit TTS API + secure context + at least one installed voice. */
 export function canUseWebkitTts(): boolean {
   if (isIosStandalonePwa()) return false;
-  return isLikelySecureVoiceContext() && hasSpeechSynthesisApi();
+  if (!isLikelySecureVoiceContext() || !hasSpeechSynthesisApi()) return false;
+  // An engine with an empty voice catalog reports success and plays silence,
+  // so "the API exists" is not enough to call this usable.
+  return browserTtsHasAnyVoice();
 }
 
 /** Human-readable reason WebKit TTS was skipped (for session logs). */
@@ -76,6 +81,9 @@ export function webkitTtsSkipReason(): string | null {
   }
   if (!isLikelySecureVoiceContext()) return 'Not a secure context (need HTTPS)';
   if (!hasSpeechSynthesisApi()) return 'speechSynthesis API not available';
+  if (!browserTtsHasAnyVoice()) {
+    return 'Browser has no speech voices installed (on Linux, install speech-dispatcher and a voice; a Flatpak browser also needs access to its socket)';
+  }
   return null;
 }
 

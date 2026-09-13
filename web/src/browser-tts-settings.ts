@@ -181,8 +181,58 @@ function baseLang(code: string | undefined | null): string | null {
  */
 export function hasBrowserVoiceForLanguage(language: string): boolean {
   const want = baseLang(language);
-  if (!want) return true;
+  // "auto" asks for no particular language, but an empty catalog still cannot
+  // speak — see browserTtsHasAnyVoice() for why that is not hypothetical.
+  if (!want) return browserTtsHasAnyVoice();
   return listBrowserTtsVoices().some((v) => baseLang(v.lang) === want);
+}
+
+/**
+ * Does this device have ANY speechSynthesis voice at all?
+ *
+ * Firefox-family browsers expose window.speechSynthesis unconditionally, but
+ * where speech-dispatcher is unreachable (a sandboxed Flatpak build is the
+ * usual culprit) the catalog stays empty — and speak() then fires `start`
+ * immediately followed by `end`, with no error event, having played nothing.
+ * Every "can we speak?" guard that only asks whether the API exists therefore
+ * passes, and the reply is silently dropped instead of falling through to a
+ * server voice. The audio router asks this instead.
+ *
+ * Before the catalog has been primed once we answer optimistically, because
+ * getVoices() is legitimately empty while the list is still loading;
+ * primeBrowserTtsVoices() settles it before a voice session starts.
+ */
+let voiceCatalogSize = -1;
+let voiceWatchAttached = false;
+
+export function browserTtsHasAnyVoice(): boolean {
+  const live = listBrowserTtsVoices().length;
+  if (live > 0) {
+    voiceCatalogSize = live;
+    return true;
+  }
+  return voiceCatalogSize < 0;
+}
+
+/** True once we have actually looked and found nothing. */
+export function browserTtsCatalogIsEmpty(): boolean {
+  return voiceCatalogSize === 0 && listBrowserTtsVoices().length === 0;
+}
+
+/**
+ * Wait for the voice catalog to load, then remember its size so the sync
+ * guards above can answer truthfully. Safe to call repeatedly.
+ */
+export async function primeBrowserTtsVoices(timeoutMs = 1500): Promise<number> {
+  const voices = await listBrowserTtsVoicesAsync(timeoutMs);
+  voiceCatalogSize = voices.length;
+  if (!voiceWatchAttached) {
+    voiceWatchAttached = true;
+    onBrowserTtsVoicesChanged((next) => {
+      voiceCatalogSize = next.length;
+    });
+  }
+  return voiceCatalogSize;
 }
 
 /** Languages this device can speak, as ISO-639-1 codes. */
@@ -344,4 +394,34 @@ export function onBrowserTtsVoicesChanged(
     if (timer) clearTimeout(timer);
     synth.removeEventListener('voiceschanged', handler);
   };
+}
+
+/**
+ * Shortest run time that could plausibly be real speech for this text.
+ *
+ * A browser whose voice catalog emptied out mid-session (or whose speech
+ * engine died) still fires `start` and then `end` back to back, with no error,
+ * so elapsed time is the only signal that nothing was actually spoken.
+ * Deliberately far below any real delivery: no engine speaks several words in
+ * under a sixth of a second, so this cannot misfire on genuinely fast speech.
+ */
+export const SILENT_PLAYBACK_MS = 150;
+
+/** Rough spoken length, used only to skip the check for very short text. */
+export function estimateSpeechMs(text: string, rate = 1): number {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return (words * 380) / (rate > 0 ? rate : 1);
+}
+
+/**
+ * Did this utterance finish so fast that it cannot have been audible?
+ * Only meaningful for text long enough to have a real duration.
+ */
+export function looksLikeSilentPlayback(
+  text: string,
+  elapsedMs: number,
+  rate = 1,
+): boolean {
+  if (estimateSpeechMs(text, rate) < 400) return false;
+  return elapsedMs < SILENT_PLAYBACK_MS;
 }

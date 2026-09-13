@@ -14,7 +14,11 @@
  * See docs/30-provider-scopes-and-speech-output.md.
  */
 
-import { hasBrowserVoiceForLanguage } from './browser-tts-settings.js';
+import {
+  browserTtsCatalogIsEmpty,
+  hasBrowserVoiceForLanguage,
+  primeBrowserTtsVoices,
+} from './browser-tts-settings.js';
 import {
   canUseWebkitStt,
   canUseWebkitTts,
@@ -107,6 +111,8 @@ export function resolveSttBackend(
  * provider that can.
  */
 function deviceCanSpeak(language: string): boolean {
+  // canUseWebkitTts() already rejects an empty voice catalog, which is the
+  // case that matters even when no particular language was asked for.
   if (!canUseWebkitTts()) return false;
   // Standalone iOS PWAs report voices but do not reliably play them.
   if (isIosStandalonePwa()) return false;
@@ -166,14 +172,20 @@ export async function resolveAudioBackendsAsync(
     sttNote = `${sttNote} — falling back to ${serverSttLabel(config)}`;
   }
 
+  // getVoices() is populated asynchronously, so settle the catalog before
+  // deciding whether the device can speak — otherwise a browser with no voices
+  // at all still looks usable and swallows every reply.
+  await primeBrowserTtsVoices();
+
   const tts = resolveTtsBackend(config);
   let ttsNote: string | undefined;
   const prefersDeviceTts = config.ttsChain[0]?.device === true;
 
   if (prefersDeviceTts && tts !== 'webkit') {
     const language = config.ttsLanguage;
-    ttsNote =
-      language && language !== 'auto' && canUseWebkitTts() && !hasBrowserVoiceForLanguage(language)
+    ttsNote = browserTtsCatalogIsEmpty()
+      ? 'This browser has no speech voices installed'
+      : language && language !== 'auto' && !hasBrowserVoiceForLanguage(language)
         ? `This device has no ${language} voice`
         : (webkitTtsSkipReason() ?? 'Browser TTS unavailable');
     if (tts === 'server') ttsNote = `${ttsNote} — falling back to ${serverTtsLabel(config)}`;

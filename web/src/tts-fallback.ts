@@ -6,6 +6,7 @@
 import { speakServerTts, stopServerTts } from './server-tts.js';
 import { resolveTtsBackend, type IntelligenceAudioConfig } from './intelligence-audio.js';
 import { canUseWebkitTts } from './webkit-capabilities.js';
+import { looksLikeSilentPlayback } from './browser-tts-settings.js';
 import type { TtsInterruptSnapshot, TtsPlayContext, TtsPlayFn } from './tts-interrupt.js';
 
 const SPEAK_PREFIX = /^\[Speak to user\]:\s*/i;
@@ -311,15 +312,16 @@ function playWebkitLine(
   ctx?: TtsPlayContext,
   opts?: { rate?: number; pitch?: number; lang?: string; voiceURI?: string },
 ): Promise<void> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     if (!canUseWebkitTts()) {
-      resolve();
+      reject(new Error('Browser TTS unavailable'));
       return;
     }
     if (ctx?.signal.aborted) {
       resolve();
       return;
     }
+    const startedAt = Date.now();
 
     prepareSpeechSynthesis();
     const utter = new SpeechSynthesisUtterance(text);
@@ -355,9 +357,24 @@ function playWebkitLine(
     };
     utter.onend = () => {
       window.speechSynthesis.cancel();
+      // Completed instantly => no voice actually spoke it; let the caller
+      // fall through to a server voice rather than losing the line.
+      if (!ctx?.signal.aborted && looksLikeSilentPlayback(text, Date.now() - startedAt, rate)) {
+        ctx?.signal.removeEventListener('abort', onAbort);
+        reject(new Error('Browser speech finished instantly — nothing was audible'));
+        return;
+      }
       finish();
     };
-    utter.onerror = () => finish();
+    utter.onerror = (ev) => {
+      const reason = ev.error ?? 'error';
+      ctx?.signal.removeEventListener('abort', onAbort);
+      if (reason === 'interrupted' || reason === 'canceled') {
+        resolve();
+        return;
+      }
+      reject(new Error(`Browser speech failed: ${reason}`));
+    };
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(utter);
   });
@@ -367,24 +384,35 @@ async function playTranscriptLine(text: string, ctx?: TtsPlayContext): Promise<v
   const cfg = transcriptTtsConfig;
   const backend = cfg ? resolveTtsBackend(cfg.audio) : canUseWebkitTts() ? 'webkit' : 'none';
 
-  if (backend === 'webkit') {
-    await playWebkitLine(text, ctx);
-    return;
-  }
+  const speakOnServer = async (): Promise<void> => {
+    if (!cfg) throw new Error('No server TTS configured');
+    await speakServerTts(text, cfg.bridgeBase, cfg.appToken, ctx);
+    lastSpokenAt = Date.now();
+    lastSpokenText = text;
+  };
+
   if (backend === 'server' && cfg) {
-    await speakServerTts(text, cfg.bridgeBase, cfg.appToken, ctx);
-    lastSpokenAt = Date.now();
-    lastSpokenText = text;
+    await speakOnServer();
     return;
   }
-  if (canUseWebkitTts()) {
-    await playWebkitLine(text, ctx);
-    return;
+
+  if (backend === 'webkit' || canUseWebkitTts()) {
+    try {
+      await playWebkitLine(text, ctx);
+      return;
+    } catch (err) {
+      if (ctx?.signal.aborted) return;
+      // The browser voice failed or played nothing — the bridge already walked
+      // its own chain, so a server voice is the only fallback left.
+      if (!cfg?.audio.ttsAvailable) throw err;
+      console.warn('[tts fallback] browser voice failed, using server TTS', err);
+      await speakOnServer();
+      return;
+    }
   }
+
   if (cfg?.audio.ttsAvailable) {
-    await speakServerTts(text, cfg.bridgeBase, cfg.appToken, ctx);
-    lastSpokenAt = Date.now();
-    lastSpokenText = text;
+    await speakOnServer();
   }
 }
 

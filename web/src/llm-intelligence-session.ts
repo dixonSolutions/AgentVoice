@@ -55,6 +55,7 @@ import { TurnSubmitBuffer } from './turn-submit-buffer.js';
 import { playVoiceCueNow } from './sound-effects.js';
 import { errorSpeechText } from './error-feedback.js';
 import {
+  looksLikeSilentPlayback,
   resolveBrowserTtsOptions,
   type WebkitTtsDefaults,
 } from './browser-tts-settings.js';
@@ -1378,7 +1379,7 @@ export class LlmIntelligenceSession {
     ctx: TtsPlayContext,
     opts?: { rate?: number; pitch?: number; lang?: string; voiceURI?: string },
   ): Promise<void> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       if (typeof window === 'undefined' || !window.speechSynthesis) {
         resolve();
         return;
@@ -1387,6 +1388,7 @@ export class LlmIntelligenceSession {
         resolve();
         return;
       }
+      const startedAt = Date.now();
 
       window.speechSynthesis.getVoices();
       prepareSpeechSynthesisForPlayback();
@@ -1418,11 +1420,29 @@ export class LlmIntelligenceSession {
       utter.onend = () => {
         // Cancel after onend to prevent Chrome's ghost-restart loop.
         window.speechSynthesis.cancel();
+        // An engine with no usable voice completes instantly and silently.
+        // Surface that as a failure so the caller can reach a server voice.
+        if (
+          !ctx.signal.aborted &&
+          looksLikeSilentPlayback(text, Date.now() - startedAt, utter.rate)
+        ) {
+          ctx.signal.removeEventListener('abort', onAbort);
+          reject(new Error('Browser speech finished instantly — nothing was audible'));
+          return;
+        }
         finish();
       };
       utter.onerror = (ev) => {
-        console.warn('[tts webkit]', ev.error ?? 'error');
-        finish();
+        const reason = ev.error ?? 'error';
+        console.warn('[tts webkit]', reason);
+        ctx.signal.removeEventListener('abort', onAbort);
+        // 'interrupted' / 'canceled' are our own barge-in and cancel() calls,
+        // not an engine that cannot speak — those must not trigger a re-read.
+        if (reason === 'interrupted' || reason === 'canceled') {
+          resolve();
+          return;
+        }
+        reject(new Error(`Browser speech failed: ${reason}`));
       };
       // Cancel any lingering synthesis before queuing the next utterance.
       window.speechSynthesis.cancel();
