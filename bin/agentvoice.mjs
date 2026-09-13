@@ -102,7 +102,61 @@ function seedConfig(home) {
         '  This install is incomplete — reinstall with: npm i -g agentvoice',
     );
   }
-  copyFileSync(example, dest);
+
+  // The example ships runMode "test", which is right in a checkout: the bridge
+  // proxies to `ng serve` on :4200 and tells you to open that. An installed
+  // package has no dev server — it has the PWA we just linked in — so it must
+  // start in serve mode, or first run prints a URL that answers nothing.
+  try {
+    const cfg = JSON.parse(readFileSync(example, 'utf8'));
+    cfg.settings ??= {};
+    cfg.settings.runMode = 'serve';
+    cfg.settings.runModes ??= {};
+    cfg.settings.runModes.serve = {
+      ...(cfg.settings.runModes.serve ?? {}),
+      backendPort: Number(process.env['PORT']) || cfg.settings.runModes.serve?.backendPort || 5089,
+    };
+    // The example's placeholder hostname is worse than nothing here.
+    delete cfg.settings.runModes.serve.publicBaseUrl;
+    writeFileSync(dest, `${JSON.stringify(cfg, null, 2)}\n`);
+  } catch {
+    copyFileSync(example, dest);
+  }
+  return true;
+}
+
+/**
+ * better-sqlite3 is a native module. npm 12 blocks install scripts it has not
+ * been told to allow, and a fresh install resolves a version no `allowScripts`
+ * pin covers — so the binding is simply never built and the bridge dies on its
+ * first query with a wall of attempted paths. Say what to do instead.
+ */
+async function checkNativeBinding() {
+  try {
+    // Importing the module is not enough — better-sqlite3 resolves its binding
+    // lazily, on the first Database. Open one in memory and throw it away.
+    const { default: Database } = await import('better-sqlite3');
+    new Database(':memory:').close();
+  } catch (err) {
+    explainNativeBindingFailure(err);
+    process.exit(1);
+  }
+}
+
+function explainNativeBindingFailure(err) {
+  const message = String(err?.message ?? '');
+  if (!message.includes('bindings file') && !message.includes('better_sqlite3')) {
+    console.error(`agentvoice: could not load better-sqlite3 — ${message}`);
+    return true;
+  }
+  console.error(
+    '\nagentvoice: better-sqlite3 has no compiled binding, so the bridge cannot open its database.\n' +
+      '\n  npm did not run its install script. Allow it and rebuild:\n' +
+      '\n    npm install-scripts approve better-sqlite3   # npm 12+\n' +
+      '    npm rebuild better-sqlite3\n' +
+      '\n  On older npm, `npm rebuild better-sqlite3` alone is enough.\n' +
+      '  A compiler toolchain is only needed if no prebuilt binary matches your Node version.\n',
+  );
   return true;
 }
 
@@ -149,11 +203,16 @@ if (seededConfig || newToken) {
 
 process.chdir(home);
 
+// The bridge logs its own fatal errors and exits, so a try/catch around the
+// import below never sees a missing native binding. Look before booting.
+await checkNativeBinding();
+
 try {
   await import(join(pkgRoot, 'dist', 'index.js'));
 } catch (err) {
   if (err && err.code === 'ERR_MODULE_NOT_FOUND' && String(err.message).includes('dist/index.js')) {
     fail('dist/index.js is missing — this install is incomplete. Reinstall with: npm i -g agentvoice');
   }
+  if (explainNativeBindingFailure(err)) process.exit(1);
   throw err;
 }
