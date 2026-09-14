@@ -28,7 +28,7 @@ try {
     console.error(
       `agentvoice: ${entry} is missing — this install is incomplete.\n` +
         '  From a clone:  npm run build\n' +
-        '  Otherwise:     npm install -g @ratradpackages/agentvoice',
+        '  Otherwise:     npm install -g @ratitisrad/agentvoice',
     );
     process.exit(1);
   }

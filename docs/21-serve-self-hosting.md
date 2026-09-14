@@ -235,7 +235,7 @@ Everything above describes a **git clone**: `scripts/update.sh` fetches, rebases
 onto `origin/<branch>`, installs, builds and restarts, and the page identifies
 the running code by branch and commit.
 
-An **npm install** (`npm i -g @ratradpackages/agentvoice`) has none of that. There is no repo to
+An **npm install** (`npm i -g @ratitisrad/agentvoice`) has none of that. There is no repo to
 rebase, no working tree to stash, and no commit to show. Updating means asking
 the registry whether something newer is published and letting npm replace the
 package; the version is one semver string.
