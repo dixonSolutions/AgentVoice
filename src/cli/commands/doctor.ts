@@ -139,7 +139,7 @@ async function checkBinding(): Promise<Check> {
     name: 'sqlite',
     status: 'fail',
     detail: `better-sqlite3 will not load — ${error.split('\n')[0]}`,
-    fix: nativeBindingAdvice(error) ?? 'Reinstall the package: npm i -g agentvoice',
+    fix: nativeBindingAdvice(error) ?? 'Reinstall the package: npm i -g @ratradpackages/agentvoice',
   };
 }
 
