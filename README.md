@@ -65,10 +65,10 @@ the same tarball — no checkout, no build step:
 
 ```bash
 # Run it once, without installing
-npx @ratitisrad/agentvoice
+npx @ratradpackages/agentvoice
 
 # Or install the `agentvoice` command globally
-npm install -g @ratitisrad/agentvoice
+npm install -g @ratradpackages/agentvoice
 agentvoice
 ```
 
@@ -112,7 +112,7 @@ answering, so `agentvoice status >/dev/null` works as a liveness probe.
 
 `update` follows the install rather than guessing: a clone runs
 `scripts/update.sh` (pass `--stash` to carry local changes across the rebase),
-an npm install runs `npm install -g @ratitisrad/agentvoice@latest`, and an install that is
+an npm install runs `npm install -g @ratradpackages/agentvoice@latest`, and an install that is
 neither says so instead of doing something destructive.
 
 Full reference: [`docs/35-cli.md`](./docs/35-cli.md).

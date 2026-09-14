@@ -1,5 +1,5 @@
 {
-  "name": "@ratitisrad/agentvoice",
+  "name": "@ratradpackages/agentvoice",
   "publishConfig": {
     "access": "public"
   },

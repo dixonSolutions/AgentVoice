@@ -6,7 +6,7 @@
  *
  *   git  — a clone. Updating means fetch, rebase, install, build, restart, and
  *          "what version am I" is a branch and a commit. scripts/update.sh.
- *   npm  — `npm i -g @ratitisrad/agentvoice`. There is no repo to rebase; updating means
+ *   npm  — `npm i -g @ratradpackages/agentvoice`. There is no repo to rebase; updating means
  *          asking the registry for a newer version and letting npm replace the
  *          package. "What version am I" is a semver string.
  *
@@ -96,7 +96,7 @@ export function detectInstallMode(opts: { refresh?: boolean } = {}): InstallMode
       reason: 'installed by npm (package lives under node_modules)',
       global,
       updateCommand: global
-        ? 'npm install -g @ratitisrad/agentvoice@latest'
+        ? 'npm install -g @ratradpackages/agentvoice@latest'
         : 'npm install agentvoice@latest',
     };
   } else {

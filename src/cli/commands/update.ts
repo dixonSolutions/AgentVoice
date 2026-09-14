@@ -32,7 +32,7 @@ export async function updateCommand(parsed: Parsed): Promise<number> {
       `cannot update this install — ${install.reason}.\n` +
         `  Root: ${install.root}\n` +
         '  Reinstall it the way you want to maintain it:\n' +
-        '    npm install -g @ratitisrad/agentvoice  # managed by npm\n' +
+        '    npm install -g @ratradpackages/agentvoice  # managed by npm\n' +
         '    git clone https://github.com/dixonSolutions/AgentVoice.git\n',
     );
     return 1;
@@ -52,7 +52,7 @@ export async function updateCommand(parsed: Parsed): Promise<number> {
   // npm: the registry replaces the package wholesale. `global` decides whether
   // that is the shared install or a project-local dependency — installing the
   // wrong one leaves the running copy untouched and looks like a no-op.
-  const args = ['install', ...(install.global ? ['-g'] : []), '@ratitisrad/agentvoice@latest'];
+  const args = ['install', ...(install.global ? ['-g'] : []), '@ratradpackages/agentvoice@latest'];
   if (dryRun) {
     say(`${yellow('dry run')} — would run:`);
     say(`  npm ${args.join(' ')}`);
