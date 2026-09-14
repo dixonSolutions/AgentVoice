@@ -69,7 +69,7 @@ export async function runCommand(): Promise<number | null> {
   } catch (err) {
     const code = (err as { code?: string } | null)?.code;
     if (code === 'ERR_MODULE_NOT_FOUND') {
-      fail(`${entry} is missing — this install is incomplete. Reinstall with: npm i -g @ratradpackages/agentvoice`);
+      fail(`${entry} is missing — this install is incomplete. Reinstall with: npm i -g @ratitisrad/agentvoice`);
       return 1;
     }
     const advice = nativeBindingAdvice(err instanceof Error ? err.message : String(err));

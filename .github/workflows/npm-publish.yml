@@ -214,8 +214,8 @@ jobs:
             AgentVoice v${{ steps.v.outputs.version }} is on npm.
 
             ```bash
-            npm install -g @ratradpackages/agentvoice     # then: agentvoice status
-            npx @ratradpackages/agentvoice                # or run it once
+            npm install -g @ratitisrad/agentvoice     # then: agentvoice status
+            npx @ratitisrad/agentvoice                # or run it once
             ```
 
             The wake-word model is not bundled — run `agentvoice prepare-vosk`

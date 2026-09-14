@@ -3,7 +3,7 @@
  *
  * The bridge itself (src/, bundled into dist/index.js) is written for a repo
  * checkout: it resolves those paths relative to `process.cwd()`. A global
- * install (`npm i -g @ratradpackages/agentvoice`) or an `npx @ratradpackages/agentvoice` has no such checkout,
+ * install (`npm i -g @ratitisrad/agentvoice`) or an `npx @ratitisrad/agentvoice` has no such checkout,
  * so this module builds one — seeding config.json and a random APP_TOKEN on
  * first run, and linking the packaged web/dist + package.json in so the
  * bridge's cwd-relative lookups find the built PWA and the right version.
@@ -108,7 +108,7 @@ export function seedConfig(home: string): boolean {
   if (!existsSync(example)) {
     throw new Error(
       `no config.json in ${home} and the packaged config.example.json is missing.\n` +
-        '  This install is incomplete — reinstall with: npm i -g @ratradpackages/agentvoice',
+        '  This install is incomplete — reinstall with: npm i -g @ratitisrad/agentvoice',
     );
   }
 

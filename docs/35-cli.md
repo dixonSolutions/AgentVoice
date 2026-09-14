@@ -135,7 +135,7 @@ shadows the one you are developing, and a rebase is meaningless under
   uses (see [`21-serve-self-hosting.md`](./21-serve-self-hosting.md)). `--stash`,
   `--dry-run`, `--force`, `--no-restart` and `--branch <name>` are forwarded
   verbatim; anything after `--` is forwarded too.
-- **npm** → `npm install -g @ratradpackages/agentvoice@latest`, dropping `-g` when the install
+- **npm** → `npm install -g @ratitisrad/agentvoice@latest`, dropping `-g` when the install
   is a local dependency rather than a global one.
 - **unknown** → refuses, says why, and explains how to reinstall into a mode
   that *can* be maintained.
