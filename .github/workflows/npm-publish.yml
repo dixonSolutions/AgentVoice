@@ -164,29 +164,62 @@ jobs:
         run: |
           set -eu
           version="${{ steps.v.outputs.version }}"
-          if npm view "agentvoice@${version}" version >/dev/null 2>&1; then
+          # Read the name from package.json rather than hardcoding it: this
+          # guard silently stopped working when the package moved to the
+          # @ratitisrad scope and this string still said "agentvoice", so it
+          # asked the registry about a package that does not exist and always
+          # answered "not published yet".
+          name="$(node -p "require('./package.json').name")"
+          if npm view "${name}@${version}" version >/dev/null 2>&1; then
             echo "already=true" >> "$GITHUB_OUTPUT"
-            echo "agentvoice@${version} is already on the registry — nothing to publish."
+            echo "${name}@${version} is already on the registry — nothing to publish."
           else
             echo "already=false" >> "$GITHUB_OUTPUT"
-            echo "agentvoice@${version} is not published yet."
+            echo "${name}@${version} is not published yet."
           fi
 
       - name: Install
         if: steps.shipped.outputs.already == 'false'
         run: npm ci --no-audit --no-fund --legacy-peer-deps
 
+      # Trusted publishing (OIDC) needs npm >= 11.5.1; Node 22 still bundles
+      # npm 10.x, which has no idea what an OIDC token is and falls back to
+      # looking for a _authToken it will not find.
+      - name: Use an npm that speaks OIDC
+        if: steps.shipped.outputs.already == 'false'
+        run: npm install -g npm@latest
+
+      # setup-node's registry-url always writes
+      #   //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
+      # into ~/.npmrc. With no NODE_AUTH_TOKEN that expands to an empty token,
+      # npm reads it as "auth is already configured", never starts the OIDC
+      # exchange, and fails with ENEEDAUTH. Drop the line and keep the
+      # registry= line that registry-url also wrote.
+      - name: Let npm reach for OIDC instead of an empty token
+        if: steps.shipped.outputs.already == 'false'
+        run: |
+          set -eu
+          if [ -f "$HOME/.npmrc" ]; then
+            sed -i '/_authToken/d' "$HOME/.npmrc"
+            echo "~/.npmrc after stripping the auth line:"
+            cat "$HOME/.npmrc"
+          fi
+
       # prepublishOnly (typecheck + lint + build) runs as part of `npm publish`,
       # so dist/ and web/dist/ can never be stale in a published tarball.
       #
-      # NPM_TOKEN must be a granular token with "Bypass two-factor
-      # authentication" enabled. npm rejects a publish from any other token with
-      # a 403 even when the account itself has no 2FA configured.
+      # No token. The package is configured on npmjs.com with this repo and
+      # this workflow as a trusted publisher, and npm exchanges the Actions
+      # OIDC token (hence `id-token: write` above) for a short-lived publish
+      # credential. That is what makes this work: a granular token has to have
+      # "Bypass two-factor authentication" set or npm answers 403, and npm is
+      # retiring those tokens for direct publishing in January 2027 anyway.
+      #
+      # Provenance is automatic under trusted publishing, so --provenance is
+      # gone too; the attestation is still signed and still published.
       - name: Publish
         if: steps.shipped.outputs.already == 'false'
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
 
       # Tag after publishing, not before: a tag pointing at a release that
       # failed halfway is worse than no tag.
