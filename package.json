@@ -1,5 +1,8 @@
 {
-  "name": "agentvoice",
+  "name": "@ratitisrad/agentvoice",
+  "publishConfig": {
+    "access": "public"
+  },
   "version": "0.1.0",
   "description": "Self-hosted voice bridge for Cursor, Codex, and Claude Code CLIs",
   "keywords": [
