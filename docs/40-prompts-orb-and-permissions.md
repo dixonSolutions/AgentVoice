@@ -11,6 +11,8 @@ proposal.
 
 ## Positions (2026-09-15)
 
+Tracked in [#63](https://github.com/dixonSolutions/AgentVoice/issues/63) (prompts read aloud), [#64](https://github.com/dixonSolutions/AgentVoice/issues/64) (ask tools and tool consolidation), [#65](https://github.com/dixonSolutions/AgentVoice/issues/65) (orb working state) and [#66](https://github.com/dixonSolutions/AgentVoice/issues/66) (microphone and audio permissions).
+
 | Question | Position |
 | --- | --- |
 | Should prompts on screen be read aloud? | **Yes, and configurable** |
