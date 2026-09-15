@@ -291,16 +291,24 @@ export function handleCheckMessages(args: CheckMessagesArgs, fallbackKey: string
 export interface InjectArgs {
   id: string;
   message: string;
+  confirm?: boolean;
 }
 
 /**
  * Backwards-compatible `inject`, now delivering for real.
  *
  * Kept as an alias because the tool name is in prompts and transcripts; it is
- * `send_to_session` with confirmation pre-granted for bridge targets, and it
- * now covers the worktree pool and the voice agent instead of only matching
- * the singleton.
+ * `send_to_session` under another name, and it now covers the worktree pool
+ * and the voice agent instead of only matching the singleton.
+ *
+ * The confirmation gate is *not* pre-granted: bridge workers never needed it,
+ * and external sessions, forks and stop-then-resume need it exactly as much
+ * through the old tool name as the new one (docs/37 §3, §4).
  */
 export function handleInject(args: InjectArgs): SendToSessionResult {
-  return handleSendToSession({ handle: args.id, message: args.message, confirm: true });
+  return handleSendToSession({
+    handle: args.id,
+    message: args.message,
+    confirm: args.confirm ?? false,
+  });
 }

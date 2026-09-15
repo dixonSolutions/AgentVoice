@@ -412,13 +412,19 @@ function buildMcpServer(sessionKey: string): McpServer {
     'inject',
     'Deprecated alias for send_to_session — kept for one release. ' +
       'Sends a message into a running session and reports how it was delivered. ' +
-      'Unlike the old implementation it also reaches worktree workers and the voice agent.',
+      'Unlike the old implementation it also reaches worktree workers and the voice agent. ' +
+      'The same confirmation rules apply: external sessions, forks and stop-then-resume ' +
+      'need confirm: true after reading the target, the method and the message back.',
     {
       id: z.string().min(1).describe('Session handle or spoken name.'),
       message: z.string().min(1).describe('The message to deliver.'),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe('The user has confirmed this exact send. Required for external sessions and forks.'),
     },
-    async ({ id, message }) => {
-      const result = handleInject({ id, message });
+    async ({ id, message, confirm }) => {
+      const result = handleInject({ id, message, confirm });
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
