@@ -385,18 +385,24 @@ export function listSessions(opts: DirectoryOptions = {}): SessionEntry[] {
   const projects = listProjectsWithPaths().filter((p) => p.enabled);
   const scoped = opts.project ? projects.filter((p) => p.name === opts.project) : projects;
 
-  const out: SessionEntry[] = [];
-  if (scope.has('voice')) out.push(...voiceEntries(opts));
-  if (scope.has('worker')) out.push(...workerEntries(opts));
+  const live: SessionEntry[] = [];
+  const past: SessionEntry[] = [];
+  if (scope.has('voice')) live.push(...voiceEntries(opts));
+  if (scope.has('worker')) live.push(...workerEntries(opts));
+  if (scope.has('external')) live.push(...externalEntries(scoped, opts));
   if (scope.has('recent')) {
-    for (const project of scoped) out.push(...recentEntries(project, opts));
+    for (const project of scoped) past.push(...recentEntries(project, opts));
   }
-  if (scope.has('external')) out.push(...externalEntries(scoped, opts));
 
-  // A handle can legitimately appear twice (a worker whose thread is also in
-  // the CLI store); the live row is the useful one.
+  /**
+   * A session id can legitimately appear twice — a live process and the same
+   * conversation sitting in the CLI's own store — and the live row is the
+   * useful one. Live kinds are collected first *and* filtered first so the
+   * idle copy is the one dropped; collecting `recent` first silently hid a
+   * running external session behind its own transcript.
+   */
   const seen = new Set<string>();
-  return out.filter((entry) => {
+  return [...live, ...past].filter((entry) => {
     const key = entry.sessionId ? `${entry.provider}:${entry.sessionId}` : entry.handle;
     if (seen.has(key)) return false;
     seen.add(key);

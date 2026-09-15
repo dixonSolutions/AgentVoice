@@ -36,6 +36,7 @@
   "files": [
     "bin/",
     "dist/",
+    "prompts/",
     "web/dist/",
     "!web/dist/vosk/model.tar.gz",
     "config.example.json",

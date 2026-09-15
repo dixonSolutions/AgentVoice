@@ -42,7 +42,10 @@ Use this to orient after a resume or when session state is unclear.
 | `get_agent_output(id, offset?, limit?)` | Paginated full event log (tool calls, file writes, shell runs, output text). In-memory for live; DB for completed. |
 | `spawn_agent(instructions, mode?, use_worktree?, worktree_name?, browser?)` | Start a worker. Modes: agent/plan/ask/debug. `browser: true` appends snapshot workflow for UI tasks. `use_worktree: true` runs in isolated git worktree for parallel execution. |
 | `stop_agent(id)` | SIGTERM → SIGKILL a worker (singleton or worktree). |
-| `inject(id, message)` | Best-effort stdin context injection. Fallback: stop + respawn with amended instructions. |
+| `send_to_session(handle, message, confirm?)` | Relay a message into a running or past session. Reports how it was delivered — `live`, `mailbox_pending`, `fork`, `resume` or `refused` — and the agent must say which. See [`37`](./37-session-directory-and-inject.md). |
+| `list_sessions(scope?)` | Every session the user could mean: the voice agent, bridge workers, past conversations from each CLI's own store, and live sessions they started themselves. |
+| `check_messages(session?)` | Collect messages sent into your own session while you were working. |
+| `inject(id, message)` | Deprecated alias for `send_to_session`. It used to write to a stdin the agent process does not have, so it never delivered anything. |
 | `revert_agent(id, confirm?)` | Revert project to the git checkpoint taken before job `id` ran. Uncommitted → stash; committed → reset --hard (requires confirm: true). |
 
 **Parallel agents**: `spawn_agent` with `use_worktree: true` creates an isolated git worktree
@@ -372,7 +375,7 @@ executor MCP server. Informational; used for debugging.
 | 7 | `get_agent_output` | Agents | Watcher in-memory buffer (live) + DB job_events (completed) |
 | 8 | `spawn_agent` | Agents | `jobManager.submitJob` + optional worktree |
 | 9 | `stop_agent` | Agents | `agentSingleton.killActiveAgent` / `killWorktreeAgent` |
-| 10 | `inject` | Agents | stdin write (best-effort) |
+| 10 | `send_to_session` | Sessions | per-session mailbox / voice turn queue / fork (`inject` is a deprecated alias) |
 | 11 | `revert_agent` | Agents | `git.revert` via job checkpoint from DB |
 | 12 | `list_jobs_history` | Jobs | DB (`job` table) |
 | 13 | `set_mode` | Mode | Session-scoped `preferredModeMap` |

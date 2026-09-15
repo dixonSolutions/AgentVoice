@@ -97,7 +97,7 @@ controls.
 | `get_agent_status` | `(id: string)` | Detailed output buffer, mode, elapsed time |
 | `spawn_agent` | `(instructions: string)` | Start a new worker agent session |
 | `stop_agent` | `(id: string)` | Terminate a worker agent immediately |
-| `inject` | `(id: string, message: string)` | Send context to a running agent (best-effort) |
+| `send_to_session` | `(handle, message, confirm?)` | Relay a message into a running or past session; reports the delivery method. `inject` is a deprecated alias. |
 
 ### Mode & Execution Control
 
@@ -206,15 +206,25 @@ into the Cursor-as-brain mode by setting `workflow.default: "agent_native"` in
 Long-term, an activation hook (e.g., a background task or Cursor rule) could
 auto-spawn the conversational loop on session start.
 
-### 8.3 `inject()` is Best-Effort
+### 8.3 `inject()` never delivered — superseded by the session mailbox
 
-**Problem:** The design acknowledges that injecting context into a running agent
-is unreliable. Cursor's agent architecture does not guarantee that a mid-run
-message lands.
+**Problem as originally stated:** injecting context into a running agent is
+unreliable, so `inject()` was exposed with a "best-effort" contract.
 
-**Resolution adopted:** `inject()` is exposed as-is with a best-effort contract.
-The recommended fallback (stop → spawn with amended instructions) is documented
-in the system prompt. No false promises are made in the tool description.
+**What was actually true:** it was not best-effort, it was never. The handler
+wrote to `active.handle.stdin`, and agents are spawned
+`stdio: ['ignore','pipe','pipe']` — `AgentHandle` has no stdin at all. It also
+only matched the singleton worker, so worktree workers and the voice agent
+could not be reached, and a `-p <prompt>` run would not read new input mid-run
+even if the pipe existed. Every call returned `delivered: false` while the tool
+description invited the agent to try.
+
+**Resolution adopted (docs/37):** a per-session mailbox that rides out on the
+next AgentVoice tool result — a channel that demonstrably exists, because every
+worker calls those tools — plus `check_messages()` for an explicit collect.
+Delivery is at the next tool call: later than "live", but real, and reported
+honestly as `mailbox_pending` rather than "sent". `inject` is kept as a
+deprecated alias of `send_to_session`.
 
 ### 8.4 Mid-tool wake via owned MCP tool results (not arbitrary tools)
 

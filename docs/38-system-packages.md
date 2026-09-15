@@ -1,6 +1,7 @@
 # 38 — System packages (.deb / .rpm)
 
-> Added: September 2026. Design, not yet implemented. Companion to
+> Added: September 2026. **Implemented** through step 3 of the plan below —
+> see the status section at the bottom. Companion to
 > [`21-serve-self-hosting.md`](./21-serve-self-hosting.md) and
 > [`35-cli.md`](./35-cli.md).
 
@@ -106,3 +107,43 @@ dedicated server.
 - Bundle the Vosk model in the package?
 - Who owns the signing key and repo hosting?
 - May the in-app update ever run `sudo`, or only show the command?
+
+## Status — implemented September 2026
+
+Plan steps 1–3 shipped:
+
+1. **`http-proxy`** ([#59](https://github.com/dixonSolutions/AgentVoice/issues/59))
+   is loaded lazily inside the dev-only proxy path, so a production install no
+   longer crashes at boot. Angular, Capacitor, `vosk-browser`, `vad-web`,
+   `primeicons` and `zone.js` moved out of runtime `dependencies`; what is left
+   is only what the server imports. `agentvoice service install` writes a
+   systemd **user** unit from whatever install is running, which is the answer
+   for npm and package users alike — `noUnitAdvice()` used to point them at a
+   shell script that only exists in a clone.
+2. **The `system` install mode** is detected from a shipped `.install-source`
+   marker, checked *before* the `node_modules` test — a .deb carries a pruned
+   `node_modules`, so the npm heuristic would otherwise claim it and offer
+   `npm i -g`, installing a second copy the service does not run.
+   `canSelfUpdate()` is false for it and the Serve page shows the `apt` / `dnf`
+   command with a copy button. The Vosk model moved to `~/.agentvoice/vosk`,
+   which the bridge serves in preference to the packaged copy.
+3. **nfpm .deb and .rpm** with a bundled Node, amd64 and arm64, built and
+   attached to each GitHub Release by `.github/workflows/npm-publish.yml`.
+
+One more prerequisite turned up while testing the package, and it was worse
+than the `http-proxy` one: **`prompts/` was neither published nor resolvable
+outside a clone**, so `readAgentVoicePrompt` looked only next to `config.json`
+and every MCP `initialize` on an npm or package install answered 500. No agent
+could connect at all. Prompts are now published, staged into the package, and
+resolved from the bridge home first and the install root second.
+
+Not shipped:
+
+4. **A hosted signed apt / dnf repository.** It needs a signing key and hosting
+   that the maintainer owns; the packages are attached to each GitHub Release
+   and install with `apt install ./agentvoice_*.deb` in the meantime.
+5. Homebrew tap and AUR, which were optional in the plan.
+
+Open questions answered by the implementation: the target is developer laptops
+(hence a user unit, not a system one), arm64 is in from day one, the Vosk model
+is not bundled, and the in-app update never runs `sudo` — it shows the command.

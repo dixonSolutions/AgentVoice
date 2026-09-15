@@ -1,6 +1,7 @@
 # 40 — Prompts read aloud, the ask tools, a working orb, and remembered permissions
 
-> Added: September 2026. Design, not yet implemented. Companion to
+> Added: September 2026. **Implemented** — see the status section at the
+> bottom. Companion to
 > [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md),
 > [`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md),
 > [`20-native-callkit-shell.md`](./20-native-callkit-shell.md) and
@@ -183,3 +184,39 @@ names as deprecated aliases for one release.
   keep the shared `AudioContext` alive rather than recreating it; the session
   keepalive from docs/19 stays.
 - **Native shell** recommended on iPhone for true persistence.
+
+## Status — implemented September 2026
+
+1. **Prompts read aloud** ([#63](https://github.com/dixonSolutions/AgentVoice/issues/63)) —
+   `voice.tts.readPrompts` (`off | announce | question | full`, default
+   `question`), spoken on the phone from the card itself in
+   `web/src/prompt-speech.ts`, so it is identical for every workflow and every
+   CLI. Secrets are never read at any level. The `request_user_input`
+   description no longer tells the agent its question is "read aloud" while
+   forbidding it to speak.
+2. **The ask tools** ([#64](https://github.com/dixonSolutions/AgentVoice/issues/64)) —
+   both kept, as decided. The seven overlapping pairs are consolidated:
+   `spawn_agent` is the one way to start work and takes a project and a mode,
+   and `get_agent_status`, `stop_agent`, `revert` (`to: checkpoint | head`),
+   `get_session_ref(project)` and `agent_provider_info` absorb their
+   duplicates. The old names remain as deprecated aliases for one release.
+   `agent_mcp_list` is no longer Cursor-only: every provider declares its own
+   inspect commands or declares that it has none, verified against the
+   installed CLIs.
+3. **The working orb** ([#65](https://github.com/dixonSolutions/AgentVoice/issues/65)) —
+   a single `agent_busy` event from the bridge (voice turn in progress, worker
+   count, open approvals), re-sent on reconnect, drives a sweeping ring for
+   `working` and a steady one for `waiting_for_you`, with a caption and a
+   static-ring fallback under `prefers-reduced-motion`. Colour still comes only
+   from the app theme.
+4. **The microphone** ([#66](https://github.com/dixonSolutions/AgentVoice/issues/66)) —
+   `web/src/mic-service.ts` owns one shared stream for the app's lifetime; the
+   session, the Vosk spotter, server STT and the wake-word test all lease it.
+   Tracks are muted rather than stopped between sessions and the device is
+   released only after a keep-warm window, so the browser's recording indicator
+   does not stay lit. The permission is queried and watched rather than assumed,
+   and a denied state gets per-browser steps instead of a generic failure.
+
+Not shipped: the optional worker-count badge that opens the sessions list
+(docs/37 has the data; the phone list itself is still to build), and the native
+shell, which remains the only route to OS-level microphone persistence.

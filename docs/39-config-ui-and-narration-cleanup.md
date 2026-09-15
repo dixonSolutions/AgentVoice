@@ -1,7 +1,7 @@
 # 39 — Config UI cleanup and bridge narration
 
-> Added: September 2026. Audit and design, not yet implemented (except the
-> Speech tab intro removal). Companion to
+> Added: September 2026. **Implemented** — see the status section at the
+> bottom for the handful of findings deliberately left. Companion to
 > [`30-speech-output-providers.md`](./30-speech-output-providers.md) and
 > [`12-stream-json-watcher.md`](./12-stream-json-watcher.md).
 
@@ -210,3 +210,40 @@ provider-parity bug.
 4. **Never speak raw error messages or file paths** by default — short phrase
    spoken, detail in the transcript.
 5. Fix the Cursor push string and verify the double-delivery path.
+
+## Status — implemented September 2026
+
+Part B shipped in full: `src/voice/phrases.ts` is the single catalog, every
+spoken bridge string goes through it, each event has an `auto | always | off`
+toggle and a user-editable template keyed by the speech output language, and a
+template naming a placeholder its event does not supply is rejected on save
+rather than read out with a `{hole}` in it. The event and its speech are now
+separate fields on the wire, so turning narration off no longer also kills the
+`job_done` push and the PWA's job-running state. Raw provider errors and raw
+file paths are not spoken unless the user asks for them. The Cursor-specific
+push string is fixed.
+
+The double-delivery path this document asked to verify: **verified, and closed
+off.** Narration reaches the PWA only over the control socket today, so the
+second handler in `web/src/llm-intelligence-session.ts` was a latent duplicate
+rather than a live one — it would have spoken every line twice the moment
+narration was also delivered on the intelligence socket, with no dedup between
+the two paths. That handler is now transcript-only; speech has exactly one
+route.
+
+Part A: the dead settings (narrator cadence, plan-first) are gone from the
+schema, the API and the screen; log level moved to the Debug section that
+advertised it; the Narrator section became "What gets spoken" and absorbed the
+agent-voice and read-aloud controls; extra launch flags and the worker poll
+interval moved to Agent, which also absorbed Personal; "Clear all sessions"
+asks first; timeouts are entered in minutes; forms gate on `canUseApi()`; and
+the stale descriptions, keywords and duplicate icons are corrected. Provider
+parity (A7) is fixed at the root: each provider declares its own binary env
+var, `EnvSchema` accepts all four, and the screen renders the list from the
+providers.
+
+Deliberately left, as smaller-value cosmetics that would churn the template
+without changing behaviour: the full 13-section restructure (the sections
+exist, but the ordering is not yet the proposed one), the region-settings
+consolidation (A11), the three health-check copies (A14), and surfacing the
+handful of settings that still have no UI.

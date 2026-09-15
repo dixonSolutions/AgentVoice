@@ -1,6 +1,7 @@
 # 36 — Disconnects, unattended work, and surviving a bridge restart
 
-> Added: September 2026. Design, not yet implemented. Companion to
+> Added: September 2026. **Implemented** — see the status section at the
+> bottom for what shipped and what did not. Companion to
 > [`16-mcp-server-agent-as-brain.md`](./16-mcp-server-agent-as-brain.md),
 > [`19-mobile-session-keepalive.md`](./19-mobile-session-keepalive.md) and
 > [`33-permissions-and-prompt-relay.md`](./33-permissions-and-prompt-relay.md).
@@ -175,3 +176,45 @@ slot; keep-alive complexity and MCP re-attach; surprise cost.
    per-provider declarations.
 3. Per-project overrides, `agent_away_policy`, "Stop all" push action, budget
    flags; update docs 16, 19, 33.
+
+## Status — implemented September 2026
+
+Shipped:
+
+- `src/state/presence.ts` — per-client presence, `connected → grace → away`,
+  plus `hung_up` when the PWA sends `{type:'hangup'}` before closing. Server
+  heartbeat on `/ws/control` and `/ws/intelligence`; two missed pongs close a
+  half-open socket. Desk clients are tracked but are not listeners.
+- `settings.session` exactly as specified above, with `/api/admin/session` and
+  a "Disconnect & background work" section on the config screen.
+- `src/state/awayPolicy.ts` — the policy, the listener block, the unattended
+  budgets, and the approval / askpass decisions, all as pure functions over
+  injected settings so they are unit-testable.
+- The `listener` block on **every** agent-voice tool result, via
+  `mcp/server/listenerEnvelope.ts` — not just the voice tools, so an agent
+  grinding through its own Read/Bash tools still finds out.
+- Policy-aware `speak` / `done` / `next_voice_turn`, with a server-enforced
+  poll floor while away, and `reconnected: { away_ms, digest, spoken_while_away }`
+  on the first turn back.
+- `agent_away_policy` for "keep going while I'm away" by voice, scoped to the
+  conversation and cleared when a new voice agent spawns.
+- The `stop_agent` guard, which only applied while a voice session existed.
+- A "finished while you were away" push from the voice agent's close handler.
+- Restart survival by **resume**: running jobs are parked `interrupted` on
+  shutdown with their session id, worktree and provider, and picked back up on
+  boot with a prompt that says to check `git status` first.
+
+Not shipped, and why:
+
+- **Keep-alive across a restart.** `systemd-run --user --scope` is the easy
+  half; the blocker this document already names is the hard half — the MCP
+  transports are in-memory, so a surviving CLI gets a 404 on `/mcp` and
+  `bindVoiceAgentMcpSession` ("first connection wins") has no run token to
+  re-bind the right process. `keepAliveSupport()` reports that as an explicit
+  unsupported-with-reason and the policy falls back to `resume`, rather than a
+  setting that looks like it works.
+- **Provider budget flags** (`--max-turns` and friends). The wall-clock and
+  tool-call budgets are enforced bridge-side, which covers the same ground
+  without a per-CLI flag matrix.
+- **A "Stop everything" action on the push notification.** Needs the native
+  shell's notification actions (docs/20).

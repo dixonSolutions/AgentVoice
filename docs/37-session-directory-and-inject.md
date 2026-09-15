@@ -1,6 +1,7 @@
 # 37 — Seeing running sessions and injecting into them by voice
 
-> Added: September 2026. Design, not yet implemented. Companion to
+> Added: September 2026. **Implemented** — see the status section at the
+> bottom. Companion to
 > [`16-mcp-server-agent-as-brain.md`](./16-mcp-server-agent-as-brain.md),
 > [`23-multi-agent-client.md`](./23-multi-agent-client.md) and
 > [`36-disconnect-and-background-work.md`](./36-disconnect-and-background-work.md).
@@ -125,3 +126,39 @@ only receives mailbox messages if its agent-voice rule tells it to call
    external sessions, per-project enablement.
 4. **Live input** — optional per-provider `sendInput()`; mailbox fallback
    where unsupported.
+
+## Status — implemented September 2026
+
+Shipped:
+
+- `handleInject` rebuilt on `send_to_session`, so it delivers for real, covers
+  the worktree pool and the voice agent, and reports which mechanism was used.
+- Worktree workers no longer overwrite the project resume id; their session id
+  is recorded on the job row instead, and it is written the moment the CLI
+  announces it rather than only when the run ends.
+- `src/state/sessionDirectory.ts` — all four kinds: the voice agent, bridge
+  workers, past conversations through a new optional `provider.listSessions`
+  (implemented for Cursor, Codex, Claude Code and Codewhale), and external live
+  sessions from a same-uid `/proc` scan matched to a registered project.
+- `src/state/sessionMailbox.ts` and `check_messages`, with messages also
+  piggybacking on any agent-voice tool result.
+- `list_sessions` / `send_to_session`, spoken two-word names, ordinals
+  ("the second one"), disambiguation with candidates, honest `delivery`, the
+  confirmation gate, and an audit row per send carrying a hash of the message
+  rather than the message.
+- `GET /api/sessions` and `POST /api/sessions/send`.
+- Security as designed: sessions outside a registered project are hidden rather
+  than read-only, the scan never leaves the current uid, and writing into a
+  session AgentVoice did not start is off unless the project opts in.
+
+Known limitations:
+
+- **The mailbox is in memory.** A bridge restart loses anything undelivered.
+  That is the right trade for now — a queued message is a relayed instruction,
+  and replaying one the user has moved on from is worse than losing it — but it
+  is a real limit, not an oversight.
+- **Fork is queued, not spawned.** `send_to_session` with `delivery: fork`
+  records the branch; actually launching it needs the spawn path to accept a
+  fork target, which belongs with rollout step 4 (live input).
+- **`liveInput` per provider** (step 4) is not implemented; the mailbox is the
+  baseline everywhere, as designed.

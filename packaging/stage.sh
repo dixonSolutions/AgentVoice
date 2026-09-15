@@ -33,7 +33,11 @@ if [[ -z "${node_src}" || ! -x "${node_src}/bin/node" ]]; then
   exit 2
 fi
 
-for required in "${repo_root}/dist/index.js" "${repo_root}/web/dist/index.html"; do
+for required in \
+  "${repo_root}/dist/index.js" \
+  "${repo_root}/web/dist/index.html" \
+  "${repo_root}/prompts/agentvoice/system.md"
+do
   if [[ ! -f "${required}" ]]; then
     echo "missing ${required} — run 'npm run build' first" >&2
     exit 1
@@ -45,6 +49,9 @@ mkdir -p "${prefix}" "${staging}/usr/bin" "${staging}/usr/lib/systemd/user"
 
 cp -r "${repo_root}/dist" "${prefix}/dist"
 cp -r "${repo_root}/bin" "${prefix}/bin"
+# The AgentVoice system prompt and MCP instructions. Without these the MCP
+# server answers 500 on every `initialize` and no agent can connect at all.
+cp -r "${repo_root}/prompts" "${prefix}/prompts"
 cp -r "${repo_root}/web" "${prefix}/web"
 cp "${repo_root}/package.json" "${prefix}/package.json"
 cp "${repo_root}/config.example.json" "${prefix}/config.example.json"
