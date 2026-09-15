@@ -12,11 +12,12 @@
 
 import type { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
-import httpProxy from 'http-proxy';
+import type HttpProxy from 'http-proxy';
 import { existsSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
 import { childLogger } from './log.js';
+import { voskPaths } from './serve/voskPaths.js';
 
 const log = childLogger('web-dispatch');
 
@@ -40,9 +41,37 @@ function isBackendOnlyPath(pathname: string): boolean {
   return pathname.startsWith('/api/') || isBackendWebSocket(pathname);
 }
 
+/**
+ * Load `http-proxy` on demand.
+ *
+ * It is a devDependency and only the Angular dev proxy needs it, so a
+ * production install (`npm i -g`, a .deb, or a pruned `node_modules`) has no
+ * copy of it. A top-level import made every such install crash on boot; the
+ * dynamic import keeps the cost inside the one dev-only code path.
+ */
+async function loadHttpProxy(): Promise<typeof HttpProxy> {
+  try {
+    const mod = (await import('http-proxy')) as unknown as {
+      default?: typeof HttpProxy;
+    } & typeof HttpProxy;
+    return mod.default ?? mod;
+  } catch (err) {
+    throw new Error(
+      'The Angular dev proxy needs the "http-proxy" package, which is a devDependency. ' +
+        'Run `npm install` in a git checkout, or start the bridge in production mode ' +
+        `(it then serves web/dist directly). Original error: ${String(err)}`,
+    );
+  }
+}
+
 /** Proxy non-API / non-backend-WS traffic to the Angular dev server. */
-export function attachDevWebProxy(app: FastifyInstance, webPort: number): void {
+export async function attachDevWebProxy(app: FastifyInstance, webPort: number): Promise<void> {
+  // The dev server has no copy of the model either — mount the user's before
+  // anything falls through to the Angular proxy.
+  await registerUserVoskDir(app);
+
   const target = `http://127.0.0.1:${webPort}`;
+  const httpProxy = await loadHttpProxy();
   const proxy = httpProxy.createProxyServer({ target, ws: true, changeOrigin: true });
 
   proxy.on('proxyRes', (proxyRes) => {
@@ -95,11 +124,33 @@ export function attachDevWebProxy(app: FastifyInstance, webPort: number): void {
   log.info({ target }, 'dev web proxy enabled');
 }
 
+/**
+ * Serve the Vosk wake-word model from the user's own directory.
+ *
+ * A distro install cannot write the ~41 MB model into `/usr/lib/agentvoice`,
+ * so `prepare-vosk` puts it in `~/.agentvoice/vosk` instead and this mount
+ * serves it — registered *before* the packaged web root so a model the user
+ * downloaded always wins over a stale packaged one (docs/38).
+ */
+async function registerUserVoskDir(app: FastifyInstance): Promise<void> {
+  const userDir = voskPaths().serveFrom[0];
+  if (!userDir || !existsSync(userDir)) return;
+  await app.register(fastifyStatic, {
+    root: userDir,
+    prefix: '/vosk/',
+    decorateReply: false,
+    wildcard: true,
+  });
+  log.info({ userDir }, 'serving the wake-word model from the user directory');
+}
+
 /** Serve web/dist in production with SPA router fallback. */
 export async function registerProductionWeb(
   app: FastifyInstance,
   webDistPath: string,
 ): Promise<void> {
+  await registerUserVoskDir(app);
+
   if (!existsSync(webDistPath)) {
     log.warn('web/dist not found — run npm run build:web');
     return;

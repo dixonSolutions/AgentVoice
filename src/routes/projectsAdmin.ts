@@ -36,6 +36,8 @@ const ProjectCreateSchema = z
     description: z.string().max(200).optional(),
     aliases: z.array(z.string()).default([]),
     enabled: z.boolean().default(true),
+    allowExternalSessions: z.boolean().optional(),
+    externalMailbox: z.boolean().optional(),
   })
   .strict();
 
@@ -45,6 +47,8 @@ const ProjectUpdateSchema = z
     description: z.string().max(200).nullable().optional(),
     aliases: z.array(z.string()).optional(),
     enabled: z.boolean().optional(),
+    allowExternalSessions: z.boolean().optional(),
+    externalMailbox: z.boolean().optional(),
   })
   .strict();
 
@@ -80,6 +84,8 @@ export async function registerProjectsAdminRoutes(app: FastifyInstance): Promise
           description: p.description ?? null,
           aliases: p.aliases,
           enabled: p.enabled,
+          allowExternalSessions: p.allowExternalSessions,
+          externalMailbox: p.externalMailbox,
           resumeId: getProjectResumeId(p.name),
           model: reg?.model ?? null,
           pathExists: existsSync(p.path),
@@ -96,10 +102,19 @@ export async function registerProjectsAdminRoutes(app: FastifyInstance): Promise
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.message });
     }
-    const { name, path, description, aliases, enabled } = parsed.data;
+    const { name, path, description, aliases, enabled, allowExternalSessions, externalMailbox } =
+      parsed.data;
 
     try {
-      const project = addProject({ name, path, description, aliases, enabled });
+      const project = addProject({
+        name,
+        path,
+        description,
+        aliases,
+        enabled,
+        allowExternalSessions,
+        externalMailbox,
+      });
       log.info({ name, path }, 'project added via admin API');
       return { ok: true, project };
     } catch (err) {
@@ -139,6 +154,8 @@ export async function registerProjectsAdminRoutes(app: FastifyInstance): Promise
         description: patch.description,
         aliases: patch.aliases,
         enabled: patch.enabled,
+        allowExternalSessions: patch.allowExternalSessions,
+        externalMailbox: patch.externalMailbox,
       });
       log.info({ name }, 'project updated via admin API');
       return { ok: true, project };

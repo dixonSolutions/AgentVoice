@@ -21,6 +21,8 @@ import { getDb, closeDb } from './state/db.js';
 import { reconcileRegistry } from './state/registry.js';
 import { migrateLegacyResumeIds } from './state/resumeMigration.js';
 import { markOrphanedJobs, markOrphanedVoiceAgentRuns } from './state/jobs.js';
+import { parkRunsForRestart, resumeInterruptedJobs } from './executor/restartSurvival.js';
+import { wireAwayPolicy } from './state/awayPolicy.js';
 import { getActiveProvider } from './providers/agents/registry.js';
 import { getActiveHostingProvider } from './providers/hosting/registry.js';
 import { killActiveAgent } from './executor/agentSingleton.js';
@@ -58,7 +60,9 @@ async function main(): Promise<void> {
   // 4b. File any legacy provider-agnostic resume id under the CLI that owns it.
   migrateLegacyResumeIds();
 
-  // 5. Orphan cleanup (jobs left running from a previous bridge process)
+  // 5. Orphan cleanup (jobs left running from a previous bridge process).
+  //     Jobs the shutdown path parked as `interrupted` are skipped here — they
+  //     are resumed below rather than failed (docs/36 §5).
   const orphanCount = markOrphanedJobs();
   if (orphanCount > 0) {
     log.warn({ orphanCount }, 'cleaned up orphaned jobs from previous run');
@@ -72,6 +76,19 @@ async function main(): Promise<void> {
   // 6. Start server
   const app = await buildServer();
   await startServer(app);
+
+  // 6b. Presence drives the away budget; the grace window comes from config.
+  wireAwayPolicy();
+
+  // 6c. Pick up anything the last shutdown parked mid-task. After the server
+  //     is listening, so a resumed agent's MCP connection has somewhere to go.
+  void resumeInterruptedJobs()
+    .then((outcome) => {
+      if (outcome.resumed + outcome.abandoned > 0) {
+        log.info(outcome, 'interrupted runs from the previous process settled');
+      }
+    })
+    .catch((err: unknown) => log.error({ err }, 'resuming interrupted runs failed'));
 
   await startServe();
 
@@ -108,6 +125,13 @@ async function main(): Promise<void> {
 
   async function shutdown(signal: string): Promise<void> {
     log.info({ signal }, 'shutdown signal received');
+    // Park before killing: once the processes are gone the only record of what
+    // they were doing is the job row.
+    try {
+      parkRunsForRestart();
+    } catch (err) {
+      log.error({ err }, 'could not park running jobs for resume');
+    }
     killActiveAgent('bridge shutdown');
     killVoiceAgent('bridge shutdown');
     try {

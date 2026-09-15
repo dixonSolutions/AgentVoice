@@ -16,7 +16,8 @@ import type {
   ServeActionId,
   ServeServiceLogs,
   JobSettings,
-  NarratorSettings,
+  NarrationSettings,
+  SessionPolicySettings,
   KeysStatus,
   KeysTestResult,
   AdminProject,
@@ -226,14 +227,28 @@ export class AdminService {
     return this.patch('/api/admin/jobs', patch);
   }
 
-  // ── Narrator ─────────────────────────────────────────────────────────────
+  // ── What gets spoken (docs/39 Part B) ────────────────────────────────────
 
-  getNarrator(): Promise<NarratorSettings> {
-    return this.get('/api/admin/narrator');
+  getNarration(): Promise<NarrationSettings> {
+    return this.get('/api/admin/narration');
   }
 
-  patchNarrator(patch: Partial<NarratorSettings>): Promise<{ ok: boolean } & NarratorSettings> {
-    return this.patch('/api/admin/narrator', patch);
+  patchNarration(
+    patch: Partial<Omit<NarrationSettings, 'catalog'>>,
+  ): Promise<{ ok: boolean } & NarrationSettings> {
+    return this.patch('/api/admin/narration', patch);
+  }
+
+  // ── Disconnect & background work (docs/36) ───────────────────────────────
+
+  getSessionPolicy(): Promise<SessionPolicySettings> {
+    return this.get('/api/admin/session');
+  }
+
+  patchSessionPolicy(
+    patch: Partial<Omit<SessionPolicySettings, 'presence'>>,
+  ): Promise<{ ok: boolean } & SessionPolicySettings> {
+    return this.patch('/api/admin/session', patch);
   }
 
   // ── AWS Keys ─────────────────────────────────────────────────────────────

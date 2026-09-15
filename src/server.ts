@@ -53,6 +53,11 @@ import { registerSpeechProviderRoutes } from './routes/speechProviders.js';
 import { registerMcpServer } from './mcp/server/index.js';
 import { attachDevWebProxy, registerProductionWeb } from './webDispatch.js';
 import { registerControlSocket } from './state/controlSocket.js';
+import { getPresence, type PresenceClient } from './state/presence.js';
+import { setReconnectDigestSource } from './mcp/server/voiceToolHandlers.js';
+import { publishAgentBusy } from './state/agentBusy.js';
+import { notifyPhone } from './push/notifyPhone.js';
+import { getPendingApprovals } from './mcp/server/approvalRegistry.js';
 import { registerPushRoutes } from './routes/push.js';
 import { registerApprovalRoutes } from './routes/approvals.js';
 import { registerTurnRoutes } from './routes/turns.js';
@@ -334,9 +339,23 @@ export async function buildServer(): Promise<FastifyInstance> {
       turnSubmit: s.voice.turnSubmit,
       defaultMode: s.defaultMode,
       maxConcurrentJobs: s.maxConcurrentJobs,
-      planFirst: s.planFirst,
-      narratorEnabled: s.narratorEnabled,
-      narratorCadenceMs: s.narratorCadenceMs,
+      /**
+       * docs/39: `planFirst` and `narratorCadenceMs` are gone — nothing read
+       * either of them, and both had a control on the config screen.
+       */
+      narration: {
+        enabled: s.narration.enabled,
+        events: s.narration.events,
+        speakRawDetail: s.narration.speakRawDetail,
+      },
+      /** docs/36 — the PWA needs the policy to label its away toggle. */
+      session: {
+        graceMs: s.session.graceMs,
+        onPhoneAway: s.session.onPhoneAway,
+        onBridgeRestart: s.session.onBridgeRestart,
+      },
+      /** docs/40 §1 — how much of a question / plan card the phone reads out. */
+      readPrompts: s.voice.tts.readPrompts,
       workflow: {
         default: s.workflow.default,
         llmIntelligence: {
@@ -373,6 +392,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       // Voice tools share session state on the `default` key (same as /api/active-project).
       const sessionKey = 'default';
       let relaySession: PhoneRelaySession | null = null;
+      let presence: PresenceClient | null = null;
 
       log.debug({ sessionKey }, 'ws connection attempt');
 
@@ -402,10 +422,44 @@ export async function buildServer(): Promise<FastifyInstance> {
             if (socket.readyState === socket.OPEN) socket.send(data);
           });
 
+          // Presence starts at auth, not at connect: an unauthenticated socket
+          // is not a listener (docs/36 §1).
+          presence = getPresence().register({
+            kind: 'phone_control',
+            ping: () => {
+              if (socket.readyState === socket.OPEN) {
+                socket.send(JSON.stringify({ type: 'ping' }));
+              }
+            },
+            close: (code, reason) => {
+              try {
+                socket.close(code, reason);
+              } catch {
+                socket.terminate?.();
+              }
+            },
+          });
+
           socket.send(JSON.stringify({ type: 'auth_ok', sessionKey }));
+
+          /**
+           * Everything the phone missed while it was gone (docs/36 §3.5,
+           * docs/40 §3): what is running, and any approval card still open.
+           * Both are re-sent rather than assumed, because the client's copy
+           * died with its last socket.
+           */
+          publishAgentBusy(true);
+          for (const request of getPendingApprovals()) {
+            void notifyPhone({ type: `${request.kind}_request`, ...request });
+          }
+
           log.info({ sessionKey }, 'ws authenticated');
           return;
         }
+
+        // Any authenticated frame proves the socket is alive, so the pong is
+        // only a fallback for an otherwise idle connection.
+        presence?.alive();
 
         // ── Subsequent frames: tool calls + state updates ──────────────
         let msg: Record<string, unknown>;
@@ -416,7 +470,17 @@ export async function buildServer(): Promise<FastifyInstance> {
           return;
         }
 
-        // TTS state update (for narrator cadence)
+        if (msg['type'] === 'pong') return;
+
+        // The PWA says goodbye before closing, so hanging up applies the away
+        // policy immediately instead of waiting out the grace window.
+        if (msg['type'] === 'hangup') {
+          presence?.hangUp();
+          presence = null;
+          return;
+        }
+
+        // TTS state update — the narrator defers a spoken line while TTS runs.
         if (msg['type'] === 'speaking' && typeof msg['value'] === 'boolean') {
           relaySession?.setSpeaking(msg['value']);
           return;
@@ -462,6 +526,8 @@ export async function buildServer(): Promise<FastifyInstance> {
 
       socket.on('close', () => {
         log.info({ sessionKey }, 'ws closed');
+        presence?.release();
+        presence = null;
         // Detach narrator — events will buffer until next connection.
         if (relaySession) {
           void getNarrator().setSession(null);
@@ -478,6 +544,18 @@ export async function buildServer(): Promise<FastifyInstance> {
     });
   });
 
+  /**
+   * The catch-up digest the agent receives with the first turn after the user
+   * comes back (docs/36 §3.5). Injected rather than imported so the voice tool
+   * handlers keep no dependency on the executor.
+   */
+  setReconnectDigestSource(() => {
+    const narrator = getNarrator();
+    const digest = narrator.buildDigest();
+    if (digest) narrator.clearBuffer();
+    return digest;
+  });
+
   registerMcpServer(app);
 
   // ── Web dispatch (after /api/* and /ws/* routes) ───────────────────────
@@ -485,7 +563,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   // Development: proxy everything else to the Angular dev server (HMR).
   // Production: serve web/dist with SPA index.html fallback.
   if (isDevelopment) {
-    attachDevWebProxy(app, run.webPort);
+    await attachDevWebProxy(app, run.webPort);
   } else {
     await registerProductionWeb(app, webDistPath);
   }

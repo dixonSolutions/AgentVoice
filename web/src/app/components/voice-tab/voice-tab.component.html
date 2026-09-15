@@ -4,6 +4,24 @@
       <cv-live-log-panel />
     }
 
+    <!--
+      docs/40 §4: the app never checked the microphone permission before
+      trying, so "denied" and "never asked" produced the same generic failure
+      and the user had no idea the browser was the thing saying no.
+    -->
+    @if (micPermissionBlocked()) {
+      <p-message severity="warn" styleClass="cv-voice-mic-card">
+        <div>
+          <strong>{{ micHelp().title }}</strong>
+          <ol class="cv-voice-mic-steps">
+            @for (step of micHelp().steps; track step) {
+              <li>{{ step }}</li>
+            }
+          </ol>
+        </div>
+      </p-message>
+    }
+
     <div
       class="cv-voice-orb-stage"
       [class.cv-voice-orb-stage--session]="
@@ -22,6 +40,8 @@
             [live]="voiceSession.conversationActive()"
             [dimmed]="pttDisabled()"
             [colorMode]="orbColorMode()"
+            [activity]="orbActivity()"
+            [caption]="orbActivityCaption()"
             [visualizeUserSpeech]="visualizeUserSpeech()"
             [expanded]="
               voiceSession.conversationActive() || voiceSession.sessionConnecting()

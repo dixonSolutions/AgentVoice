@@ -24,6 +24,7 @@ import {
   broadcastToVoiceSessions,
   broadcastVoiceAgentStatus,
   broadcastVoiceTurnIdle,
+  bufferedAwaySpeech,
   hadSpeakThisTurn,
   handleSpeak,
 } from '../mcp/server/voiceToolHandlers.js';
@@ -44,6 +45,10 @@ import {
   type AgentStreamEvent,
 } from '../providers/agents/events.js';
 import { publishEvent } from '../state/eventBus.js';
+import { phrase } from '../voice/phrases.js';
+import { isListening, setConversationAwayPolicy } from '../state/awayPolicy.js';
+import { notifyPhone } from '../push/notifyPhone.js';
+import { getConfig } from '../config.js';
 
 const log = childLogger('voice-agent');
 
@@ -67,6 +72,19 @@ const VOICE_BOOT_SUFFIX =
   `\n\n---\nThe ${MCP_SERVER_NAME} MCP server (AgentVoice) is connected. ` +
   'Speak one sentence to greet or acknowledge the user first, then call next_voice_turn() to receive their request. ' +
   'Never start a session in silent tool mode.';
+
+/**
+ * Appended when a run starts with nobody listening — a worker relaunched after
+ * a bridge restart, or a run kicked off from a desk client. Without it the
+ * agent opens with "greet the user first", waits for a turn that will never
+ * come, and exits (docs/36 §3.3).
+ */
+const VOICE_AWAY_SUFFIX =
+  '\n\nNobody is listening right now. Do not greet anyone and do not wait on ' +
+  'next_voice_turn() for an answer: work the task through, and use speak() to ' +
+  'record what you are doing — those lines become the catch-up summary the user ' +
+  'hears when they come back. The `listener` block on every AgentVoice tool ' +
+  'result tells you the current policy.';
 
 const VOICE_RESUME_SUFFIX =
   `\n\n---\nThe ${MCP_SERVER_NAME} MCP server (AgentVoice) is connected. ` +
@@ -153,12 +171,13 @@ function buildPendingTurnBlock(pendingTurn?: string): string {
 function buildVoiceBootPrompt(project: Project, pendingTurn?: string): string {
   const turnBlock = buildPendingTurnBlock(pendingTurn);
   const isResume = Boolean(project.resumeId);
+  const awayBlock = isListening() ? '' : VOICE_AWAY_SUFFIX;
   // Do NOT trim these suffixes — they start with "---" after trimming, which
   // cursor-agent parses as an unknown option flag (exit code 1). The leading
   // "\n\n" keeps the prompt from being treated as a CLI flag.
   return isResume
-    ? `${resumeSystemBlock()}${VOICE_RESUME_SUFFIX}${turnBlock}`
-    : `${agentVoiceRuleBody()}${VOICE_BOOT_SUFFIX}${turnBlock}`;
+    ? `${resumeSystemBlock()}${VOICE_RESUME_SUFFIX}${awayBlock}${turnBlock}`
+    : `${agentVoiceRuleBody()}${VOICE_BOOT_SUFFIX}${awayBlock}${turnBlock}`;
 }
 
 /**
@@ -219,6 +238,9 @@ export function spawnVoiceAgent(
   // A resume id the active CLI does not have is fatal *and* mute: it exits 1
   // before the agent can speak. Better a fresh thread than a silent turn.
   const project = guardResumeId(incomingProject);
+  // "Keep going while I'm away" is scoped to one conversation — it must not
+  // leak into the next one (docs/36 §2).
+  setConversationAwayPolicy(null);
   const provider = getActiveProvider();
   const client = provider.id;
   const args = buildVoiceAgentArgs(project, session, pendingTurn);
@@ -426,10 +448,12 @@ export function spawnVoiceAgent(
     // spokeThisTurn must survive done() — clearing it there made normal turns
     // look silent and TTS’d the agent’s final process/summary text after exit.
     if (!hadSpeakThisTurn()) {
+      // Every fallback line lives in the phrase catalog now, so it can be
+      // reworded or translated like the rest of the bridge's speech (docs/39).
       const fallback = authRequired
-        ? `${provider.displayName} needs you to sign in — I sent a sign-in link to your phone.`
+        ? phrase('fallback_auth', { provider: provider.displayName })
         : staleSession
-          ? `That ${provider.displayName} conversation is no longer available, so I cleared it. Say that again and I will start a fresh thread.`
+          ? phrase('fallback_session_gone', { provider: provider.displayName })
           : summarizeForSpeechFallback(lastAssistantText);
       if (fallback) {
         log.warn(
@@ -442,9 +466,7 @@ export function spawnVoiceAgent(
           { runId, pid },
           'voice agent exited without speak() and no assistant text — user heard nothing',
         );
-        handleSpeak({
-          text: 'I finished but did not speak aloud — please try again.',
-        });
+        handleSpeak({ text: phrase('fallback_silent') });
       }
     }
 
@@ -455,6 +477,28 @@ export function spawnVoiceAgent(
     }
 
     broadcastVoiceTurnIdle();
+
+    /**
+     * The voice agent's own work emits no `job_done`, so finishing while the
+     * user was away produced no notification at all — they had to open the app
+     * and guess (docs/36 §4). Workers already push through the narrator; this
+     * is the voice agent's equivalent.
+     */
+    if (!isListening() && !stoppedByBridge && getConfig().settings.session.unattended.notifyOnFinish) {
+      const spoken = bufferedAwaySpeech();
+      const last = spoken.length > 0 ? spoken[spoken.length - 1]?.text : null;
+      void notifyPhone({
+        type: 'away_finished',
+        run_id: runId,
+        project: project.name,
+        exit_code: exitCode,
+        summary:
+          last ??
+          (exitCode === 0
+            ? `${provider.displayName} finished on ${project.name}.`
+            : `${provider.displayName} stopped with an error on ${project.name}.`),
+      });
+    }
 
     for (const cb of eventListeners) {
       cb({ type: 'exit', exitCode });

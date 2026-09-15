@@ -44,9 +44,15 @@ const EnvSchema = z.object({
   APNS_KEY_PATH: z.string().optional(),
   APNS_BUNDLE_ID: z.string().optional(),
   APNS_PRODUCTION: z.string().optional(),
-  /** Override paths for alternative agent client binaries */
+  /**
+   * Pin an agent CLI's binary path. One per provider — the schema used to
+   * declare only two of the four, so setting CURSOR_AGENT_PATH or
+   * CODEWHALE_PATH was silently dropped (docs/39 A7).
+   */
+  CURSOR_AGENT_PATH: z.string().optional(),
   CODEX_PATH: z.string().optional(),
   CLAUDE_CODE_PATH: z.string().optional(),
+  CODEWHALE_PATH: z.string().optional(),
   /** Agent-provider auth credentials — set by the in-app login flow or manually. */
   CURSOR_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),
@@ -151,6 +157,19 @@ export const VoiceTtsSchema = z.object({
    * as it takes, and the queue will run behind the agent.
    */
   readAloud: z.enum(['replies', 'titles', 'summary', 'everything']).default('replies'),
+  /**
+   * How much of an on-screen question / plan / permission card is read aloud.
+   *
+   *   off      — nothing; the card is silent (pre-docs/40 behaviour).
+   *   announce — "There's a question on your phone."
+   *   question — the question and its options; for a plan, title and step count.
+   *   full     — also every plan step and the estimated impact.
+   *
+   * A hands-free user has no screen, so a card nobody reads out is a dead end.
+   * Secrets are never read: `secret_input` announces at every level above off.
+   * See docs/40-prompts-orb-and-permissions.md §1.
+   */
+  readPrompts: z.enum(['off', 'announce', 'question', 'full']).default('question'),
   /** Server defaults for browser TTS — per-device overrides live in PWA localStorage. */
   webkit: WebkitTtsDefaultsSchema.default({}),
 }).default({});
@@ -415,6 +434,118 @@ export const HostingSettingsSchema = z
   })
   .default({});
 
+// ── Disconnects and unattended work (docs/36) ────────────────────────────────
+
+/** What the bridge does with running work when the phone goes away. */
+export const AWAY_POLICIES = ['keep_working', 'finish_turn', 'stop_all'] as const;
+export type AwayPolicy = (typeof AWAY_POLICIES)[number];
+
+/** What happens to running agents when the bridge process itself restarts. */
+export const RESTART_POLICIES = ['kill', 'resume', 'keep_alive'] as const;
+export type RestartPolicy = (typeof RESTART_POLICIES)[number];
+
+export const UnattendedSchema = z
+  .object({
+    /**
+     * Wall-clock budget for one away period. Distinct from `jobTimeoutMs`,
+     * which bounds a single attended job: unattended work is allowed to run
+     * much longer, but not forever.
+     */
+    maxRuntimeMs: z.number().int().positive().default(3_600_000),
+    /** Tool-call budget for one away period — 0 disables the cap. */
+    maxToolCalls: z.number().int().min(0).default(0),
+    /**
+     * How an approval card behaves with nobody looking at it.
+     *   wait_push  — push it and keep it open for approvalTimeoutMs.
+     *   deny       — answer no immediately, with "the user is away".
+     *   skip       — deny this step but tell the agent to carry on elsewhere.
+     */
+    approvals: z.enum(['wait_push', 'deny', 'skip']).default('wait_push'),
+    approvalTimeoutMs: z.number().int().positive().default(900_000),
+    /**
+     * Askpass (sudo / git / ssh) while away. `fail_fast` keeps a shell from
+     * hanging for a quarter of an hour on a password nobody will type.
+     */
+    secrets: z.enum(['wait_push', 'fail_fast']).default('fail_fast'),
+    /** Refuse to start unattended work outside a git worktree. */
+    requireWorktree: z.boolean().default(false),
+    /** Push when the voice agent finishes work you were not watching. */
+    notifyOnFinish: z.boolean().default(true),
+  })
+  .default({});
+
+export const SessionSettingsSchema = z
+  .object({
+    /**
+     * How long a dropped phone stays `grace` before it counts as `away`.
+     * Absorbs Wi-Fi/cellular handover, iOS suspension and the PWA reconnect.
+     */
+    graceMs: z.number().int().min(0).max(300_000).default(45_000),
+    /** Default when the phone goes away — see docs/36 "Decisions". */
+    onPhoneAway: z.enum(AWAY_POLICIES).default('keep_working'),
+    /** Default when the bridge process restarts under running work. */
+    onBridgeRestart: z.enum(RESTART_POLICIES).default('keep_alive'),
+    unattended: UnattendedSchema,
+  })
+  .default({});
+
+// ── Bridge narration (docs/39 Part B) ────────────────────────────────────────
+
+/**
+ * Every spoken line the bridge itself produces, as opposed to the lines the
+ * agent chooses through `speak()`. Each is separately switchable and each has
+ * an editable template, because the hardcoded set duplicated the voice agent's
+ * own narration and could not be turned off one event at a time.
+ */
+export const NARRATION_KINDS = [
+  'job_started',
+  'job_done',
+  'job_done_no_changes',
+  'job_error',
+  'file_write',
+  'file_read',
+  'shell_run',
+  'ghost_killed',
+  'away_replay',
+  'away_progress',
+  'permission',
+  'secret_input',
+  'fallback_auth',
+  'fallback_session_gone',
+  'fallback_silent',
+  'busy',
+] as const;
+export type NarrationKind = (typeof NARRATION_KINDS)[number];
+
+/**
+ * `auto` speaks only when no voice agent owns narration — i.e. the
+ * llm_intelligence workflow, or agent_native with nothing attached. That is
+ * the fix for double narration: in agent_native the agent already says
+ * "starting", so the watcher saying it too was the bug.
+ */
+export const NarrationModeSchema = z.enum(['auto', 'always', 'off']);
+export type NarrationMode = z.infer<typeof NarrationModeSchema>;
+
+export const NarrationSettingsSchema = z
+  .object({
+    /** Master switch. Replaces the old `narratorEnabled`. */
+    enabled: z.boolean().default(true),
+    /** Per-event mode. Missing keys fall back to `auto`. */
+    events: z.record(z.enum(NARRATION_KINDS), NarrationModeSchema).default({}),
+    /**
+     * Per-kind template overrides. Named placeholders only (`{agent}`,
+     * `{project}`, `{count}` …) — unknown placeholders are rejected on save
+     * rather than read out to the user.
+     */
+    templates: z.record(z.string(), z.string().max(400)).default({}),
+    /**
+     * Speak raw provider error text and raw file paths. Off by default: a
+     * stack trace read aloud is noise, and the transcript still has it.
+     */
+    speakRawDetail: z.boolean().default(false),
+  })
+  .default({});
+
 // ── config.json schema ───────────────────────────────────────────────────────
 
 export const AGENT_CLIENTS = ['cursor', 'codex', 'claude-code', 'codewhale'] as const;
@@ -440,7 +571,6 @@ const SettingsSchema = z.object({
   defaultActiveFast: z.boolean().default(false),
   maxConcurrentJobs: z.number().int().min(1).max(4).default(1),
   jobTimeoutMs: z.number().int().positive().default(600_000),
-  planFirst: z.boolean().default(false),
   /**
    * Extra Cursor flags. `--force` / `--yolo` used to live here; the permission
    * mode below owns them now (migrated out at load).
@@ -452,9 +582,16 @@ const SettingsSchema = z.object({
    */
   permissionModes: z.record(z.string(), z.string()).default({}),
   modelCacheTtlMs: z.number().int().positive().default(3_600_000),
-  narratorEnabled: z.boolean().default(true),
-  narratorCadenceMs: z.number().int().positive().default(15_000),
+  /**
+   * Bridge narration: what the watcher and the approval paths say out loud.
+   * `narratorEnabled` survives only as the migration source for
+   * `narration.enabled`; `narratorCadenceMs` is gone because the only event it
+   * gated (`progress_tick`) was never emitted.
+   */
+  narration: NarrationSettingsSchema,
   narratorMaxBufferEvents: z.number().int().positive().default(50),
+  /** Disconnects, unattended work and restart survival. See docs/36. */
+  session: SessionSettingsSchema,
   /** Kill the worker immediately if it tries to spawn Task/subagent sessions. */
   ghostKillEnabled: z.boolean().default(true),
   logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
@@ -479,6 +616,23 @@ const ProjectConfigSchema = z.object({
   aliases: z.array(z.string()).default([]),
   description: z.string().optional(),
   enabled: z.boolean().default(true),
+  /**
+   * Allow the phone to send messages into agent sessions this project did not
+   * start (docs/37 §4).
+   *
+   * Off by default and deliberately per project: injection *is* prompt
+   * injection, and an externally started session may be running with bypass
+   * permissions — so anyone holding APP_TOKEN could otherwise drive it.
+   */
+  allowExternalSessions: z.boolean().default(false),
+  /**
+   * Tell sessions in this project to poll `check_messages()`.
+   *
+   * A session AgentVoice did not start only receives mailbox messages if its
+   * agent-voice rule tells it to look, which is why this is opt-in per project
+   * rather than a global switch.
+   */
+  externalMailbox: z.boolean().default(false),
 });
 
 export const ConfigFileSchema = z.object({
@@ -504,6 +658,9 @@ export type AudioSettings = z.infer<typeof LlmIntelligenceAudioSchema>;
 export type LlmIntelligenceWorkflow = z.infer<typeof LlmIntelligenceWorkflowSchema>;
 export type WorkflowSettings = z.infer<typeof WorkflowSettingsSchema>;
 export type ServeSettings = z.infer<typeof ServeSettingsSchema>;
+export type SessionSettings = z.infer<typeof SessionSettingsSchema>;
+export type UnattendedSettings = z.infer<typeof UnattendedSchema>;
+export type NarrationSettings = z.infer<typeof NarrationSettingsSchema>;
 export type HostingSettings = z.infer<typeof HostingSettingsSchema>;
 export type Settings = Omit<z.infer<typeof SettingsSchema>, 'voice' | 'workflow'> & {
   voice: VoiceSettings;
@@ -724,6 +881,30 @@ function migrateRawConfig(raw: unknown): unknown {
           migrateAudioSettings(li['audio'] as Record<string, unknown>);
         }
       }
+    }
+
+    // docs/39 Part B — narratorEnabled was one switch over every spoken bridge
+    // line. It becomes the master switch of a per-event structure; the cadence
+    // field is dropped outright because the only event it gated was never
+    // emitted.
+    if ('narratorEnabled' in s || 'narratorCadenceMs' in s) {
+      const narration = rawObject(s, 'narration');
+      if (narration['enabled'] === undefined && typeof s['narratorEnabled'] === 'boolean') {
+        narration['enabled'] = s['narratorEnabled'];
+      }
+      delete s['narratorEnabled'];
+      delete s['narratorCadenceMs'];
+      log.info('Migrated config — settings.narratorEnabled → settings.narration.enabled');
+    }
+
+    // docs/39 A2 — planFirst was only ever echoed back by /api/settings and
+    // overlapped "Default agent mode: plan", which is the setting that works.
+    if ('planFirst' in s) {
+      if (s['planFirst'] === true && s['defaultMode'] === undefined) {
+        s['defaultMode'] = 'plan';
+        log.info('Migrated config — settings.planFirst=true → defaultMode=plan');
+      }
+      delete s['planFirst'];
     }
 
     if (s['heartbeat'] && typeof s['heartbeat'] === 'object' && !s['serve']) {

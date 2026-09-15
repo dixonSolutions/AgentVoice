@@ -197,19 +197,20 @@
                 text="Wake and end phrases must be different — e.g. listen / send." />
             }
           }
-          <p-iftalabel>
-            <p-inputNumber id="cfg-worker-poll" [(ngModel)]="workerPollTimeoutMs"
-              [min]="5000" [max]="60000" [step]="1000" suffix=" ms"
-              [disabled]="!isBridgeConnected()" />
-            <label for="cfg-worker-poll">Worker status poll interval</label>
-          </p-iftalabel>
-          <p-message severity="secondary" variant="simple"
-            text="While a sub-agent runs, how long to wait for your next voice/text turn before checking worker status again. Speaking is optional when nothing meaningful changed." />
+          <!--
+            The worker status poll interval moved to Agent: it is how often the
+            agent checks on a worker, not part of taking a turn (docs/39 A12).
+          -->
         </p-fieldset>
 
+        <!--
+          docs/39 A10: agent voice moved to "What gets spoken", where the
+          read-aloud level and the bridge's own narration already live. Left
+          here as a pointer rather than a second copy of the same switches.
+        -->
         <p-fieldset legend="Agent voice (TTS)">
           <p-message severity="secondary" variant="simple"
-            text="Controls MCP speak() playback. When disabled, transcripts still appear but nothing is spoken." />
+            text="Whether the agent's replies are played aloud. This and the rest of what you hear live together under What gets spoken." />
 
           <div class="cv-cfg-toggle-row">
             <p-toggleSwitch id="cfg-agent-voice" [(ngModel)]="agentVoiceEnabled"
@@ -266,26 +267,6 @@
   }
 
   <!-- ── Personal ── -->
-  @if (activeSection() === 'personal') {
-    <div class="cv-cfg-detail">
-      <p-fluid>
-        <p-message severity="secondary" variant="simple"
-          text="The voice agent uses this name when addressing you." />
-        <p-fieldset legend="Your name">
-          <p-iftalabel>
-            <input pInputText id="cfg-user-name" [(ngModel)]="userName"
-              placeholder="e.g. Alex" [disabled]="!isBridgeConnected()" />
-            <label for="cfg-user-name">Name (optional)</label>
-          </p-iftalabel>
-        </p-fieldset>
-        <p-button label="Save name" icon="pi pi-user"
-          [loading]="savingUserName"
-          [disabled]="!isBridgeConnected()"
-          (onClick)="onSaveUserName()" />
-      </p-fluid>
-    </div>
-  }
-
   <!-- ── Projects ── -->
   @if (activeSection() === 'projects') {
     <div class="cv-cfg-detail">
@@ -595,10 +576,12 @@
       @if (agentClientData) {
         <p-fluid>
           <p-fieldset legend="Active agent client">
-            <p class="cv-cfg-hint">
-              Select the AI coding agent the bridge will spawn for voice and worker jobs.
-              All three clients register the shared agent-voice MCP server.
-            </p>
+            <!--
+              "All three clients" — there are four. Counting them in prose
+              means the copy is wrong the day a fifth arrives, so it does not.
+            -->
+            <p-message severity="secondary" variant="simple"
+              text="The coding agent the bridge spawns for voice and worker jobs. Every client registers the same agent-voice MCP server." />
             <div class="cv-client-list">
               @for (client of agentClientData.clients; track client.id) {
                 <button
@@ -622,7 +605,7 @@
                       <span>{{ client.binPath ?? client.id }}</span>
                     } @else {
                       <i class="pi pi-exclamation-circle" style="color: var(--p-orange-400)"></i>
-                      <span>Not installed — see docs/23-multi-agent-client.md</span>
+                      <span>Not installed — install its CLI, then reload this page</span>
                     }
                   </div>
                 </button>
@@ -630,14 +613,91 @@
             </div>
           </p-fieldset>
 
-          <p-fieldset legend="Environment overrides">
-            <p class="cv-cfg-hint">
-              Set these in your <code>.env</code> file to override the binary path for each client:
-            </p>
+          <!--
+            Rendered from what the providers declare. The hardcoded version
+            listed two of the four, so CURSOR_AGENT_PATH and CODEWHALE_PATH
+            looked like they did not exist (docs/39 A7).
+          -->
+          <!--
+            docs/39 A16: "Personal" was a whole section with its own save
+            button for one field. It is agent behaviour, so it lives here.
+          -->
+          <p-fieldset legend="How the agent addresses you">
+            <p-iftalabel>
+              <input pInputText id="cfg-user-name" [(ngModel)]="userName"
+                placeholder="e.g. Alex" [disabled]="!canUseApi()" />
+              <label for="cfg-user-name">Your name (optional)</label>
+            </p-iftalabel>
+            <p-button label="Save" icon="pi pi-save"
+              [loading]="savingUserName"
+              [disabled]="!canUseApi()"
+              (onClick)="onSaveUserName()" />
+          </p-fieldset>
+
+          <!--
+            docs/39 A12: the worker status poll interval sat under "Turn
+            submit" in the Voice section. It is how often the voice agent
+            checks on a worker — agent behaviour, not turn-taking.
+          -->
+          <p-fieldset legend="Worker narration">
+            <p-iftalabel>
+              <p-inputNumber id="cfg-worker-poll"
+                [ngModel]="workerPollTimeoutMs / 1000"
+                (ngModelChange)="workerPollTimeoutMs = $event * 1000"
+                [min]="5" [max]="60" [step]="5" suffix=" s"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-worker-poll">Check on a running worker every</label>
+            </p-iftalabel>
+            <p-message severity="secondary" variant="simple"
+              text="How long the agent waits for you before looking at a worker's progress again." />
+            <p-button label="Save" icon="pi pi-save"
+              [loading]="savingVoice"
+              [disabled]="!canUseApi()"
+              (onClick)="onSaveVoiceSettings()" />
+          </p-fieldset>
+
+          <p-fieldset legend="Binary path overrides">
+            <p-message severity="secondary" variant="simple"
+              text="Set these in your .env file to pin a client's binary." />
             <div class="cv-cfg-code-block">
-              <code>CODEX_PATH=/path/to/codex</code><br>
-              <code>CLAUDE_CODE_PATH=/path/to/claude</code>
+              @for (client of agentClientData.clients; track client.id) {
+                @if (client.binEnvVar) {
+                  <code>{{ client.binEnvVar }}={{ client.binEnvValue || '/path/to/' + client.id }}</code><br>
+                }
+              }
             </div>
+          </p-fieldset>
+
+          <!--
+            docs/39 A6: these were in Job Settings, described as Cursor-only,
+            with a Cursor default. They are the active client's launch flags.
+          -->
+          <p-fieldset legend="Extra launch flags">
+            <p-message severity="secondary" variant="simple"
+              [text]="'Passed to ' + activeClientLabel() + ' before each run. Permission flags belong under Permissions on the Voice tab.'" />
+            <div class="cv-cfg-flags">
+              @for (flag of agentClientData.extraArgs; track flag) {
+                <div class="cv-cfg-flag-chip">
+                  <span>{{ flag }}</span>
+                  <button class="cv-cfg-flag-remove" (click)="onRemoveExtraArg(flag)"
+                    [disabled]="!canUseApi()" title="Remove flag">
+                    <i class="pi pi-times"></i>
+                  </button>
+                </div>
+              }
+            </div>
+            <div class="cv-cfg-flag-add-row">
+              <input pInputText [(ngModel)]="newPreRunFlag" placeholder="--flag"
+                (keydown.enter)="onAddExtraArg()"
+                [disabled]="!canUseApi()" />
+              <p-button icon="pi pi-plus" size="small"
+                [disabled]="!canUseApi() || !newPreRunFlag.trim()"
+                (onClick)="onAddExtraArg()" />
+            </div>
+            <p-button label="Save" icon="pi pi-save"
+              [loading]="savingJobs"
+              [disabled]="!canUseApi()"
+              (onClick)="onSaveExtraArgs()" />
           </p-fieldset>
         </p-fluid>
       }
@@ -846,15 +906,35 @@
                       <p-message severity="secondary" variant="simple"
                         [text]="'Already on ' + serveInstalledVersion + ' — nothing newer has been published.'" />
                     }
+                  } @else if (serveIsSystemInstall) {
+                    <!--
+                      docs/38: an in-app update cannot write to /usr/lib, and
+                      running `npm i -g` here would install a second copy the
+                      service does not run. So: the command, not a button.
+                    -->
+                    <p-message severity="secondary" variant="simple"
+                      text="Installed from a system package, so your package manager owns the update." />
+                    <div class="cv-cfg-code-block">
+                      <code>{{ serveUpdateCommand }}</code>
+                    </div>
+                    <p-button label="Copy command" icon="pi pi-copy"
+                      severity="secondary" [outlined]="true"
+                      (onClick)="copyUpdateCommand()" />
+                    <p-message severity="secondary" variant="simple"
+                      text="After upgrading, restart it as yourself: systemctl --user restart agentvoice" />
                   } @else {
                     <p-message severity="warn" variant="simple"
-                      [text]="'Cannot update automatically — ' + serveInstallReason + '. Reinstall with npm, or run from a git clone.'" />
+                      [text]="'Cannot update automatically — ' + serveInstallReason + '. Reinstall it the way you want to maintain it: npm, a system package, or a git clone.'" />
                   }
                 </p-fieldset>
 
                 <p-fieldset legend="Service">
+                  <!--
+                    scripts/restart.sh only exists in a clone — it was named to
+                    npm and package users who have no scripts/ directory.
+                  -->
                   <p-message severity="secondary" variant="simple"
-                    text="Restart runs scripts/restart.sh (build + systemd restart) without touching git." />
+                    text="Restarts the bridge service without touching your code or your config." />
                   <div class="cv-cfg-serve-action-grid">
                     <p-button label="Restart service" icon="pi pi-replay"
                       severity="secondary" [outlined]="true"
@@ -1029,7 +1109,7 @@
                         [(ngModel)]="hostingData.runModes.serve.publicBaseUrl"
                         placeholder="https://your-tailscale-hostname:8787"
                         [disabled]="!isBridgeConnected()" />
-                      <label for="cfg-public-url">Public base URL (Tailscale / reverse proxy)</label>
+                      <label for="cfg-public-url">Public base URL</label>
                     </p-iftalabel>
                   </p-fieldset>
 
@@ -1132,74 +1212,44 @@
                 [disabled]="!isBridgeConnected()" />
               <label for="cfg-max-concurrent">Max concurrent jobs</label>
             </p-iftalabel>
+            <!-- Minutes, not milliseconds: nobody types 600000 by choice. -->
             <p-iftalabel>
               <p-inputNumber id="cfg-job-timeout"
-                [(ngModel)]="jobsData.jobTimeoutMs"
-                [min]="10000" [step]="60000" suffix=" ms"
-                [disabled]="!isBridgeConnected()" />
+                [ngModel]="jobsData.jobTimeoutMs / 60000"
+                (ngModelChange)="jobsData.jobTimeoutMs = $event * 60000"
+                [min]="1" [step]="1" [maxFractionDigits]="1" suffix=" min"
+                [disabled]="!canUseApi()" />
               <label for="cfg-job-timeout">Job timeout</label>
             </p-iftalabel>
             <p-iftalabel>
               <p-inputNumber id="cfg-model-cache-ttl"
-                [(ngModel)]="jobsData.modelCacheTtlMs"
-                [min]="60000" [step]="60000" suffix=" ms"
-                [disabled]="!isBridgeConnected()" />
+                [ngModel]="jobsData.modelCacheTtlMs / 60000"
+                (ngModelChange)="jobsData.modelCacheTtlMs = $event * 60000"
+                [min]="1" [step]="5" [maxFractionDigits]="1" suffix=" min"
+                [disabled]="!canUseApi()" />
               <label for="cfg-model-cache-ttl">Model cache TTL</label>
             </p-iftalabel>
           </p-fieldset>
 
-          <p-fieldset legend="Behaviour">
-            <div class="cv-cfg-toggle-row">
-              <p-toggleSwitch id="cfg-plan-first"
-                [(ngModel)]="jobsData.planFirst"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-plan-first">Plan first — always draft a plan before acting</label>
-            </div>
+          <!--
+            "Plan first" used to live here. Nothing read it — it was echoed by
+            /api/settings and ignored — and it overlapped "Default agent mode:
+            Plan" just above, which does work. docs/39 A2.
+          -->
+          <p-fieldset legend="Safety">
             <div class="cv-cfg-toggle-row">
               <p-toggleSwitch id="cfg-ghost-kill"
                 [(ngModel)]="jobsData.ghostKillEnabled"
-                [disabled]="!isBridgeConnected()" />
+                [disabled]="!canUseApi()" />
               <label for="cfg-ghost-kill">Ghost kill — automatically stop orphaned agents</label>
             </div>
           </p-fieldset>
 
-          <p-fieldset legend="Pre-run flags">
-            <p-message severity="secondary" variant="simple"
-              text="Extra flags passed to the Cursor CLI before each job run (Cursor only). --force / --yolo are not accepted here any more — pick them under Permissions on the Voice tab." />
-            <div class="cv-cfg-flags">
-              @for (flag of jobsData.preRunFlags; track flag) {
-                <div class="cv-cfg-flag-chip">
-                  <span>{{ flag }}</span>
-                  <button class="cv-cfg-flag-remove" (click)="onRemoveFlag(flag)"
-                    [disabled]="!isBridgeConnected()" title="Remove flag">
-                    <i class="pi pi-times"></i>
-                  </button>
-                </div>
-              }
-            </div>
-            <div class="cv-cfg-flag-add-row">
-              <input pInputText [(ngModel)]="newPreRunFlag" placeholder="--flag"
-                (keydown.enter)="onAddFlag()"
-                [disabled]="!isBridgeConnected()" />
-              <p-button icon="pi pi-plus" size="small"
-                [disabled]="!isBridgeConnected() || !newPreRunFlag.trim()"
-                (onClick)="onAddFlag()" />
-            </div>
-          </p-fieldset>
+          <!-- Log level moved to Debug & Logs, which advertised it (docs/39 A3). -->
 
-          <p-fieldset legend="Logging">
-            <p-iftalabel>
-              <p-select id="cfg-log-level"
-                [options]="logLevelOptions" optionLabel="label" optionValue="value"
-                [(ngModel)]="jobsData.logLevel"
-                [disabled]="!isBridgeConnected()" />
-              <label for="cfg-log-level">Log level</label>
-            </p-iftalabel>
-          </p-fieldset>
-
-          <p-button label="Save job settings" icon="pi pi-save"
+          <p-button label="Save" icon="pi pi-save"
             [loading]="savingJobs"
-            [disabled]="!isBridgeConnected()"
+            [disabled]="!canUseApi()"
             (onClick)="onSaveJobs()" />
 
         </p-fluid>
@@ -1207,46 +1257,223 @@
     </div>
   }
 
-  <!-- ── Narrator ── -->
-  @if (activeSection() === 'narrator') {
+  <!-- ── What gets spoken (docs/39 Part B) ── -->
+  @if (activeSection() === 'spoken') {
     <div class="cv-cfg-detail">
 
-      @if (loadingNarrator && !narratorData) {
+      @if (loadingNarration && !narrationData) {
         <div class="cv-cfg-loading"><p-progressSpinner strokeWidth="3" /></div>
       }
 
-      @if (narratorData) {
+      @if (narrationData) {
         <p-fluid>
           <p-message severity="secondary" variant="simple"
-            text="Narrator still announces job start/finish and file writes. Count-only 'still working' ticks are off — the voice agent speaks milestones instead." />
+            text="One place decides what you hear. The agent's own replies come first; everything below is the bridge speaking on top of them." />
 
-          <div class="cv-cfg-toggle-row">
-            <p-toggleSwitch id="cfg-narrator-enabled"
-              [(ngModel)]="narratorData.narratorEnabled"
-              [disabled]="!isBridgeConnected()" />
-            <label for="cfg-narrator-enabled">Enable narrator</label>
-          </div>
+          <p-fieldset legend="Agent voice">
+            <div class="cv-cfg-toggle-row">
+              <p-toggleSwitch id="cfg-agent-voice-enabled"
+                [(ngModel)]="agentVoiceEnabled"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-agent-voice-enabled">Play the agent's replies aloud</label>
+            </div>
+            <p-iftalabel>
+              <p-select id="cfg-read-aloud"
+                [options]="readAloudOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="readAloud"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-read-aloud">How much of the agent's work is read aloud</label>
+            </p-iftalabel>
+            <!-- docs/40 §1: a question card used to reach a hands-free user in silence. -->
+            <p-iftalabel>
+              <p-select id="cfg-read-prompts"
+                [options]="readPromptsOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="readPrompts"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-read-prompts">Questions and plans on screen</label>
+            </p-iftalabel>
+            <div class="cv-cfg-toggle-row">
+              <p-toggleSwitch id="cfg-error-sound"
+                [(ngModel)]="errorSoundEnabled"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-error-sound">Play an error sound</label>
+            </div>
+            <div class="cv-cfg-toggle-row">
+              <p-toggleSwitch id="cfg-error-speak"
+                [(ngModel)]="errorSpeakEnabled"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-error-speak">Speak error messages</label>
+            </div>
+            <p-button label="Save" icon="pi pi-save"
+              [loading]="savingTts"
+              [disabled]="!canUseApi()"
+              (onClick)="onSaveTtsSettings()" />
+          </p-fieldset>
 
-          <p-iftalabel>
-            <p-inputNumber id="cfg-narrator-cadence"
-              [(ngModel)]="narratorData.narratorCadenceMs"
-              [min]="5000" [step]="1000" suffix=" ms"
-              [disabled]="!isBridgeConnected() || !narratorData.narratorEnabled" />
-            <label for="cfg-narrator-cadence">Cadence interval</label>
-          </p-iftalabel>
+          <p-fieldset legend="Bridge narration">
+            <p-message severity="secondary" variant="simple"
+              text="Auto speaks only when no voice agent is already narrating, so you do not hear the same milestone twice." />
 
-          <p-iftalabel>
-            <p-inputNumber id="cfg-narrator-buffer"
-              [(ngModel)]="narratorData.narratorMaxBufferEvents"
-              [min]="10" [max]="200"
-              [disabled]="!isBridgeConnected() || !narratorData.narratorEnabled" />
-            <label for="cfg-narrator-buffer">Max buffer events</label>
-          </p-iftalabel>
+            <div class="cv-cfg-toggle-row">
+              <p-toggleSwitch id="cfg-narration-enabled"
+                [(ngModel)]="narrationData.enabled"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-narration-enabled">Let the bridge narrate work</label>
+            </div>
 
-          <p-button label="Save narrator settings" icon="pi pi-save"
-            [loading]="savingNarrator"
-            [disabled]="!isBridgeConnected()"
-            (onClick)="onSaveNarrator()" />
+            <div class="cv-cfg-toggle-row">
+              <p-toggleSwitch id="cfg-narration-raw"
+                [(ngModel)]="narrationData.speakRawDetail"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-narration-raw">Read raw file paths and provider errors aloud</label>
+            </div>
+
+            @for (entry of narrationData.catalog; track entry.kind) {
+              <div class="cv-cfg-narration-row">
+                <span class="cv-cfg-narration-label">{{ narrationLabel(entry.kind) }}</span>
+                <p-selectButton
+                  [options]="narrationModeOptions" optionLabel="label" optionValue="value"
+                  [ngModel]="narrationModeOf(entry)"
+                  (ngModelChange)="onNarrationModeChange(entry, $event)"
+                  [allowEmpty]="false"
+                  [disabled]="!canUseApi()" />
+                <p-button icon="pi pi-pencil" severity="secondary" [text]="true"
+                  [disabled]="!canUseApi()"
+                  (onClick)="toggleTemplateEditor(entry)"
+                  title="Edit the wording" />
+              </div>
+              @if (editingTemplate === entry.kind) {
+                <div class="cv-cfg-narration-template">
+                  <input pInputText
+                    [ngModel]="templateOf(entry)"
+                    (ngModelChange)="onTemplateChange(entry, $event)"
+                    [placeholder]="entry.default"
+                    [disabled]="!canUseApi()" />
+                  <small>
+                    Placeholders: {{ entry.placeholders.join(', ') }}. Leave empty for the default.
+                  </small>
+                </div>
+              }
+            }
+
+            <p-iftalabel>
+              <p-inputNumber id="cfg-narration-buffer"
+                [(ngModel)]="narrationData.maxBufferEvents"
+                [min]="10" [max]="1000"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-narration-buffer">Events kept for the catch-up summary</label>
+            </p-iftalabel>
+
+            <p-button label="Save" icon="pi pi-save"
+              [loading]="savingNarration"
+              [disabled]="!canUseApi()"
+              (onClick)="onSaveNarration()" />
+          </p-fieldset>
+        </p-fluid>
+      }
+    </div>
+  }
+
+  <!-- ── Disconnect & background work (docs/36) ── -->
+  @if (activeSection() === 'session') {
+    <div class="cv-cfg-detail">
+
+      @if (loadingSession && !sessionData) {
+        <div class="cv-cfg-loading"><p-progressSpinner strokeWidth="3" /></div>
+      }
+
+      @if (sessionData) {
+        <p-fluid>
+          @if (sessionData.presence) {
+            <p-message severity="secondary" variant="simple" [text]="presenceLabel()" />
+          }
+
+          <p-fieldset legend="When your phone goes away">
+            <p-iftalabel>
+              <p-select id="cfg-away-policy"
+                [options]="awayPolicyOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="sessionData.onPhoneAway"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-away-policy">Running work should</label>
+            </p-iftalabel>
+            <p-iftalabel>
+              <p-inputNumber id="cfg-grace"
+                [ngModel]="sessionData.graceMs / 1000"
+                (ngModelChange)="sessionData.graceMs = $event * 1000"
+                [min]="0" [max]="300" [step]="5" suffix=" s"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-grace">Wait this long before counting you as away</label>
+            </p-iftalabel>
+            <p-message severity="secondary" variant="simple"
+              text="A tunnel blip, a Wi-Fi handover or an app switch all drop the connection for a few seconds. Hanging up on purpose skips the wait." />
+          </p-fieldset>
+
+          <p-fieldset legend="When the bridge restarts">
+            <p-iftalabel>
+              <p-select id="cfg-restart-policy"
+                [options]="restartPolicyOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="sessionData.onBridgeRestart"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-restart-policy">Running agents should</label>
+            </p-iftalabel>
+          </p-fieldset>
+
+          <p-fieldset legend="Unattended work">
+            <p-iftalabel>
+              <p-inputNumber id="cfg-away-runtime"
+                [ngModel]="sessionData.unattended.maxRuntimeMs / 60000"
+                (ngModelChange)="sessionData.unattended.maxRuntimeMs = $event * 60000"
+                [min]="1" [step]="15" [maxFractionDigits]="0" suffix=" min"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-away-runtime">Budget per away period</label>
+            </p-iftalabel>
+            <p-iftalabel>
+              <p-inputNumber id="cfg-away-tools"
+                [(ngModel)]="sessionData.unattended.maxToolCalls"
+                [min]="0" [step]="50"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-away-tools">Tool-call budget (0 = no limit)</label>
+            </p-iftalabel>
+            <p-iftalabel>
+              <p-select id="cfg-away-approvals"
+                [options]="awayApprovalOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="sessionData.unattended.approvals"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-away-approvals">An approval while you are away</label>
+            </p-iftalabel>
+            <p-iftalabel>
+              <p-inputNumber id="cfg-away-approval-timeout"
+                [ngModel]="sessionData.unattended.approvalTimeoutMs / 60000"
+                (ngModelChange)="sessionData.unattended.approvalTimeoutMs = $event * 60000"
+                [min]="1" [step]="5" [maxFractionDigits]="0" suffix=" min"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-away-approval-timeout">Keep that card open for</label>
+            </p-iftalabel>
+            <p-iftalabel>
+              <p-select id="cfg-away-secrets"
+                [options]="awaySecretOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="sessionData.unattended.secrets"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-away-secrets">A sudo or ssh password while you are away</label>
+            </p-iftalabel>
+            <div class="cv-cfg-toggle-row">
+              <p-toggleSwitch id="cfg-away-worktree"
+                [(ngModel)]="sessionData.unattended.requireWorktree"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-away-worktree">Only run unattended work inside a git worktree</label>
+            </div>
+            <div class="cv-cfg-toggle-row">
+              <p-toggleSwitch id="cfg-away-notify"
+                [(ngModel)]="sessionData.unattended.notifyOnFinish"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-away-notify">Push me when work finishes while I am away</label>
+            </div>
+          </p-fieldset>
+
+          <p-button label="Save" icon="pi pi-save"
+            [loading]="savingSession"
+            [disabled]="!canUseApi()"
+            (onClick)="onSaveSessionPolicy()" />
         </p-fluid>
       }
     </div>
@@ -1291,11 +1518,28 @@
         <p-fieldset legend="Session state">
           <p-message severity="secondary" variant="simple"
             text="Session state tracks the active project and model per connection. Clearing it resets all sessions." />
-          <p-button label="Clear all sessions" icon="pi pi-trash"
-            severity="danger" [outlined]="true"
-            [loading]="clearingSessions"
-            [disabled]="!isBridgeConnected()"
-            (onClick)="onClearSessions()" />
+          <!--
+            docs/39 A9: this was a one-tap destructive action with no
+            confirmation, sitting next to read-only stats.
+          -->
+          @if (confirmingClearSessions) {
+            <p-message severity="warn" variant="simple"
+              text="This clears the active project, model and resume state for every session. Running work is not affected." />
+            <div class="cv-cfg-row-actions">
+              <p-button label="Yes, clear them" icon="pi pi-trash"
+                severity="danger"
+                [loading]="clearingSessions"
+                [disabled]="!canUseApi()"
+                (onClick)="onClearSessions()" />
+              <p-button label="Cancel" severity="secondary" [outlined]="true"
+                (onClick)="confirmingClearSessions = false" />
+            </div>
+          } @else {
+            <p-button label="Clear all sessions" icon="pi pi-trash"
+              severity="danger" [outlined]="true"
+              [disabled]="!canUseApi()"
+              (onClick)="confirmingClearSessions = true" />
+          }
         </p-fieldset>
 
         @if (auditEntries.length > 0) {
@@ -1335,6 +1579,23 @@
 
         @if (jsonLoadError) {
           <p-message severity="error" variant="simple" [text]="jsonLoadError" />
+        }
+
+        <!-- docs/39 A3: the log level was under Jobs while this section named it. -->
+        @if (jobsData) {
+          <p-fieldset legend="Logging">
+            <p-iftalabel>
+              <p-select id="cfg-log-level"
+                [options]="logLevelOptions" optionLabel="label" optionValue="value"
+                [(ngModel)]="jobsData.logLevel"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-log-level">Log level</label>
+            </p-iftalabel>
+            <p-button label="Save" icon="pi pi-save"
+              [loading]="savingJobs"
+              [disabled]="!canUseApi()"
+              (onClick)="onSaveJobs()" />
+          </p-fieldset>
         }
 
         <p-iftalabel>

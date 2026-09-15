@@ -9,19 +9,25 @@
  *   Voice I/O    — speak, done, next_voice_turn
  *   Identity     — get_session_ref
  *   Agents       — list_agents, get_agent_status, get_agent_output,
- *                  spawn_agent, stop_agent, inject, revert_agent
+ *                  spawn_agent, stop_agent, execute_plan, revert
+ *   Sessions     — list_sessions, send_to_session, check_messages
  *   Jobs         — list_jobs_history
- *   Mode         — set_mode, execute_plan
  *   Project      — agent_list_projects, agent_set_project, agent_manage_projects
- *   Model        — agent_list_models, agent_set_model
- *   Execute      — agent_submit, agent_ask, agent_recall_answer
- *   Job tracking — agent_job_status, agent_job_stop
- *   Session      — agent_new_session, agent_session_info
- *   Git          — agent_diff, agent_revert
- *   System       — agent_info, agent_status
+ *   Model        — agent_list_models, agent_set_model, agent_permission_mode
+ *   Execute      — agent_ask, agent_recall_answer
+ *   Session      — agent_new_session
+ *   Git          — agent_diff
+ *   System       — agent_provider_info
  *   MCP inspect  — agent_mcp_list, agent_mcp_tools
+ *   Away policy  — agent_away_policy
  *   User display — show_images
  *   User interact — request_user_input, submit_plan_for_approval
+ *
+ * Deprecated aliases kept for one release (docs/40 §2): agent_submit →
+ * spawn_agent, agent_job_status → get_agent_status, agent_job_stop →
+ * stop_agent, revert_agent / agent_revert → revert, agent_session_info →
+ * get_session_ref(project), agent_info / agent_status → agent_provider_info,
+ * set_mode → spawn_agent's `mode`, inject → send_to_session.
  *
  * Transport: MCP Streamable HTTP (preferred over legacy SSE).
  * Auth: same Bearer token as /api/*.
@@ -58,8 +64,24 @@ import { PERMISSION_PROMPT_TOOL } from '../../providers/agents/permissions.js';
 import { getActiveProvider } from '../../providers/agents/registry.js';
 import { notifyPhone } from '../../push/notifyPhone.js';
 import { instrumentMcpToolLogging } from './toolLogging.js';
+import { instrumentListenerEnvelope } from './listenerEnvelope.js';
+import {
+  handleListSessions,
+  handleSendToSession,
+  handleCheckMessages,
+  handleInject,
+} from './sessionToolHandlers.js';
 import { handleShowImages } from './imageToolHandlers.js';
 import { voiceTurnQueue } from './turnQueue.js';
+import {
+  approvalPolicy,
+  isListening,
+  effectiveAwayPolicy,
+  setConversationAwayPolicy,
+  getConversationAwayPolicy,
+} from '../../state/awayPolicy.js';
+import { AWAY_POLICIES, getConfig } from '../../config.js';
+import { phrase, shouldSpeakNarration, narrationPayload } from '../../voice/phrases.js';
 
 const log = childLogger('mcp:server');
 
@@ -113,6 +135,9 @@ function buildMcpServer(sessionKey: string): McpServer {
   );
 
   instrumentMcpToolLogging(server);
+  // Applied after the logging wrapper so the envelope lands on the outermost
+  // result — the one the CLI actually receives.
+  instrumentListenerEnvelope(server, sessionKey);
 
   // ── Voice I/O ──────────────────────────────────────────────────────────
 
@@ -165,12 +190,25 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'get_session_ref',
-    'Get your current identity: voice agent run ID, CLI session ID (resume ref), ' +
-      'MCP session ID, active job ID, active project, active model, and preferred spawn mode. ' +
+    'Who and where you are: voice agent run id, CLI session id (resume ref), MCP session id, ' +
+      'active job id, active project, active model and preferred spawn mode. ' +
+      'Pass `project` to also get that project\'s persisted state — its resume id, last job and ' +
+      'last run time — which is what agent_session_info returned. ' +
       'Call this to orient yourself after a resume or when session state is unclear.',
-    {},
-    async () => {
-      const result = agentTools.handleGetSessionRef();
+    {
+      project: z
+        .string()
+        .optional()
+        .describe("Include this project's persisted session state in the answer."),
+    },
+    async ({ project }) => {
+      const identity = agentTools.handleGetSessionRef();
+      const result = project
+        ? {
+            ...identity,
+            project_session: await dispatchTool('agent_session_info', { project }, sessionKey),
+          }
+        : identity;
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
@@ -219,7 +257,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'spawn_agent',
-    'Start a new worker agent with the given coding instructions. ' +
+    'Start a worker agent with the given coding instructions. The one way to start work — ' +
+      'agent_submit is a deprecated alias for this. ' +
       'Modes: agent (default, applies changes), plan (proposes then waits), ' +
       'ask (read-only), debug (instruments and investigates). ' +
       'Set use_worktree: true to run in an isolated git worktree alongside the current worker ' +
@@ -229,12 +268,14 @@ function buildMcpServer(sessionKey: string): McpServer {
       "Don't start silently.",
     {
       instructions: z.string().min(1).describe("The coding task — use the user's words."),
+      project: z.string().optional().describe('Target project (defaults to the active project).'),
       mode: z
         .enum(['agent', 'plan', 'ask', 'debug'])
         .optional()
         .describe(
           'agent = apply changes; plan = propose only; ask = read-only; ' +
-          'debug = agent mode with debugging focus. Default: stored preference or "agent".',
+          'debug = agent mode with debugging focus. Pass it here rather than calling ' +
+          'set_mode first. Default: stored preference or "agent".',
         ),
       use_worktree: z
         .boolean()
@@ -254,9 +295,10 @@ function buildMcpServer(sessionKey: string): McpServer {
           'Append browser snapshot workflow — use for UI work or when the user says "Browser".',
         ),
     },
-    async ({ instructions, mode, use_worktree, worktree_name, browser }) => {
+    async ({ instructions, project, mode, use_worktree, worktree_name, browser }) => {
       const result = await agentTools.handleSpawnAgent({
         instructions,
+        project,
         mode,
         use_worktree,
         worktree_name,
@@ -273,7 +315,18 @@ function buildMcpServer(sessionKey: string): McpServer {
       'The API rejects this unless the user explicitly issued a recent stop/cancel command.',
     { id: z.string().min(1).describe('Agent or job ID from list_agents.') },
     async ({ id }) => {
-      if (hasActiveVoiceSession() && !voiceTurnQueue.checkAndClearInterrupt()) {
+      /**
+       * The guard used to be conditional on a voice session existing, so with
+       * the phone gone — exactly when nobody can object — an agent could stop
+       * any worker it liked (docs/36 §4 rails). The rule is the same either
+       * way: only a recent explicit user stop command releases it.
+       *
+       * The one exception is the away policy `stop_all`, which IS the user's
+       * standing instruction to stop.
+       */
+      const userAskedToStopEverything =
+        !isListening() && effectiveAwayPolicy() === 'stop_all';
+      if (!userAskedToStopEverything && !voiceTurnQueue.checkAndClearInterrupt()) {
         return {
           content: [
             {
@@ -293,26 +346,142 @@ function buildMcpServer(sessionKey: string): McpServer {
     },
   );
 
+  // ── Session directory (docs/37) ────────────────────────────────────────
+
+  server.tool(
+    'list_sessions',
+    'List every agent session the user could mean: the voice agent, bridge workers, ' +
+      'past conversations in each CLI\'s own store, and live sessions the user started ' +
+      'themselves in a terminal. Each row has a spoken name ("auth worker"), its status, ' +
+      'and `delivery` — how a message would actually reach it. Only sessions inside a ' +
+      'registered project are listed.',
+    {
+      scope: z
+        .enum(['all', 'running', 'bridge', 'external', 'recent'])
+        .optional()
+        .describe('all (default), running, bridge (ours only), external, or recent.'),
+      project: z.string().optional().describe('Restrict to one project by name.'),
+    },
+    async ({ scope, project }) => {
+      const result = handleListSessions({ scope, project });
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    'send_to_session',
+    'Send a message from the user into a running or past agent session. ' +
+      'Takes a handle, a spoken name ("the auth worker"), or an ordinal ("the second one"). ' +
+      'The result says how it was delivered — live, mailbox_pending, fork, resume or refused — ' +
+      'and you must tell the user which one happened rather than just saying "sent". ' +
+      'External sessions, forks and stop-then-resume always need confirm: true; read the ' +
+      'target, the method and the message back to the user first.',
+    {
+      handle: z.string().min(1).describe('Handle, spoken name, or ordinal from list_sessions.'),
+      message: z.string().min(1).max(8_000).describe("The user's message, relayed as they said it."),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe('The user has confirmed this exact send. Required for external sessions and forks.'),
+      project: z.string().optional(),
+    },
+    async ({ handle, message, confirm, project }) => {
+      const result = handleSendToSession({ handle, message, confirm, project });
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    'check_messages',
+    'Collect messages the user sent into your session while you were working. ' +
+      'Call it when a tool result shows `pending_messages` above zero. ' +
+      'Messages are handed over once — treat them as instructions that arrived mid-task.',
+    {
+      session: z
+        .string()
+        .optional()
+        .describe('Your own session handle. Omit to use the one this MCP session is bound to.'),
+    },
+    async ({ session }) => {
+      const result = handleCheckMessages({ session }, sessionKey);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
   server.tool(
     'inject',
-    'Send additional context to a running agent (best-effort stdin write). ' +
-      'If not delivered, fall back to stop_agent() + spawn_agent() with amended instructions.',
+    'Deprecated alias for send_to_session — kept for one release. ' +
+      'Sends a message into a running session and reports how it was delivered. ' +
+      'Unlike the old implementation it also reaches worktree workers and the voice agent. ' +
+      'The same confirmation rules apply: external sessions, forks and stop-then-resume ' +
+      'need confirm: true after reading the target, the method and the message back.',
     {
-      id: z.string().min(1).describe('Agent ID.'),
-      message: z.string().min(1).describe('Context to inject into the running agent.'),
+      id: z.string().min(1).describe('Session handle or spoken name.'),
+      message: z.string().min(1).describe('The message to deliver.'),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe('The user has confirmed this exact send. Required for external sessions and forks.'),
     },
-    async ({ id, message }) => {
-      const result = await agentTools.handleInject({ id, message });
+    async ({ id, message, confirm }) => {
+      const result = handleInject({ id, message, confirm });
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    'revert',
+    'Undo agent changes. `to: "checkpoint"` (needs `id`) rewinds to the git checkpoint taken ' +
+      'before that job ran; `to: "head"` (the default) drops uncommitted changes in the project. ' +
+      'Uncommitted work is stashed, which is reversible; a hard reset over agent commits is not, ' +
+      'and needs confirm: true after you have said out loud exactly what will be lost. ' +
+      'Replaces revert_agent and agent_revert, which stay as deprecated aliases.',
+    {
+      to: z
+        .enum(['checkpoint', 'head'])
+        .optional()
+        .describe('checkpoint = back to before a job ran (needs id); head = drop uncommitted work.'),
+      id: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Job ID, required for to: "checkpoint" (from list_jobs_history or spawn_agent).'),
+      project: z.string().optional().describe('Project for to: "head" (defaults to active).'),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe('Required for a hard reset over agent commits. Confirm with the user first.'),
+    },
+    async ({ to, id, project, confirm }) => {
+      const target = to ?? (id ? 'checkpoint' : 'head');
+      if (target === 'checkpoint') {
+        if (!id) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({
+                  ok: false,
+                  error: 'ID_REQUIRED',
+                  message: 'to: "checkpoint" needs the job id to rewind to. Call list_jobs_history().',
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+        const result = await agentTools.handleRevertAgent({ id, confirm });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+      const result = await dispatchTool('agent_revert', { project, confirm }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
 
   server.tool(
     'revert_agent',
-    'Revert a project to the git checkpoint recorded before a specific job ran. ' +
-      'Uncommitted changes: git stash (safe, reversible). ' +
-      'Agent-committed changes: git reset --hard (destructive — requires confirm: true). ' +
-      'Always confirm with the user before calling with confirm: true.',
+    'Deprecated alias — use revert({ to: "checkpoint", id }). ' +
+      'Reverts a project to the git checkpoint recorded before a specific job ran.',
     {
       id: z
         .string()
@@ -357,8 +526,9 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'set_mode',
-    'Store the preferred spawn mode for this session. ' +
-      'The next spawn_agent() call will use this mode if no explicit mode is given. ' +
+    'Deprecated — pass `mode` to spawn_agent instead. ' +
+      'Stores the preferred spawn mode for this session; ' +
+      'the next spawn_agent() call uses it if no explicit mode is given. ' +
       'Modes: agent (default), plan (propose before apply), ask (read-only), ' +
       'debug (agent + debugging focus). ' +
       'Does NOT restart or modify any running agent.',
@@ -499,13 +669,52 @@ function buildMcpServer(sessionKey: string): McpServer {
     },
   );
 
+  server.tool(
+    'agent_away_policy',
+    'Read or set what happens to running work when the user puts their phone down. ' +
+      'Call with no arguments to read the policy in force. Pass `policy` when the user ' +
+      'says something like "keep going while I am away" or "stop if you lose me" — ' +
+      'the override lasts for this conversation only and does not change their saved setting. ' +
+      'keep_working = finish the task alone; finish_turn = wrap up the current step then stop; ' +
+      'stop_all = reach a safe point and stop.',
+    {
+      policy: z
+        .enum(AWAY_POLICIES)
+        .optional()
+        .describe('Policy for this conversation. Omit to just read.'),
+      clear: z
+        .boolean()
+        .optional()
+        .describe('Drop the conversation override and go back to the saved setting.'),
+    },
+    async ({ policy, clear }) => {
+      if (clear) setConversationAwayPolicy(null);
+      else if (policy) setConversationAwayPolicy(policy);
+      const saved = getConfig().settings.session.onPhoneAway;
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({
+              ok: true,
+              policy: effectiveAwayPolicy(),
+              saved_default: saved,
+              override: getConversationAwayPolicy(),
+              choices: AWAY_POLICIES,
+            }),
+          },
+        ],
+      };
+    },
+  );
+
   // ── Execution ──────────────────────────────────────────────────────────
 
   server.tool(
     'agent_submit',
-    'Submit a coding task to the active agent CLI (worker). ' +
-      'Returns immediately with a job_id. Track progress with agent_job_status or get_agent_status. ' +
-      'Takes a git checkpoint automatically — use revert_agent to undo if needed.',
+    'Deprecated alias for spawn_agent — use spawn_agent. ' +
+      'Submits a coding task to the active agent CLI and returns a job_id immediately. ' +
+      'Takes a git checkpoint automatically; undo with revert.',
     {
       prompt: z
         .string()
@@ -525,11 +734,13 @@ function buildMcpServer(sessionKey: string): McpServer {
         ),
     },
     async ({ prompt, project, mode, browser }) => {
-      const result = await dispatchTool(
-        'agent_submit',
-        { prompt, project, mode, browser },
-        sessionKey,
-      );
+      // One implementation, two names, for one release (docs/40 §2).
+      const result = await agentTools.handleSpawnAgent({
+        instructions: prompt,
+        project,
+        mode,
+        browser,
+      });
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
@@ -573,8 +784,9 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_job_status',
-    'Poll a running or completed job. Returns status, recent progress events, summary, ' +
-      'diffstat, and session ID. Call periodically while waiting for a long job.',
+    'Deprecated alias for get_agent_status — use get_agent_status, which takes an agent id ' +
+      'or a job id. Polls a running or completed job and returns status, recent progress, ' +
+      'summary, diffstat and session id.',
     {
       job_id: z
         .string()
@@ -590,8 +802,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_job_stop',
-    'Terminate the active agent_submit job (SIGTERM → SIGKILL). ' +
-      'Does not cancel in-flight agent_ask calls — those run to completion.',
+    'Deprecated alias for stop_agent — use stop_agent, which takes an agent id or a job id ' +
+      'and keeps the user-confirmation guard. Does not cancel in-flight agent_ask calls.',
     {
       job_id: z
         .string()
@@ -622,8 +834,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_session_info',
-    'Read the persisted session state for a project: resume ID, last job, last run time. ' +
-      'Useful for narrating "you were last working on X twenty minutes ago".',
+    'Deprecated alias — get_session_ref(project) returns the same persisted state alongside ' +
+      'your own identity. Reads a project\'s resume id, last job and last run time.',
     {
       project: z.string().optional().describe('Project to query (defaults to active project).'),
     },
@@ -652,9 +864,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_revert',
-    'Revert uncommitted changes in the active project. ' +
-      'Uncommitted: git stash (safe). Agent-committed: git reset --hard (requires confirm: true). ' +
-      'Always confirm with the user before hard reset.',
+    'Deprecated alias — use revert({ to: "head" }). ' +
+      'Reverts uncommitted changes in a project; a hard reset over agent commits needs confirm: true.',
     {
       project: z.string().optional().describe('Project to revert (defaults to active project).'),
       confirm: z
@@ -671,9 +882,29 @@ function buildMcpServer(sessionKey: string): McpServer {
   // ── System ─────────────────────────────────────────────────────────────
 
   server.tool(
+    'agent_provider_info',
+    'Everything about the CLI currently running the work: version, default model, OS, account, ' +
+      'and whether it is signed in. Answers both "what model are you using?" and ' +
+      '"are you ready to run jobs?" in one call. ' +
+      'Replaces agent_info and agent_status, which are kept as deprecated aliases.',
+    {},
+    async () => {
+      // Version and auth were two tools purely because they were written at
+      // different times; the agent almost always wanted both (docs/40 §2).
+      const [info, status] = await Promise.all([
+        dispatchTool('agent_info', {}, sessionKey),
+        dispatchTool('agent_status', {}, sessionKey),
+      ]);
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ ...(info as object), ...(status as object) }) }],
+      };
+    },
+  );
+
+  server.tool(
     'agent_info',
-    'Get CLI version, default model, OS, and account info for the active agent provider ' +
-      "(Cursor, Codex, or Claude Code). Use when the user asks 'what model are you using?'",
+    'Deprecated alias — use agent_provider_info. ' +
+      'CLI version, default model, OS and account for the active agent provider.',
     {},
     async () => {
       const result = await dispatchTool('agent_info', {}, sessionKey);
@@ -683,8 +914,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_status',
-    'Check authentication status of the active agent provider. ' +
-      'Returns authenticated, email, and provider id. Use to verify the CLI is ready before jobs.',
+    'Deprecated alias — use agent_provider_info. ' +
+      'Authentication status of the active agent provider.',
     {},
     async () => {
       const result = await dispatchTool('agent_status', {}, sessionKey);
@@ -697,8 +928,9 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_mcp_list',
-    'List MCP servers the Cursor CLI has configured, and their load status. Cursor-only diagnostic. ' +
-      'Informational — shows what MCPs the worker agents can use.',
+    "List the MCP servers the active agent CLI has configured, and their load status. " +
+      'Works for whichever CLI is running; a CLI with no such command comes back ' +
+      'supported: false with the reason, not an error.',
     {},
     async () => {
       const result = await dispatchTool('agent_mcp_list', {}, sessionKey);
@@ -708,8 +940,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_mcp_tools',
-    'List tools exposed by a specific executor MCP server. ' +
-      'Use to discover what tools are available to worker agents from a given server.',
+    'List the tools one of the agent CLI\'s MCP servers exposes. ' +
+      'Some CLIs list every server at once — the result says so with all_servers: true.',
     {
       server: z.string().describe('MCP server identifier from agent_mcp_list.'),
     },
@@ -779,11 +1011,12 @@ function buildMcpServer(sessionKey: string): McpServer {
   server.tool(
     'request_user_input',
     'Ask the user a question and wait for their spoken or tapped reply. ' +
-      'The PWA shows a prompt card; the user answers by voice or tap. ' +
+      'The PWA shows a prompt card and, unless the user has turned that off, reads it aloud. ' +
       'This tool BLOCKS until the user responds, a new voice/text turn arrives, or timeout_ms elapses. ' +
       'If the user speaks/types while waiting, returns { interrupted: true, user_turn } instead of an answer — treat that as the new request. ' +
       'Use for yes/no decisions, short choices, or free-text clarifications. ' +
-      'Do NOT call speak() before this — the PWA card is the notification.',
+      'Do NOT call speak() with the same question first: the card speaks it, so you would ask it twice. ' +
+      'If nobody is listening the away policy answers for the user — read `away` in the result.',
     {
       question: z.string().min(1).max(1000).describe('The question to display and read aloud to the user.'),
       input_type: z
@@ -808,13 +1041,23 @@ function buildMcpServer(sessionKey: string): McpServer {
         .describe('How long to wait for a response (default 120 000 ms = 2 min).'),
     },
     async ({ question, input_type, options, timeout_ms }) => {
-      if (!hasActiveVoiceSession()) {
+      /**
+       * With nobody listening this used to be a flat NO_VOICE_SESSION, so an
+       * unattended run stalled on its first question. The away policy decides
+       * instead: keep the card open on a push, answer no, or decline this one
+       * step and let the agent carry on elsewhere (docs/36 §4).
+       */
+      const policy = approvalPolicy(timeout_ms ?? 120_000);
+      if (policy.action !== 'ask') {
         return voiceToolResponse({
-          error: 'NO_VOICE_SESSION',
-          message: NO_VOICE_SESSION_ERROR,
+          answered_by: 'away_policy',
+          decision: policy.action,
+          answer: policy.action === 'deny' ? 'no' : '',
+          away: true,
+          message: policy.message ?? undefined,
         });
       }
-      const timeout = timeout_ms ?? 120_000;
+      const timeout = policy.timeoutMs;
 
       const { request_id, promise } = registerRequest((id) => {
         const req: UserInputRequest = {
@@ -882,6 +1125,28 @@ function buildMcpServer(sessionKey: string): McpServer {
     async ({ tool_name, input }) => {
       const provider = getActiveProvider();
       const summary = summarizeToolUse(tool_name, input);
+      /**
+       * A CLI permission prompt with nobody listening follows the away policy
+       * rather than sitting open for five minutes (docs/36 §4). `deny` and
+       * `skip` both answer no — the difference is what the agent is told to do
+       * next — and neither ever silently allows.
+       */
+      const away = approvalPolicy(300_000);
+      if (away.action !== 'ask') {
+        log.info({ tool_name, action: away.action }, 'permission prompt answered by the away policy');
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                behavior: 'deny',
+                message: away.message ?? 'The user is away.',
+              }),
+            },
+          ],
+        };
+      }
+
       const { request_id, promise } = registerRequest((id) => {
         const req: PermissionRequest = {
           kind: 'permission',
@@ -893,12 +1158,15 @@ function buildMcpServer(sessionKey: string): McpServer {
         };
         void notifyPhone({ type: 'permission_request', ...req });
         return req;
-      }, 300_000);
-      void notifyPhone({
-        type: 'narration',
-        kind: 'permission',
-        text: `${provider.displayName} wants to run ${summary}. Say yes or no, or answer on your phone.`,
-      });
+      }, away.timeoutMs);
+      void notifyPhone(
+        narrationPayload({
+          kind: 'permission',
+          text: phrase('permission', { provider: provider.displayName, summary }),
+          speak: shouldSpeakNarration('permission', { agentOwnsNarration: false }),
+          data: { tool_name, summary },
+        }),
+      );
       log.info({ request_id, tool_name, summary: summary.slice(0, 120) }, 'permission prompt relayed to phone');
 
       const decision = (behavior: 'allow' | 'deny', message?: string) => ({
@@ -969,13 +1237,16 @@ function buildMcpServer(sessionKey: string): McpServer {
         .describe('How long to wait for a response (default 180 000 ms = 3 min).'),
     },
     async ({ title, steps, estimated_impact, timeout_ms }) => {
-      if (!hasActiveVoiceSession()) {
+      const policy = approvalPolicy(timeout_ms ?? 180_000);
+      if (policy.action !== 'ask') {
         return voiceToolResponse({
-          error: 'NO_VOICE_SESSION',
-          message: NO_VOICE_SESSION_ERROR,
+          decision: 'rejected',
+          answered_by: 'away_policy',
+          away: true,
+          message: policy.message ?? undefined,
         });
       }
-      const timeout = timeout_ms ?? 180_000;
+      const timeout = policy.timeoutMs;
 
       const { request_id, promise } = registerRequest((id) => {
         const req: PlanApprovalRequest = {

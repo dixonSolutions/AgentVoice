@@ -30,6 +30,7 @@ import { getConfig } from '../config.js';
 import { childLogger } from '../log.js';
 import { getActiveProvider } from '../providers/agents/registry.js';
 import { registerVoiceSession } from '../mcp/server/voiceToolHandlers.js';
+import { getPresence, type PresenceClient } from '../state/presence.js';
 import { getPendingApprovals } from '../mcp/server/approvalRegistry.js';
 import { applyApprovalResponse } from '../mcp/server/approvalResponses.js';
 import { voiceTurnQueue } from '../mcp/server/turnQueue.js';
@@ -75,6 +76,10 @@ export function registerEventsSocket(app: FastifyInstance): void {
       let authenticated = false;
       let unregisterVoice: (() => void) | null = null;
       let unsubscribe: (() => void) | null = null;
+      // Desk clients are tracked but are NOT listeners: the away policies in
+      // docs/36 act on phone presence. A VS Code window open on another
+      // machine must not make the bridge think someone is holding a phone.
+      let presence: PresenceClient | null = null;
 
       const send = (payload: unknown): void => {
         if (socket.readyState === WS_OPEN) socket.send(JSON.stringify(payload));
@@ -93,6 +98,10 @@ export function registerEventsSocket(app: FastifyInstance): void {
           authenticated = true;
           unregisterVoice = registerVoiceSession(send);
           unsubscribe = subscribeEvents(send);
+          // No server-side ping here: desk clients already drive their own
+          // `ping` → `pong` exchange, and an unsolicited server ping would be
+          // unanswered by every shipped extension build and then reaped.
+          presence = getPresence().register({ kind: 'desk' });
           send({ type: 'auth_ok', sessionKey: 'default', client: 'events', ...deskStateSnapshot() });
           log.info('events ws authenticated');
           return;
@@ -105,6 +114,8 @@ export function registerEventsSocket(app: FastifyInstance): void {
           send({ type: 'error', message: 'Invalid JSON' });
           return;
         }
+
+        presence?.alive();
 
         switch (msg['type']) {
           case 'ping':
@@ -151,6 +162,8 @@ export function registerEventsSocket(app: FastifyInstance): void {
       });
 
       socket.on('close', () => {
+        presence?.release();
+        presence = null;
         unregisterVoice?.();
         unsubscribe?.();
         unregisterVoice = null;

@@ -1,0 +1,78 @@
+# nfpm recipe for the AgentVoice .deb / .rpm (docs/38, #58).
+#
+# Three decisions this file encodes, all of them load-bearing:
+#
+#   Node is bundled. Debian 12 and Ubuntu 24.04 ship Node 18 while `engines`
+#   needs >= 20, and `better-sqlite3` is an ABI-bound native module — the
+#   binary has to match the runtime that loads it. Depending on a distro Node
+#   would mean the binding breaks on the next Node major the distro ships.
+#   The cost is owning Node's security updates, which is the accepted trade.
+#
+#   One package per architecture. That is the same `better-sqlite3` binding:
+#   amd64 and arm64 need different binaries, so the PWA (which is entirely
+#   architecture-independent) is carried in both rather than split out into a
+#   noarch package that would double the repository's moving parts.
+#
+#   The unit is a *user* unit and is NOT enabled. The bridge has to run as the
+#   developer: it spawns `claude`, `cursor-agent` and `codex` with their
+#   credentials, writes ~/.cursor/mcp.json, ~/.codex/config.toml and
+#   ~/.claude.json, and edits the user's projects. A package cannot enable a
+#   user unit for a user who has not logged in yet, and it must not guess which
+#   human on the box is the developer — so postinstall prints the two commands
+#   and stops.
+#
+# Populated by .github/workflows/npm-publish.yml, which stages the payload into
+# packaging/root/ before calling nfpm.
+name: agentvoice
+arch: ${PKG_ARCH}
+platform: linux
+version: ${PKG_VERSION}
+section: devel
+priority: optional
+maintainer: dixonSolutions <noreply@users.noreply.github.com>
+description: |
+  Self-hosted voice bridge for Cursor, Codex, Claude Code and Codewhale.
+  Talk to your coding agents from your phone — the bridge runs on your own
+  machine and the agents run as you.
+vendor: AgentVoice
+homepage: https://github.com/dixonSolutions/AgentVoice
+license: MIT
+
+# The speech server is a container image, not a package, so it is a suggestion.
+# git is what the checkpoint/revert paths shell out to.
+depends:
+  - git
+recommends:
+  - ca-certificates
+suggests:
+  - podman
+
+contents:
+  - src: ./root/usr/lib/agentvoice
+    dst: /usr/lib/agentvoice
+    type: tree
+
+  - src: ./root/usr/bin/agentvoice
+    dst: /usr/bin/agentvoice
+    file_info:
+      mode: 0755
+
+  # Not enabled: post-install prints how, and by which user.
+  - src: ./root/usr/lib/systemd/user/agentvoice.service
+    dst: /usr/lib/systemd/user/agentvoice.service
+
+  # The .install-source marker src/serve/installMode.ts reads — so the Serve
+  # page shows `apt` / `dnf` instead of an update button it cannot honour — is
+  # written by packaging/stage.sh and carried by the tree entry above. Listing
+  # it again here is a content collision, not a second copy.
+
+scripts:
+  postinstall: ./scripts/postinstall.sh
+  preremove: ./scripts/preremove.sh
+
+deb:
+  fields:
+    Bugs: https://github.com/dixonSolutions/AgentVoice/issues
+
+rpm:
+  group: Development/Tools

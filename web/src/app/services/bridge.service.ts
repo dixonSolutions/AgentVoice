@@ -76,6 +76,16 @@ export interface VoiceSessionPrepareResult {
 export interface NarrationEvent {
   text: string;
   kind?: string;
+  /**
+   * Whether this line should be played aloud. The bridge decides per event
+   * (docs/39 Part B); the event itself always travels so push notifications
+   * and the orb's state survive narration being switched off.
+   *
+   * Older bridges do not send it — undefined means "speak", which is what
+   * they meant.
+   */
+  speak?: boolean;
+  data?: Record<string, unknown>;
 }
 
 // ── Approval push types ────────────────────────────────────────────────────
@@ -179,6 +189,16 @@ export class BridgeService {
   readonly authFailed$ = new Subject<void>();
 
   // ── Approval push observable ───────────────────────────────────────────
+
+  /**
+   * What the bridge says is running right now — a voice turn in progress, how
+   * many workers, and how many approval cards are open. Source of truth for
+   * the orb's working ring, re-sent on reconnect so it is correct after the
+   * phone comes back (docs/40 §3).
+   */
+  readonly agentBusy = signal<{ voiceTurnActive: boolean; workers: number; pendingApprovals: number }>(
+    { voiceTurnActive: false, workers: 0, pendingApprovals: 0 },
+  );
 
   /** Emits when the bridge pushes a user_input_request or plan_approval_request. */
   readonly approvalRequest$ = new Subject<ApprovalRequest>();
@@ -302,6 +322,19 @@ export class BridgeService {
       this._reconnectTimer = null;
     }
     if (this._ws) {
+      /**
+       * Say goodbye on purpose (docs/36 §1). A socket that just closes is
+       * indistinguishable from a tunnel blip, so the bridge would hold the
+       * grace window open for 45 s before applying the away policy. Hanging up
+       * explicitly applies it straight away.
+       */
+      if (this._ws.readyState === WebSocket.OPEN) {
+        try {
+          this._ws.send(JSON.stringify({ type: 'hangup' }));
+        } catch {
+          // A socket that cannot take the frame is already gone.
+        }
+      }
       this._ws.close();
       this._ws = null;
     }
@@ -569,6 +602,31 @@ export class BridgeService {
     }
 
     switch (msg['type']) {
+      /**
+       * Server heartbeat (docs/36 §1). Answering it is what lets the bridge
+       * tell a live connection from a half-open one — without the pong, a
+       * phone that dropped off Wi-Fi looks connected until TCP gives up.
+       */
+      case 'ping':
+        if (this._ws?.readyState === WebSocket.OPEN) {
+          this._ws.send(JSON.stringify({ type: 'pong' }));
+        }
+        break;
+
+      /**
+       * The bridge's own account of what is running (docs/40 §3). The orb used
+       * to guess this from narration, so it was wrong after a reconnect and
+       * wrong whenever narration was off.
+       */
+      case 'agent_busy': {
+        this.agentBusy.set({
+          voiceTurnActive: msg['voice_turn_active'] === true,
+          workers: typeof msg['workers'] === 'number' ? msg['workers'] : 0,
+          pendingApprovals: typeof msg['pending_approvals'] === 'number' ? msg['pending_approvals'] : 0,
+        });
+        break;
+      }
+
       case 'auth_ok':
         this.wsStatus.set('connected');
         this.apiStatus.set('ok');
@@ -580,7 +638,15 @@ export class BridgeService {
         const text = msg['text'] as string | undefined;
         const kind = msg['kind'] as string | undefined;
         if (typeof text === 'string' && text) {
-          this.narration$.next({ text, kind });
+          this.narration$.next({
+            text,
+            kind,
+            speak: msg['speak'] !== false,
+            data:
+              typeof msg['data'] === 'object' && msg['data'] !== null
+                ? (msg['data'] as Record<string, unknown>)
+                : undefined,
+          });
         }
         break;
       }

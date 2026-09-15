@@ -6,17 +6,18 @@
  * Code. Responsibilities:
  *   1. Turn normalized events into typed NarrationEvent kinds.
  *   2. Maintain a rolling JobSummary (accumulated across the run).
- *   3. Emit NarrationEvents with cadence limiting (max 1 per 15 s for ticks;
- *      significant transitions always emit immediately).
+ *   3. Emit NarrationEvents. Every spoken string comes from the phrase catalog
+ *      (voice/phrases.ts) so it can be switched off or reworded per event —
+ *      see docs/39 Part B.
  *
  * See docs/12-stream-json-watcher.md for the full spec.
  */
 
-import { getConfig } from '../config.js';
 import { addJobEvent, type JobEventKind } from '../state/jobs.js';
 import { childLogger } from '../log.js';
 import { getActiveProvider } from '../providers/agents/registry.js';
 import type { AgentStreamEvent, NormalizedToolCall } from '../providers/agents/events.js';
+import { phrase } from '../voice/phrases.js';
 
 const log = childLogger('watcher');
 
@@ -35,7 +36,6 @@ export type NarrationKind =
   | 'file_write'
   | 'file_read'
   | 'shell_run'
-  | 'progress_tick'
   | 'job_done'
   | 'job_error'
   | 'ghost_killed';
@@ -45,6 +45,12 @@ export interface NarrationEvent {
   text: string;
   jobId: string;
   ts: Date;
+  /**
+   * The event's own facts, independent of the spoken sentence. The PWA uses
+   * these for the orb, the session log and push notifications, so they survive
+   * a user who has turned this event's narration off.
+   */
+  data?: Record<string, unknown>;
 }
 
 // ── JobSummary ────────────────────────────────────────────────────────────
@@ -102,9 +108,6 @@ export class Watcher {
   private readonly listeners: Array<(event: NarrationEvent) => void> = [];
   private readonly summary: JobSummary;
 
-  private lastNarrationAt: number = 0;
-  private cadenceMs: number;
-  private cadenceTimer: ReturnType<typeof setTimeout> | null = null;
   private ghostTriggered = false;
   private lastActivityLabel: string | null = null;
 
@@ -130,9 +133,6 @@ export class Watcher {
       elapsedMs: 0,
       startedAt: new Date(),
     };
-
-    const { settings } = getConfig();
-    this.cadenceMs = settings.narratorCadenceMs;
   }
 
   /** Subscribe to narration events. */
@@ -176,8 +176,11 @@ export class Watcher {
       case 'init':
         log.debug({ jobId: this.jobId }, 'job started');
         this.trackEvent('system_init', { model: event.model ?? null });
-        this.emit({ kind: 'job_started', text: `${agent} started working on ${this.projectName}.` });
-        // No cadence TTS ticks — the voice agent narrates via get_agent_status.
+        this.emit({
+          kind: 'job_started',
+          text: phrase('job_started', { agent, project: this.projectName }),
+          data: { agent, project: this.projectName },
+        });
         return;
 
       case 'tool_start':
@@ -185,21 +188,29 @@ export class Watcher {
         return;
 
       case 'result': {
-        this.stopCadenceTicks();
         const filesChanged = this.summary.filesWritten.length;
         const doneText =
           filesChanged > 0
-            ? `Done — ${agent} changed ${filesChanged} file${filesChanged !== 1 ? 's' : ''}. Want to see the diff?`
-            : `Done — ${agent} finished with no file changes.`;
+            ? phrase('job_done', { agent, count: filesChanged })
+            : phrase('job_done_no_changes', { agent });
         this.trackEvent('job_done', { summary: doneText });
-        this.emit({ kind: 'job_done', text: doneText });
+        this.emit({
+          kind: 'job_done',
+          text: doneText,
+          data: { agent, count: filesChanged, files: this.summary.filesWritten.slice(-20) },
+        });
         return;
       }
 
       case 'error':
-        this.stopCadenceTicks();
         this.trackEvent('job_error', { message: event.message });
-        this.emit({ kind: 'job_error', text: `Something went wrong. ${agent} said: ${event.message}` });
+        this.emit({
+          kind: 'job_error',
+          text: phrase('job_error', { agent, message: event.message }),
+          // The raw provider error stays in `data` for the transcript even when
+          // the spoken line deliberately leaves it out.
+          data: { agent, message: event.message },
+        });
         return;
 
       // session / tool_done / assistant_text carry no narration of their own.
@@ -242,13 +253,13 @@ export class Watcher {
     const ghost = isGhostToolCall(tool);
     if (ghost.ghost && !this.ghostTriggered) {
       this.ghostTriggered = true;
-      this.stopCadenceTicks();
       const reason = ghost.reason ?? 'subagent';
       log.warn({ jobId: this.jobId, reason }, 'ghost agent tool detected — killing job');
       this.trackEvent('ghost_killed', { reason });
       this.emit({
         kind: 'ghost_killed',
-        text: `Stopped — ${this.agentName()} tried to spawn extra agents (${reason}). Budget protection kicked in.`,
+        text: phrase('ghost_killed', { agent: this.agentName(), reason }),
+        data: { agent: this.agentName(), reason },
       });
       this.onGhostDetected?.();
       return;
@@ -260,15 +271,31 @@ export class Watcher {
     if (tool.action === 'write' && tool.path) {
       this.summary.filesWritten.push(tool.path);
       this.trackEvent('file_write', { path: tool.path });
-      this.emit({ kind: 'file_write', text: `${this.agentName()} just wrote ${tool.path}.` });
+      this.emit({
+        kind: 'file_write',
+        text: phrase('file_write', { agent: this.agentName(), path: tool.path }),
+        data: { agent: this.agentName(), path: tool.path },
+      });
     } else if (tool.action === 'read' || tool.action === 'search') {
       if (tool.path) this.summary.filesRead.push(tool.path);
       this.trackEvent('file_read', { path: tool.path ?? label });
+      // Emitted, but `file_read` and `shell_run` default to mode `off` in the
+      // phrase catalog: one spoken line per read would bury the agent's own
+      // replies. Emitting them anyway is what makes the away digest's
+      // "N commands run" a real number instead of a permanent 0 (docs/39 A1).
+      this.emit({
+        kind: 'file_read',
+        text: phrase('file_read', { agent: this.agentName(), path: tool.path ?? label }),
+        data: { agent: this.agentName(), path: tool.path ?? label },
+      });
     } else if (tool.action === 'shell') {
       if (tool.command) this.summary.shellCommands.push(tool.command);
       this.trackEvent('shell_run', { cmd: tool.command, label });
-      // Raw commands are useful in logs/status but noisy and potentially
-      // sensitive over TTS. Cadence ticks provide concise spoken progress.
+      this.emit({
+        kind: 'shell_run',
+        text: phrase('shell_run', { agent: this.agentName(), command: tool.command ?? label }),
+        data: { agent: this.agentName(), command: tool.command ?? label },
+      });
     }
   }
 
@@ -278,27 +305,23 @@ export class Watcher {
     return this.summary;
   }
 
-  /** Stop timers (call when the job finishes or is killed). */
+  /** Release resources (call when the job finishes or is killed). */
   destroy(): void {
-    this.stopCadenceTicks();
+    this.listeners.length = 0;
   }
 
   // ── Internal ──────────────────────────────────────────────────────────
 
   /**
    * Emit a NarrationEvent to all subscribers.
-   * Transition events (file_write, job_done, job_error) bypass
-   * the cadence gate. Only progress_tick is gated.
+   *
+   * There is no cadence gate any more: the only event it ever applied to was
+   * `progress_tick`, which nothing emitted, and its interval field made the
+   * config screen advertise a control that did nothing (docs/39 A1). Whether a
+   * line is actually spoken is now decided per event by
+   * `shouldSpeakNarration`, downstream in the narrator.
    */
-  private emit(params: { kind: NarrationKind; text: string }): void {
-    const isGated = params.kind === 'progress_tick';
-    const now = Date.now();
-
-    if (isGated && now - this.lastNarrationAt < this.cadenceMs) {
-      return; // Too soon for a tick — drop it
-    }
-
-    this.lastNarrationAt = now;
+  private emit(params: { kind: NarrationKind; text: string; data?: Record<string, unknown> }): void {
     const event: NarrationEvent = {
       ...params,
       jobId: this.jobId,
@@ -307,21 +330,6 @@ export class Watcher {
 
     for (const cb of this.listeners) {
       cb(event);
-    }
-  }
-
-  /**
-   * Formerly emitted count-only "Still working — read N files" TTS ticks.
-   * Disabled: voice agent owns spoken progress. Kept as a no-op so call sites stay safe.
-   */
-  private startCadenceTicks(): void {
-    this.stopCadenceTicks();
-  }
-
-  private stopCadenceTicks(): void {
-    if (this.cadenceTimer) {
-      clearTimeout(this.cadenceTimer);
-      this.cadenceTimer = null;
     }
   }
 }

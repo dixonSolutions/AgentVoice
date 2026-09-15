@@ -24,6 +24,7 @@ import { parseArgs, rejectUnknown, intFlag, UsageError } from './args.js';
 import { doctorCommand } from './commands/doctor.js';
 import { runCommand } from './commands/run.js';
 import { logsCommand, serviceCommand } from './commands/service.js';
+import { serviceInstallCommand } from './commands/serviceInstall.js';
 import { statusCommand } from './commands/status.js';
 import { tokenCommand } from './commands/token.js';
 import { updateCommand, UPDATE_FLAGS } from './commands/update.js';
@@ -40,6 +41,7 @@ const USAGE = `
   ${bold('Running the bridge')}
     run                    Boot the bridge in the foreground (the default)
     start | stop | restart Manage the agentvoice.service systemd unit
+    service install        Write a systemd user unit for this install
     logs [-n N] [-f]       Tail the service journal
 
   ${bold('Looking after it')}
@@ -56,7 +58,9 @@ const USAGE = `
     -n, --lines N          Journal lines to show (logs, default 80)
     -f, --follow           Follow the journal (logs)
     --new                  Rotate the APP_TOKEN (token)
-    --force                Re-download even if present (prepare-vosk)
+    --now                  Enable and start it straight away (service install)
+    --force                Re-download even if present (prepare-vosk);
+                           overwrite an existing unit (service install)
     --stash                Stash local changes across a git update
     --dry-run              Report what an update would do, change nothing
     --branch <name>        Rebase onto origin/<name> (git installs)
@@ -102,6 +106,23 @@ async function dispatch(argv: string[]): Promise<void> {
       // null means the bridge is now running in this process — leave exitCode
       // alone or the process would exit as soon as the event loop settles.
       if (code !== null) process.exitCode = code;
+      return;
+    }
+
+    case 'service': {
+      const [verb = '', ...serviceArgs] = args;
+      if (verb !== 'install') {
+        throw new UsageError(
+          `unknown service verb "${verb || '(none)'}" — the only one is: install`,
+        );
+      }
+      const parsed = parseArgs(serviceArgs);
+      rejectUnknown(parsed, ['dry-run', 'now', 'force']);
+      process.exitCode = await serviceInstallCommand({
+        dryRun: parsed.switches.has('dry-run'),
+        now: parsed.switches.has('now'),
+        force: parsed.switches.has('force'),
+      });
       return;
     }
 

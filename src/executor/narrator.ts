@@ -1,37 +1,35 @@
 /**
- * Narrator — converts NarrationEvents into spoken messages for Dad.
+ * Narrator — decides what the *bridge* says out loud about running work.
  *
- * Receives events from the Watcher and injects them into the active
- * realtime session. When no session is active (mic is off), events are
- * buffered up to `narratorMaxBufferEvents` and replayed as a summary
- * when the next session connects.
+ * Receives events from the Watcher. Two things changed in docs/36 + docs/39:
  *
- * Architecture (Milestone 4): narration travels phone → provider via the
- * control WebSocket relay. The bridge sends `{ type: "narration", text, kind }`
- * to the phone over the authenticated control WS. The phone injects it into
- * the provider session via `conversation.item.create` + `response.create`
- * on the WebRTC data channel.
+ *   1. The event and its speech are separate. Every event is delivered to the
+ *      phone as `{type:'narration', kind, text, speak, data}`; `speak` decides
+ *      whether TTS plays it. Turning narration off used to also kill the
+ *      `job_done` push notification and the PWA's "a job is running" state,
+ *      because both were derived from the same suppressed message.
+ *   2. The gate is per event, not one global switch, and `auto` means "only if
+ *      no voice agent is already narrating" — which is the actual fix for the
+ *      duplicate "started working on …" line in the agent_native workflow.
  *
- * The `PhoneRelaySession` class (below) implements `NarratorSession` for
- * this relay model. It holds a reference to the active control WS `send`
- * function.
+ * When nobody is listening, events are buffered up to
+ * `narratorMaxBufferEvents` and replayed as one digest when the phone comes
+ * back (docs/36 §3.5).
  *
- * See docs/12-stream-json-watcher.md — Narrator section.
+ * See docs/12-stream-json-watcher.md and docs/39 Part B.
  */
 
 import { getConfig } from '../config.js';
 import { childLogger } from '../log.js';
 import { getActiveProvider } from '../providers/agents/registry.js';
 import { notifyPhone } from '../push/notifyPhone.js';
+import { phrase, shouldSpeakNarration, narrationPayload } from '../voice/phrases.js';
+import type { NarrationKind as CatalogKind } from '../config.js';
 import type { NarrationEvent } from './watcher.js';
 
 const log = childLogger('narrator');
 
 // ── Session interface ─────────────────────────────────────────────────────
-//
-// A thin interface over the realtime WebSocket — filled in by Milestone 4.
-// The narrator holds a reference to the active session; swapping sessions
-// is just a setSession() call.
 
 export interface NarratorSession {
   /**
@@ -52,8 +50,16 @@ export interface NarratorSession {
    */
   injectText(text: string): Promise<void>;
   /** Optional narration kind (job_started, job_done, ghost_killed, …). */
-  injectTextWithKind?(text: string, kind: string): Promise<void>;
+  injectTextWithKind?(text: string, kind: string, speak?: boolean): Promise<void>;
 }
+
+/**
+ * Does a voice agent own spoken narration right now?
+ *
+ * Injected rather than imported so the narrator does not depend on the
+ * executor, and so tests can drive both sides of the `auto` decision.
+ */
+export type NarrationOwnershipProbe = () => boolean;
 
 // ── Narrator ──────────────────────────────────────────────────────────────
 
@@ -61,16 +67,21 @@ export class Narrator {
   private session: NarratorSession | null = null;
   private readonly buffer: NarrationEvent[] = [];
   private readonly maxBuffer: number;
+  private ownershipProbe: NarrationOwnershipProbe = () => false;
 
-  constructor() {
-    const { settings } = getConfig();
-    this.maxBuffer = settings.narratorMaxBufferEvents;
+  constructor(maxBuffer?: number) {
+    this.maxBuffer = maxBuffer ?? getConfig().settings.narratorMaxBufferEvents;
+  }
+
+  /** Tell the narrator how to find out whether an agent is narrating. */
+  setOwnershipProbe(probe: NarrationOwnershipProbe): void {
+    this.ownershipProbe = probe;
   }
 
   /**
    * Attach (or detach) the active realtime session.
    * Call with null when the session closes; call with the new session when it
-   * opens. On attach, buffered events are replayed as a summary.
+   * opens. On attach, buffered events are replayed as a digest.
    */
   async setSession(session: NarratorSession | null): Promise<void> {
     this.session = session;
@@ -80,22 +91,30 @@ export class Narrator {
     }
   }
 
+  /** Everything buffered while nobody was listening, without draining it. */
+  peekBuffer(): readonly NarrationEvent[] {
+    return this.buffer;
+  }
+
   /**
    * Receive a narration event from the Watcher.
-   * If a session is ready, inject immediately.
-   * If not, buffer (up to maxBuffer).
+   *
+   * Note what is NOT here any more: an early `return` on a global narration
+   * switch. The event always travels; only `speak` is gated.
    */
   async receive(event: NarrationEvent): Promise<void> {
-    const { settings } = getConfig();
-    if (!settings.narratorEnabled) return;
-    // Count-only cadence ticks are reserved for get_agent_status — voice agent speaks milestones.
-    if (event.kind === 'progress_tick') return;
-
     if (this.session?.isReady) {
       await this.inject(event);
     } else {
       this.bufferEvent(event);
     }
+  }
+
+  /** Whether this event's text should be played aloud right now. */
+  private speakFlagFor(event: NarrationEvent): boolean {
+    return shouldSpeakNarration(event.kind as CatalogKind, {
+      agentOwnsNarration: this.ownershipProbe(),
+    });
   }
 
   // ── Private ──────────────────────────────────────────────────────────
@@ -107,20 +126,22 @@ export class Narrator {
       return;
     }
 
-    // Defer if TTS is still playing from a prior injection.
-    if (session.isSpeaking) {
+    const speak = this.speakFlagFor(event);
+
+    // Only defer for lines that will actually be heard — a silent event has no
+    // reason to wait behind TTS.
+    if (speak && session.isSpeaking) {
       log.debug({ kind: event.kind }, 'narrator: session speaking — deferring injection');
-      // Re-queue after a short delay rather than silently dropping.
       await new Promise((res) => setTimeout(res, 1500));
       await this.inject(event); // Retry once
       return;
     }
 
     try {
-      log.debug({ kind: event.kind, text: event.text }, 'narrator: injecting');
+      log.debug({ kind: event.kind, speak, text: event.text }, 'narrator: injecting');
       if (session.injectTextWithKind) {
-        await session.injectTextWithKind(event.text, event.kind);
-      } else {
+        await session.injectTextWithKind(event.text, event.kind, speak);
+      } else if (speak) {
         await session.injectText(event.text);
       }
     } catch (err) {
@@ -138,39 +159,64 @@ export class Narrator {
   }
 
   /**
-   * When a new session connects, replay buffered events as a concise summary
-   * rather than a flood of individual messages.
+   * Build the digest of what happened while nobody was listening.
+   *
+   * Split out from `replayBuffer` so the reconnect path in docs/36 can attach
+   * the same text to the first `next_voice_turn()` and let the voice agent
+   * tell it in its own words, rather than the bridge speaking over it.
+   */
+  buildDigest(): { text: string; files: number; commands: number; finished: boolean } | null {
+    if (this.buffer.length === 0) return null;
+
+    const doneEvent = [...this.buffer]
+      .reverse()
+      .find((e: NarrationEvent) => e.kind === 'job_done' || e.kind === 'job_error');
+    const files = this.buffer.filter((e) => e.kind === 'file_write').length;
+    // `shell_run` events are emitted now (silently) — before docs/39 this
+    // count was structurally always zero.
+    const commands = this.buffer.filter((e) => e.kind === 'shell_run').length;
+
+    let text: string;
+    if (doneEvent) {
+      text = doneEvent.text;
+      if (files > 0 || commands > 0) {
+        text += ` ${phrase('away_replay', { files, commands })}`;
+      }
+    } else {
+      text = phrase('away_progress', { agent: getActiveProvider().displayName, files });
+    }
+
+    return { text, files, commands, finished: Boolean(doneEvent) };
+  }
+
+  /** Drop everything buffered — the digest has been delivered another way. */
+  clearBuffer(): void {
+    this.buffer.length = 0;
+  }
+
+  /**
+   * When a new session connects, replay buffered events as one digest rather
+   * than a flood of individual messages.
    */
   private async replayBuffer(): Promise<void> {
-    if (this.buffer.length === 0) return;
+    const digest = this.buildDigest();
+    if (!digest) return;
 
     const session = this.session;
     if (!session?.isReady) return;
 
-    // Build a compact summary from buffered events.
-    const doneEvent = [...this.buffer].reverse().find((e: NarrationEvent) => e.kind === 'job_done' || e.kind === 'job_error');
-    const writesCount = this.buffer.filter((e) => e.kind === 'file_write').length;
-    const shellCount = this.buffer.filter((e) => e.kind === 'shell_run').length;
+    this.clearBuffer();
 
-    let summaryText: string;
-    if (doneEvent) {
-      summaryText = doneEvent.text;
-      if (writesCount > 0 || shellCount > 0) {
-        const parts: string[] = [];
-        if (writesCount > 0) parts.push(`${writesCount} file${writesCount !== 1 ? 's' : ''} written`);
-        if (shellCount > 0) parts.push(`${shellCount} command${shellCount !== 1 ? 's' : ''} run`);
-        summaryText += ` While you were away: ${parts.join(', ')}.`;
-      }
-    } else {
-      // Job still running when session reconnected.
-      summaryText = `${getActiveProvider().displayName} is still working.`;
-      if (writesCount > 0) summaryText += ` So far: ${writesCount} file${writesCount !== 1 ? 's' : ''} written.`;
-    }
-
-    this.buffer.length = 0;
+    const speak = shouldSpeakNarration('away_replay', {
+      agentOwnsNarration: this.ownershipProbe(),
+    });
 
     try {
-      await session.injectText(summaryText);
+      if (session.injectTextWithKind) {
+        await session.injectTextWithKind(digest.text, 'away_replay', speak);
+      } else if (speak) {
+        await session.injectText(digest.text);
+      }
     } catch (err) {
       log.error({ err }, 'narrator: buffer replay failed');
     }
@@ -186,7 +232,7 @@ export function getNarrator(): Narrator {
   return _narrator;
 }
 
-// ── PhoneRelaySession (Milestone 4 implementation) ────────────────────────
+// ── PhoneRelaySession ─────────────────────────────────────────────────────
 //
 // Sends narration events to the phone over the authenticated control WS.
 // The phone forwards them to the provider via the WebRTC data channel
@@ -221,10 +267,12 @@ export class PhoneRelaySession implements NarratorSession {
   }
 
   async injectText(text: string): Promise<void> {
-    await notifyPhone({ type: 'narration', text });
+    await notifyPhone(narrationPayload({ kind: 'job_done', text, speak: true }));
   }
 
-  async injectTextWithKind(text: string, kind: string): Promise<void> {
-    await notifyPhone({ type: 'narration', text, kind });
+  async injectTextWithKind(text: string, kind: string, speak = true): Promise<void> {
+    await notifyPhone(
+      narrationPayload({ kind: kind as CatalogKind, text, speak }),
+    );
   }
 }

@@ -44,6 +44,11 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`31-service-orchestrator-converter.md`](./31-service-orchestrator-converter.md) | The Service / Orchestrator / Converter / Specializer layering shared by speech in, speech out, and (pending) the agent CLIs | Adding a provider or a selection policy, or working out where vendor knowledge belongs |
 | [`32-environments-vs-projects.md`](./32-environments-vs-projects.md) | Why "run the agent elsewhere" (remote / cloud) collides with the path-based project registry, and the order to add it in | Issue #40, or before touching `projects[].path` |
 | [`33-permissions-and-prompt-relay.md`](./33-permissions-and-prompt-relay.md) | Per-CLI permission modes (run-everything default), Claude Code prompts relayed to the phone, and sudo / git / ssh askpass relay | Changing how much the agent may do unasked, or a prompt is stuck on the host |
+| [`36-disconnect-and-background-work.md`](./36-disconnect-and-background-work.md) | Design: what happens to sessions when the phone or bridge goes away — presence, away policy, unattended work, surviving a bridge restart | Changing disconnect behaviour, autonomy, or restart handling |
+| [`37-session-directory-and-inject.md`](./37-session-directory-and-inject.md) | Design: listing bridge, past and external agent sessions, and sending messages into them by voice (mailbox, resume, fork — never TTY) | Touching `inject`, session ids, or multi-session voice |
+| [`38-system-packages.md`](./38-system-packages.md) | Design: .deb / .rpm packaging, a `system` install mode, and the npm fixes it depends on | Packaging, install modes, or the update path |
+| [`39-config-ui-and-narration-cleanup.md`](./39-config-ui-and-narration-cleanup.md) | Audit of the settings screen and every hardcoded bridge narration line, with the toggles + templates design | Editing the config tab or anything the bridge speaks on its own |
+| [`40-prompts-orb-and-permissions.md`](./40-prompts-orb-and-permissions.md) | Reading question and plan cards aloud, why the ask tools stay (and which of the 37 tools overlap), a working state on the orb, and remembering mic / audio permissions | Touching the approval panel, the MCP tool surface, the orb, or microphone capture |
 
 ## One-paragraph summary
 

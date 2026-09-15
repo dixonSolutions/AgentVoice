@@ -229,6 +229,11 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 | [`25-hosting-providers.md`](./docs/25-hosting-providers.md) | Tailscale, Cloudflare, ngrok, Dev Tunnels, LAN, manual |
 | [`33-permissions-and-prompt-relay.md`](./docs/33-permissions-and-prompt-relay.md) | Permission modes per CLI, permission prompts and sudo passwords relayed to the phone |
 | [`35-cli.md`](./docs/35-cli.md) | The `agentvoice` management CLI |
+| [`36-disconnect-and-background-work.md`](./docs/36-disconnect-and-background-work.md) | Design: disconnect policy, unattended work, surviving bridge restarts |
+| [`37-session-directory-and-inject.md`](./docs/37-session-directory-and-inject.md) | Design: list running sessions and inject into them by voice |
+| [`38-system-packages.md`](./docs/38-system-packages.md) | Design: .deb / .rpm packages and a system install mode |
+| [`39-config-ui-and-narration-cleanup.md`](./docs/39-config-ui-and-narration-cleanup.md) | Config screen audit and bridge narration toggles + templates |
+| [`40-prompts-orb-and-permissions.md`](./docs/40-prompts-orb-and-permissions.md) | Design: prompts read aloud, ask tools and tool overlap, orb working state, remembered mic permission |
 | [`26-rename-agentvoice.md`](./docs/26-rename-agentvoice.md) | Cursor Voice → AgentVoice rename notes |
 
 ## Stack

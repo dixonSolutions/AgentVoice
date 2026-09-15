@@ -160,6 +160,12 @@ export interface JobHistoryEntry {
 
 export interface SpawnAgentArgs {
   instructions: string;
+  /**
+   * Target project. Absent means the active one — `agent_submit` accepted this
+   * and `spawn_agent` did not, which was one of the reasons both existed
+   * (docs/40 §2).
+   */
+  project?: string;
   mode?: 'agent' | 'plan' | 'ask' | 'debug';
   /**
    * Run in an isolated git worktree for parallel execution.
@@ -187,17 +193,6 @@ export interface StopAgentArgs {
 
 export interface StopAgentResult {
   ok: boolean;
-  message: string;
-}
-
-export interface InjectArgs {
-  id: string;
-  message: string;
-}
-
-export interface InjectResult {
-  ok: boolean;
-  delivered: boolean;
   message: string;
 }
 
@@ -248,7 +243,6 @@ export interface AgentToolHandlers {
   handleListJobsHistory: (args: ListJobsHistoryArgs) => Promise<JobHistoryEntry[]>;
   handleSpawnAgent: (args: SpawnAgentArgs) => Promise<SpawnAgentResult>;
   handleStopAgent: (args: StopAgentArgs) => Promise<StopAgentResult>;
-  handleInject: (args: InjectArgs) => Promise<InjectResult>;
   handleSetMode: (args: SetModeArgs) => Promise<SetModeResult>;
   handleExecutePlan: (args: ExecutePlanArgs) => Promise<ExecutePlanResult>;
   handleRevertAgent: (args: RevertAgentArgs) => Promise<RevertAgentResult>;
@@ -522,11 +516,14 @@ export function makeAgentHandlers(sessionKey: string): AgentToolHandlers {
 
     async handleSpawnAgent(args: SpawnAgentArgs): Promise<SpawnAgentResult> {
       const session = getSessionState(sessionKey);
-      const project = resolveProject(session.activeProject ?? '');
+      const requested = args.project?.trim();
+      const project = resolveProject(requested || session.activeProject || '');
 
       if (!project) {
         throw new Error(
-          'No active project set. Ask the user to select a project before spawning a worker.',
+          requested
+            ? `No project matches "${requested}". Call agent_list_projects() to see the options.`
+            : 'No active project set. Ask the user to select a project before spawning a worker.',
         );
       }
 
@@ -616,38 +613,6 @@ export function makeAgentHandlers(sessionKey: string): AgentToolHandlers {
         message:
           `Agent "${args.id}" is not currently running. ` +
           `Active ids: [${allIds}]. Use list_agents() to verify.`,
-      };
-    },
-
-    async handleInject(args: InjectArgs): Promise<InjectResult> {
-      const active = getActiveAgentRun();
-
-      if (!active || active.refId !== args.id) {
-        return {
-          ok: false,
-          delivered: false,
-          message: `Agent "${args.id}" is not the active singleton. Use list_agents() to verify.`,
-        };
-      }
-
-      const handle = active.handle as { stdin?: { write?: (s: string) => void } };
-      if (handle.stdin?.write) {
-        try {
-          handle.stdin.write(`\n${args.message}\n`);
-          log.info({ id: args.id, msg: args.message.slice(0, 80), sessionKey }, 'inject delivered');
-          return { ok: true, delivered: true, message: 'Message injected (best-effort).' };
-        } catch (err) {
-          log.warn({ err, id: args.id }, 'inject write failed');
-        }
-      }
-
-      log.warn({ id: args.id, sessionKey }, 'inject not supported — agent has no stdin');
-      return {
-        ok: true,
-        delivered: false,
-        message:
-          'Agent is running but stdin injection is not supported. ' +
-          'If context is critical: call stop_agent() then spawn_agent() with amended instructions.',
       };
     },
 
@@ -757,6 +722,11 @@ export const handleListAgents = defaultHandlers.handleListAgents;
 export const handleGetAgentStatus = defaultHandlers.handleGetAgentStatus;
 export const handleSpawnAgent = defaultHandlers.handleSpawnAgent;
 export const handleStopAgent = defaultHandlers.handleStopAgent;
-export const handleInject = defaultHandlers.handleInject;
+/**
+ * `inject` moved to mcp/server/sessionToolHandlers.ts in docs/37: the version
+ * that lived here wrote to a stdin the agent process does not have, so it
+ * never delivered anything.
+ */
+export { handleInject } from './sessionToolHandlers.js';
 export const handleSetMode = defaultHandlers.handleSetMode;
 export const handleExecutePlan = defaultHandlers.handleExecutePlan;

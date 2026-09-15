@@ -172,6 +172,15 @@ export interface AgentProvider {
   resolveBin(): string;
   /** True if the binary was actually found (not just the bare PATH fallback name). */
   isInstalled(): boolean;
+  /**
+   * The environment variable that pins this CLI's binary path.
+   *
+   * Declared per provider so the config screen can render the list from the
+   * providers themselves. It used to be a hardcoded pair (CODEX_PATH,
+   * CLAUDE_CODE_PATH) that silently omitted CURSOR_AGENT_PATH and
+   * CODEWHALE_PATH — docs/39 A7.
+   */
+  binEnvVar(): string | null;
 
   /** Build the subprocess environment for this CLI (may strip conflicting provider keys). */
   env(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
@@ -262,4 +271,65 @@ export interface AgentProvider {
    * When absent (or resolving null) `agent_new_session` just clears resume_id.
    */
   createSession?(project: Project): Promise<string | null>;
+
+  /**
+   * Past conversations this CLI holds for `project`, newest first.
+   *
+   * Reads the CLI's own on-disk store, which is undocumented and internal to
+   * each vendor — so this is best-effort by construction. An unreadable or
+   * restructured store returns `[]`, never throws, and the caller treats that
+   * as "no past sessions found", exactly as `sessionStatus` treats `unknown`.
+   *
+   * Used by the session directory (docs/37 §1 kind C) so the phone can list
+   * and resume threads that AgentVoice did not start.
+   */
+  listSessions?(project: Project, limit?: number): StoredSessionSummary[];
+
+  /**
+   * Commands for inspecting this CLI's own MCP configuration, or null when the
+   * CLI offers none. Declaring null is a real answer, not a gap.
+   */
+  mcpInspectCommands?(): McpInspectCommands | null;
+
+  /**
+   * Fork a past conversation into a new branch, if the CLI supports it.
+   *
+   * Forking is the safe way into a session that a live process may still own:
+   * resuming a session id concurrently corrupts its transcript, so the
+   * directory forks instead (docs/37 §2). A provider without a fork flag
+   * declares it by leaving this undefined.
+   */
+  forkSessionArgs?(project: Project, sessionId: string, prompt: string): string[] | null;
+}
+
+/**
+ * How to ask this CLI what MCP servers *it* has configured.
+ *
+ * `agent_mcp_list` used to shell out to `cursor-agent` no matter which client
+ * was active, so the answer described a CLI that was not running the work.
+ * Every provider now either declares its own commands or says it cannot —
+ * the provider rule: implemented for all four, or explicitly unsupported.
+ */
+export interface McpInspectCommands {
+  /** Argv after the binary that lists configured servers. */
+  list: string[];
+  /**
+   * Argv that lists one server's tools, or a fixed argv that lists them all.
+   * Null when the CLI has no equivalent.
+   */
+  tools: ((server: string) => string[]) | null;
+  /** Set when the CLI lists every server's tools at once, ignoring the name. */
+  toolsListsEverything?: boolean;
+}
+
+/** One past conversation as read from a CLI's own session store. */
+export interface StoredSessionSummary {
+  /** The CLI's own session / chat / rollout id. */
+  id: string;
+  /** Epoch ms of the last activity, from metadata or the file's mtime. */
+  updatedAt: number;
+  /** Absolute path of the backing file or directory, for mtime and liveness. */
+  path: string;
+  /** First user message, when the store makes it cheap to read. */
+  preview?: string | null;
 }

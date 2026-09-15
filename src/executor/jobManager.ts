@@ -34,6 +34,9 @@ import { getConfig } from '../config.js';
 import { childLogger } from '../log.js';
 import type { AgentHandle } from './agentProcess.js';
 import { notifyAuthRequired } from '../providers/agents/authNotify.js';
+import { clearMailbox } from '../state/sessionMailbox.js';
+import { publishAgentBusy } from '../state/agentBusy.js';
+import { isVoiceAgentRunning } from './voiceAgent.js';
 
 const log = childLogger('job-manager');
 
@@ -154,6 +157,9 @@ export function getJobsHistory(
     error: string | null;
     started_at: string;
     finished_at: string | null;
+    worktree: string | null;
+    provider: string | null;
+    resumed_from: string | null;
   };
 
   let rows: JobRow[];
@@ -193,6 +199,9 @@ export function getJobsHistory(
     error: r.error,
     startedAt: r.started_at,
     finishedAt: r.finished_at,
+    worktree: r.worktree ?? null,
+    provider: r.provider ?? null,
+    resumedFrom: r.resumed_from ?? null,
   }));
 }
 
@@ -204,6 +213,11 @@ export function getJobsHistory(
  * Pass `worktree` to run in an isolated git worktree — bypasses the singleton
  * gate so multiple agents can run in parallel on separate worktrees.
  */
+export interface SubmitJobOptions {
+  /** The interrupted job this run continues, for the restart-resume chain. */
+  resumedFrom?: string | null;
+}
+
 export async function submitJob(
   project: Project,
   sessionKey: string,
@@ -211,6 +225,7 @@ export async function submitJob(
   mode: JobMode = 'agent',
   worktree?: string,
   browser?: boolean,
+  opts: SubmitJobOptions = {},
 ): Promise<SubmitResult> {
   const { settings } = getConfig();
   const session = getSessionState(sessionKey);
@@ -245,6 +260,11 @@ export async function submitJob(
     prompt,
     mode,
     checkpoint: checkpointSha ?? undefined,
+    // Recorded so an interrupted run can be relaunched in the same place with
+    // the same CLI after a bridge restart (docs/36 §5).
+    worktree: worktree ?? null,
+    provider: getActiveProvider().id,
+    resumedFrom: opts.resumedFrom ?? null,
   });
 
   // Spawn the agent process (with optional worktree for parallel execution).
@@ -258,8 +278,28 @@ export async function submitJob(
     stopJob(jobId, 'Stopped: agent tried to spawn subagents (budget protection)', 'error');
   });
   const narrator = getNarrator();
+  /**
+   * `auto` narration must go quiet whenever the voice agent is already
+   * narrating — in agent_native its own prompt tells it to speak on each
+   * milestone, so the watcher saying the same thing was a duplicate the user
+   * could not switch off (docs/39 Part B).
+   */
+  narrator.setOwnershipProbe(
+    () => getConfig().settings.workflow.default === 'agent_native' && isVoiceAgentRunning(),
+  );
   watcher.onNarration((evt) => void narrator.receive(evt));
-  handle.onEvent((evt) => watcher.process(evt));
+  handle.onEvent((evt) => {
+    /**
+     * Record the CLI session id the moment it is announced, not only when the
+     * run finishes. A restart resume and the session directory both need it
+     * while the job is still going — a job killed mid-run used to leave no way
+     * to continue its conversation.
+     */
+    if (evt.kind === 'session' && evt.sessionId) {
+      updateJob(jobId, { sessionId: evt.sessionId });
+    }
+    watcher.process(evt);
+  });
 
   if (worktree) {
     registerWorktreeAgent({ refId: jobId, worktreeName: worktree, sessionKey, handle, watcher });
@@ -292,10 +332,16 @@ export async function submitJob(
 
   activeJobs.set(jobId, { handle, watcher, timeoutTimer });
   jobStartedAtMs.set(jobId, Date.now());
+  // The orb shows what the bridge says is running, not what it inferred from
+  // narration (docs/40 §3).
+  publishAgentBusy();
 
   // Completion handler — runs in the background.
   void handle.result.then((result) => {
     clearTimeout(timeoutTimer);
+    // A finished worker will never read its mailbox again; anything still in
+    // it would otherwise be handed to whatever reuses the id.
+    clearMailbox(jobId);
     watcher.destroy();
     activeJobs.delete(jobId);
     jobStartedAtMs.delete(jobId);
@@ -322,9 +368,24 @@ export async function submitJob(
       finishedAt: new Date().toISOString(),
     });
 
-    if (result.sessionId) {
+    /**
+     * The session id is always recorded on the job row, which is what
+     * restart-resume and the session directory read.
+     *
+     * The *project* resume id — "the conversation this project continues" —
+     * is only written by the non-worktree singleton worker. Worktree workers
+     * used to write it too, so N parallel workers each clobbered the
+     * project's resume id with their own and the last one home won
+     * (docs/37 §5.1, #56).
+     */
+    if (result.sessionId && !worktree) {
       setProjectResumeId(project.name, result.sessionId);
       log.info({ jobId, project: project.name, sessionId: result.sessionId }, 'resume id persisted');
+    } else if (result.sessionId) {
+      log.debug(
+        { jobId, worktree, sessionId: result.sessionId },
+        'worktree job session id kept on the job row only',
+      );
     }
 
     if (result.authRequired) {

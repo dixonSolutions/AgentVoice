@@ -1,33 +1,46 @@
 /**
  * How was this bridge installed, and therefore how does it update?
  *
- * There are two ways to be running AgentVoice, and they have nothing in common
- * when it comes to getting a newer one:
+ * There are three ways to be running AgentVoice, and they have nothing in
+ * common when it comes to getting a newer one:
  *
- *   git  — a clone. Updating means fetch, rebase, install, build, restart, and
- *          "what version am I" is a branch and a commit. scripts/update.sh.
- *   npm  — `npm i -g @ratitisrad/agentvoice`. There is no repo to rebase; updating means
- *          asking the registry for a newer version and letting npm replace the
- *          package. "What version am I" is a semver string.
+ *   git    — a clone. Updating means fetch, rebase, install, build, restart,
+ *            and "what version am I" is a branch and a commit.
+ *   npm    — `npm i -g @ratitisrad/agentvoice`. No repo to rebase; updating
+ *            means asking the registry and letting npm replace the package.
+ *   system — a .deb or .rpm (docs/38). The package manager owns the files, the
+ *            bridge cannot write to them, and updating is `apt` or `dnf`. The
+ *            in-app update button has to become a copyable command.
  *
  * Offering rebase buttons to someone who installed from npm is nonsense — there
  * is no branch, no commit, and no working tree to stash. Offering `npm i -g` to
  * a clone would silently install a *different* copy alongside the one they are
- * running. So the surface has to ask first, and this is where it asks.
+ * running. Offering either to a .deb install would fight the package manager.
+ * So the surface has to ask first, and this is where it asks.
  *
  * Detection is deliberately structural rather than a flag in config.json: a
  * config file gets copied between machines, and the answer has to describe the
  * install that is actually running right now.
  */
 
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { childLogger } from '../log.js';
 
 const log = childLogger('serve:install-mode');
 
-export type InstallMode = 'git' | 'npm' | 'unknown';
+export type InstallMode = 'git' | 'npm' | 'system' | 'unknown';
+
+/** Prefixes a distro package installs AgentVoice under. */
+const SYSTEM_ROOTS = ['/usr/lib/agentvoice', '/usr/share/agentvoice', '/opt/agentvoice'];
+
+/**
+ * Marker the .deb / .rpm ships so the bridge can name the right update
+ * command. A path check alone is not enough — someone may well untar a build
+ * into /opt — so the marker is authoritative and the path is the fallback.
+ */
+const INSTALL_SOURCE_MARKER = '.install-source';
 
 export interface InstallModeInfo {
   mode: InstallMode;
@@ -78,9 +91,12 @@ export function detectInstallMode(opts: { refresh?: boolean } = {}): InstallMode
 
   const root = packageRoot();
   const npmInstalled = insideNodeModules(realpathOrSelf(root));
+  const system = detectSystemPackage(root);
 
   let info: InstallModeInfo;
-  if (existsSync(join(root, '.git'))) {
+  if (system) {
+    info = system;
+  } else if (existsSync(join(root, '.git'))) {
     info = {
       mode: 'git',
       root,
@@ -124,7 +140,68 @@ function realpathOrSelf(path: string): string {
   }
 }
 
-/** Can this install be updated in place by the bridge itself? */
+/**
+ * Is this a distro package?
+ *
+ * Checked *before* the node_modules test: a .deb ships a pruned node_modules
+ * inside /usr/lib/agentvoice, so the npm heuristic would otherwise claim it
+ * and offer `npm i -g`, which would install a second copy the service does not
+ * run.
+ */
+function detectSystemPackage(root: string): InstallModeInfo | null {
+  const marker = readInstallSourceMarker(root);
+  const underSystemRoot = SYSTEM_ROOTS.some(
+    (prefix) => root === prefix || root.startsWith(`${prefix}/`),
+  );
+  if (!marker && !underSystemRoot) return null;
+
+  const family = marker ?? osPackageFamily();
+  return {
+    mode: 'system',
+    root,
+    reason: marker
+      ? `installed from a ${marker} package (${INSTALL_SOURCE_MARKER} marker)`
+      : `installed under ${root}, which is owned by the system package manager`,
+    global: true,
+    updateCommand: systemUpdateCommand(family),
+  };
+}
+
+function readInstallSourceMarker(root: string): 'deb' | 'rpm' | null {
+  try {
+    const value = readFileSync(join(root, INSTALL_SOURCE_MARKER), 'utf-8').trim().toLowerCase();
+    if (value === 'deb' || value === 'rpm') return value;
+  } catch {
+    // No marker — fall back to the path check.
+  }
+  return null;
+}
+
+/** Guess the package family from /etc/os-release when the marker is missing. */
+function osPackageFamily(): 'deb' | 'rpm' | null {
+  try {
+    const release = readFileSync('/etc/os-release', 'utf-8').toLowerCase();
+    if (/\b(debian|ubuntu|linuxmint|pop|raspbian)\b/.test(release)) return 'deb';
+    if (/\b(fedora|rhel|centos|rocky|almalinux|opensuse|suse)\b/.test(release)) return 'rpm';
+  } catch {
+    // Not a Linux distro we can identify.
+  }
+  return null;
+}
+
+function systemUpdateCommand(family: 'deb' | 'rpm' | null): string {
+  if (family === 'deb') return 'sudo apt update && sudo apt install --only-upgrade agentvoice';
+  if (family === 'rpm') return 'sudo dnf upgrade agentvoice';
+  return 'Use your package manager to upgrade the agentvoice package';
+}
+
+/**
+ * Can this install be updated in place by the bridge itself?
+ *
+ * Not for a system package: the files belong to root and to the package
+ * manager's database, so the Serve UI shows a copyable command instead of an
+ * update button (docs/38).
+ */
 export function canSelfUpdate(info = detectInstallMode()): boolean {
   return info.mode === 'git' || info.mode === 'npm';
 }

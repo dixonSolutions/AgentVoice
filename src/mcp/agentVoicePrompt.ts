@@ -1,24 +1,41 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { getConfig, getConfigPath } from '../config.js';
 import { getActiveProvider } from '../providers/agents/registry.js';
 import { MCP_SERVER_NAME } from '../providers/agents/mcpRegistration.js';
+import { detectInstallMode } from '../serve/installMode.js';
 
 /**
- * Returns the project root directory derived from the config file path.
+ * Where a prompt file might live, most specific first.
  *
- * Using import.meta.url is unreliable here: in dev the source is at
- * src/mcp/agentVoicePrompt.ts (two levels from root) but tsup bundles
- * everything flat into dist/index.js (one level from root), so the climb count
- * would differ. getConfigPath() always resolves to an absolute path regardless
- * of how the process was launched or where the bundle lives.
+ * The bridge home wins, so anyone can override a prompt by dropping their own
+ * copy next to config.json. The install root is the fallback and is what makes
+ * this work at all for an npm or .deb install: the home is `~/.agentvoice`,
+ * the prompts ship with the package, and the two are different directories.
+ *
+ * Resolving only from the config directory meant every MCP `initialize` on a
+ * non-clone install answered 500 — so no agent could connect, at all.
+ * `import.meta.url` is not an option here: in dev the source is two levels
+ * from the root and tsup bundles it flat into dist/, one level down.
  */
-function getRepoRoot(): string {
-  return dirname(resolve(getConfigPath()));
+function promptRoots(): string[] {
+  const roots = [dirname(resolve(getConfigPath()))];
+  const installRoot = detectInstallMode().root;
+  if (!roots.includes(installRoot)) roots.push(installRoot);
+  return roots;
 }
 
 export function readAgentVoicePrompt(relativePath: string): string {
-  return readFileSync(join(getRepoRoot(), relativePath), 'utf-8').trim();
+  const tried: string[] = [];
+  for (const root of promptRoots()) {
+    const candidate = join(root, relativePath);
+    tried.push(candidate);
+    if (existsSync(candidate)) return readFileSync(candidate, 'utf-8').trim();
+  }
+  throw new Error(
+    `AgentVoice prompt "${relativePath}" not found. Looked in:\n  ${tried.join('\n  ')}\n` +
+      'A packaged install ships these under its install root; a clone has them in prompts/.',
+  );
 }
 
 /**

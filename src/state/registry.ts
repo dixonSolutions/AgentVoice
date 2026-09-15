@@ -151,6 +151,21 @@ export function listProjects(): Omit<Project, 'path'>[] {
 }
 
 /**
+ * Every enabled project *with* its path.
+ *
+ * `listProjects()` deliberately strips the path because its result is sent to
+ * the phone. Server-side callers that have to match a filesystem location —
+ * the session directory matching a process's cwd to a registered project —
+ * need the real thing, and must not send it on.
+ */
+export function listProjectsWithPaths(): Project[] {
+  const rows = getDb()
+    .prepare('SELECT * FROM project WHERE enabled = 1 ORDER BY name')
+    .all() as ProjectRow[];
+  return rows.map(rowToProject);
+}
+
+/**
  * Resolve a name (or alias) to the trusted Project row.
  * Returns null if not found, disabled, or ambiguous.
  *

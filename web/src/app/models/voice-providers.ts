@@ -26,6 +26,12 @@ export interface VoiceTtsSettings {
   errorSoundEnabled: boolean;
   /** How much of the agent's work is read aloud beyond its replies. */
   readAloud?: 'replies' | 'titles' | 'summary' | 'everything';
+  /**
+   * How much of an on-screen question / plan / permission card is read aloud.
+   * Without this a hands-free user was asked a question in total silence.
+   * See docs/40-prompts-orb-and-permissions.md §1.
+   */
+  readPrompts?: 'off' | 'announce' | 'question' | 'full';
   errorSpeakEnabled: boolean;
   webkit: WebkitTtsDefaults;
 }

@@ -52,3 +52,9 @@ Thumbs.db
 
 # Local editor workspace settings (per checkout)
 /.vscode/
+
+# Packaging staging tree (packaging/stage.sh) and the packages it produces.
+# Hundreds of MB, rebuilt from scratch on every release.
+packaging/root/
+*.deb
+*.rpm

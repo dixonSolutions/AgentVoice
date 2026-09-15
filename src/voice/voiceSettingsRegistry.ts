@@ -98,6 +98,8 @@ const VoiceTtsBodySchema = z.object({
   errorSoundEnabled: z.boolean().optional(),
   errorSpeakEnabled: z.boolean().optional(),
   readAloud: z.enum(['replies', 'titles', 'summary', 'everything']).optional(),
+  /** docs/40 §1 — how much of a question / plan card the phone reads aloud. */
+  readPrompts: z.enum(['off', 'announce', 'question', 'full']).optional(),
   webkit: z
     .object({
       rate: z.number().min(0.1).max(10).optional(),
@@ -176,6 +178,7 @@ export function setVoiceTts(raw: unknown): VoiceSettingsResponse {
       errorSoundEnabled: true,
       errorSpeakEnabled: true,
       readAloud: 'replies' as const,
+      readPrompts: 'question' as const,
       webkit: { rate: 1.02, pitch: 1, volume: 1, lang: 'en-US' },
     };
     voice.tts = {
@@ -184,6 +187,7 @@ export function setVoiceTts(raw: unknown): VoiceSettingsResponse {
       errorSoundEnabled: parsed.data.errorSoundEnabled ?? current.errorSoundEnabled ?? true,
       errorSpeakEnabled: parsed.data.errorSpeakEnabled ?? current.errorSpeakEnabled ?? true,
       readAloud: parsed.data.readAloud ?? current.readAloud ?? 'replies',
+      readPrompts: parsed.data.readPrompts ?? current.readPrompts ?? 'question',
       webkit: {
         ...current.webkit,
         ...(parsed.data.webkit ?? {}),

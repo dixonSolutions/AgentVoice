@@ -5,8 +5,8 @@
  * STT only runs during an utterance and transcribes once — never used for phrase detection.
  */
 
+import { acquireMic, type MicLease } from './mic-service.js';
 import {
-  captureMicStream,
   createMicProcessingChain,
   getSharedAudioContext,
   primeTtsPlaybackUnlock,
@@ -152,6 +152,8 @@ export class LlmIntelligenceSession {
   private wakeWordsEnabled = true;
   private lastLoggedSttPartial = '';
   private sharedMicStream: MediaStream | null = null;
+  /** Borrowed from MicService; released, not stopped, when the session ends. */
+  private micLease: MicLease | null = null;
   private lastErrorFeedbackMessage = '';
   private lastErrorFeedbackAt = 0;
   private ownsSharedMic = false;
@@ -364,8 +366,12 @@ export class LlmIntelligenceSession {
     this.micTracks.clear();
     this.micMuted = false;
     if (this.ownsSharedMic) {
-      this.sharedMicStream?.getTracks().forEach((t) => t.stop());
+      // Release the lease, not the device. MicService mutes immediately and
+      // only stops the tracks after the keep-warm window, so the next session
+      // does not trigger a fresh permission prompt.
+      this.micLease?.release();
     }
+    this.micLease = null;
     this.sharedMicStream = null;
     this.ownsSharedMic = false;
     stopAllTts();
@@ -406,7 +412,10 @@ export class LlmIntelligenceSession {
 
   private async ensureSharedMic(): Promise<MediaStream> {
     if (this.sharedMicStream) return this.sharedMicStream;
-    this.sharedMicStream = await captureMicStream();
+    // One owner for the whole app (docs/40 §4): the lease hands back the same
+    // device every session instead of stopping its tracks and re-prompting.
+    this.micLease = await acquireMic();
+    this.sharedMicStream = this.micLease.stream;
     this.ownsSharedMic = true;
     this.registerMicStream(this.sharedMicStream);
     return this.sharedMicStream;
@@ -1153,13 +1162,18 @@ export class LlmIntelligenceSession {
       }
 
       case 'narration': {
+        /**
+         * Transcript only — never spoken here.
+         *
+         * The PWA holds both the control socket and this one. Narration is
+         * routed control socket → BridgeService → AppComponent →
+         * injectNarration, which is the single place that decides whether a
+         * line is played. Speaking it here as well meant that the moment
+         * narration was also delivered on this socket the user heard every
+         * line twice, with no dedup between the two paths (docs/39 Part B).
+         */
         const text = typeof msg['text'] === 'string' ? msg['text'] : '';
-        if (text && this.ttsSettings.agentVoiceEnabled) {
-          this.enqueueSpeak(text);
-          this.cb.onAssistantTranscript(text);
-        } else if (text) {
-          this.cb.onAssistantTranscript(text);
-        }
+        if (text) this.cb.onAssistantTranscript(text);
         break;
       }
 

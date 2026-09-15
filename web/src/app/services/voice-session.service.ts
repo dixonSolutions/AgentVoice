@@ -20,6 +20,14 @@ import { SessionKeepAlive } from '../../session-keepalive.js';
 import { preloadVoiceCues, playVoiceCueNow } from '../../sound-effects.js';
 import type { AudioBackendSummary } from '../../llm-intelligence-session.js';
 import { onModelDownload, type ModelDownloadState } from '../../model-download.js';
+import {
+  promptSpeechLines,
+  markPromptSpoken,
+  hasSpokenPrompt,
+  forgetSpokenPrompts,
+  type ReadPromptsMode,
+} from '../../prompt-speech.js';
+import type { ApprovalRequest } from '@agentvoice/client';
 
 export interface TranscriptEntry {
   id: number;
@@ -352,12 +360,33 @@ export class VoiceSessionService {
     clearTranscriptTts();
     cancelTtsFallback();
     stopAllTts();
+    // A new session must be able to hear a card that is still open.
+    forgetSpokenPrompts();
     this.appState.transitionTo('idle');
   }
 
   injectNarration(text: string): void {
     if (!this.conversationActive()) return;
     this._session?.injectNarration(text);
+  }
+
+  /**
+   * Read a question / plan / permission card aloud (docs/40 §1, #63).
+   *
+   * Spoken here, on the phone, from the card itself, so it is identical for
+   * every workflow and every CLI — and so the bridge's hardcoded permission
+   * and askpass narration lines can go away. It goes through the normal TTS
+   * queue, so barge-in and tts_interrupt work and a spoken answer resolves
+   * the card the way it already did.
+   */
+  speakPromptCard(request: ApprovalRequest): void {
+    if (!this.conversationActive()) return;
+    if (hasSpokenPrompt(request.request_id)) return;
+    const mode = (this.voiceProviders.data()?.tts.readPrompts ?? 'question') as ReadPromptsMode;
+    const lines = promptSpeechLines(request, mode);
+    if (lines.length === 0) return;
+    markPromptSpoken(request.request_id);
+    for (const line of lines) this._session?.injectNarration(line);
   }
 
   /** Typed message for cascade workflows — same turn path as voice (queued while agent runs). */

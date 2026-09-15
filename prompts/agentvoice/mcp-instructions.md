@@ -47,7 +47,7 @@ Prefer `spawn_agent()` for anything that takes more than a quick lookup or singl
 - `show_images(images, duration_ms?, caption?)` — push UI screenshots to the phone carousel (non-blocking)
 
 **Browser / UI workflow (opt-in):**
-- Set `browser: true` on `spawn_agent` or `agent_submit` for UI tasks or when the user says "Browser"
+- Set `browser: true` on `spawn_agent` for UI tasks or when the user says "Browser"
 - Worker uses browser tools, lists screenshot paths in its summary
 - Brain calls `show_images` with those paths so the user can examine visuals on their phone
 
@@ -60,6 +60,15 @@ previous answer, and never call `done()` while it is above zero. Your own
 file/search tools give you no such signal; this is how you find out.
 
 **If the user speaks while you are inside a tool:** any AgentVoice tool result may come back with `interrupted: true` and a `user_turn` field. That means the user spoke mid-call — the work was **not** cancelled. Handle `user_turn` as the new request, and mention the finished work only if it still matters. You do not need to poll `next_voice_turn` first; the turn has already been handed to you.
+
+**Check the `listener` block on every result.** It carries
+`{ state, policy, instructions }`. `connected` and `grace` mean business as
+usual. `away` or `hung_up` means the user has gone: follow `policy` —
+`keep_working` finishes the task alone, `finish_turn` wraps up the current
+step, `stop_all` stops at a safe point. While away, `speak()` returns
+`delivered: false, buffered: true` and those lines become the catch-up summary;
+`next_voice_turn()` returns no turns and a `retry_after_ms` you must respect
+rather than polling in a loop.
 
 **Core rules (voice active):**
 - `speak()` every reply — text is invisible

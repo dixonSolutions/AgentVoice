@@ -8,8 +8,9 @@
  * is configured.
  */
 
+import { acquireMic, type MicLease } from './mic-service.js';
 import {
-  captureMicStream,
+
   createMicProcessingChain,
   getSharedAudioContext,
   connectSilentSink,
@@ -35,6 +36,8 @@ export interface ServerSttCallbacks {
 
 export class ServerSttSession {
   private micStream: MediaStream | null = null;
+  /** Borrowed from MicService — released, never stopped, on close. */
+  private micLease: MicLease | null = null;
   private ownsMic = false;
   private audioCtx: AudioContext | null = null;
   private micChain: MicProcessingChain | null = null;
@@ -64,7 +67,8 @@ export class ServerSttSession {
       this.micStream = mediaStream;
       this.ownsMic = false;
     } else {
-      this.micStream = await captureMicStream();
+      this.micLease = await acquireMic();
+      this.micStream = this.micLease.stream;
       this.ownsMic = true;
     }
     this.audioCtx = getSharedAudioContext();
@@ -133,8 +137,11 @@ export class ServerSttSession {
     this.silenceFrames = 0;
     this.pcmChunks = [];
     if (this.ownsMic) {
-      for (const t of this.micStream?.getTracks() ?? []) t.stop();
+      // Release the lease rather than stopping the tracks: stopping is what
+      // made the next session re-request the microphone (docs/40 §4).
+      this.micLease?.release();
     }
+    this.micLease = null;
     this.micStream = null;
     this.ownsMic = false;
     this.pcmChunks = [];

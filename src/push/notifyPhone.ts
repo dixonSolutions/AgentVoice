@@ -8,6 +8,7 @@ import { sendWebPush } from './webPush.js';
 import { sendApnsPush } from './apns.js';
 import { childLogger } from '../log.js';
 import { publishEvent } from '../state/eventBus.js';
+import { getActiveProvider } from '../providers/agents/registry.js';
 
 const log = childLogger('notify-phone');
 
@@ -27,7 +28,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
   const type = msg['type'] as string | undefined;
   switch (type) {
     case 'user_input_request': {
-      const q = String(msg['question'] ?? 'Cursor needs your answer');
+      const q = String(msg['question'] ?? `${agentDisplayName()} needs your answer`);
       return {
         title: 'AgentVoice',
         body: q.slice(0, 180),
@@ -66,6 +67,16 @@ function pushPayloadForType(msg: Record<string, unknown>): {
         voip: true,
       };
     }
+    case 'away_finished': {
+      const summary = String(msg['summary'] ?? 'Work finished while you were away.');
+      return {
+        title: 'AgentVoice — Finished while you were away',
+        body: summary.slice(0, 180),
+        tag: `away-finished-${msg['run_id'] ?? 'run'}`,
+        url: '/?tab=voice',
+        voip: false,
+      };
+    }
     case 'narration': {
       const kind = msg['kind'] as string | undefined;
       if (kind !== 'job_done' && kind !== 'job_error') return null;
@@ -82,7 +93,9 @@ function pushPayloadForType(msg: Record<string, unknown>): {
       const caption = msg['caption'] as string | undefined;
       return {
         title: 'AgentVoice',
-        body: caption?.slice(0, 180) ?? 'New screenshots from Cursor',
+        // Provider parity (docs/39 Part B): this said "from Cursor" whichever
+        // CLI produced the screenshots.
+        body: caption?.slice(0, 180) ?? `New screenshots from ${agentDisplayName()}`,
         tag: `images-${msg['batch_id'] ?? 'batch'}`,
         url: '/?tab=voice',
         voip: false,
@@ -100,6 +113,15 @@ function pushPayloadForType(msg: Record<string, unknown>): {
     }
     default:
       return null;
+  }
+}
+
+/** Display name of the CLI actually running — never a hardcoded vendor. */
+function agentDisplayName(): string {
+  try {
+    return getActiveProvider().displayName;
+  } catch {
+    return 'Your agent';
   }
 }
 
@@ -138,6 +160,7 @@ export async function notifyPhone(payload: object): Promise<NotifyResult> {
     type === 'plan_approval_request' ||
     type === 'permission_request' ||
     type === 'secret_input_request' ||
+    type === 'away_finished' ||
     type === 'auth_required';
 
   // Approvals always push (user may be on another app). Skip others if WS live.

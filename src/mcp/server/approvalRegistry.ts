@@ -25,6 +25,7 @@ import { randomUUID } from 'node:crypto';
 import { childLogger } from '../../log.js';
 import type { TtsInterruptContext } from '../../voice/ttsInterrupt.js';
 import { registerResolveWait, releaseWait, type VoiceTurnAnnotation } from './pendingWaits.js';
+import { publishAgentBusy } from '../../state/agentBusy.js';
 
 const log = childLogger('approval-registry');
 
@@ -183,6 +184,8 @@ export function registerRequest(
     });
   });
 
+  // An open card is part of "busy" — the orb shows a waiting ring for it.
+  publishAgentBusy();
   return { request_id, promise };
 }
 
@@ -220,6 +223,7 @@ function settle(request_id: string): void {
   releaseWait(deferred.waitId);
   pending.delete(request_id);
   pendingPayloads.delete(request_id);
+  publishAgentBusy();
 }
 
 /** Cancel all pending requests (e.g. on server shutdown). */

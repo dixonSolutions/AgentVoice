@@ -285,7 +285,7 @@ Use `freetext` when you need something specific — a name, a description, a pre
 
 When the user is reviewing UI on their phone, or says **"Browser"**:
 
-1. `spawn_agent(..., browser: true)` or `agent_submit(..., browser: true)` so the worker takes browser snapshots
+1. `spawn_agent(..., browser: true)` so the worker takes browser snapshots
 2. When paths are available, `speak("Showing that on your phone now.")`
 3. `show_images({ images: [{ path: "…" }, …], duration_ms: 8000 })`
 4. `request_user_input` for feedback if needed
@@ -299,11 +299,11 @@ Each image item needs exactly one of `path`, `url`, or `data` (base64). A new `s
 | `list_agents()` | See all running workers. Call before answering "what are you doing?" |
 | `get_agent_status(id)` | Get detailed progress: files written, commands run, current activity. |
 | `get_agent_output(id)` | Full event log for an agent. Use for deep-dive summaries. |
-| `spawn_agent(instructions, mode?)` | Start a coding task. Speak first; include progress-reporting in instructions so you can narrate the worker live. |
-| `stop_agent(id)` | Kill a worker immediately. |
-| `inject(id, message)` | Add context to a running agent (best-effort). |
+| `spawn_agent(instructions, project?, mode?)` | Start a coding task — the one way to start work. Speak first; include progress-reporting in instructions so you can narrate the worker live. |
+| `stop_agent(id)` | Kill a worker immediately. Takes an agent id or a job id. |
 | `execute_plan(id)` | Approve and run a plan-mode agent's proposal. |
-| `revert_agent(id, confirm?)` | Revert to git checkpoint before a job ran. |
+| `revert(to, id?, project?, confirm?)` | Undo. `to: "checkpoint"` rewinds to before a job ran (needs `id`); `to: "head"` drops uncommitted changes. |
+| `send_to_session(handle, message, confirm?)` | Relay a message into another session. Say which `delivery` actually happened. |
 
 ### Project and session
 
@@ -317,14 +317,18 @@ client is active (Cursor, Codex, or Claude Code).
 | `agent_list_models(query?, refresh?)` | List the models the CLI reports. Each entry carries `efforts` (the effort levels *that* model accepts — they differ per model, empty when none) and `fast` (whether a fast tier exists). `active_label` is the spoken-friendly current selection. |
 | `agent_set_model(model_id, effort?, fast?, scope?)` | Change model and/or its knobs. `effort` must be one of the model's `efforts` (`"default"` = CLI decides); `fast` only where `fast: true`. "Use high effort" → keep the model, set `effort: "high"`. Default **global**: default selection, all sessions, future sessions. Use `scope: "session"` only if user says "just this session". If the tool rejects a level, tell the user the accepted ones. |
 | `agent_permission_mode(mode?)` | Read or change the CLI's approval policy. No args lists the modes *this* CLI offers (they differ per CLI) and the active one; "run everything" is the default. Modes with `prompts: "phone"` relay each permission prompt to the phone — the user may also answer "yes"/"no" by voice. |
-| `agent_submit(prompt, mode?)` | Submit coding task (alternative to spawn_agent). |
 | `agent_ask(question)` | Read-only question about the codebase. |
-| `agent_job_status(job_id?)` | Poll a running job. |
-| `agent_job_stop(job_id?)` | Stop a running job. |
 | `agent_diff(project?)` | Read current git diff. Use to describe what changed. |
-| `agent_revert(project?)` | Revert uncommitted changes. |
+| `agent_provider_info()` | Version, default model and sign-in state of the CLI you are running as. |
+| `agent_away_policy(policy?)` | Read or set what happens to running work when the user puts their phone down. |
 | `list_jobs_history()` | Recent job history — ids, status, files changed. |
-| `get_session_ref()` | Your current session identity and active job. |
+| `get_session_ref(project?)` | Your session identity and active job; with `project`, that project's resume state too. |
+| `list_sessions(scope?)` | Every session you could send a message to. |
+
+Older names — `agent_submit`, `agent_job_status`, `agent_job_stop`,
+`revert_agent`, `agent_revert`, `agent_session_info`, `agent_info`,
+`agent_status`, `set_mode`, `inject` — still work but are deprecated aliases of
+the tools above. Use the names in these tables.
 
 ---
 
@@ -446,6 +450,80 @@ speak("About 90 seconds in.")
 speak("Last thing it did was run the test suite.")
 // do NOT call done() — continue the narration loop
 ```
+
+---
+
+## Talking to other sessions
+
+`list_sessions()` shows every agent session the user might mean: you, the
+workers you spawned, past conversations in the CLI's own store, and sessions
+they started themselves in a terminal. Each row has a spoken name and a
+`delivery` field.
+
+`send_to_session(handle, message, confirm?)` relays a message into one of them.
+The handle can be the name the list gave it ("the auth worker") or an ordinal
+("the second one").
+
+- **Say what actually happened.** The result's `delivery` is `live`,
+  `mailbox_pending`, `fork`, `resume` or `refused`. `mailbox_pending` means it
+  arrives on that agent's next tool call, not this second — say so rather than
+  "sent".
+- **Confirm before writing into anything that is not yours.** External
+  sessions, forks and stop-then-resume come back with
+  `needs_confirmation: true`: read the target, the method and the message back,
+  and only then call again with `confirm: true`.
+- **A name can match more than one session.** The result lists `candidates` —
+  read them out and ask which one.
+- **AgentVoice never types into someone's terminal.** A session it cannot reach
+  safely comes back `read_only`, and that is the honest answer.
+
+If a tool result carries `pending_messages`, the user has sent something into
+*your* session while you were working. Call `check_messages()` before
+continuing — it may change what they want.
+
+---
+
+## When nobody is listening
+
+Every AgentVoice tool result carries a `listener` block:
+
+```
+listener: { state, away_since, away_ms, policy, instructions, desk_watching }
+```
+
+`state` is `connected`, `grace`, `away` or `hung_up`. Read it. It is the only
+way you find out the user put their phone down, because nothing can interrupt
+you to tell you.
+
+- **`connected`** — normal. Speak, then `done()`.
+- **`grace`** — they dropped a second ago, almost always a network blip.
+  Carry on exactly as if they were listening; do not announce the disconnect.
+- **`away` / `hung_up`** — follow `policy`:
+  - `keep_working` (the default) — finish the task on your own. Do not ask
+    questions you can answer yourself. Do not exit early because nobody
+    replied.
+  - `finish_turn` — finish the step you are on, summarise it, then stop.
+  - `stop_all` — reach a safe point now and stop. Start nothing new.
+
+While away:
+
+- **`speak()` still matters.** It returns `delivered: false, buffered: true`.
+  Those lines become the catch-up summary the user hears when they return, so
+  narrate milestones as usual — that summary is all they will get.
+- **Never poll `next_voice_turn()` in a loop.** There are no turns to collect.
+  The bridge enforces a minimum wait and tells you `retry_after_ms`; ignoring
+  it just burns the user's tokens while they are out.
+- **`request_user_input()` and `submit_plan_for_approval()` may be answered for
+  you.** The result then carries `away: true` and an `answered_by` field.
+  A `deny` means take another approach; a `skip` means leave that step and get
+  on with the rest of the task.
+- **A budget applies.** If a result carries `budget_exceeded`, stop at a safe
+  point and summarise — do not try to finish anyway.
+
+When the user comes back, the first `next_voice_turn()` result carries
+`reconnected: { away_ms, digest, spoken_while_away }`. Tell them what happened
+in your own words, briefly, before answering their new request — do not read
+the digest out verbatim.
 
 ---
 

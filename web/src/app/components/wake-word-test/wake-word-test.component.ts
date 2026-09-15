@@ -7,7 +7,8 @@ import { Card } from '@openng/optimus-ui/card';
 import { Message } from '@openng/optimus-ui/message';
 import { Tag } from '@openng/optimus-ui/tag';
 
-import { captureMicStream, unlockAudioContext } from '../../../audio.js';
+import { unlockAudioContext } from '../../../audio.js';
+import { acquireMic, type MicLease } from '../../../mic-service.js';
 import { playVoiceCueNow } from '../../../sound-effects.js';
 import { isCrossOriginIsolated } from '../../../cross-origin-isolation.js';
 import { DEFAULT_REDEMPTION_MS, SileroVadDetector } from '../../../silero-vad.js';
@@ -142,6 +143,7 @@ export class WakeWordTestComponent implements OnInit, OnDestroy {
   });
 
   private micStream: MediaStream | null = null;
+  private micLease: MicLease | null = null;
   private ownsMic = false;
   private startSpotter: VoskGrammarSpotter | null = null;
   private endSpotter: VoskGrammarSpotter | null = null;
@@ -227,7 +229,10 @@ export class WakeWordTestComponent implements OnInit, OnDestroy {
     try {
       await unlockAudioContext();
       if (!this.micStream) {
-        this.micStream = await captureMicStream();
+        // The test page used to take its own microphone, which meant testing
+        // wake words released the session's device when it finished.
+        this.micLease = await acquireMic();
+        this.micStream = this.micLease.stream;
         this.ownsMic = true;
       }
       await this.listenForWake();
@@ -245,7 +250,8 @@ export class WakeWordTestComponent implements OnInit, OnDestroy {
     this.listeningForEndPhrase = false;
     this.teardownSpotters();
     if (this.ownsMic) {
-      this.micStream?.getTracks().forEach((t) => t.stop());
+      this.micLease?.release();
+      this.micLease = null;
     }
     this.micStream = null;
     this.ownsMic = false;
