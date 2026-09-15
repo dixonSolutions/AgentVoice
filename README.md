@@ -233,6 +233,7 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 | [`37-session-directory-and-inject.md`](./docs/37-session-directory-and-inject.md) | Design: list running sessions and inject into them by voice |
 | [`38-system-packages.md`](./docs/38-system-packages.md) | Design: .deb / .rpm packages and a system install mode |
 | [`39-config-ui-and-narration-cleanup.md`](./docs/39-config-ui-and-narration-cleanup.md) | Config screen audit and bridge narration toggles + templates |
+| [`40-prompts-orb-and-permissions.md`](./docs/40-prompts-orb-and-permissions.md) | Design: prompts read aloud, ask tools and tool overlap, orb working state, remembered mic permission |
 | [`26-rename-agentvoice.md`](./docs/26-rename-agentvoice.md) | Cursor Voice → AgentVoice rename notes |
 
 ## Stack

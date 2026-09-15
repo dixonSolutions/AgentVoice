@@ -48,6 +48,7 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`37-session-directory-and-inject.md`](./37-session-directory-and-inject.md) | Design: listing bridge, past and external agent sessions, and sending messages into them by voice (mailbox, resume, fork — never TTY) | Touching `inject`, session ids, or multi-session voice |
 | [`38-system-packages.md`](./38-system-packages.md) | Design: .deb / .rpm packaging, a `system` install mode, and the npm fixes it depends on | Packaging, install modes, or the update path |
 | [`39-config-ui-and-narration-cleanup.md`](./39-config-ui-and-narration-cleanup.md) | Audit of the settings screen and every hardcoded bridge narration line, with the toggles + templates design | Editing the config tab or anything the bridge speaks on its own |
+| [`40-prompts-orb-and-permissions.md`](./40-prompts-orb-and-permissions.md) | Reading question and plan cards aloud, why the ask tools stay (and which of the 37 tools overlap), a working state on the orb, and remembering mic / audio permissions | Touching the approval panel, the MCP tool surface, the orb, or microphone capture |
 
 ## One-paragraph summary
 
