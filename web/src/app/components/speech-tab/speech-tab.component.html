@@ -4,9 +4,6 @@
   }
 
   @if (view(); as v) {
-    <p-message severity="secondary" variant="simple"
-      text="Which engine listens, and which one speaks. Each side has an ordered chain: the first entry that is configured and can handle the language wins, so a provider going down degrades instead of breaking. Wake words stay on-device with Vosk and are unaffected." />
-
     <p-tabs [value]="direction()" (valueChange)="onDirectionChange($any($event))">
       <p-tablist>
         <p-tab value="stt"><i class="pi pi-microphone"></i> Speech in</p-tab>
