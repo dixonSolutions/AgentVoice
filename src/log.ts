@@ -26,10 +26,15 @@ export function initLogger(level: string = 'info'): pino.Logger {
   return _logger;
 }
 
-/** Return the root logger, initialising with defaults if not yet set up. */
+/**
+ * Return the root logger, initialising with defaults if not yet set up.
+ *
+ * `LOG_LEVEL` is honoured for the implicit case so `npm test` (which never
+ * calls `initLogger`) does not bury assertion output in JSON log lines.
+ */
 export function getLogger(): pino.Logger {
   if (!_logger) {
-    _logger = pino({ level: 'info' });
+    _logger = pino({ level: process.env['LOG_LEVEL'] ?? 'info' });
   }
   return _logger;
 }

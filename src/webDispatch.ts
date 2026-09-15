@@ -12,7 +12,7 @@
 
 import type { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
-import httpProxy from 'http-proxy';
+import type HttpProxy from 'http-proxy';
 import { existsSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
@@ -40,9 +40,33 @@ function isBackendOnlyPath(pathname: string): boolean {
   return pathname.startsWith('/api/') || isBackendWebSocket(pathname);
 }
 
+/**
+ * Load `http-proxy` on demand.
+ *
+ * It is a devDependency and only the Angular dev proxy needs it, so a
+ * production install (`npm i -g`, a .deb, or a pruned `node_modules`) has no
+ * copy of it. A top-level import made every such install crash on boot; the
+ * dynamic import keeps the cost inside the one dev-only code path.
+ */
+async function loadHttpProxy(): Promise<typeof HttpProxy> {
+  try {
+    const mod = (await import('http-proxy')) as unknown as {
+      default?: typeof HttpProxy;
+    } & typeof HttpProxy;
+    return mod.default ?? mod;
+  } catch (err) {
+    throw new Error(
+      'The Angular dev proxy needs the "http-proxy" package, which is a devDependency. ' +
+        'Run `npm install` in a git checkout, or start the bridge in production mode ' +
+        `(it then serves web/dist directly). Original error: ${String(err)}`,
+    );
+  }
+}
+
 /** Proxy non-API / non-backend-WS traffic to the Angular dev server. */
-export function attachDevWebProxy(app: FastifyInstance, webPort: number): void {
+export async function attachDevWebProxy(app: FastifyInstance, webPort: number): Promise<void> {
   const target = `http://127.0.0.1:${webPort}`;
+  const httpProxy = await loadHttpProxy();
   const proxy = httpProxy.createProxyServer({ target, ws: true, changeOrigin: true });
 
   proxy.on('proxyRes', (proxyRes) => {

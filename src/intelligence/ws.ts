@@ -43,6 +43,8 @@ import { getSpeechOutputSpecializer } from '../providers/speech/output/orchestra
 import { createMemory, type ConversationMemory } from './memory.js';
 import { runIntelligenceTurn as runOrchestratorTurn, type OrchestratorCallbacks } from './orchestrator.js';
 import { parseTtsInterrupt } from '../voice/ttsInterrupt.js';
+import { phrase } from '../voice/phrases.js';
+import { getPresence, type PresenceClient } from '../state/presence.js';
 import {
   registerTurnCompleteHook,
   registerVoiceSession,
@@ -114,6 +116,7 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
       let intelSession: IntelligenceSession | null = null;
       let unregisterVoice: (() => void) | null = null;
       let unregisterTurnDone: (() => void) | null = null;
+      let presence: PresenceClient | null = null;
 
       log.debug({ sessionKey }, 'intelligence ws connection attempt');
 
@@ -187,6 +190,20 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
               ttsChain: describeSpeechOutputChain(),
             },
           });
+          presence = getPresence().register({
+            kind: 'phone_intelligence',
+            ping: () => {
+              if (socket.readyState === WS_OPEN) send(socket, { type: 'ping' });
+            },
+            close: (code, reason) => {
+              try {
+                socket.close(code, reason);
+              } catch {
+                socket.terminate?.();
+              }
+            },
+          });
+
           log.info({ sessionKey, workflow: workflowId }, 'intelligence ws authenticated');
           return;
         }
@@ -196,6 +213,16 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
           msg = JSON.parse(str) as Record<string, unknown>;
         } catch {
           send(socket, { type: 'error', message: 'Invalid JSON' });
+          return;
+        }
+
+        presence?.alive();
+
+        if (msg['type'] === 'pong') return;
+
+        if (msg['type'] === 'hangup') {
+          presence?.hangUp();
+          presence = null;
           return;
         }
 
@@ -214,10 +241,7 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
           );
 
           if (intelSession.busy && intelSession.workflow !== 'agent_native') {
-            send(socket, {
-              type: 'speak',
-              text: "One moment — I'm still working on your last request.",
-            });
+            send(socket, { type: 'speak', text: phrase('busy') });
             return;
           }
 
@@ -290,6 +314,8 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
       });
 
       socket.on('close', () => {
+        presence?.release();
+        presence = null;
         sessions.delete(socket);
         unregisterVoice?.();
         unregisterTurnDone?.();

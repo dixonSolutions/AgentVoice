@@ -45,7 +45,13 @@ import type {
   ServeEvent,
   ServeActionId,
   JobSettings,
-  NarratorSettings,
+  NarrationSettings,
+  NarrationCatalogEntry,
+  NarrationKind,
+  NarrationMode,
+  SessionPolicySettings,
+  AwayPolicy,
+  RestartPolicy,
   WorkflowSettings,
   AgentClientSettings,
   AgentClientId,
@@ -67,7 +73,8 @@ type SectionId =
   | 'agent-client'
   | 'serve'
   | 'jobs'
-  | 'narrator'
+  | 'spoken'
+  | 'session'
   | 'database'
   | 'debug';
 
@@ -161,17 +168,34 @@ const ALL_SECTIONS: ConfigSection[] = [
   },
   {
     id: 'jobs',
-    label: 'Job Settings',
-    icon: 'pi-cog',
-    description: 'Concurrency, timeouts, plan-first mode, pre-run flags, ghost kill',
-    keywords: ['job', 'timeout', 'concurrent', 'plan', 'flags', 'ghost', 'kill', 'cache', 'mode', 'agent'],
+    // "Job Settings" repeated the word every section shares (docs/39 cosmetics).
+    label: 'Jobs',
+    icon: 'pi-briefcase',
+    description: 'Concurrency, timeout, ghost kill, model cache',
+    keywords: ['job', 'timeout', 'concurrent', 'ghost', 'kill', 'cache', 'mode', 'agent'],
   },
   {
-    id: 'narrator',
-    label: 'Narrator',
-    icon: 'pi-volume-up',
-    description: 'Voice narration enabled, cadence interval, event buffer',
-    keywords: ['narrator', 'narration', 'cadence', 'buffer', 'speak', 'voice', 'interval'],
+    // Replaces the old Narrator section. Three places used to decide what is
+    // spoken about work — agent voice, narrator and Speech out — and none of
+    // them agreed (docs/39 A10).
+    id: 'spoken',
+    label: 'What gets spoken',
+    icon: 'pi-comments',
+    description: 'Agent replies, read-aloud level, question cards, and per-event bridge narration',
+    keywords: [
+      'narration', 'narrator', 'speak', 'spoken', 'aloud', 'read', 'prompt', 'question',
+      'announce', 'template', 'buffer', 'job done', 'job started', 'error sound',
+    ],
+  },
+  {
+    id: 'session',
+    label: 'Disconnect & background work',
+    icon: 'pi-sync',
+    description: 'What keeps running when your phone or the bridge goes away',
+    keywords: [
+      'disconnect', 'away', 'background', 'unattended', 'grace', 'hangup', 'restart',
+      'resume', 'keep alive', 'approval', 'budget', 'runtime', 'presence', 'offline',
+    ],
   },
   {
     id: 'database',
@@ -182,9 +206,9 @@ const ALL_SECTIONS: ConfigSection[] = [
   },
   {
     id: 'debug',
-    label: 'Debug & Logs',
+    label: 'Debug & logs',
     icon: 'pi-wrench',
-    description: 'Log level, raw config.json editor',
+    description: 'Log level and the raw config.json editor',
     keywords: ['debug', 'log', 'level', 'trace', 'json', 'config', 'raw', 'editor'],
   },
 ];
@@ -360,8 +384,10 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     this.stopJournalStream();
     this.jobsLoadSeq++;
     this.loadingJobs = false;
-    this.narratorLoadSeq++;
-    this.loadingNarrator = false;
+    this.narrationLoadSeq++;
+    this.loadingNarration = false;
+    this.sessionLoadSeq++;
+    this.loadingSession = false;
     this.dbLoadSeq++;
     this.loadingDb = false;
     this.jsonLoadSeq++;
@@ -441,14 +467,19 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       case 'jobs':
         await this.loadJobs();
         break;
-      case 'narrator':
-        await this.loadNarrator();
+      case 'spoken':
+        await this.loadNarration();
+        break;
+      case 'session':
+        await this.loadSessionPolicy();
         break;
       case 'database':
         await this.loadDatabase();
         break;
       case 'debug':
-        await this.loadRawJson();
+        // Log level lives here now — the section advertised it while the
+        // control sat under Jobs, so search landed in the wrong place.
+        await Promise.all([this.loadRawJson(), this.loadJobs()]);
         break;
     }
   }
@@ -485,6 +516,8 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   ];
 
   protected readAloud: 'replies' | 'titles' | 'summary' | 'everything' = 'replies';
+  /** docs/40 §1 — how much of an on-screen question / plan card is read out. */
+  protected readPrompts: 'off' | 'announce' | 'question' | 'full' = 'question';
   protected agentVoiceEnabled = true;
   protected errorSoundEnabled = true;
   protected errorSpeakEnabled = true;
@@ -580,6 +613,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     if (data?.tts) {
       this.agentVoiceEnabled = data.tts.agentVoiceEnabled;
       this.readAloud = data.tts.readAloud ?? 'replies';
+      this.readPrompts = data.tts.readPrompts ?? 'question';
       this.errorSoundEnabled = data.tts.errorSoundEnabled ?? true;
       this.errorSpeakEnabled = data.tts.errorSpeakEnabled ?? true;
       this.webkitRate = data.tts.webkit.rate;
@@ -633,6 +667,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       await this.voiceProviders.updateVoiceTts({
         agentVoiceEnabled: this.agentVoiceEnabled,
         readAloud: this.readAloud,
+        readPrompts: this.readPrompts,
         errorSoundEnabled: this.errorSoundEnabled,
         errorSpeakEnabled: this.errorSpeakEnabled,
         webkit: {
@@ -1612,42 +1647,198 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     }
   }
 
-  // ── Narrator section ─────────────────────────────────────────────────────
+  // ── What gets spoken (docs/39 Part B) ────────────────────────────────────
 
-  protected narratorData: NarratorSettings | null = null;
-  protected loadingNarrator = false;
-  private narratorLoadSeq = 0;
-  protected savingNarrator = false;
+  protected narrationData: NarrationSettings | null = null;
+  protected loadingNarration = false;
+  private narrationLoadSeq = 0;
+  protected savingNarration = false;
+  /** Which catalog row has its template editor open. */
+  protected editingTemplate: NarrationKind | null = null;
 
-  private async loadNarrator(): Promise<void> {
-    const seq = ++this.narratorLoadSeq;
-    this.loadingNarrator = true;
+  protected readonly narrationModeOptions = [
+    { label: 'Auto', value: 'auto' as NarrationMode },
+    { label: 'Always', value: 'always' as NarrationMode },
+    { label: 'Off', value: 'off' as NarrationMode },
+  ];
+
+  protected readonly readPromptsOptions = [
+    { label: 'Off — the card is silent', value: 'off' },
+    { label: 'Announce — "there is a question on your phone"', value: 'announce' },
+    { label: 'Question — read the question and its options', value: 'question' },
+    { label: 'Full — read every plan step too', value: 'full' },
+  ];
+
+  /** Friendly names for the catalog rows — the raw kind ids are not UI copy. */
+  private static readonly NARRATION_LABELS: Record<string, string> = {
+    job_started: 'A worker starts',
+    job_done: 'A worker finishes with changes',
+    job_done_no_changes: 'A worker finishes with no changes',
+    job_error: 'A worker fails',
+    file_write: 'A file is written',
+    file_read: 'A file is read',
+    shell_run: 'A command is run',
+    ghost_killed: 'Budget protection stops a worker',
+    away_replay: 'Catch-up when you come back',
+    away_progress: 'Still-working update when you come back',
+    permission: 'The CLI asks permission',
+    secret_input: 'A password is needed',
+    fallback_auth: 'The CLI needs you to sign in',
+    fallback_session_gone: 'The conversation expired',
+    fallback_silent: 'The agent finished without speaking',
+    busy: 'You spoke while the bridge was busy',
+  };
+
+  protected narrationLabel(kind: string): string {
+    return ConfigTabComponent.NARRATION_LABELS[kind] ?? kind;
+  }
+
+  protected narrationModeOf(entry: NarrationCatalogEntry): NarrationMode {
+    return this.narrationData?.events[entry.kind] ?? entry.mode;
+  }
+
+  protected onNarrationModeChange(entry: NarrationCatalogEntry, mode: NarrationMode): void {
+    if (!this.narrationData) return;
+    this.narrationData.events = { ...this.narrationData.events, [entry.kind]: mode };
+  }
+
+  protected templateOf(entry: NarrationCatalogEntry): string {
+    return this.narrationData?.templates[entry.kind] ?? '';
+  }
+
+  protected onTemplateChange(entry: NarrationCatalogEntry, value: string): void {
+    if (!this.narrationData) return;
+    this.narrationData.templates = { ...this.narrationData.templates, [entry.kind]: value };
+  }
+
+  protected toggleTemplateEditor(entry: NarrationCatalogEntry): void {
+    this.editingTemplate = this.editingTemplate === entry.kind ? null : entry.kind;
+  }
+
+  private async loadNarration(): Promise<void> {
+    const seq = ++this.narrationLoadSeq;
+    this.loadingNarration = true;
     try {
-      const data = await this.admin.getNarrator();
-      if (seq !== this.narratorLoadSeq) return;
-      this.narratorData = data;
+      const data = await this.admin.getNarration();
+      if (seq !== this.narrationLoadSeq) return;
+      this.narrationData = data;
     } catch (err) {
-      if (seq !== this.narratorLoadSeq) return;
-      this.toast.error('Could not load narrator settings', err instanceof Error ? err.message : String(err));
+      if (seq !== this.narrationLoadSeq) return;
+      this.toast.error('Could not load speech settings', err instanceof Error ? err.message : String(err));
     } finally {
-      if (seq === this.narratorLoadSeq) {
-        this.loadingNarrator = false;
+      if (seq === this.narrationLoadSeq) {
+        this.loadingNarration = false;
         this.cdr.markForCheck();
       }
     }
   }
 
-  protected async onSaveNarrator(): Promise<void> {
-    if (!this.narratorData) return;
-    this.savingNarrator = true;
+  protected async onSaveNarration(): Promise<void> {
+    if (!this.narrationData) return;
+    this.savingNarration = true;
     try {
-      const res = await this.admin.patchNarrator(this.narratorData);
-      this.narratorData = { ...res };
-      this.toast.success('Narrator settings saved');
+      const res = await this.admin.patchNarration({
+        enabled: this.narrationData.enabled,
+        events: this.narrationData.events,
+        templates: this.narrationData.templates,
+        speakRawDetail: this.narrationData.speakRawDetail,
+        maxBufferEvents: this.narrationData.maxBufferEvents,
+      });
+      this.narrationData = { ...res };
+      this.toast.success('Saved');
     } catch (err) {
-      this.toast.error('Could not save narrator settings', err instanceof Error ? err.message : String(err));
+      // The bridge rejects a template naming a placeholder its event never
+      // supplies, rather than letting the phone read out a literal {hole}.
+      this.toast.error('Could not save', err instanceof Error ? err.message : String(err));
     } finally {
-      this.savingNarrator = false;
+      this.savingNarration = false;
+    }
+  }
+
+  // ── Disconnect & background work (docs/36) ───────────────────────────────
+
+  protected sessionData: SessionPolicySettings | null = null;
+  protected loadingSession = false;
+  private sessionLoadSeq = 0;
+  protected savingSession = false;
+
+  protected readonly awayPolicyOptions = [
+    { label: 'Keep working — carry on without me', value: 'keep_working' as AwayPolicy },
+    { label: 'Finish the current turn, then stop', value: 'finish_turn' as AwayPolicy },
+    { label: 'Stop everything', value: 'stop_all' as AwayPolicy },
+  ];
+
+  protected readonly restartPolicyOptions = [
+    { label: 'Keep the agent alive across a restart', value: 'keep_alive' as RestartPolicy },
+    { label: 'Resume it in a new process', value: 'resume' as RestartPolicy },
+    { label: 'Kill it', value: 'kill' as RestartPolicy },
+  ];
+
+  protected readonly awayApprovalOptions = [
+    { label: 'Push it and wait', value: 'wait_push' },
+    { label: 'Answer no', value: 'deny' },
+    { label: 'Skip that step, carry on elsewhere', value: 'skip' },
+  ];
+
+  protected readonly awaySecretOptions = [
+    { label: 'Fail fast — do not hang on a password', value: 'fail_fast' },
+    { label: 'Push it and wait', value: 'wait_push' },
+  ];
+
+  /** Minutes in the UI, milliseconds on the wire (docs/39 cosmetics). */
+  protected msToMinutes(ms: number): number {
+    return Math.round((ms / 60_000) * 10) / 10;
+  }
+
+  protected presenceLabel(): string {
+    const p = this.sessionData?.presence;
+    if (!p) return 'unknown';
+    switch (p.state) {
+      case 'connected':
+        return 'Your phone is connected';
+      case 'grace':
+        return 'Phone dropped a moment ago — still inside the grace window';
+      case 'away':
+        return 'Away';
+      case 'hung_up':
+        return 'You hung up';
+    }
+  }
+
+  private async loadSessionPolicy(): Promise<void> {
+    const seq = ++this.sessionLoadSeq;
+    this.loadingSession = true;
+    try {
+      const data = await this.admin.getSessionPolicy();
+      if (seq !== this.sessionLoadSeq) return;
+      this.sessionData = data;
+    } catch (err) {
+      if (seq !== this.sessionLoadSeq) return;
+      this.toast.error('Could not load disconnect settings', err instanceof Error ? err.message : String(err));
+    } finally {
+      if (seq === this.sessionLoadSeq) {
+        this.loadingSession = false;
+        this.cdr.markForCheck();
+      }
+    }
+  }
+
+  protected async onSaveSessionPolicy(): Promise<void> {
+    if (!this.sessionData) return;
+    this.savingSession = true;
+    try {
+      const res = await this.admin.patchSessionPolicy({
+        graceMs: this.sessionData.graceMs,
+        onPhoneAway: this.sessionData.onPhoneAway,
+        onBridgeRestart: this.sessionData.onBridgeRestart,
+        unattended: this.sessionData.unattended,
+      });
+      this.sessionData = { ...this.sessionData, ...res };
+      this.toast.success('Saved');
+    } catch (err) {
+      this.toast.error('Could not save', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.savingSession = false;
     }
   }
 

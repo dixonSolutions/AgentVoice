@@ -12,8 +12,10 @@
  *   PATCH /api/admin/hosting
  *   GET  /api/admin/jobs            — job scheduler settings
  *   PATCH /api/admin/jobs
- *   GET  /api/admin/narrator        — narrator settings
- *   PATCH /api/admin/narrator
+ *   GET  /api/admin/narration       — what the bridge says aloud (docs/39 Part B)
+ *   PATCH /api/admin/narration
+ *   GET  /api/admin/session         — disconnect / unattended policy (docs/36)
+ *   PATCH /api/admin/session
  *   GET  /api/admin/keys            — AWS key status (masked)
  *   PATCH /api/admin/keys           — update AWS keys in .env
  *   POST /api/admin/keys/test       — STS credential ping
@@ -26,7 +28,17 @@
 
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { getConfig, AGENT_CLIENTS, type AgentClient } from '../config.js';
+import {
+  getConfig,
+  AGENT_CLIENTS,
+  AWAY_POLICIES,
+  RESTART_POLICIES,
+  NARRATION_KINDS,
+  NarrationModeSchema,
+  type AgentClient,
+} from '../config.js';
+import { phraseCatalog, validateTemplate } from '../voice/phrases.js';
+import { getPresence } from '../state/presence.js';
 import { readConfigFile, writeConfigFile } from '../state/configFile.js';
 import {
   isAgentClientAvailable,
@@ -110,7 +122,6 @@ const JobsPatchSchema = z
     defaultMode: z.enum(['agent', 'plan']).optional(),
     maxConcurrentJobs: z.number().int().min(1).max(4).optional(),
     jobTimeoutMs: z.number().int().positive().optional(),
-    planFirst: z.boolean().optional(),
     preRunFlags: z.array(z.string()).optional(),
     modelCacheTtlMs: z.number().int().positive().optional(),
     ghostKillEnabled: z.boolean().optional(),
@@ -118,11 +129,37 @@ const JobsPatchSchema = z
   })
   .strict();
 
-const NarratorPatchSchema = z
+/**
+ * docs/39 Part B. `narratorEnabled` became `narration.enabled` and the cadence
+ * interval is gone entirely — it only ever gated an event nothing emitted.
+ */
+const NarrationPatchSchema = z
   .object({
-    narratorEnabled: z.boolean().optional(),
-    narratorCadenceMs: z.number().int().positive().optional(),
-    narratorMaxBufferEvents: z.number().int().positive().optional(),
+    enabled: z.boolean().optional(),
+    events: z.record(z.enum(NARRATION_KINDS), NarrationModeSchema).optional(),
+    templates: z.record(z.string(), z.string().max(400)).optional(),
+    speakRawDetail: z.boolean().optional(),
+    maxBufferEvents: z.number().int().positive().max(1000).optional(),
+  })
+  .strict();
+
+const SessionPatchSchema = z
+  .object({
+    graceMs: z.number().int().min(0).max(300_000).optional(),
+    onPhoneAway: z.enum(AWAY_POLICIES).optional(),
+    onBridgeRestart: z.enum(RESTART_POLICIES).optional(),
+    unattended: z
+      .object({
+        maxRuntimeMs: z.number().int().positive().optional(),
+        maxToolCalls: z.number().int().min(0).optional(),
+        approvals: z.enum(['wait_push', 'deny', 'skip']).optional(),
+        approvalTimeoutMs: z.number().int().positive().optional(),
+        secrets: z.enum(['wait_push', 'fail_fast']).optional(),
+        requireWorktree: z.boolean().optional(),
+        notifyOnFinish: z.boolean().optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -212,7 +249,6 @@ export async function registerAdminSettingsRoutes(app: FastifyInstance): Promise
       defaultMode,
       maxConcurrentJobs,
       jobTimeoutMs,
-      planFirst,
       preRunFlags,
       modelCacheTtlMs,
       ghostKillEnabled,
@@ -222,7 +258,6 @@ export async function registerAdminSettingsRoutes(app: FastifyInstance): Promise
       defaultMode,
       maxConcurrentJobs,
       jobTimeoutMs,
-      planFirst,
       preRunFlags,
       modelCacheTtlMs,
       ghostKillEnabled,
@@ -239,29 +274,155 @@ export async function registerAdminSettingsRoutes(app: FastifyInstance): Promise
     cfg.settings = applyPatch(cfg.settings, parsed.data as Partial<typeof cfg.settings>);
     writeConfigFile(cfg);
     log.info('job settings updated');
-    const { defaultMode, maxConcurrentJobs, jobTimeoutMs, planFirst, preRunFlags, modelCacheTtlMs, ghostKillEnabled, logLevel } =
+    const { defaultMode, maxConcurrentJobs, jobTimeoutMs, preRunFlags, modelCacheTtlMs, ghostKillEnabled, logLevel } =
       getConfig().settings;
-    return { ok: true, defaultMode, maxConcurrentJobs, jobTimeoutMs, planFirst, preRunFlags, modelCacheTtlMs, ghostKillEnabled, logLevel };
+    return { ok: true, defaultMode, maxConcurrentJobs, jobTimeoutMs, preRunFlags, modelCacheTtlMs, ghostKillEnabled, logLevel };
   });
 
-  // ── Narrator ──────────────────────────────────────────────────────────
+  // ── What gets spoken (docs/39 Part B) ─────────────────────────────────
 
+  function narrationState() {
+    const { narration, narratorMaxBufferEvents } = getConfig().settings;
+    return {
+      enabled: narration.enabled,
+      events: narration.events,
+      templates: narration.templates,
+      speakRawDetail: narration.speakRawDetail,
+      maxBufferEvents: narratorMaxBufferEvents,
+      /** Every spoken bridge line, its default wording and its placeholders. */
+      catalog: phraseCatalog(),
+    };
+  }
+
+  app.get('/api/admin/narration', async () => narrationState());
+
+  app.patch<{ Body: unknown }>('/api/admin/narration', async (req, reply) => {
+    const parsed = NarrationPatchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.message });
+    }
+    const patch = parsed.data;
+
+    // A template naming a placeholder its event never supplies would be read
+    // out with a literal `{hole}` in it. Reject it here instead.
+    if (patch.templates) {
+      const problems: Array<{ key: string; unknown: string[] }> = [];
+      for (const [key, template] of Object.entries(patch.templates)) {
+        const kind = key.split('@')[0] ?? key;
+        if (!(NARRATION_KINDS as readonly string[]).includes(kind)) {
+          problems.push({ key, unknown: ['<unknown event>'] });
+          continue;
+        }
+        const result = validateTemplate(kind as (typeof NARRATION_KINDS)[number], template);
+        if (!result.ok) problems.push({ key, unknown: result.unknown });
+      }
+      if (problems.length > 0) {
+        return reply.code(400).send({
+          error: 'Unknown placeholders in narration template(s)',
+          problems,
+        });
+      }
+    }
+
+    const cfg = readConfigFile();
+    const settings = cfg.settings as Record<string, unknown>;
+    const narration = {
+      ...(settings['narration'] as Record<string, unknown> | undefined),
+    } as Record<string, unknown>;
+    if (patch.enabled !== undefined) narration['enabled'] = patch.enabled;
+    if (patch.speakRawDetail !== undefined) narration['speakRawDetail'] = patch.speakRawDetail;
+    if (patch.events) {
+      narration['events'] = { ...(narration['events'] as object), ...patch.events };
+    }
+    if (patch.templates) {
+      const merged = { ...(narration['templates'] as Record<string, string> | undefined) };
+      for (const [key, value] of Object.entries(patch.templates)) {
+        // An empty string means "back to the default", not "say nothing".
+        if (value.trim() === '') delete merged[key];
+        else merged[key] = value;
+      }
+      narration['templates'] = merged;
+    }
+    settings['narration'] = narration;
+    if (patch.maxBufferEvents !== undefined) {
+      settings['narratorMaxBufferEvents'] = patch.maxBufferEvents;
+    }
+    writeConfigFile(cfg);
+    log.info('narration settings updated');
+    return { ok: true, ...narrationState() };
+  });
+
+  /**
+   * Deprecated alias. Older PWA builds still PATCH the single boolean; map it
+   * onto the master switch so an app that has not refreshed keeps working.
+   */
   app.get('/api/admin/narrator', async () => {
-    const { narratorEnabled, narratorCadenceMs, narratorMaxBufferEvents } = getConfig().settings;
-    return { narratorEnabled, narratorCadenceMs, narratorMaxBufferEvents };
+    const { narration, narratorMaxBufferEvents } = getConfig().settings;
+    return {
+      narratorEnabled: narration.enabled,
+      narratorMaxBufferEvents,
+      deprecated: 'Use /api/admin/narration',
+    };
   });
 
   app.patch<{ Body: unknown }>('/api/admin/narrator', async (req, reply) => {
-    const parsed = NarratorPatchSchema.safeParse(req.body);
+    const parsed = z
+      .object({
+        narratorEnabled: z.boolean().optional(),
+        narratorMaxBufferEvents: z.number().int().positive().optional(),
+      })
+      .strict()
+      .safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: parsed.error.message });
     }
     const cfg = readConfigFile();
-    cfg.settings = applyPatch(cfg.settings, parsed.data as Partial<typeof cfg.settings>);
+    const settings = cfg.settings as Record<string, unknown>;
+    if (parsed.data.narratorEnabled !== undefined) {
+      settings['narration'] = {
+        ...(settings['narration'] as object),
+        enabled: parsed.data.narratorEnabled,
+      };
+    }
+    if (parsed.data.narratorMaxBufferEvents !== undefined) {
+      settings['narratorMaxBufferEvents'] = parsed.data.narratorMaxBufferEvents;
+    }
     writeConfigFile(cfg);
-    log.info('narrator settings updated');
-    const { narratorEnabled, narratorCadenceMs, narratorMaxBufferEvents } = getConfig().settings;
-    return { ok: true, narratorEnabled, narratorCadenceMs, narratorMaxBufferEvents };
+    const { narration, narratorMaxBufferEvents } = getConfig().settings;
+    return {
+      ok: true,
+      narratorEnabled: narration.enabled,
+      narratorMaxBufferEvents,
+      deprecated: 'Use /api/admin/narration',
+    };
+  });
+
+  // ── Disconnect & background work (docs/36) ────────────────────────────
+
+  app.get('/api/admin/session', async () => {
+    const { session } = getConfig().settings;
+    return { ...session, presence: getPresence().snapshot() };
+  });
+
+  app.patch<{ Body: unknown }>('/api/admin/session', async (req, reply) => {
+    const parsed = SessionPatchSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.message });
+    }
+    const cfg = readConfigFile();
+    const settings = cfg.settings as Record<string, unknown>;
+    const current = { ...(settings['session'] as Record<string, unknown> | undefined) };
+    const { unattended, ...rest } = parsed.data;
+    Object.assign(current, rest);
+    if (unattended) {
+      current['unattended'] = { ...(current['unattended'] as object), ...unattended };
+    }
+    settings['session'] = current;
+    writeConfigFile(cfg);
+    // The grace window is held by the live tracker, not re-read per check.
+    getPresence().setGraceMs(getConfig().settings.session.graceMs);
+    log.info({ patch: parsed.data }, 'session policy updated');
+    return { ok: true, ...getConfig().settings.session };
   });
 
   // ── AWS Keys ──────────────────────────────────────────────────────────

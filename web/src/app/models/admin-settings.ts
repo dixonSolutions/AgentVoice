@@ -173,19 +173,81 @@ export interface JobSettings {
   defaultMode: DefaultMode;
   maxConcurrentJobs: number;
   jobTimeoutMs: number;
-  planFirst: boolean;
   preRunFlags: string[];
   modelCacheTtlMs: number;
   ghostKillEnabled: boolean;
   logLevel: LogLevel;
 }
 
-// ── Narrator ───────────────────────────────────────────────────────────────
+// ── What gets spoken (docs/39 Part B) ──────────────────────────────────────
 
-export interface NarratorSettings {
-  narratorEnabled: boolean;
-  narratorCadenceMs: number;
-  narratorMaxBufferEvents: number;
+/** `auto` = speak only when no voice agent is already narrating. */
+export type NarrationMode = 'auto' | 'always' | 'off';
+
+export type NarrationKind =
+  | 'job_started'
+  | 'job_done'
+  | 'job_done_no_changes'
+  | 'job_error'
+  | 'file_write'
+  | 'file_read'
+  | 'shell_run'
+  | 'ghost_killed'
+  | 'away_replay'
+  | 'away_progress'
+  | 'permission'
+  | 'secret_input'
+  | 'fallback_auth'
+  | 'fallback_session_gone'
+  | 'fallback_silent'
+  | 'busy';
+
+export interface NarrationCatalogEntry {
+  kind: NarrationKind;
+  default: string;
+  detailed: string | null;
+  placeholders: string[];
+  mode: NarrationMode;
+  override: string | null;
+}
+
+export interface NarrationSettings {
+  enabled: boolean;
+  events: Partial<Record<NarrationKind, NarrationMode>>;
+  templates: Record<string, string>;
+  speakRawDetail: boolean;
+  maxBufferEvents: number;
+  catalog: NarrationCatalogEntry[];
+}
+
+// ── Disconnect & background work (docs/36) ─────────────────────────────────
+
+export type AwayPolicy = 'keep_working' | 'finish_turn' | 'stop_all';
+export type RestartPolicy = 'kill' | 'resume' | 'keep_alive';
+export type ListenerState = 'connected' | 'grace' | 'away' | 'hung_up';
+
+export interface UnattendedSettings {
+  maxRuntimeMs: number;
+  maxToolCalls: number;
+  approvals: 'wait_push' | 'deny' | 'skip';
+  approvalTimeoutMs: number;
+  secrets: 'wait_push' | 'fail_fast';
+  requireWorktree: boolean;
+  notifyOnFinish: boolean;
+}
+
+export interface SessionPolicySettings {
+  graceMs: number;
+  onPhoneAway: AwayPolicy;
+  onBridgeRestart: RestartPolicy;
+  unattended: UnattendedSettings;
+  presence?: {
+    state: ListenerState;
+    awaySince: number | null;
+    awayMs: number;
+    clients: Record<string, number>;
+    deskPresent: boolean;
+  };
 }
 
 // ── AWS Keys ───────────────────────────────────────────────────────────────

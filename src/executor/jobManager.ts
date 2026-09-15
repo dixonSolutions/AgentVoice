@@ -34,6 +34,7 @@ import { getConfig } from '../config.js';
 import { childLogger } from '../log.js';
 import type { AgentHandle } from './agentProcess.js';
 import { notifyAuthRequired } from '../providers/agents/authNotify.js';
+import { isVoiceAgentRunning } from './voiceAgent.js';
 
 const log = childLogger('job-manager');
 
@@ -258,6 +259,15 @@ export async function submitJob(
     stopJob(jobId, 'Stopped: agent tried to spawn subagents (budget protection)', 'error');
   });
   const narrator = getNarrator();
+  /**
+   * `auto` narration must go quiet whenever the voice agent is already
+   * narrating — in agent_native its own prompt tells it to speak on each
+   * milestone, so the watcher saying the same thing was a duplicate the user
+   * could not switch off (docs/39 Part B).
+   */
+  narrator.setOwnershipProbe(
+    () => getConfig().settings.workflow.default === 'agent_native' && isVoiceAgentRunning(),
+  );
   watcher.onNarration((evt) => void narrator.receive(evt));
   handle.onEvent((evt) => watcher.process(evt));
 
