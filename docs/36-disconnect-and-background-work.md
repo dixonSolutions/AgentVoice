@@ -12,6 +12,8 @@ unattended keeps going on its own.
 
 ## Decisions (2026-09-15)
 
+Tracked in [#55](https://github.com/dixonSolutions/AgentVoice/issues/55).
+
 | Question | Decision |
 | --- | --- |
 | Default when the phone goes away | **Keep working autonomously** |

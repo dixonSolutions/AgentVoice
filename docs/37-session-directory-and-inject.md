@@ -10,6 +10,8 @@ into any of them by voice.
 
 ## Decisions (2026-09-15)
 
+Tracked in [#56](https://github.com/dixonSolutions/AgentVoice/issues/56); the `inject` bug is [#57](https://github.com/dixonSolutions/AgentVoice/issues/57).
+
 | Question | Decision |
 | --- | --- |
 | Scope of the first version | **Everything** — bridge sessions, past sessions, and sessions the user started themselves, including injection into those via **fork** or an **opt-in mailbox** |

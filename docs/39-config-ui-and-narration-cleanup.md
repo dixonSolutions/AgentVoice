@@ -7,6 +7,8 @@
 
 ## Decisions (2026-09-15)
 
+Config cleanup is tracked in [#60](https://github.com/dixonSolutions/AgentVoice/issues/60); narration toggles and templates in [#61](https://github.com/dixonSolutions/AgentVoice/issues/61).
+
 | Question | Decision |
 | --- | --- |
 | Speech tab intro paragraph | **Removed** (this PR) |

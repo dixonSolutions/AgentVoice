@@ -9,6 +9,8 @@ npm package and git clone?
 
 ## Decision (2026-09-15)
 
+Tracked in [#58](https://github.com/dixonSolutions/AgentVoice/issues/58); the `http-proxy` bug is [#59](https://github.com/dixonSolutions/AgentVoice/issues/59).
+
 **Build .deb and .rpm packages now.** (The brainstorm recommended an
 `install.sh` one-liner first and packages later; the maintainer chose
 packages now. The npm fixes below are prerequisites either way.)
