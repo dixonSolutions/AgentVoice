@@ -9,7 +9,8 @@
  *   Voice I/O    — speak, done, next_voice_turn
  *   Identity     — get_session_ref
  *   Agents       — list_agents, get_agent_status, get_agent_output,
- *                  spawn_agent, stop_agent, inject, revert_agent
+ *                  spawn_agent, stop_agent, revert_agent
+ *   Sessions     — list_sessions, send_to_session, check_messages, inject (alias)
  *   Jobs         — list_jobs_history
  *   Mode         — set_mode, execute_plan
  *   Project      — agent_list_projects, agent_set_project, agent_manage_projects
@@ -60,6 +61,12 @@ import { getActiveProvider } from '../../providers/agents/registry.js';
 import { notifyPhone } from '../../push/notifyPhone.js';
 import { instrumentMcpToolLogging } from './toolLogging.js';
 import { instrumentListenerEnvelope } from './listenerEnvelope.js';
+import {
+  handleListSessions,
+  handleSendToSession,
+  handleCheckMessages,
+  handleInject,
+} from './sessionToolHandlers.js';
 import { handleShowImages } from './imageToolHandlers.js';
 import { voiceTurnQueue } from './turnQueue.js';
 import {
@@ -126,7 +133,7 @@ function buildMcpServer(sessionKey: string): McpServer {
   instrumentMcpToolLogging(server);
   // Applied after the logging wrapper so the envelope lands on the outermost
   // result — the one the CLI actually receives.
-  instrumentListenerEnvelope(server);
+  instrumentListenerEnvelope(server, sessionKey);
 
   // ── Voice I/O ──────────────────────────────────────────────────────────
 
@@ -318,16 +325,79 @@ function buildMcpServer(sessionKey: string): McpServer {
     },
   );
 
+  // ── Session directory (docs/37) ────────────────────────────────────────
+
+  server.tool(
+    'list_sessions',
+    'List every agent session the user could mean: the voice agent, bridge workers, ' +
+      'past conversations in each CLI\'s own store, and live sessions the user started ' +
+      'themselves in a terminal. Each row has a spoken name ("auth worker"), its status, ' +
+      'and `delivery` — how a message would actually reach it. Only sessions inside a ' +
+      'registered project are listed.',
+    {
+      scope: z
+        .enum(['all', 'running', 'bridge', 'external', 'recent'])
+        .optional()
+        .describe('all (default), running, bridge (ours only), external, or recent.'),
+      project: z.string().optional().describe('Restrict to one project by name.'),
+    },
+    async ({ scope, project }) => {
+      const result = handleListSessions({ scope, project });
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    'send_to_session',
+    'Send a message from the user into a running or past agent session. ' +
+      'Takes a handle, a spoken name ("the auth worker"), or an ordinal ("the second one"). ' +
+      'The result says how it was delivered — live, mailbox_pending, fork, resume or refused — ' +
+      'and you must tell the user which one happened rather than just saying "sent". ' +
+      'External sessions, forks and stop-then-resume always need confirm: true; read the ' +
+      'target, the method and the message back to the user first.',
+    {
+      handle: z.string().min(1).describe('Handle, spoken name, or ordinal from list_sessions.'),
+      message: z.string().min(1).max(8_000).describe("The user's message, relayed as they said it."),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe('The user has confirmed this exact send. Required for external sessions and forks.'),
+      project: z.string().optional(),
+    },
+    async ({ handle, message, confirm, project }) => {
+      const result = handleSendToSession({ handle, message, confirm, project });
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    'check_messages',
+    'Collect messages the user sent into your session while you were working. ' +
+      'Call it when a tool result shows `pending_messages` above zero. ' +
+      'Messages are handed over once — treat them as instructions that arrived mid-task.',
+    {
+      session: z
+        .string()
+        .optional()
+        .describe('Your own session handle. Omit to use the one this MCP session is bound to.'),
+    },
+    async ({ session }) => {
+      const result = handleCheckMessages({ session }, sessionKey);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
   server.tool(
     'inject',
-    'Send additional context to a running agent (best-effort stdin write). ' +
-      'If not delivered, fall back to stop_agent() + spawn_agent() with amended instructions.',
+    'Deprecated alias for send_to_session — kept for one release. ' +
+      'Sends a message into a running session and reports how it was delivered. ' +
+      'Unlike the old implementation it also reaches worktree workers and the voice agent.',
     {
-      id: z.string().min(1).describe('Agent ID.'),
-      message: z.string().min(1).describe('Context to inject into the running agent.'),
+      id: z.string().min(1).describe('Session handle or spoken name.'),
+      message: z.string().min(1).describe('The message to deliver.'),
     },
     async ({ id, message }) => {
-      const result = await agentTools.handleInject({ id, message });
+      const result = handleInject({ id, message });
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );

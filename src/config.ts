@@ -610,6 +610,23 @@ const ProjectConfigSchema = z.object({
   aliases: z.array(z.string()).default([]),
   description: z.string().optional(),
   enabled: z.boolean().default(true),
+  /**
+   * Allow the phone to send messages into agent sessions this project did not
+   * start (docs/37 §4).
+   *
+   * Off by default and deliberately per project: injection *is* prompt
+   * injection, and an externally started session may be running with bypass
+   * permissions — so anyone holding APP_TOKEN could otherwise drive it.
+   */
+  allowExternalSessions: z.boolean().default(false),
+  /**
+   * Tell sessions in this project to poll `check_messages()`.
+   *
+   * A session AgentVoice did not start only receives mailbox messages if its
+   * agent-voice rule tells it to look, which is why this is opt-in per project
+   * rather than a global switch.
+   */
+  externalMailbox: z.boolean().default(false),
 });
 
 export const ConfigFileSchema = z.object({

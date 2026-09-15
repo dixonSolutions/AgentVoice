@@ -34,6 +34,7 @@ import { getConfig } from '../config.js';
 import { childLogger } from '../log.js';
 import type { AgentHandle } from './agentProcess.js';
 import { notifyAuthRequired } from '../providers/agents/authNotify.js';
+import { clearMailbox } from '../state/sessionMailbox.js';
 import { isVoiceAgentRunning } from './voiceAgent.js';
 
 const log = childLogger('job-manager');
@@ -334,6 +335,9 @@ export async function submitJob(
   // Completion handler — runs in the background.
   void handle.result.then((result) => {
     clearTimeout(timeoutTimer);
+    // A finished worker will never read its mailbox again; anything still in
+    // it would otherwise be handed to whatever reuses the id.
+    clearMailbox(jobId);
     watcher.destroy();
     activeJobs.delete(jobId);
     jobStartedAtMs.delete(jobId);

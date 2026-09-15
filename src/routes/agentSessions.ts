@@ -24,6 +24,10 @@ import {
 } from '../state/jobs.js';
 import { handleNewSession } from '../mcp/tools/session.js';
 import { getActiveProvider } from '../providers/agents/registry.js';
+import {
+  handleListSessions,
+  handleSendToSession,
+} from '../mcp/server/sessionToolHandlers.js';
 
 const log = childLogger('api:agent-sessions');
 
@@ -38,6 +42,18 @@ const SelectBodySchema = z.object({
 
 const NewSessionBodySchema = z.object({
   project: z.string().min(1),
+});
+
+const DirectoryQuerySchema = z.object({
+  project: z.string().min(1).optional(),
+  scope: z.enum(['all', 'running', 'bridge', 'external', 'recent']).optional(),
+});
+
+const SendBodySchema = z.object({
+  handle: z.string().min(1),
+  message: z.string().min(1).max(8_000),
+  confirm: z.boolean().optional(),
+  project: z.string().min(1).optional(),
 });
 
 const SessionLogsQuerySchema = z.object({
@@ -72,6 +88,51 @@ function paths(suffix = ''): string[] {
 }
 
 export async function registerAgentSessionRoutes(app: FastifyInstance): Promise<void> {
+  /**
+   * GET /api/sessions — the full session directory (docs/37 §1).
+   *
+   * Distinct from `/api/agent-sessions`, which only ever saw rows AgentVoice
+   * itself wrote. This one also covers the voice agent, the worktree pool,
+   * each CLI's own past conversations, and live sessions the user started in a
+   * terminal — every kind the phone's sessions list groups.
+   */
+  app.get<{ Querystring: { project?: string; scope?: string } }>(
+    '/api/sessions',
+    async (req, reply) => {
+      const parsed = DirectoryQuerySchema.safeParse(req.query ?? {});
+      if (!parsed.success) {
+        return reply.code(400).send({ error: parsed.error.message });
+      }
+      // A project filter still goes through the allowlist.
+      let projectName: string | null = null;
+      if (parsed.data.project) {
+        try {
+          projectName = resolveProjectOr404(parsed.data.project).name;
+        } catch (err) {
+          return reply.code(404).send({ error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+      const result = handleListSessions({
+        scope: parsed.data.scope,
+        ...(projectName ? { project: projectName } : {}),
+      });
+      return result;
+    },
+  );
+
+  /** POST /api/sessions/send — deliver a message into one session. */
+  app.post<{ Body: unknown }>('/api/sessions/send', async (req, reply) => {
+    const parsed = SendBodySchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ error: parsed.error.message });
+    }
+    const result = handleSendToSession(parsed.data);
+    if (!result.ok && result.needs_confirmation) {
+      return reply.code(409).send(result);
+    }
+    return result;
+  });
+
   /** GET — list known threads + active resume id. */
   for (const path of paths()) {
     app.get<{ Querystring: { project?: string } }>(path, async (req, reply) => {

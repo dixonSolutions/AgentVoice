@@ -12,7 +12,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { homedir } from 'node:os';
-import { mkdirSync, writeFileSync, existsSync, readdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import stripAnsi from 'strip-ansi';
 import { getConfig } from '../../config.js';
@@ -54,6 +54,7 @@ import type {
   ModelVariant,
   PermissionModeDescriptor,
   SpawnOptions,
+  StoredSessionSummary,
 } from './types.js';
 
 const execFileAsync = promisify(execFile);
@@ -523,6 +524,74 @@ function cursorSessionStatus(_project: Project, sessionId: string): 'present' | 
   return 'absent';
 }
 
+/**
+ * Past Cursor chats for a project.
+ *
+ * Chats live at `~/.cursor/chats/<workspace hash>/<chat id>/`. The hash is
+ * Cursor's internal encoding of the workspace path and is not reproducible
+ * from outside, so every workspace directory is scanned and each chat is
+ * matched on the cwd recorded in its own metadata where one exists. Without
+ * that, the chat is still listed — the directory has no other identifying
+ * mark, and hiding it would be worse than showing it unattributed.
+ */
+function cursorListSessions(project: Project, limit = 30): StoredSessionSummary[] {
+  const root = join(resolveUserHome(), '.cursor', 'chats');
+  let workspaces: string[];
+  try {
+    workspaces = readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+
+  const out: StoredSessionSummary[] = [];
+  for (const workspace of workspaces) {
+    let chats: string[];
+    try {
+      chats = readdirSync(join(root, workspace), { withFileTypes: true })
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name);
+    } catch {
+      continue;
+    }
+    for (const chat of chats) {
+      const path = join(root, workspace, chat);
+      const cwd = cursorChatCwd(path);
+      if (cwd !== null && cwd !== project.path) continue;
+      out.push({ id: chat, updatedAt: safeMtimeMs(path), path, preview: null });
+    }
+  }
+  out.sort((a, b) => b.updatedAt - a.updatedAt);
+  return out.slice(0, limit);
+}
+
+/** Cursor's chat metadata is undocumented — read it if present, shrug if not. */
+function cursorChatCwd(chatDir: string): string | null {
+  for (const name of ['metadata.json', 'chat.json', 'session.json']) {
+    const file = join(chatDir, name);
+    if (!existsSync(file)) continue;
+    try {
+      const parsed = JSON.parse(readFileSync(file, 'utf-8')) as Record<string, unknown>;
+      for (const key of ['cwd', 'workspace', 'workspacePath', 'rootPath']) {
+        const value = parsed[key];
+        if (typeof value === 'string') return value;
+      }
+    } catch {
+      // Unreadable metadata is not a reason to hide the chat.
+    }
+  }
+  return null;
+}
+
+function safeMtimeMs(path: string): number {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
 export const cursorProvider: AgentProvider = {
   id: 'cursor',
   displayName: 'Cursor',
@@ -604,6 +673,9 @@ export const cursorProvider: AgentProvider = {
   parseStreamEvent: parseCursorEvent,
   ensureMcpRegistration: ensureCursorMcpRegistration,
   sessionStatus: cursorSessionStatus,
+  listSessions: cursorListSessions,
+  /** cursor-agent has no fork flag — `--resume` continues the chat in place. */
+  forkSessionArgs: () => null,
 
   /** `cursor-agent create-chat` mints a thread id we can resume into later. */
   async createSession(): Promise<string | null> {

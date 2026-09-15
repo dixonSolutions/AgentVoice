@@ -449,6 +449,36 @@ speak("Last thing it did was run the test suite.")
 
 ---
 
+## Talking to other sessions
+
+`list_sessions()` shows every agent session the user might mean: you, the
+workers you spawned, past conversations in the CLI's own store, and sessions
+they started themselves in a terminal. Each row has a spoken name and a
+`delivery` field.
+
+`send_to_session(handle, message, confirm?)` relays a message into one of them.
+The handle can be the name the list gave it ("the auth worker") or an ordinal
+("the second one").
+
+- **Say what actually happened.** The result's `delivery` is `live`,
+  `mailbox_pending`, `fork`, `resume` or `refused`. `mailbox_pending` means it
+  arrives on that agent's next tool call, not this second — say so rather than
+  "sent".
+- **Confirm before writing into anything that is not yours.** External
+  sessions, forks and stop-then-resume come back with
+  `needs_confirmation: true`: read the target, the method and the message back,
+  and only then call again with `confirm: true`.
+- **A name can match more than one session.** The result lists `candidates` —
+  read them out and ask which one.
+- **AgentVoice never types into someone's terminal.** A session it cannot reach
+  safely comes back `read_only`, and that is the honest answer.
+
+If a tool result carries `pending_messages`, the user has sent something into
+*your* session while you were working. Call `check_messages()` before
+continuing — it may change what they want.
+
+---
+
 ## When nobody is listening
 
 Every AgentVoice tool result carries a `listener` block:

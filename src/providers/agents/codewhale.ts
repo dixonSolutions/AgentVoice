@@ -61,6 +61,7 @@ import type {
   ModelEntry,
   PermissionModeDescriptor,
   SpawnOptions,
+  StoredSessionSummary,
 } from './types.js';
 
 const execFileAsync = promisify(execFile);
@@ -363,6 +364,23 @@ function readSessions(): StoredSession[] {
     }
   }
   return sessions;
+}
+
+/**
+ * Past Codewhale conversations for a project — the existing `readSessions()`
+ * store reader, filtered by workspace and shaped for the session directory.
+ */
+function codewhaleListSessions(project: Project, limit = 30): StoredSessionSummary[] {
+  return readSessions()
+    .filter((session) => session.workspace === project.path)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, limit)
+    .map((session) => ({
+      id: session.id,
+      updatedAt: session.updatedAt,
+      path: join(sessionsDir(), `${session.id}.json`),
+      preview: null,
+    }));
 }
 
 function safeMtime(path: string): number {
@@ -679,6 +697,12 @@ export const codewhaleProvider: AgentProvider = {
   parseStreamEvent: parseCodewhaleEvent,
   ensureMcpRegistration: ensureCodewhaleMcpRegistration,
   sessionStatus: codewhaleSessionStatus,
+  listSessions: codewhaleListSessions,
+
+  /** Codewhale branches a conversation with its own `fork` subcommand. */
+  forkSessionArgs(_project: Project, sessionId: string, prompt: string): string[] {
+    return ['fork', sessionId, '--prompt', prompt];
+  },
 
   buildWorkerArgs(opts: SpawnOptions): string[] {
     const { project, session, prompt, mode = 'agent', oneShot = false, browser } = opts;

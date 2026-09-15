@@ -262,4 +262,39 @@ export interface AgentProvider {
    * When absent (or resolving null) `agent_new_session` just clears resume_id.
    */
   createSession?(project: Project): Promise<string | null>;
+
+  /**
+   * Past conversations this CLI holds for `project`, newest first.
+   *
+   * Reads the CLI's own on-disk store, which is undocumented and internal to
+   * each vendor — so this is best-effort by construction. An unreadable or
+   * restructured store returns `[]`, never throws, and the caller treats that
+   * as "no past sessions found", exactly as `sessionStatus` treats `unknown`.
+   *
+   * Used by the session directory (docs/37 §1 kind C) so the phone can list
+   * and resume threads that AgentVoice did not start.
+   */
+  listSessions?(project: Project, limit?: number): StoredSessionSummary[];
+
+  /**
+   * Fork a past conversation into a new branch, if the CLI supports it.
+   *
+   * Forking is the safe way into a session that a live process may still own:
+   * resuming a session id concurrently corrupts its transcript, so the
+   * directory forks instead (docs/37 §2). A provider without a fork flag
+   * declares it by leaving this undefined.
+   */
+  forkSessionArgs?(project: Project, sessionId: string, prompt: string): string[] | null;
+}
+
+/** One past conversation as read from a CLI's own session store. */
+export interface StoredSessionSummary {
+  /** The CLI's own session / chat / rollout id. */
+  id: string;
+  /** Epoch ms of the last activity, from metadata or the file's mtime. */
+  updatedAt: number;
+  /** Absolute path of the backing file or directory, for mtime and liveness. */
+  path: string;
+  /** First user message, when the store makes it cheap to read. */
+  preview?: string | null;
 }

@@ -13,7 +13,17 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+  statSync,
+  openSync,
+  readSync,
+  closeSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { childLogger } from '../../log.js';
@@ -49,6 +59,7 @@ import type {
   ModelEntry,
   PermissionModeDescriptor,
   SpawnOptions,
+  StoredSessionSummary,
 } from './types.js';
 
 const execFileAsync = promisify(execFile);
@@ -515,6 +526,92 @@ function codexSessionStatus(_project: Project, sessionId: string): 'present' | '
   return hasRolloutFile(root, sessionId, 4) ? 'present' : 'absent';
 }
 
+/**
+ * Past Codex conversations for a project.
+ *
+ * Rollouts live at `~/.codex/sessions/<yyyy>/<mm>/<dd>/rollout-<stamp>-<id>.jsonl`.
+ * The path carries no workspace, so the cwd recorded in the rollout's first
+ * line is what ties a session to a project; a rollout whose head cannot be
+ * read is skipped rather than guessed at.
+ */
+function codexListSessions(project: Project, limit = 30): StoredSessionSummary[] {
+  const root = join(resolveUserHome(), '.codex', 'sessions');
+  const files: string[] = [];
+  collectRollouts(root, 4, files);
+
+  const out: StoredSessionSummary[] = [];
+  for (const path of files) {
+    const head = readFirstJsonLine(path);
+    const cwd = firstString(head, ['cwd', 'workspace', 'workdir']);
+    if (cwd !== project.path) continue;
+    const id = rolloutId(path);
+    if (!id) continue;
+    out.push({ id, updatedAt: safeMtimeMs(path), path, preview: null });
+  }
+  out.sort((a, b) => b.updatedAt - a.updatedAt);
+  return out.slice(0, limit);
+}
+
+function collectRollouts(dir: string, depth: number, into: string[]): void {
+  if (depth < 0 || into.length > 500) return;
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) collectRollouts(full, depth - 1, into);
+    else if (entry.name.startsWith('rollout-') && entry.name.endsWith('.jsonl')) into.push(full);
+  }
+}
+
+/** `rollout-2026-09-15T10-11-12-<uuid>.jsonl` → the uuid. */
+function rolloutId(path: string): string | null {
+  const name = path.split('/').pop() ?? '';
+  const match = /rollout-.*?-([0-9a-fA-F-]{36})\.jsonl$/.exec(name);
+  return match?.[1] ?? null;
+}
+
+function readFirstJsonLine(path: string): Record<string, unknown> | null {
+  try {
+    const fd = openSync(path, 'r');
+    try {
+      const buf = Buffer.alloc(8192);
+      const read = readSync(fd, buf, 0, buf.length, 0);
+      const firstLine = buf.subarray(0, read).toString('utf-8').split('\n')[0];
+      if (!firstLine) return null;
+      return JSON.parse(firstLine) as Record<string, unknown>;
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+}
+
+function firstString(obj: Record<string, unknown> | null, keys: string[]): string | null {
+  if (!obj) return null;
+  for (const key of keys) {
+    const value = obj[key];
+    if (typeof value === 'string') return value;
+  }
+  const payload = obj['payload'];
+  if (payload && typeof payload === 'object') {
+    return firstString(payload as Record<string, unknown>, keys);
+  }
+  return null;
+}
+
+function safeMtimeMs(path: string): number {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
 export const codexProvider: AgentProvider = {
   id: 'codex',
   displayName: 'Codex',
@@ -617,6 +714,14 @@ export const codexProvider: AgentProvider = {
   parseStreamEvent: parseCodexEvent,
   ensureMcpRegistration: ensureCodexMcpRegistration,
   sessionStatus: codexSessionStatus,
+  listSessions: codexListSessions,
+  /**
+   * Codex has no fork flag: `codex exec resume` continues the thread in place.
+   * Declared unsupported rather than faked, so the session directory shows the
+   * honest delivery method (docs/37 §3) instead of promising a branch it
+   * cannot make.
+   */
+  forkSessionArgs: () => null,
 
   buildWorkerArgs(opts: SpawnOptions): string[] {
     const { project, session, prompt, mode = 'agent', oneShot = false, worktree, browser } = opts;

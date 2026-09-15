@@ -21,6 +21,7 @@
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { listenerBlock, chargeAwayBudget, isListening } from '../../state/awayPolicy.js';
+import { pendingCount } from '../../state/sessionMailbox.js';
 import { childLogger } from '../../log.js';
 
 const log = childLogger('mcp:listener-envelope');
@@ -48,7 +49,11 @@ const SKIP = new Set(['show_images']);
  * the usual single JSON text block. Anything else is returned untouched: a
  * malformed or non-JSON payload must never be corrupted by this.
  */
-export function attachListenerToResult(name: string, result: unknown): unknown {
+export function attachListenerToResult(
+  name: string,
+  result: unknown,
+  sessionKey?: string,
+): unknown {
   if (SKIP.has(name)) return result;
   const res = result as ToolResult | null;
   const first = res?.content?.[0];
@@ -67,6 +72,21 @@ export function attachListenerToResult(name: string, result: unknown): unknown {
   // keeps it — theirs is the one that matches what it just decided.
   if (payload['listener'] === undefined) payload['listener'] = listenerBlock();
 
+  /**
+   * Mailbox piggyback (docs/37 §2): a message the user sent into this session
+   * rides out on the next tool result, so a worker learns about it without
+   * having to poll `check_messages()` on a timer.
+   */
+  if (sessionKey && name !== 'check_messages') {
+    const waiting = pendingCount(sessionKey);
+    if (waiting > 0) {
+      payload['pending_messages'] = waiting;
+      payload['pending_messages_message'] =
+        `The user sent ${waiting} message${waiting === 1 ? '' : 's'} into this session while you ` +
+        'were working. Call check_messages() now — they may change what they want.';
+    }
+  }
+
   if (!isListening()) {
     const verdict = chargeAwayBudget();
     if (verdict.exceeded) {
@@ -84,7 +104,7 @@ export function attachListenerToResult(name: string, result: unknown): unknown {
  * Wrap `server.tool` so every registered tool's result carries the envelope.
  * Call once in buildMcpServer, before the tools are registered.
  */
-export function instrumentListenerEnvelope(server: McpServer): void {
+export function instrumentListenerEnvelope(server: McpServer, sessionKey?: string): void {
   const target = server as McpServer & {
     tool: (name: string, description: string, schema: unknown, handler: ToolHandler) => unknown;
   };
@@ -97,7 +117,7 @@ export function instrumentListenerEnvelope(server: McpServer): void {
     original(name, description, schema, async (args: Record<string, unknown>) => {
       const result = await handler(args);
       try {
-        return attachListenerToResult(name, result);
+        return attachListenerToResult(name, result, sessionKey);
       } catch (err) {
         log.warn({ err, tool: name }, 'could not attach the listener block');
         return result;

@@ -190,17 +190,6 @@ export interface StopAgentResult {
   message: string;
 }
 
-export interface InjectArgs {
-  id: string;
-  message: string;
-}
-
-export interface InjectResult {
-  ok: boolean;
-  delivered: boolean;
-  message: string;
-}
-
 export interface SetModeArgs {
   /** Agent id (informational — mode is stored per-session, applied on next spawn). */
   id: string;
@@ -248,7 +237,6 @@ export interface AgentToolHandlers {
   handleListJobsHistory: (args: ListJobsHistoryArgs) => Promise<JobHistoryEntry[]>;
   handleSpawnAgent: (args: SpawnAgentArgs) => Promise<SpawnAgentResult>;
   handleStopAgent: (args: StopAgentArgs) => Promise<StopAgentResult>;
-  handleInject: (args: InjectArgs) => Promise<InjectResult>;
   handleSetMode: (args: SetModeArgs) => Promise<SetModeResult>;
   handleExecutePlan: (args: ExecutePlanArgs) => Promise<ExecutePlanResult>;
   handleRevertAgent: (args: RevertAgentArgs) => Promise<RevertAgentResult>;
@@ -619,38 +607,6 @@ export function makeAgentHandlers(sessionKey: string): AgentToolHandlers {
       };
     },
 
-    async handleInject(args: InjectArgs): Promise<InjectResult> {
-      const active = getActiveAgentRun();
-
-      if (!active || active.refId !== args.id) {
-        return {
-          ok: false,
-          delivered: false,
-          message: `Agent "${args.id}" is not the active singleton. Use list_agents() to verify.`,
-        };
-      }
-
-      const handle = active.handle as { stdin?: { write?: (s: string) => void } };
-      if (handle.stdin?.write) {
-        try {
-          handle.stdin.write(`\n${args.message}\n`);
-          log.info({ id: args.id, msg: args.message.slice(0, 80), sessionKey }, 'inject delivered');
-          return { ok: true, delivered: true, message: 'Message injected (best-effort).' };
-        } catch (err) {
-          log.warn({ err, id: args.id }, 'inject write failed');
-        }
-      }
-
-      log.warn({ id: args.id, sessionKey }, 'inject not supported — agent has no stdin');
-      return {
-        ok: true,
-        delivered: false,
-        message:
-          'Agent is running but stdin injection is not supported. ' +
-          'If context is critical: call stop_agent() then spawn_agent() with amended instructions.',
-      };
-    },
-
     /**
      * Store the preferred spawn mode for this MCP session.
      * The mode is applied as the default on the next spawn_agent() call.
@@ -757,6 +713,11 @@ export const handleListAgents = defaultHandlers.handleListAgents;
 export const handleGetAgentStatus = defaultHandlers.handleGetAgentStatus;
 export const handleSpawnAgent = defaultHandlers.handleSpawnAgent;
 export const handleStopAgent = defaultHandlers.handleStopAgent;
-export const handleInject = defaultHandlers.handleInject;
+/**
+ * `inject` moved to mcp/server/sessionToolHandlers.ts in docs/37: the version
+ * that lived here wrote to a stdin the agent process does not have, so it
+ * never delivered anything.
+ */
+export { handleInject } from './sessionToolHandlers.js';
 export const handleSetMode = defaultHandlers.handleSetMode;
 export const handleExecutePlan = defaultHandlers.handleExecutePlan;

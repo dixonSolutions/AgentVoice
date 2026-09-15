@@ -15,7 +15,7 @@
 
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { childLogger } from '../../log.js';
@@ -55,6 +55,7 @@ import type {
   ModelEntry,
   PermissionModeDescriptor,
   SpawnOptions,
+  StoredSessionSummary,
 } from './types.js';
 
 const execFileAsync = promisify(execFile);
@@ -540,6 +541,90 @@ function claudeSessionStatus(_project: Project, sessionId: string): 'present' | 
   return 'absent';
 }
 
+/**
+ * Past Claude Code conversations for a project.
+ *
+ * Transcripts live at `~/.claude/projects/<mangled cwd>/<session id>.jsonl`.
+ * The directory name is Claude Code's own encoding of the working directory:
+ * it is not documented, so rather than trying to reproduce it we match on the
+ * `cwd` recorded inside the transcript's first line, and fall back to the
+ * directory-name heuristic when that line is unreadable.
+ */
+function claudeListSessions(project: Project, limit = 30): StoredSessionSummary[] {
+  const root = join(resolveUserHome(), '.claude', 'projects');
+  let dirs: string[];
+  try {
+    dirs = readdirSync(root, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    return [];
+  }
+
+  const out: StoredSessionSummary[] = [];
+  for (const dir of dirs) {
+    let files: string[];
+    try {
+      files = readdirSync(join(root, dir)).filter((name) => name.endsWith('.jsonl'));
+    } catch {
+      continue;
+    }
+    for (const file of files) {
+      const path = join(root, dir, file);
+      const head = readFirstJsonLine(path);
+      const cwd = typeof head?.['cwd'] === 'string' ? (head['cwd'] as string) : null;
+      if (cwd !== null && cwd !== project.path) continue;
+      if (cwd === null && !dir.includes(project.path.replace(/[\\/.]/g, '-'))) continue;
+      out.push({
+        id: file.replace(/\.jsonl$/, ''),
+        updatedAt: safeMtimeMs(path),
+        path,
+        preview: firstUserText(head),
+      });
+    }
+  }
+  out.sort((a, b) => b.updatedAt - a.updatedAt);
+  return out.slice(0, limit);
+}
+
+/** First line of a JSONL transcript, parsed — null when unreadable. */
+function readFirstJsonLine(path: string): Record<string, unknown> | null {
+  try {
+    // Transcripts reach megabytes; only the head is ever needed here.
+    const fd = openSync(path, 'r');
+    try {
+      const buf = Buffer.alloc(8192);
+      const read = readSync(fd, buf, 0, buf.length, 0);
+      const text = buf.subarray(0, read).toString('utf-8');
+      const firstLine = text.split('\n')[0];
+      if (!firstLine) return null;
+      return JSON.parse(firstLine) as Record<string, unknown>;
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return null;
+  }
+}
+
+function firstUserText(head: Record<string, unknown> | null): string | null {
+  if (!head) return null;
+  const message = head['message'];
+  if (message && typeof message === 'object') {
+    const content = (message as Record<string, unknown>)['content'];
+    if (typeof content === 'string') return content.slice(0, 160);
+  }
+  return null;
+}
+
+function safeMtimeMs(path: string): number {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return 0;
+  }
+}
+
 // ── MCP registration ──────────────────────────────────────────────────────
 
 /**
@@ -720,6 +805,15 @@ export const claudeProvider: AgentProvider = {
   parseStreamEvent: parseClaudeEvent,
   ensureMcpRegistration: ensureClaudeMcpRegistration,
   sessionStatus: claudeSessionStatus,
+  listSessions: claudeListSessions,
+
+  /**
+   * Claude Code branches a conversation with `--fork-session`, which is what
+   * makes it safe to write into a thread another live process still owns.
+   */
+  forkSessionArgs(_project: Project, sessionId: string, prompt: string): string[] {
+    return ['--resume', sessionId, '--fork-session', '-p', prompt];
+  },
 
   buildWorkerArgs(opts: SpawnOptions): string[] {
     const { project, session, prompt, mode = 'agent', oneShot = false, browser } = opts;

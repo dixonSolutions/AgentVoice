@@ -30,6 +30,10 @@ export interface ProjectAdminView {
   description: string | null;
   aliases: string[];
   enabled: boolean;
+  /** docs/37 §4 — may the phone write into sessions this project did not start? */
+  allowExternalSessions: boolean;
+  /** docs/37 §2 — should sessions here poll check_messages()? */
+  externalMailbox: boolean;
   pathExists: boolean;
 }
 
@@ -62,6 +66,8 @@ export function listProjectsAdmin(filters: ProjectListFilters = {}): ProjectAdmi
     description: p.description ?? null,
     aliases: p.aliases,
     enabled: p.enabled,
+    allowExternalSessions: p.allowExternalSessions,
+    externalMailbox: p.externalMailbox,
     pathExists: existsSync(p.path),
   }));
 }
@@ -89,6 +95,10 @@ export interface AddProjectInput {
   description?: string;
   aliases?: string[];
   enabled?: boolean;
+  /** docs/37 §4 — let the phone write into sessions AgentVoice did not start. */
+  allowExternalSessions?: boolean;
+  /** docs/37 §2 — tell sessions in this project to poll check_messages(). */
+  externalMailbox?: boolean;
 }
 
 export function addProject(input: AddProjectInput): ProjectAdminView {
@@ -106,6 +116,10 @@ export function addProject(input: AddProjectInput): ProjectAdminView {
     description: input.description,
     aliases: input.aliases ?? [],
     enabled: input.enabled ?? true,
+    // Both default to off: injection into a session we did not start is
+    // prompt injection, so it is opt-in per project.
+    allowExternalSessions: input.allowExternalSessions ?? false,
+    externalMailbox: input.externalMailbox ?? false,
   };
 
   cfg.projects.push(entry);
@@ -118,6 +132,8 @@ export function addProject(input: AddProjectInput): ProjectAdminView {
     description: entry.description ?? null,
     aliases: entry.aliases,
     enabled: entry.enabled,
+    allowExternalSessions: entry.allowExternalSessions,
+    externalMailbox: entry.externalMailbox,
     pathExists: existsSync(entry.path),
   };
 }
@@ -128,6 +144,8 @@ export interface UpdateProjectInput {
   description?: string | null;
   aliases?: string[];
   enabled?: boolean;
+  allowExternalSessions?: boolean;
+  externalMailbox?: boolean;
 }
 
 export function updateProject(input: UpdateProjectInput): ProjectAdminView {
@@ -149,6 +167,8 @@ export function updateProject(input: UpdateProjectInput): ProjectAdminView {
       input.description !== undefined ? (input.description ?? undefined) : existing.description,
     aliases: input.aliases ?? existing.aliases,
     enabled: input.enabled ?? existing.enabled,
+    allowExternalSessions: input.allowExternalSessions ?? existing.allowExternalSessions,
+    externalMailbox: input.externalMailbox ?? existing.externalMailbox,
   };
 
   cfg.projects[idx] = updated;
@@ -161,6 +181,8 @@ export function updateProject(input: UpdateProjectInput): ProjectAdminView {
     description: updated.description ?? null,
     aliases: updated.aliases,
     enabled: updated.enabled,
+    allowExternalSessions: updated.allowExternalSessions,
+    externalMailbox: updated.externalMailbox,
     pathExists: existsSync(updated.path),
   };
 }
