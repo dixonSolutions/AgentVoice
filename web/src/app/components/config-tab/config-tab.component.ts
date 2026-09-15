@@ -44,6 +44,7 @@ import type {
   ServeStatus,
   ServeEvent,
   ServeActionId,
+  InstallMode,
   JobSettings,
   NarrationSettings,
   NarrationCatalogEntry,
@@ -66,7 +67,6 @@ type SectionId =
   | 'connection'
   | 'voice'
   | 'speech'
-  | 'personal'
   | 'projects'
   | 'keys'
   | 'workflow'
@@ -106,15 +106,23 @@ const ALL_SECTIONS: ConfigSection[] = [
   },
   {
     id: 'voice',
-    label: 'Voice & Controls',
+    // Was "Voice & Controls", claiming TTS and transcription — which are the
+    // Speech tab's job, and the two descriptions contradicted each other
+    // (docs/39 A17). `interrupt` in the keywords pointed at deafen settings
+    // that were removed.
+    label: 'Listening & controls',
     icon: 'pi-microphone',
-    description: 'Wake words, on-screen controls, turn submit, TTS, and transcription',
-    keywords: ['wake', 'phrase', 'vad', 'silence', 'start', 'end', 'cancel', 'audio', 'sound', 'cue', 'tts', 'voice', 'interrupt', 'browser', 'polly', 'transcribe', 'sfm', 'speech', 'stt', 'touch', 'mute', 'speak'],
+    description: 'Wake phrases, on-screen controls, and when a turn is submitted',
+    keywords: [
+      'wake', 'phrase', 'vad', 'silence', 'start', 'end', 'cancel', 'listen',
+      'touch', 'mute', 'controls', 'turn', 'submit', 'activation', 'barge',
+    ],
   },
   {
     id: 'speech',
-    label: 'Speech',
-    icon: 'pi-language',
+    // `pi-language` read as "choose a language". These are the engines.
+    label: 'Speech engines',
+    icon: 'pi-headphones',
     description: 'Which engines listen and speak — providers, voices, languages, keys',
     keywords: [
       'speech', 'stt', 'tts', 'transcribe', 'transcription', 'whisper', 'asr', 'dictation',
@@ -125,13 +133,6 @@ const ALL_SECTIONS: ConfigSection[] = [
     ],
   },
   {
-    id: 'personal',
-    label: 'Personal',
-    icon: 'pi-user',
-    description: 'Your name used by the voice agent',
-    keywords: ['name', 'user', 'personal', 'address'],
-  },
-  {
     id: 'projects',
     label: 'Projects',
     icon: 'pi-folder-open',
@@ -140,31 +141,47 @@ const ALL_SECTIONS: ConfigSection[] = [
   },
   {
     id: 'keys',
-    label: 'AWS Bedrock Keys',
+    // These keys power Polly and Transcribe as well as Bedrock, so naming them
+    // after one consumer sent people looking in the wrong place (docs/39 A13).
+    label: 'AWS credentials',
     icon: 'pi-key',
-    description: 'IAM access key, secret, region — test credentials with a live ping',
+    description: 'IAM access key, secret and region — used by Bedrock, Polly and Transcribe',
     keywords: ['aws', 'bedrock', 'key', 'iam', 'access', 'secret', 'region', 'credential', 'polly', 'transcribe'],
   },
   {
     id: 'workflow',
-    label: 'LLM & Workflow',
+    label: 'LLM intelligence',
     icon: 'pi-microchip-ai',
-    description: 'Default workflow, model, region, audio settings, conversation memory',
-    keywords: ['llm', 'model', 'workflow', 'cursor', 'claude', 'sonnet', 'polly', 'voice', 'tts', 'stt', 'memory', 'webkit', 'tokens'],
+    // The old description said "audio settings"; only a region is left here,
+    // and its keywords made "tts" match three different sections (docs/39).
+    description: 'Active workflow, Bedrock model and region, conversation memory',
+    keywords: ['llm', 'workflow', 'bedrock', 'model', 'region', 'memory', 'tokens', 'intelligence'],
   },
   {
     id: 'agent-client',
-    label: 'Agent Client',
-    icon: 'pi-microchip-ai',
-    description: 'Select the AI coding agent: Cursor, Codex, or Claude Code',
-    keywords: ['agent', 'client', 'cursor', 'codex', 'claude', 'claude-code', 'codewhale', 'codew', 'openai', 'anthropic', 'deepseek', 'binary', 'path'],
+    label: 'Agent',
+    // Shared pi-microchip-ai with LLM & Workflow before — two sections with
+    // the same icon read as the same section (docs/39 cosmetics).
+    icon: 'pi-android',
+    description: 'Which coding agent runs the work, its launch flags, and how it addresses you',
+    keywords: [
+      'agent', 'client', 'cursor', 'codex', 'claude', 'claude-code', 'codewhale', 'codew',
+      'openai', 'anthropic', 'deepseek', 'binary', 'path', 'flags', 'trust',
+      'name', 'user', 'personal', 'address', 'poll', 'worker',
+    ],
   },
   {
     id: 'serve',
-    label: 'Serve',
+    label: 'Updates & service',
     icon: 'pi-server',
-    description: 'Health check, live service logs, restart, and rebase onto origin',
-    keywords: ['serve', 'host', 'port', 'url', 'tailscale', 'rebase', 'restart', 'git', 'journal', 'journalctl', 'health', 'network', 'systemd'],
+    // "Rebase onto origin" is meaningless for an npm or .deb install, which is
+    // most of them — the update path depends on how it was installed.
+    description: 'Version, update, restart, service logs, hosting and ports',
+    keywords: [
+      'serve', 'host', 'port', 'url', 'tailscale', 'cloudflare', 'ngrok', 'update',
+      'upgrade', 'restart', 'git', 'journal', 'journalctl', 'health', 'network',
+      'systemd', 'apt', 'dnf', 'npm',
+    ],
   },
   {
     id: 'jobs',
@@ -199,7 +216,7 @@ const ALL_SECTIONS: ConfigSection[] = [
   },
   {
     id: 'database',
-    label: 'Database & Sessions',
+    label: 'Data & diagnostics',
     icon: 'pi-database',
     description: 'DB path, table stats, session state, audit log',
     keywords: ['database', 'db', 'sqlite', 'session', 'audit', 'log', 'history', 'jobs', 'events'],
@@ -446,9 +463,6 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
         this.syncVoiceForm();
         break;
       // 'speech' is handled entirely by <cv-speech-tab />.
-      case 'personal':
-        this.syncVoiceForm();
-        break;
       case 'projects':
         await this.loadProjects();
         break;
@@ -459,7 +473,10 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
         await this.loadWorkflow();
         break;
       case 'agent-client':
-        await this.loadAgentClient();
+        // Personal (your name) and the worker poll interval were folded in
+        // here, and both come from the voice settings (docs/39 A12, A16).
+        await Promise.all([this.loadAgentClient(), this.voiceProviders.refresh()]);
+        this.syncVoiceForm();
         break;
       case 'serve':
         await this.loadServe();
@@ -989,7 +1006,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     this.savingAgentClient = true;
     try {
       const res = await this.admin.setAgentClient(clientId);
-      this.agentClientData = { active: res.active, clients: res.clients };
+      this.agentClientData = { active: res.active, clients: res.clients, extraArgs: res.extraArgs };
       this.toast.success('Agent client changed', res.clients.find((c) => c.id === res.active)?.label ?? res.active);
     } catch (err) {
       this.toast.error('Could not change agent client', err instanceof Error ? err.message : String(err));
@@ -1070,7 +1087,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   // Showing rebase controls to an npm install would offer operations that
   // cannot run, so the whole section switches on this.
 
-  protected get serveInstallMode(): 'git' | 'npm' | 'unknown' {
+  protected get serveInstallMode(): InstallMode {
     return this.serveStatus?.install?.mode ?? 'git';
   }
 
@@ -1082,8 +1099,25 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     return this.serveInstallMode === 'npm';
   }
 
+  /**
+   * A .deb / .rpm install (docs/38). The package manager owns the files, so
+   * there is no update *button* to offer — only the command to copy.
+   */
+  protected get serveIsSystemInstall(): boolean {
+    return this.serveInstallMode === 'system';
+  }
+
   protected get serveCanUpdate(): boolean {
-    return this.serveInstallMode !== 'unknown';
+    return this.serveInstallMode === 'git' || this.serveInstallMode === 'npm';
+  }
+
+  protected async copyUpdateCommand(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(this.serveUpdateCommand);
+      this.toast.success('Copied', 'Paste it into a terminal on the bridge host.');
+    } catch {
+      this.toast.error('Could not copy', 'Select the command and copy it manually.');
+    }
   }
 
   protected get serveInstallReason(): string {
@@ -1620,17 +1654,49 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     }
   }
 
-  protected onAddFlag(): void {
-    if (!this.jobsData || !this.newPreRunFlag.trim()) return;
-    if (!this.jobsData.preRunFlags.includes(this.newPreRunFlag.trim())) {
-      this.jobsData.preRunFlags = [...this.jobsData.preRunFlags, this.newPreRunFlag.trim()];
+  /**
+   * Extra launch flags live under Agent Client now — they are the active CLI's
+   * flags, not a job setting, and the shipped default (`--trust`) is Cursor's
+   * (docs/39 A6). They are still persisted through /api/admin/jobs, which is
+   * where `preRunFlags` lives.
+   */
+  protected onAddExtraArg(): void {
+    const flag = this.newPreRunFlag.trim();
+    if (!this.agentClientData || !flag) return;
+    if (!this.agentClientData.extraArgs.includes(flag)) {
+      this.agentClientData = {
+        ...this.agentClientData,
+        extraArgs: [...this.agentClientData.extraArgs, flag],
+      };
     }
     this.newPreRunFlag = '';
   }
 
-  protected onRemoveFlag(flag: string): void {
-    if (!this.jobsData) return;
-    this.jobsData.preRunFlags = this.jobsData.preRunFlags.filter((f) => f !== flag);
+  protected onRemoveExtraArg(flag: string): void {
+    if (!this.agentClientData) return;
+    this.agentClientData = {
+      ...this.agentClientData,
+      extraArgs: this.agentClientData.extraArgs.filter((f) => f !== flag),
+    };
+  }
+
+  protected async onSaveExtraArgs(): Promise<void> {
+    if (!this.agentClientData) return;
+    this.savingJobs = true;
+    try {
+      await this.admin.patchJobs({ preRunFlags: this.agentClientData.extraArgs });
+      this.toast.success('Saved');
+    } catch (err) {
+      this.toast.error('Could not save', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.savingJobs = false;
+    }
+  }
+
+  /** Display name of the client the flags actually go to. */
+  protected activeClientLabel(): string {
+    const data = this.agentClientData;
+    return data?.clients.find((c) => c.id === data.active)?.label ?? 'the agent CLI';
   }
 
   protected async onSaveJobs(): Promise<void> {
@@ -1872,8 +1938,12 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     }
   }
 
+  /** Two-step, because the action is destructive and was previously one tap. */
+  protected confirmingClearSessions = false;
+
   protected async onClearSessions(): Promise<void> {
     this.clearingSessions = true;
+    this.confirmingClearSessions = false;
     try {
       const res = await this.admin.clearSessions();
       this.toast.success('Sessions cleared', `${res.cleared} row(s) removed.`);

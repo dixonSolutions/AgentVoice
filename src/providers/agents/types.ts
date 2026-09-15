@@ -172,6 +172,15 @@ export interface AgentProvider {
   resolveBin(): string;
   /** True if the binary was actually found (not just the bare PATH fallback name). */
   isInstalled(): boolean;
+  /**
+   * The environment variable that pins this CLI's binary path.
+   *
+   * Declared per provider so the config screen can render the list from the
+   * providers themselves. It used to be a hardcoded pair (CODEX_PATH,
+   * CLAUDE_CODE_PATH) that silently omitted CURSOR_AGENT_PATH and
+   * CODEWHALE_PATH — docs/39 A7.
+   */
+  binEnvVar(): string | null;
 
   /** Build the subprocess environment for this CLI (may strip conflicting provider keys). */
   env(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv;

@@ -21,6 +21,11 @@ export function createBinResolver(spec: BinResolveSpec): {
   resolve(): string;
   isInstalled(): boolean;
   resolvedPath(): string | null;
+  /**
+   * The env var that pins this CLI's path, so the config screen can name it
+   * per provider instead of listing two of the four (docs/39 A7).
+   */
+  envVar(): string | null;
 } {
   let cached: string | null = null;
 
@@ -53,7 +58,7 @@ export function createBinResolver(spec: BinResolveSpec): {
     return path !== spec.fallback ? path : null;
   }
 
-  return { resolve, isInstalled, resolvedPath };
+  return { resolve, isInstalled, resolvedPath, envVar: () => spec.envVar ?? null };
 }
 
 export function homeCandidate(...segments: string[]): string {

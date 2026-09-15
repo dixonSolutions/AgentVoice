@@ -708,6 +708,7 @@ export const claudeProvider: AgentProvider = {
 
   resolveBin: () => resolver.resolve(),
   isInstalled: () => resolver.isInstalled(),
+  binEnvVar: () => resolver.envVar(),
   env: claudeEnv,
   checkAuth,
 

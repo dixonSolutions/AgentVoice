@@ -618,6 +618,7 @@ export const codexProvider: AgentProvider = {
 
   resolveBin: () => resolver.resolve(),
   isInstalled: () => resolver.isInstalled(),
+  binEnvVar: () => resolver.envVar(),
   env: codexEnv,
   checkAuth,
 

@@ -44,9 +44,15 @@ const EnvSchema = z.object({
   APNS_KEY_PATH: z.string().optional(),
   APNS_BUNDLE_ID: z.string().optional(),
   APNS_PRODUCTION: z.string().optional(),
-  /** Override paths for alternative agent client binaries */
+  /**
+   * Pin an agent CLI's binary path. One per provider — the schema used to
+   * declare only two of the four, so setting CURSOR_AGENT_PATH or
+   * CODEWHALE_PATH was silently dropped (docs/39 A7).
+   */
+  CURSOR_AGENT_PATH: z.string().optional(),
   CODEX_PATH: z.string().optional(),
   CLAUDE_CODE_PATH: z.string().optional(),
+  CODEWHALE_PATH: z.string().optional(),
   /** Agent-provider auth credentials — set by the in-app login flow or manually. */
   CURSOR_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string().optional(),

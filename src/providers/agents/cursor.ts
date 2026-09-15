@@ -598,6 +598,7 @@ export const cursorProvider: AgentProvider = {
 
   resolveBin: () => resolver.resolve(),
   isInstalled: () => resolver.isInstalled(),
+  binEnvVar: () => resolver.envVar(),
   env: cursorEnv,
   checkAuth,
 

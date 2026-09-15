@@ -49,6 +49,7 @@ import { getDb } from '../state/db.js';
 import { AUTO_MODEL_ID, getCachedModelsAnyAge, isValidModelId } from '../state/models.js';
 import { getDefaultSelection, persistDefaultSelection, setSelectionForAllSessions } from '../state/registry.js';
 import { childLogger } from '../log.js';
+import { getProvider } from '../providers/agents/registry.js';
 import {
   resolveAwsAuth,
   validateAwsCredentials,
@@ -482,23 +483,30 @@ export async function registerAdminSettingsRoutes(app: FastifyInstance): Promise
 
   // ── Agent Client ──────────────────────────────────────────────────────
 
-  const CLIENT_LABELS: Record<AgentClient, string> = {
-    cursor: 'Cursor',
-    codex: 'Codex',
-    'claude-code': 'Claude Code',
-    codewhale: 'Codewhale',
-  };
+  // Labels come from each provider's own displayName — a second copy here
+  // would be one more place to forget when a client is added.
 
   function getAgentClientStatus() {
     const { settings } = getConfig();
     return {
       active: settings.agentClient,
-      clients: AGENT_CLIENTS.map((id) => ({
-        id,
-        label: CLIENT_LABELS[id],
-        available: isAgentClientAvailable(id),
-        binPath: resolvedAgentBinPath(id),
-      })),
+      clients: AGENT_CLIENTS.map((id) => {
+        const provider = getProvider(id);
+        return {
+          id,
+          label: provider.displayName,
+          available: isAgentClientAvailable(id),
+          binPath: resolvedAgentBinPath(id),
+          /** Rendered by the config screen instead of a hardcoded list. */
+          binEnvVar: provider.binEnvVar(),
+          binEnvValue: provider.binEnvVar() ? (process.env[provider.binEnvVar()!] ?? null) : null,
+        };
+      }),
+      /**
+       * Extra launch flags belong to the active CLI, not to jobs in general —
+       * the shipped default (`--trust`) is Cursor's (docs/39 A6).
+       */
+      extraArgs: settings.preRunFlags,
     };
   }
 

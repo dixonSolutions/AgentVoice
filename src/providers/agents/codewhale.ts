@@ -545,6 +545,7 @@ export const codewhaleProvider: AgentProvider = {
 
   resolveBin: () => resolver.resolve(),
   isInstalled: () => resolver.isInstalled(),
+  binEnvVar: () => resolver.envVar(),
   env: codewhaleEnv,
   checkAuth,
 

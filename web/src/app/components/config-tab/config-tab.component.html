@@ -197,19 +197,20 @@
                 text="Wake and end phrases must be different — e.g. listen / send." />
             }
           }
-          <p-iftalabel>
-            <p-inputNumber id="cfg-worker-poll" [(ngModel)]="workerPollTimeoutMs"
-              [min]="5000" [max]="60000" [step]="1000" suffix=" ms"
-              [disabled]="!isBridgeConnected()" />
-            <label for="cfg-worker-poll">Worker status poll interval</label>
-          </p-iftalabel>
-          <p-message severity="secondary" variant="simple"
-            text="While a sub-agent runs, how long to wait for your next voice/text turn before checking worker status again. Speaking is optional when nothing meaningful changed." />
+          <!--
+            The worker status poll interval moved to Agent: it is how often the
+            agent checks on a worker, not part of taking a turn (docs/39 A12).
+          -->
         </p-fieldset>
 
+        <!--
+          docs/39 A10: agent voice moved to "What gets spoken", where the
+          read-aloud level and the bridge's own narration already live. Left
+          here as a pointer rather than a second copy of the same switches.
+        -->
         <p-fieldset legend="Agent voice (TTS)">
           <p-message severity="secondary" variant="simple"
-            text="Controls MCP speak() playback. When disabled, transcripts still appear but nothing is spoken." />
+            text="Whether the agent's replies are played aloud. This and the rest of what you hear live together under What gets spoken." />
 
           <div class="cv-cfg-toggle-row">
             <p-toggleSwitch id="cfg-agent-voice" [(ngModel)]="agentVoiceEnabled"
@@ -266,26 +267,6 @@
   }
 
   <!-- ── Personal ── -->
-  @if (activeSection() === 'personal') {
-    <div class="cv-cfg-detail">
-      <p-fluid>
-        <p-message severity="secondary" variant="simple"
-          text="The voice agent uses this name when addressing you." />
-        <p-fieldset legend="Your name">
-          <p-iftalabel>
-            <input pInputText id="cfg-user-name" [(ngModel)]="userName"
-              placeholder="e.g. Alex" [disabled]="!isBridgeConnected()" />
-            <label for="cfg-user-name">Name (optional)</label>
-          </p-iftalabel>
-        </p-fieldset>
-        <p-button label="Save name" icon="pi pi-user"
-          [loading]="savingUserName"
-          [disabled]="!isBridgeConnected()"
-          (onClick)="onSaveUserName()" />
-      </p-fluid>
-    </div>
-  }
-
   <!-- ── Projects ── -->
   @if (activeSection() === 'projects') {
     <div class="cv-cfg-detail">
@@ -595,10 +576,12 @@
       @if (agentClientData) {
         <p-fluid>
           <p-fieldset legend="Active agent client">
-            <p class="cv-cfg-hint">
-              Select the AI coding agent the bridge will spawn for voice and worker jobs.
-              All three clients register the shared agent-voice MCP server.
-            </p>
+            <!--
+              "All three clients" — there are four. Counting them in prose
+              means the copy is wrong the day a fifth arrives, so it does not.
+            -->
+            <p-message severity="secondary" variant="simple"
+              text="The coding agent the bridge spawns for voice and worker jobs. Every client registers the same agent-voice MCP server." />
             <div class="cv-client-list">
               @for (client of agentClientData.clients; track client.id) {
                 <button
@@ -622,7 +605,7 @@
                       <span>{{ client.binPath ?? client.id }}</span>
                     } @else {
                       <i class="pi pi-exclamation-circle" style="color: var(--p-orange-400)"></i>
-                      <span>Not installed — see docs/23-multi-agent-client.md</span>
+                      <span>Not installed — install its CLI, then reload this page</span>
                     }
                   </div>
                 </button>
@@ -630,14 +613,91 @@
             </div>
           </p-fieldset>
 
-          <p-fieldset legend="Environment overrides">
-            <p class="cv-cfg-hint">
-              Set these in your <code>.env</code> file to override the binary path for each client:
-            </p>
+          <!--
+            Rendered from what the providers declare. The hardcoded version
+            listed two of the four, so CURSOR_AGENT_PATH and CODEWHALE_PATH
+            looked like they did not exist (docs/39 A7).
+          -->
+          <!--
+            docs/39 A16: "Personal" was a whole section with its own save
+            button for one field. It is agent behaviour, so it lives here.
+          -->
+          <p-fieldset legend="How the agent addresses you">
+            <p-iftalabel>
+              <input pInputText id="cfg-user-name" [(ngModel)]="userName"
+                placeholder="e.g. Alex" [disabled]="!canUseApi()" />
+              <label for="cfg-user-name">Your name (optional)</label>
+            </p-iftalabel>
+            <p-button label="Save" icon="pi pi-save"
+              [loading]="savingUserName"
+              [disabled]="!canUseApi()"
+              (onClick)="onSaveUserName()" />
+          </p-fieldset>
+
+          <!--
+            docs/39 A12: the worker status poll interval sat under "Turn
+            submit" in the Voice section. It is how often the voice agent
+            checks on a worker — agent behaviour, not turn-taking.
+          -->
+          <p-fieldset legend="Worker narration">
+            <p-iftalabel>
+              <p-inputNumber id="cfg-worker-poll"
+                [ngModel]="workerPollTimeoutMs / 1000"
+                (ngModelChange)="workerPollTimeoutMs = $event * 1000"
+                [min]="5" [max]="60" [step]="5" suffix=" s"
+                [disabled]="!canUseApi()" />
+              <label for="cfg-worker-poll">Check on a running worker every</label>
+            </p-iftalabel>
+            <p-message severity="secondary" variant="simple"
+              text="How long the agent waits for you before looking at a worker's progress again." />
+            <p-button label="Save" icon="pi pi-save"
+              [loading]="savingVoice"
+              [disabled]="!canUseApi()"
+              (onClick)="onSaveVoiceSettings()" />
+          </p-fieldset>
+
+          <p-fieldset legend="Binary path overrides">
+            <p-message severity="secondary" variant="simple"
+              text="Set these in your .env file to pin a client's binary." />
             <div class="cv-cfg-code-block">
-              <code>CODEX_PATH=/path/to/codex</code><br>
-              <code>CLAUDE_CODE_PATH=/path/to/claude</code>
+              @for (client of agentClientData.clients; track client.id) {
+                @if (client.binEnvVar) {
+                  <code>{{ client.binEnvVar }}={{ client.binEnvValue || '/path/to/' + client.id }}</code><br>
+                }
+              }
             </div>
+          </p-fieldset>
+
+          <!--
+            docs/39 A6: these were in Job Settings, described as Cursor-only,
+            with a Cursor default. They are the active client's launch flags.
+          -->
+          <p-fieldset legend="Extra launch flags">
+            <p-message severity="secondary" variant="simple"
+              [text]="'Passed to ' + activeClientLabel() + ' before each run. Permission flags belong under Permissions on the Voice tab.'" />
+            <div class="cv-cfg-flags">
+              @for (flag of agentClientData.extraArgs; track flag) {
+                <div class="cv-cfg-flag-chip">
+                  <span>{{ flag }}</span>
+                  <button class="cv-cfg-flag-remove" (click)="onRemoveExtraArg(flag)"
+                    [disabled]="!canUseApi()" title="Remove flag">
+                    <i class="pi pi-times"></i>
+                  </button>
+                </div>
+              }
+            </div>
+            <div class="cv-cfg-flag-add-row">
+              <input pInputText [(ngModel)]="newPreRunFlag" placeholder="--flag"
+                (keydown.enter)="onAddExtraArg()"
+                [disabled]="!canUseApi()" />
+              <p-button icon="pi pi-plus" size="small"
+                [disabled]="!canUseApi() || !newPreRunFlag.trim()"
+                (onClick)="onAddExtraArg()" />
+            </div>
+            <p-button label="Save" icon="pi pi-save"
+              [loading]="savingJobs"
+              [disabled]="!canUseApi()"
+              (onClick)="onSaveExtraArgs()" />
           </p-fieldset>
         </p-fluid>
       }
@@ -846,15 +906,35 @@
                       <p-message severity="secondary" variant="simple"
                         [text]="'Already on ' + serveInstalledVersion + ' — nothing newer has been published.'" />
                     }
+                  } @else if (serveIsSystemInstall) {
+                    <!--
+                      docs/38: an in-app update cannot write to /usr/lib, and
+                      running `npm i -g` here would install a second copy the
+                      service does not run. So: the command, not a button.
+                    -->
+                    <p-message severity="secondary" variant="simple"
+                      text="Installed from a system package, so your package manager owns the update." />
+                    <div class="cv-cfg-code-block">
+                      <code>{{ serveUpdateCommand }}</code>
+                    </div>
+                    <p-button label="Copy command" icon="pi pi-copy"
+                      severity="secondary" [outlined]="true"
+                      (onClick)="copyUpdateCommand()" />
+                    <p-message severity="secondary" variant="simple"
+                      text="After upgrading, restart it as yourself: systemctl --user restart agentvoice" />
                   } @else {
                     <p-message severity="warn" variant="simple"
-                      [text]="'Cannot update automatically — ' + serveInstallReason + '. Reinstall with npm, or run from a git clone.'" />
+                      [text]="'Cannot update automatically — ' + serveInstallReason + '. Reinstall it the way you want to maintain it: npm, a system package, or a git clone.'" />
                   }
                 </p-fieldset>
 
                 <p-fieldset legend="Service">
+                  <!--
+                    scripts/restart.sh only exists in a clone — it was named to
+                    npm and package users who have no scripts/ directory.
+                  -->
                   <p-message severity="secondary" variant="simple"
-                    text="Restart runs scripts/restart.sh (build + systemd restart) without touching git." />
+                    text="Restarts the bridge service without touching your code or your config." />
                   <div class="cv-cfg-serve-action-grid">
                     <p-button label="Restart service" icon="pi pi-replay"
                       severity="secondary" [outlined]="true"
@@ -1029,7 +1109,7 @@
                         [(ngModel)]="hostingData.runModes.serve.publicBaseUrl"
                         placeholder="https://your-tailscale-hostname:8787"
                         [disabled]="!isBridgeConnected()" />
-                      <label for="cfg-public-url">Public base URL (Tailscale / reverse proxy)</label>
+                      <label for="cfg-public-url">Public base URL</label>
                     </p-iftalabel>
                   </p-fieldset>
 
@@ -1162,36 +1242,6 @@
                 [(ngModel)]="jobsData.ghostKillEnabled"
                 [disabled]="!canUseApi()" />
               <label for="cfg-ghost-kill">Ghost kill — automatically stop orphaned agents</label>
-            </div>
-          </p-fieldset>
-
-          <!--
-            docs/39 A6 — these are the active CLI's extra launch flags, not a
-            generic job setting, and the default (--trust) is Cursor's. They are
-            labelled with the running provider so the screen stops implying
-            every client takes them.
-          -->
-          <p-fieldset legend="Extra launch flags">
-            <p-message severity="secondary" variant="simple"
-              [text]="'Extra flags passed to the active agent CLI before each run. Permission flags (--force / --yolo) belong under Permissions on the Voice tab.'" />
-            <div class="cv-cfg-flags">
-              @for (flag of jobsData.preRunFlags; track flag) {
-                <div class="cv-cfg-flag-chip">
-                  <span>{{ flag }}</span>
-                  <button class="cv-cfg-flag-remove" (click)="onRemoveFlag(flag)"
-                    [disabled]="!isBridgeConnected()" title="Remove flag">
-                    <i class="pi pi-times"></i>
-                  </button>
-                </div>
-              }
-            </div>
-            <div class="cv-cfg-flag-add-row">
-              <input pInputText [(ngModel)]="newPreRunFlag" placeholder="--flag"
-                (keydown.enter)="onAddFlag()"
-                [disabled]="!isBridgeConnected()" />
-              <p-button icon="pi pi-plus" size="small"
-                [disabled]="!isBridgeConnected() || !newPreRunFlag.trim()"
-                (onClick)="onAddFlag()" />
             </div>
           </p-fieldset>
 
@@ -1468,11 +1518,28 @@
         <p-fieldset legend="Session state">
           <p-message severity="secondary" variant="simple"
             text="Session state tracks the active project and model per connection. Clearing it resets all sessions." />
-          <p-button label="Clear all sessions" icon="pi pi-trash"
-            severity="danger" [outlined]="true"
-            [loading]="clearingSessions"
-            [disabled]="!isBridgeConnected()"
-            (onClick)="onClearSessions()" />
+          <!--
+            docs/39 A9: this was a one-tap destructive action with no
+            confirmation, sitting next to read-only stats.
+          -->
+          @if (confirmingClearSessions) {
+            <p-message severity="warn" variant="simple"
+              text="This clears the active project, model and resume state for every session. Running work is not affected." />
+            <div class="cv-cfg-row-actions">
+              <p-button label="Yes, clear them" icon="pi pi-trash"
+                severity="danger"
+                [loading]="clearingSessions"
+                [disabled]="!canUseApi()"
+                (onClick)="onClearSessions()" />
+              <p-button label="Cancel" severity="secondary" [outlined]="true"
+                (onClick)="confirmingClearSessions = false" />
+            </div>
+          } @else {
+            <p-button label="Clear all sessions" icon="pi pi-trash"
+              severity="danger" [outlined]="true"
+              [disabled]="!canUseApi()"
+              (onClick)="confirmingClearSessions = true" />
+          }
         </p-fieldset>
 
         @if (auditEntries.length > 0) {
