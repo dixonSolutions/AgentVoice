@@ -251,6 +251,149 @@ jobs:
             npx @ratitisrad/agentvoice                # or run it once
             ```
 
+            Or install the .deb / .rpm attached below — they bundle Node, so
+            they work on distros that still ship Node 18.
+
+            ```bash
+            sudo apt install ./agentvoice_${{ steps.v.outputs.version }}_amd64.deb
+            sudo dnf install ./agentvoice-${{ steps.v.outputs.version }}.x86_64.rpm
+            ```
+
             The wake-word model is not bundled — run `agentvoice prepare-vosk`
             if you want wake words.
           files: '*.tgz'
+
+  # ── System packages (docs/38, #58) ─────────────────────────────────────────
+  #
+  # Runs after the release so the .deb / .rpm are attached to the same GitHub
+  # Release the npm tarball is. One job per architecture: better-sqlite3's
+  # binding is ABI- and arch-bound and the bundled Node has to match it, which
+  # is also why the runtime is fetched here rather than depended on.
+  packages:
+    name: deb + rpm (${{ matrix.arch }})
+    if: github.event_name != 'pull_request'
+    needs: release
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+            node_arch: x64
+          # arm64 from day one — Raspberry Pi and Graviton are exactly the
+          # "always-on box in the corner" this is for. Built on a native
+          # runner so the binding is compiled, not cross-guessed.
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+            node_arch: arm64
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund --legacy-peer-deps
+
+      - name: Build
+        run: npm run build
+
+      - name: Resolve the version
+        id: v
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # The exact runtime that goes in the package. Pinned to the major the
+      # package.json `engines` field requires, not "whatever latest is".
+      - name: Fetch the Node runtime to bundle
+        id: node
+        run: |
+          set -eu
+          major="$(node -p "require('./package.json').engines.node.replace(/[^0-9]/g,'')")"
+          version="$(curl -fsSL https://nodejs.org/dist/index.json \
+            | node -e 'let d="";process.stdin.on("data",c=>d+=c).on("end",()=>{
+                const major=process.argv[1];
+                const hit=JSON.parse(d).find(v=>v.lts&&v.version.startsWith("v"+major+"."));
+                if(!hit){console.error("no LTS release for Node "+major);process.exit(1)}
+                console.log(hit.version);
+              })' "$major")"
+          dir="node-${version}-linux-${{ matrix.node_arch }}"
+          curl -fsSL -o node.tar.xz "https://nodejs.org/dist/${version}/${dir}.tar.xz"
+          tar -xf node.tar.xz
+          echo "dir=${PWD}/${dir}" >> "$GITHUB_OUTPUT"
+          echo "Bundling ${version} (${{ matrix.node_arch }})"
+
+      - name: Stage the package payload
+        run: packaging/stage.sh "${{ steps.node.outputs.dir }}"
+
+      # The model is 41 MB and cannot live under /usr/lib anyway — the same
+      # assertion the npm job makes, for the same reason.
+      - name: Assert the wake-word model is not packaged
+        run: |
+          set -eu
+          if [ -f packaging/root/usr/lib/agentvoice/web/dist/vosk/model.tar.gz ]; then
+            echo "::error::the wake-word model is in the staging tree — packaging/stage.sh should have removed it"
+            exit 1
+          fi
+          echo "wake-word model correctly excluded"
+
+      - name: Install nfpm
+        run: |
+          set -eu
+          version=2.41.3
+          arch=$([ "${{ matrix.arch }}" = arm64 ] && echo arm64 || echo x86_64)
+          curl -fsSL -o nfpm.tar.gz \
+            "https://github.com/goreleaser/nfpm/releases/download/v${version}/nfpm_${version}_Linux_${arch}.tar.gz"
+          tar -xzf nfpm.tar.gz nfpm
+          sudo install -m 0755 nfpm /usr/local/bin/nfpm
+
+      - name: Build the .deb and the .rpm
+        env:
+          PKG_VERSION: ${{ steps.v.outputs.version }}
+          PKG_ARCH: ${{ matrix.arch }}
+        run: |
+          set -eu
+          cd packaging
+          PKG_FORMAT=deb ./stage.sh "${{ steps.node.outputs.dir }}" >/dev/null
+          nfpm package --config nfpm.yaml --packager deb --target ../
+          PKG_FORMAT=rpm ./stage.sh "${{ steps.node.outputs.dir }}" >/dev/null
+          nfpm package --config nfpm.yaml --packager rpm --target ../
+          ls -la ../*.deb ../*.rpm
+
+      # A package that does not install is not a release artefact. amd64 can be
+      # checked on the runner itself; the arm64 runner is native too.
+      - name: Install it and run the CLI
+        run: |
+          set -eu
+          sudo apt-get install -y ./agentvoice_*_${{ matrix.arch }}.deb
+          agentvoice --version
+          # The install mode has to come back as `system`, or the Serve page
+          # would offer an npm update for a package-manager install, and
+          # `agentvoice update` would install a second copy the service does
+          # not run (docs/38). Parsed rather than grepped: the output is
+          # pretty-printed JSON.
+          mode="$(agentvoice status --json | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).install.mode')"
+          echo "install mode: ${mode}"
+          [ "${mode}" = system ]
+          sudo apt-get remove -y agentvoice
+
+      - uses: actions/upload-artifact@v5
+        with:
+          name: agentvoice-packages-${{ matrix.arch }}
+          path: |
+            *.deb
+            *.rpm
+          if-no-files-found: error
+
+      - name: Attach to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.v.outputs.version }}
+          files: |
+            *.deb
+            *.rpm

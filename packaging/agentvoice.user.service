@@ -1,0 +1,27 @@
+# Systemd *user* unit shipped by the .deb / .rpm, deliberately not enabled.
+#
+# A user unit, not a system one: the bridge spawns the agent CLIs with the
+# developer's own credentials and writes their ~/.cursor/mcp.json,
+# ~/.codex/config.toml and ~/.claude.json. The repo's system unit
+# (User=agentvoice, ProtectSystem=strict) only suits a dedicated server.
+#
+# The explicit PATH is not decoration: a systemd user unit inherits a minimal
+# environment, and every agent CLI installs itself into a per-user bin
+# directory, so without this the bridge starts and then cannot find a single
+# agent to run.
+[Unit]
+Description=AgentVoice Bridge
+Documentation=https://github.com/dixonSolutions/AgentVoice
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/agentvoice run
+Restart=on-failure
+RestartSec=3
+Environment=NODE_ENV=production
+Environment=PATH=%h/.local/bin:%h/bin:%h/.bun/bin:%h/.cargo/bin:/usr/local/bin:/usr/bin:/bin
+
+[Install]
+WantedBy=default.target

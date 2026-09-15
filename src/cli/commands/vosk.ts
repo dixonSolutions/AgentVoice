@@ -18,7 +18,7 @@ import { join, resolve } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { tmpdir } from 'node:os';
-import { detectInstallMode } from '../../serve/installMode.js';
+import { voskPaths } from '../../serve/voskPaths.js';
 import { bold, dim, fail, green, say, yellow } from '../out.js';
 
 const MODEL_ZIP_URL = 'https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip';
@@ -26,23 +26,16 @@ const MODEL_DIR_NAME = 'vosk-model-small-en-us-0.15';
 /** Below this, whatever we fetched is an error page, not a model. */
 const MIN_PLAUSIBLE_BYTES = 10 * 1024 * 1024;
 
-/**
- * Where this install serves `/vosk/model.tar.gz` from.
- *
- * A clone gets `web/public` so the file survives the next `ng build`; anything
- * else gets `web/dist`, which is what actually gets served and is the only
- * directory an installed package has.
- */
-function voskDir(root: string, mode: string): string {
-  const publicDir = join(root, 'web', 'public', 'vosk');
-  if (mode === 'git' && existsSync(join(root, 'web', 'public'))) return publicDir;
-  return join(root, 'web', 'dist', 'vosk');
-}
-
 export async function prepareVoskCommand(opts: { force?: boolean } = {}): Promise<void> {
-  const install = detectInstallMode();
-  const dir = voskDir(install.root, install.mode);
+  const paths = voskPaths();
+  const dir = paths.writeTo;
   const target = join(dir, 'model.tar.gz');
+
+  if (paths.packagedRootReadOnly) {
+    // A .deb / .rpm install cannot write into /usr/lib, so the model goes to
+    // the user's own home and the bridge serves it from there (docs/38).
+    say(dim(`  Installed package — writing the model to ${dir}`));
+  }
 
   if (existsSync(target) && !opts.force) {
     const mb = (statSync(target).size / 1024 / 1024).toFixed(1);

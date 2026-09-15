@@ -127,18 +127,21 @@ export function noUnitAdvice(info: UnitInfo, installRoot: string): string {
       '  Run the bridge in the foreground instead:  agentvoice run'
     );
   }
-  // The installer script only ships in a clone; an npm install has no scripts/
-  // to point at, and sending someone to a path that does not exist is worse
-  // than telling them the truth.
+  /**
+   * `agentvoice service install` works from whatever install is running, so it
+   * is the answer for everyone. The shell script only exists in a clone, and
+   * pointing an npm or .deb user at a path that is not there was worse than
+   * saying nothing (docs/38).
+   */
   const installer = join(installRoot, 'scripts', 'install-systemd.sh');
-  const how = existsSync(installer)
-    ? `  Install one:  bash ${installer}`
-    : '  Install one from a clone of the repo (scripts/install-systemd.sh),\n' +
-      '  or write a unit that runs:  ' + process.execPath + ' ' + join(installRoot, 'dist', 'index.js');
+  const extra = existsSync(installer)
+    ? `\n  Or, in this clone:  bash ${installer}`
+    : '';
 
   return (
     `no ${info.unit} is installed (neither a user nor a system unit).\n` +
-    `${how}\n` +
+    '  Install one:  agentvoice service install --now' +
+    `${extra}\n` +
     '  Or run the bridge in the foreground:  agentvoice run'
   );
 }
