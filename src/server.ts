@@ -55,6 +55,9 @@ import { attachDevWebProxy, registerProductionWeb } from './webDispatch.js';
 import { registerControlSocket } from './state/controlSocket.js';
 import { getPresence, type PresenceClient } from './state/presence.js';
 import { setReconnectDigestSource } from './mcp/server/voiceToolHandlers.js';
+import { publishAgentBusy } from './state/agentBusy.js';
+import { notifyPhone } from './push/notifyPhone.js';
+import { getPendingApprovals } from './mcp/server/approvalRegistry.js';
 import { registerPushRoutes } from './routes/push.js';
 import { registerApprovalRoutes } from './routes/approvals.js';
 import { registerTurnRoutes } from './routes/turns.js';
@@ -438,6 +441,18 @@ export async function buildServer(): Promise<FastifyInstance> {
           });
 
           socket.send(JSON.stringify({ type: 'auth_ok', sessionKey }));
+
+          /**
+           * Everything the phone missed while it was gone (docs/36 §3.5,
+           * docs/40 §3): what is running, and any approval card still open.
+           * Both are re-sent rather than assumed, because the client's copy
+           * died with its last socket.
+           */
+          publishAgentBusy(true);
+          for (const request of getPendingApprovals()) {
+            void notifyPhone({ type: `${request.kind}_request`, ...request });
+          }
+
           log.info({ sessionKey }, 'ws authenticated');
           return;
         }

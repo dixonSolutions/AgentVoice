@@ -1,5 +1,6 @@
 import {
   Component,
+  DestroyRef,
   computed,
   effect,
   inject,
@@ -39,8 +40,19 @@ import { ApprovalPanelComponent } from '../approval-panel/approval-panel.compone
 import { AuthCardComponent } from '../auth-card/auth-card.component';
 import { ImageCarouselComponent } from '../image-carousel/image-carousel.component';
 import { LiveLogPanelComponent } from '../live-log-panel/live-log-panel.component';
-import { VoiceOrbComponent, type OrbColorMode } from '../voice-orb/voice-orb.component';
+import {
+  VoiceOrbComponent,
+  type OrbActivity,
+  type OrbColorMode,
+} from '../voice-orb/voice-orb.component';
 import { formatBytes, type ModelDownloadState } from '../../../model-download.js';
+import {
+  cachedMicPermission,
+  micPermissionHelp,
+  micPermissionState,
+  onMicPermissionChange,
+  type MicPermissionState,
+} from '../../../mic-service.js';
 
 const SELECT_PANEL_WIDTH_VAR = '--cv-select-panel-width';
 
@@ -535,6 +547,44 @@ export class VoiceTabComponent {
     return 'ready';
   });
 
+  /**
+   * Whether work is running, taken from the bridge's `agent_busy` rather than
+   * guessed from narration — narration can be off, and a reconnect wipes
+   * whatever the client had inferred (docs/40 §3).
+   */
+  protected readonly orbActivity = computed((): OrbActivity => {
+    const busy = this.bridge.agentBusy();
+    if (busy.pendingApprovals > 0) return 'waiting_for_you';
+    if (busy.voiceTurnActive || busy.workers > 0) return 'working';
+    return 'none';
+  });
+
+  /** One line under the orb saying what the ring means. */
+  protected readonly orbActivityCaption = computed((): string => {
+    const busy = this.bridge.agentBusy();
+    if (busy.pendingApprovals > 0) {
+      return busy.pendingApprovals === 1
+        ? 'Waiting for your answer'
+        : `Waiting for your answer — ${busy.pendingApprovals} questions`;
+    }
+    if (busy.workers > 0) {
+      return busy.workers === 1 ? 'Working — 1 agent' : `Working — ${busy.workers} agents`;
+    }
+    if (busy.voiceTurnActive) return 'Working';
+    return '';
+  });
+
+  /**
+   * Microphone permission, watched rather than assumed. `prompt` is fine —
+   * the orb tap will ask — so only `denied` gets the onboarding card, which is
+   * the state the user cannot escape from inside the app.
+   */
+  protected readonly micPermission = signal<MicPermissionState>(cachedMicPermission());
+
+  protected readonly micPermissionBlocked = computed(() => this.micPermission() === 'denied');
+
+  protected readonly micHelp = computed(() => micPermissionHelp());
+
   protected readonly showOrbCaption = computed(
     () => !this.isLiveSession() && this.orbColorMode() === 'idle',
   );
@@ -642,6 +692,14 @@ export class VoiceTabComponent {
 
   constructor() {
     this.trackPickerWidth();
+
+    // The microphone permission can change while the app is open (the user
+    // flipping it in site settings), so this watches rather than sampling once.
+    void micPermissionState().then((state) => this.micPermission.set(state));
+    inject(DestroyRef).onDestroy(
+      onMicPermissionChange((state) => this.micPermission.set(state)),
+    );
+
     effect(() => {
       if (this.bridge.wsStatus() === 'connected') {
         void this.voiceProviders.refresh();

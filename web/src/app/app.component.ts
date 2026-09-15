@@ -157,9 +157,24 @@ export class AppComponent implements OnInit, OnDestroy {
       }),
     );
 
+    /**
+     * Read question, plan and permission cards aloud (docs/40 §1).
+     *
+     * Nothing spoke these before: they went straight to the approval panel,
+     * so a hands-free user with no screen was asked a question in silence.
+     */
+    this._subs.add(
+      this.bridge.approvalRequest$.subscribe((request) => {
+        this.voiceSession.speakPromptCard(request);
+      }),
+    );
+
     this._subs.add(
       this.bridge.narration$.subscribe((event) => {
-        this.voiceSession.injectNarration(event.text);
+        // The event always arrives; `speak` decides whether it is heard. That
+        // separation is why turning narration off no longer also kills the
+        // "a job is running" state below (docs/39 Part B).
+        if (event.speak !== false) this.voiceSession.injectNarration(event.text);
         if (event.kind === 'job_started') {
           this.voiceSession.notifyJobRunning(true);
         } else if (

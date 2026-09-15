@@ -806,6 +806,11 @@ export const claudeProvider: AgentProvider = {
   ensureMcpRegistration: ensureClaudeMcpRegistration,
   sessionStatus: claudeSessionStatus,
   listSessions: claudeListSessions,
+  /** `claude mcp list` / `claude mcp get <name>`. */
+  mcpInspectCommands: () => ({
+    list: ['mcp', 'list'],
+    tools: (server: string) => ['mcp', 'get', server],
+  }),
 
   /**
    * Claude Code branches a conversation with `--fork-session`, which is what

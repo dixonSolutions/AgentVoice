@@ -5,7 +5,8 @@
  */
 
 import type { Model } from 'vosk-browser';
-import { captureMicStream, getSharedAudioContext, unlockAudioContext, connectSilentSink } from './audio.js';
+import { getSharedAudioContext, unlockAudioContext, connectSilentSink } from './audio.js';
+import { acquireMic, type MicLease } from './mic-service.js';
 import { isCrossOriginIsolated, voskCoopError } from './cross-origin-isolation.js';
 import { loadVoskModel } from './vosk-model-cache.js';
 import { normalizeForWakeMatch } from './wake-words.js';
@@ -64,6 +65,7 @@ export const buildWakeGrammar = buildVoskGrammar;
 export class VoskGrammarSpotter {
   private recognizer: InstanceType<Model['KaldiRecognizer']> | null = null;
   private mediaStream: MediaStream | null = null;
+  private micLease: MicLease | null = null;
   private ownsStream = false;
   private processor: ScriptProcessorNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
@@ -128,7 +130,10 @@ export class VoskGrammarSpotter {
       this.mediaStream = opts.mediaStream;
       this.ownsStream = false;
     } else {
-      this.mediaStream = await captureMicStream();
+      // Borrow the app's one microphone rather than opening a second one —
+      // a second getUserMedia is a second permission prompt (docs/40 §4).
+      this.micLease = await acquireMic();
+      this.mediaStream = this.micLease.stream;
       this.ownsStream = true;
     }
 
@@ -182,8 +187,9 @@ export class VoskGrammarSpotter {
     this.recognizer?.remove();
     this.recognizer = null;
     if (this.ownsStream) {
-      this.mediaStream?.getTracks().forEach((track) => track.stop());
+      this.micLease?.release();
     }
+    this.micLease = null;
     this.mediaStream = null;
     this.ownsStream = false;
     this.processor = null;

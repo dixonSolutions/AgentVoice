@@ -698,6 +698,16 @@ export const codewhaleProvider: AgentProvider = {
   ensureMcpRegistration: ensureCodewhaleMcpRegistration,
   sessionStatus: codewhaleSessionStatus,
   listSessions: codewhaleListSessions,
+  /**
+   * `codewhale mcp list` / `codewhale mcp tools`. The tools command has no
+   * per-server argument — it lists everything discovered — so the result says
+   * so rather than pretending the filter was applied.
+   */
+  mcpInspectCommands: () => ({
+    list: ['mcp', 'list'],
+    tools: () => ['mcp', 'tools'],
+    toolsListsEverything: true,
+  }),
 
   /** Codewhale branches a conversation with its own `fork` subcommand. */
   forkSessionArgs(_project: Project, sessionId: string, prompt: string): string[] {

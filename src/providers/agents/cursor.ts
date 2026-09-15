@@ -674,6 +674,11 @@ export const cursorProvider: AgentProvider = {
   ensureMcpRegistration: ensureCursorMcpRegistration,
   sessionStatus: cursorSessionStatus,
   listSessions: cursorListSessions,
+  /** `cursor-agent mcp list` / `mcp list-tools <identifier>`. */
+  mcpInspectCommands: () => ({
+    list: ['mcp', 'list'],
+    tools: (server: string) => ['mcp', 'list-tools', server],
+  }),
   /** cursor-agent has no fork flag — `--resume` continues the chat in place. */
   forkSessionArgs: () => null,
 

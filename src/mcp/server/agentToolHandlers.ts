@@ -160,6 +160,12 @@ export interface JobHistoryEntry {
 
 export interface SpawnAgentArgs {
   instructions: string;
+  /**
+   * Target project. Absent means the active one — `agent_submit` accepted this
+   * and `spawn_agent` did not, which was one of the reasons both existed
+   * (docs/40 §2).
+   */
+  project?: string;
   mode?: 'agent' | 'plan' | 'ask' | 'debug';
   /**
    * Run in an isolated git worktree for parallel execution.
@@ -510,11 +516,14 @@ export function makeAgentHandlers(sessionKey: string): AgentToolHandlers {
 
     async handleSpawnAgent(args: SpawnAgentArgs): Promise<SpawnAgentResult> {
       const session = getSessionState(sessionKey);
-      const project = resolveProject(session.activeProject ?? '');
+      const requested = args.project?.trim();
+      const project = resolveProject(requested || session.activeProject || '');
 
       if (!project) {
         throw new Error(
-          'No active project set. Ask the user to select a project before spawning a worker.',
+          requested
+            ? `No project matches "${requested}". Call agent_list_projects() to see the options.`
+            : 'No active project set. Ask the user to select a project before spawning a worker.',
         );
       }
 

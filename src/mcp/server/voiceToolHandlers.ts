@@ -19,6 +19,7 @@ import { voiceTurnQueue } from './turnQueue.js';
 import { getActiveProvider } from '../../providers/agents/registry.js';
 import { getActiveVoiceAgent } from '../../executor/voiceAgent.js';
 import { recordTurn } from '../../state/turns.js';
+import { markVoiceTurnStarted, markVoiceTurnFinished } from '../../state/agentBusy.js';
 import {
   withListener,
   listenerBlock,
@@ -364,6 +365,7 @@ export function handleDone(): DoneResult {
 
 /** Mark the turn complete — PWA waits for queued speech before re-arming. */
 export function broadcastVoiceTurnIdle(): void {
+  markVoiceTurnFinished();
   // Do not clear spokeThisTurn here — voiceAgent exit still needs it.
   log.info('voice turn complete — PWA will re-arm after queued speech');
   // eslint-disable-next-line no-console
@@ -467,6 +469,7 @@ export async function handleNextVoiceTurn(
 
   // New utterance handed to this agent process — re-arm mute-exit fallback.
   resetTurnSpeakTracking();
+  markVoiceTurnStarted();
 
   // Only signal thinking once a real user turn has arrived — not on every poll start.
   broadcastToVoiceSessions({ type: 'thinking', value: true });

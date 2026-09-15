@@ -35,6 +35,7 @@ import { childLogger } from '../log.js';
 import type { AgentHandle } from './agentProcess.js';
 import { notifyAuthRequired } from '../providers/agents/authNotify.js';
 import { clearMailbox } from '../state/sessionMailbox.js';
+import { publishAgentBusy } from '../state/agentBusy.js';
 import { isVoiceAgentRunning } from './voiceAgent.js';
 
 const log = childLogger('job-manager');
@@ -331,6 +332,9 @@ export async function submitJob(
 
   activeJobs.set(jobId, { handle, watcher, timeoutTimer });
   jobStartedAtMs.set(jobId, Date.now());
+  // The orb shows what the bridge says is running, not what it inferred from
+  // narration (docs/40 §3).
+  publishAgentBusy();
 
   // Completion handler — runs in the background.
   void handle.result.then((result) => {

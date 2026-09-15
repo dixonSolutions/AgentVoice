@@ -113,7 +113,15 @@ export function getSharedAudioContext(): AudioContext {
   return _audioCtx;
 }
 
-/** Request microphone with noise-suppression constraints enabled. */
+/**
+ * Request the microphone with noise-suppression constraints enabled.
+ *
+ * @deprecated Use `acquireMic()` from mic-service.ts. Calling this directly
+ * opens a second device handle, and releasing it stops tracks the shared owner
+ * is still using — which is what made every new session re-prompt for the
+ * microphone (docs/40 §4). Kept for the one-shot capability probe in
+ * webkit-capabilities.ts, which deliberately wants its own throwaway stream.
+ */
 export async function captureMicStream(): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({
     audio: MIC_MEDIA_CONSTRAINTS,

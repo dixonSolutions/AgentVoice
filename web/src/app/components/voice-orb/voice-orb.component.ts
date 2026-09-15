@@ -24,6 +24,21 @@ const VIZ_BINS = 32;
  */
 export type OrbColorMode = 'idle' | 'ready' | 'listening';
 
+/**
+ * Whether work is happening, shown as a ring *around* the orb rather than a
+ * fourth colour — the colour already means "is the mic open", and overloading
+ * it would make "listening while a worker runs" unrepresentable.
+ *
+ *   none            — nothing running.
+ *   working         — a voice turn or a worker is in progress: a sweeping arc.
+ *   waiting_for_you — an approval card is open: a steady ring.
+ *
+ * `VoiceSessionService._jobRunning` and the app's `working` state existed
+ * before this and were simply never passed to the orb, so nothing on screen
+ * showed that work was running at all (docs/40 §3).
+ */
+export type OrbActivity = 'none' | 'working' | 'waiting_for_you';
+
 /** @deprecated Prefer OrbColorMode; kept for any stray imports. */
 export type OrbColorModeLegacy = 'blue' | 'red' | 'green' | OrbColorMode;
 
@@ -51,10 +66,23 @@ interface ThemePalette {
       [class.cv-voice-orb--expanded]="expanded()"
       [class.cv-voice-orb--idle]="resolvedMode() === 'idle'"
       [class.cv-voice-orb--ready]="resolvedMode() === 'ready'"
-      [class.cv-voice-orb--listening]="resolvedMode() === 'listening'">
+      [class.cv-voice-orb--listening]="resolvedMode() === 'listening'"
+      [class.cv-voice-orb--working]="activity() === 'working'"
+      [class.cv-voice-orb--waiting]="activity() === 'waiting_for_you'">
       <canvas #canvas aria-hidden="true"></canvas>
       <div class="cv-voice-orb-glow" [style.opacity]="glowOpacity()" aria-hidden="true"></div>
+      @if (activity() !== 'none') {
+        <div class="cv-voice-orb-ring" aria-hidden="true"></div>
+      }
     </div>
+    @if (caption()) {
+      <!--
+        The ring alone is ambiguous, and it is invisible to anyone using a
+        screen reader or with animations turned off. aria-live announces a
+        change in what the agent is doing without stealing focus.
+      -->
+      <p class="cv-voice-orb-caption" role="status" aria-live="polite">{{ caption() }}</p>
+    }
   `,
   styles: [
     `
@@ -154,6 +182,67 @@ interface ThemePalette {
         opacity: 0.55;
       }
 
+      /* Working / waiting ring — theme colour only, never the agent's brand. */
+      .cv-voice-orb-ring {
+        position: absolute;
+        inset: -7%;
+        border-radius: 50%;
+        z-index: 2;
+        pointer-events: none;
+        border: 2px solid transparent;
+      }
+
+      .cv-voice-orb--working .cv-voice-orb-ring {
+        /* A sweeping arc, visibly different from the ready state's breathing. */
+        border-top-color: var(--p-primary-color);
+        border-right-color: color-mix(in srgb, var(--p-primary-color) 40%, transparent);
+        animation: cv-orb-sweep 1.4s linear infinite;
+      }
+
+      .cv-voice-orb--waiting .cv-voice-orb-ring {
+        border-color: color-mix(in srgb, var(--p-primary-color) 70%, transparent);
+        animation: cv-orb-wait 2.6s ease-in-out infinite;
+      }
+
+      .cv-voice-orb-caption {
+        margin: 0.75rem 0 0;
+        text-align: center;
+        font-size: 0.85rem;
+        opacity: 0.75;
+      }
+
+      /*
+        prefers-reduced-motion: a static ring plus the caption. The state must
+        still be visible — removing the animation must not remove the signal.
+      */
+      @media (prefers-reduced-motion: reduce) {
+        .cv-voice-orb--working .cv-voice-orb-ring,
+        .cv-voice-orb--waiting .cv-voice-orb-ring {
+          animation: none;
+          border-color: color-mix(in srgb, var(--p-primary-color) 70%, transparent);
+        }
+
+        .cv-voice-orb--ready .cv-voice-orb-glow {
+          animation: none;
+        }
+      }
+
+      @keyframes cv-orb-sweep {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      @keyframes cv-orb-wait {
+        0%,
+        100% {
+          opacity: 0.45;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+
       @keyframes cv-orb-pulse-ready {
         0%,
         100% {
@@ -181,6 +270,10 @@ export class VoiceOrbComponent implements OnDestroy {
   readonly colorMode = input<OrbColorModeLegacy>('idle');
   /** When true, draw mic-reactive waves (post–wake-word user speech only). */
   readonly visualizeUserSpeech = input(false);
+  /** Whether work is running — from the bridge's agent_busy, not guessed. */
+  readonly activity = input<OrbActivity>('none');
+  /** One line under the orb: "Working — 2 agents", "Waiting for your answer". */
+  readonly caption = input<string>('');
 
   protected resolvedMode = (): OrbColorMode => normalizeOrbMode(this.colorMode());
 

@@ -9,21 +9,25 @@
  *   Voice I/O    — speak, done, next_voice_turn
  *   Identity     — get_session_ref
  *   Agents       — list_agents, get_agent_status, get_agent_output,
- *                  spawn_agent, stop_agent, revert_agent
- *   Sessions     — list_sessions, send_to_session, check_messages, inject (alias)
+ *                  spawn_agent, stop_agent, execute_plan, revert
+ *   Sessions     — list_sessions, send_to_session, check_messages
  *   Jobs         — list_jobs_history
- *   Mode         — set_mode, execute_plan
  *   Project      — agent_list_projects, agent_set_project, agent_manage_projects
- *   Model        — agent_list_models, agent_set_model
- *   Execute      — agent_submit, agent_ask, agent_recall_answer
- *   Job tracking — agent_job_status, agent_job_stop
- *   Session      — agent_new_session, agent_session_info
- *   Git          — agent_diff, agent_revert
- *   System       — agent_info, agent_status
+ *   Model        — agent_list_models, agent_set_model, agent_permission_mode
+ *   Execute      — agent_ask, agent_recall_answer
+ *   Session      — agent_new_session
+ *   Git          — agent_diff
+ *   System       — agent_provider_info
  *   MCP inspect  — agent_mcp_list, agent_mcp_tools
  *   Away policy  — agent_away_policy
  *   User display — show_images
  *   User interact — request_user_input, submit_plan_for_approval
+ *
+ * Deprecated aliases kept for one release (docs/40 §2): agent_submit →
+ * spawn_agent, agent_job_status → get_agent_status, agent_job_stop →
+ * stop_agent, revert_agent / agent_revert → revert, agent_session_info →
+ * get_session_ref(project), agent_info / agent_status → agent_provider_info,
+ * set_mode → spawn_agent's `mode`, inject → send_to_session.
  *
  * Transport: MCP Streamable HTTP (preferred over legacy SSE).
  * Auth: same Bearer token as /api/*.
@@ -186,12 +190,25 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'get_session_ref',
-    'Get your current identity: voice agent run ID, CLI session ID (resume ref), ' +
-      'MCP session ID, active job ID, active project, active model, and preferred spawn mode. ' +
+    'Who and where you are: voice agent run id, CLI session id (resume ref), MCP session id, ' +
+      'active job id, active project, active model and preferred spawn mode. ' +
+      'Pass `project` to also get that project\'s persisted state — its resume id, last job and ' +
+      'last run time — which is what agent_session_info returned. ' +
       'Call this to orient yourself after a resume or when session state is unclear.',
-    {},
-    async () => {
-      const result = agentTools.handleGetSessionRef();
+    {
+      project: z
+        .string()
+        .optional()
+        .describe("Include this project's persisted session state in the answer."),
+    },
+    async ({ project }) => {
+      const identity = agentTools.handleGetSessionRef();
+      const result = project
+        ? {
+            ...identity,
+            project_session: await dispatchTool('agent_session_info', { project }, sessionKey),
+          }
+        : identity;
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
@@ -240,7 +257,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'spawn_agent',
-    'Start a new worker agent with the given coding instructions. ' +
+    'Start a worker agent with the given coding instructions. The one way to start work — ' +
+      'agent_submit is a deprecated alias for this. ' +
       'Modes: agent (default, applies changes), plan (proposes then waits), ' +
       'ask (read-only), debug (instruments and investigates). ' +
       'Set use_worktree: true to run in an isolated git worktree alongside the current worker ' +
@@ -250,12 +268,14 @@ function buildMcpServer(sessionKey: string): McpServer {
       "Don't start silently.",
     {
       instructions: z.string().min(1).describe("The coding task — use the user's words."),
+      project: z.string().optional().describe('Target project (defaults to the active project).'),
       mode: z
         .enum(['agent', 'plan', 'ask', 'debug'])
         .optional()
         .describe(
           'agent = apply changes; plan = propose only; ask = read-only; ' +
-          'debug = agent mode with debugging focus. Default: stored preference or "agent".',
+          'debug = agent mode with debugging focus. Pass it here rather than calling ' +
+          'set_mode first. Default: stored preference or "agent".',
         ),
       use_worktree: z
         .boolean()
@@ -275,9 +295,10 @@ function buildMcpServer(sessionKey: string): McpServer {
           'Append browser snapshot workflow — use for UI work or when the user says "Browser".',
         ),
     },
-    async ({ instructions, mode, use_worktree, worktree_name, browser }) => {
+    async ({ instructions, project, mode, use_worktree, worktree_name, browser }) => {
       const result = await agentTools.handleSpawnAgent({
         instructions,
+        project,
         mode,
         use_worktree,
         worktree_name,
@@ -403,11 +424,58 @@ function buildMcpServer(sessionKey: string): McpServer {
   );
 
   server.tool(
+    'revert',
+    'Undo agent changes. `to: "checkpoint"` (needs `id`) rewinds to the git checkpoint taken ' +
+      'before that job ran; `to: "head"` (the default) drops uncommitted changes in the project. ' +
+      'Uncommitted work is stashed, which is reversible; a hard reset over agent commits is not, ' +
+      'and needs confirm: true after you have said out loud exactly what will be lost. ' +
+      'Replaces revert_agent and agent_revert, which stay as deprecated aliases.',
+    {
+      to: z
+        .enum(['checkpoint', 'head'])
+        .optional()
+        .describe('checkpoint = back to before a job ran (needs id); head = drop uncommitted work.'),
+      id: z
+        .string()
+        .min(1)
+        .optional()
+        .describe('Job ID, required for to: "checkpoint" (from list_jobs_history or spawn_agent).'),
+      project: z.string().optional().describe('Project for to: "head" (defaults to active).'),
+      confirm: z
+        .boolean()
+        .optional()
+        .describe('Required for a hard reset over agent commits. Confirm with the user first.'),
+    },
+    async ({ to, id, project, confirm }) => {
+      const target = to ?? (id ? 'checkpoint' : 'head');
+      if (target === 'checkpoint') {
+        if (!id) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: JSON.stringify({
+                  ok: false,
+                  error: 'ID_REQUIRED',
+                  message: 'to: "checkpoint" needs the job id to rewind to. Call list_jobs_history().',
+                }),
+              },
+            ],
+            isError: true,
+          };
+        }
+        const result = await agentTools.handleRevertAgent({ id, confirm });
+        return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+      }
+      const result = await dispatchTool('agent_revert', { project, confirm }, sessionKey);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
     'revert_agent',
-    'Revert a project to the git checkpoint recorded before a specific job ran. ' +
-      'Uncommitted changes: git stash (safe, reversible). ' +
-      'Agent-committed changes: git reset --hard (destructive — requires confirm: true). ' +
-      'Always confirm with the user before calling with confirm: true.',
+    'Deprecated alias — use revert({ to: "checkpoint", id }). ' +
+      'Reverts a project to the git checkpoint recorded before a specific job ran.',
     {
       id: z
         .string()
@@ -452,8 +520,9 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'set_mode',
-    'Store the preferred spawn mode for this session. ' +
-      'The next spawn_agent() call will use this mode if no explicit mode is given. ' +
+    'Deprecated — pass `mode` to spawn_agent instead. ' +
+      'Stores the preferred spawn mode for this session; ' +
+      'the next spawn_agent() call uses it if no explicit mode is given. ' +
       'Modes: agent (default), plan (propose before apply), ask (read-only), ' +
       'debug (agent + debugging focus). ' +
       'Does NOT restart or modify any running agent.',
@@ -637,9 +706,9 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_submit',
-    'Submit a coding task to the active agent CLI (worker). ' +
-      'Returns immediately with a job_id. Track progress with agent_job_status or get_agent_status. ' +
-      'Takes a git checkpoint automatically — use revert_agent to undo if needed.',
+    'Deprecated alias for spawn_agent — use spawn_agent. ' +
+      'Submits a coding task to the active agent CLI and returns a job_id immediately. ' +
+      'Takes a git checkpoint automatically; undo with revert.',
     {
       prompt: z
         .string()
@@ -659,11 +728,13 @@ function buildMcpServer(sessionKey: string): McpServer {
         ),
     },
     async ({ prompt, project, mode, browser }) => {
-      const result = await dispatchTool(
-        'agent_submit',
-        { prompt, project, mode, browser },
-        sessionKey,
-      );
+      // One implementation, two names, for one release (docs/40 §2).
+      const result = await agentTools.handleSpawnAgent({
+        instructions: prompt,
+        project,
+        mode,
+        browser,
+      });
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );
@@ -707,8 +778,9 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_job_status',
-    'Poll a running or completed job. Returns status, recent progress events, summary, ' +
-      'diffstat, and session ID. Call periodically while waiting for a long job.',
+    'Deprecated alias for get_agent_status — use get_agent_status, which takes an agent id ' +
+      'or a job id. Polls a running or completed job and returns status, recent progress, ' +
+      'summary, diffstat and session id.',
     {
       job_id: z
         .string()
@@ -724,8 +796,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_job_stop',
-    'Terminate the active agent_submit job (SIGTERM → SIGKILL). ' +
-      'Does not cancel in-flight agent_ask calls — those run to completion.',
+    'Deprecated alias for stop_agent — use stop_agent, which takes an agent id or a job id ' +
+      'and keeps the user-confirmation guard. Does not cancel in-flight agent_ask calls.',
     {
       job_id: z
         .string()
@@ -756,8 +828,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_session_info',
-    'Read the persisted session state for a project: resume ID, last job, last run time. ' +
-      'Useful for narrating "you were last working on X twenty minutes ago".',
+    'Deprecated alias — get_session_ref(project) returns the same persisted state alongside ' +
+      'your own identity. Reads a project\'s resume id, last job and last run time.',
     {
       project: z.string().optional().describe('Project to query (defaults to active project).'),
     },
@@ -786,9 +858,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_revert',
-    'Revert uncommitted changes in the active project. ' +
-      'Uncommitted: git stash (safe). Agent-committed: git reset --hard (requires confirm: true). ' +
-      'Always confirm with the user before hard reset.',
+    'Deprecated alias — use revert({ to: "head" }). ' +
+      'Reverts uncommitted changes in a project; a hard reset over agent commits needs confirm: true.',
     {
       project: z.string().optional().describe('Project to revert (defaults to active project).'),
       confirm: z
@@ -805,9 +876,29 @@ function buildMcpServer(sessionKey: string): McpServer {
   // ── System ─────────────────────────────────────────────────────────────
 
   server.tool(
+    'agent_provider_info',
+    'Everything about the CLI currently running the work: version, default model, OS, account, ' +
+      'and whether it is signed in. Answers both "what model are you using?" and ' +
+      '"are you ready to run jobs?" in one call. ' +
+      'Replaces agent_info and agent_status, which are kept as deprecated aliases.',
+    {},
+    async () => {
+      // Version and auth were two tools purely because they were written at
+      // different times; the agent almost always wanted both (docs/40 §2).
+      const [info, status] = await Promise.all([
+        dispatchTool('agent_info', {}, sessionKey),
+        dispatchTool('agent_status', {}, sessionKey),
+      ]);
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ ...(info as object), ...(status as object) }) }],
+      };
+    },
+  );
+
+  server.tool(
     'agent_info',
-    'Get CLI version, default model, OS, and account info for the active agent provider ' +
-      "(Cursor, Codex, or Claude Code). Use when the user asks 'what model are you using?'",
+    'Deprecated alias — use agent_provider_info. ' +
+      'CLI version, default model, OS and account for the active agent provider.',
     {},
     async () => {
       const result = await dispatchTool('agent_info', {}, sessionKey);
@@ -817,8 +908,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_status',
-    'Check authentication status of the active agent provider. ' +
-      'Returns authenticated, email, and provider id. Use to verify the CLI is ready before jobs.',
+    'Deprecated alias — use agent_provider_info. ' +
+      'Authentication status of the active agent provider.',
     {},
     async () => {
       const result = await dispatchTool('agent_status', {}, sessionKey);
@@ -831,8 +922,9 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_mcp_list',
-    'List MCP servers the Cursor CLI has configured, and their load status. Cursor-only diagnostic. ' +
-      'Informational — shows what MCPs the worker agents can use.',
+    "List the MCP servers the active agent CLI has configured, and their load status. " +
+      'Works for whichever CLI is running; a CLI with no such command comes back ' +
+      'supported: false with the reason, not an error.',
     {},
     async () => {
       const result = await dispatchTool('agent_mcp_list', {}, sessionKey);
@@ -842,8 +934,8 @@ function buildMcpServer(sessionKey: string): McpServer {
 
   server.tool(
     'agent_mcp_tools',
-    'List tools exposed by a specific executor MCP server. ' +
-      'Use to discover what tools are available to worker agents from a given server.',
+    'List the tools one of the agent CLI\'s MCP servers exposes. ' +
+      'Some CLIs list every server at once — the result says so with all_servers: true.',
     {
       server: z.string().describe('MCP server identifier from agent_mcp_list.'),
     },

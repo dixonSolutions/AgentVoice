@@ -716,6 +716,12 @@ export const codexProvider: AgentProvider = {
   sessionStatus: codexSessionStatus,
   listSessions: codexListSessions,
   /**
+   * `codex mcp list`. Codex has no documented per-server tool listing, so that
+   * half is declared unsupported rather than guessed at; if `mcp list` is not
+   * in the installed build either, the probe reports that honestly.
+   */
+  mcpInspectCommands: () => ({ list: ['mcp', 'list'], tools: null }),
+  /**
    * Codex has no fork flag: `codex exec resume` continues the thread in place.
    * Declared unsupported rather than faked, so the session directory shows the
    * honest delivery method (docs/37 §3) instead of promising a branch it

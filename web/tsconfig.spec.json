@@ -1,0 +1,9 @@
+{
+  "//": "Typechecks the PWA's node:test suites. The app config sets `types: []` so Angular builds carry no Node globals; the tests need them, so they live here and are excluded from the app build.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./out-tsc/spec",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.test.ts", "src/**/*.ts"]
+}

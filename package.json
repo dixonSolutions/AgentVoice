@@ -58,13 +58,13 @@
     "mobile:sync": "npm run build:web && cd mobile && npm install --legacy-peer-deps && npx cap sync",
     "prepare:vosk": "node scripts/download-vosk-model.mjs",
     "lint": "eslint src web/src packages/client/src",
-    "typecheck": "tsc --noEmit && npx tsc --noEmit -p web/tsconfig.app.json && npx tsc --noEmit -p packages/client/tsconfig.json",
+    "typecheck": "tsc --noEmit && npx tsc --noEmit -p web/tsconfig.app.json && npx tsc --noEmit -p web/tsconfig.spec.json && npx tsc --noEmit -p packages/client/tsconfig.json",
     "stop": "bash scripts/stop.sh",
     "start:service": "bash scripts/start.sh",
     "start": "NODE_ENV=production node dist/index.js",
     "prepublishOnly": "npm run typecheck && npm run lint && npm test && npm run build",
-    "test": "LOG_LEVEL=silent node --import tsx --test \"src/**/*.test.ts\"",
-    "test:watch": "LOG_LEVEL=silent node --import tsx --test --watch \"src/**/*.test.ts\""
+    "test": "LOG_LEVEL=silent node --import tsx --test \"src/**/*.test.ts\" \"web/src/**/*.test.ts\"",
+    "test:watch": "LOG_LEVEL=silent node --import tsx --test --watch \"src/**/*.test.ts\" \"web/src/**/*.test.ts\""
   },
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.1068.0",
