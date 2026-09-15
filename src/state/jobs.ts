@@ -13,14 +13,18 @@ const log = childLogger('jobs');
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-export type JobStatus = 'running' | 'done' | 'error' | 'stopped';
+/**
+ * `interrupted` is new in docs/36 §5: the bridge went down under a running
+ * job. It is deliberately not `error` — the work is not lost, it is waiting to
+ * be resumed on the next boot.
+ */
+export type JobStatus = 'running' | 'done' | 'error' | 'stopped' | 'interrupted';
 export type JobMode = 'agent' | 'plan' | 'ask';
 export type JobEventKind =
   | 'job_started'
   | 'file_write'
   | 'file_read'
   | 'shell_run'
-  | 'progress_tick'
   | 'job_done'
   | 'job_error'
   | 'ghost_killed'
@@ -41,6 +45,12 @@ export interface Job {
   error: string | null;
   startedAt: string;
   finishedAt: string | null;
+  /** Worktree this job ran in, when it was a parallel worker. */
+  worktree: string | null;
+  /** The CLI that owned the run — needed to relaunch it after a restart. */
+  provider: string | null;
+  /** Job id this one was resumed from, so a chain stays traceable. */
+  resumedFrom: string | null;
 }
 
 export interface JobEvent {
@@ -67,6 +77,9 @@ interface JobRow {
   error: string | null;
   started_at: string;
   finished_at: string | null;
+  worktree: string | null;
+  provider: string | null;
+  resumed_from: string | null;
 }
 
 function rowToJob(row: JobRow): Job {
@@ -84,6 +97,9 @@ function rowToJob(row: JobRow): Job {
     error: row.error,
     startedAt: row.started_at,
     finishedAt: row.finished_at,
+    worktree: row.worktree ?? null,
+    provider: row.provider ?? null,
+    resumedFrom: row.resumed_from ?? null,
   };
 }
 
@@ -96,12 +112,15 @@ export function createJob(params: {
   mode: JobMode;
   pid?: number;
   checkpoint?: string;
+  worktree?: string | null;
+  provider?: string | null;
+  resumedFrom?: string | null;
 }): string {
   const id = randomUUID();
   getDb()
     .prepare(
-      `INSERT INTO job (id, project, prompt, mode, status, pid, checkpoint)
-       VALUES (@id, @project, @prompt, @mode, 'running', @pid, @checkpoint)`,
+      `INSERT INTO job (id, project, prompt, mode, status, pid, checkpoint, worktree, provider, resumed_from)
+       VALUES (@id, @project, @prompt, @mode, 'running', @pid, @checkpoint, @worktree, @provider, @resumedFrom)`,
     )
     .run({
       id,
@@ -110,6 +129,9 @@ export function createJob(params: {
       mode: params.mode,
       pid: params.pid ?? null,
       checkpoint: params.checkpoint ?? null,
+      worktree: params.worktree ?? null,
+      provider: params.provider ?? null,
+      resumedFrom: params.resumedFrom ?? null,
     });
   log.debug({ jobId: id, project: params.project, mode: params.mode }, 'job created');
   return id;
@@ -178,7 +200,14 @@ export function updateJob(
     .run(values);
 }
 
-/** Mark all `running` jobs as `error` — called on bridge startup to reap orphans. */
+/**
+ * Mark all `running` jobs as `error` — called on bridge startup to reap
+ * orphans left by a crash.
+ *
+ * Jobs the shutdown path deliberately parked as `interrupted` are left alone:
+ * those are waiting for `resumeInterruptedJobs()` (docs/36 §5), and failing
+ * them here would throw the work away a second before it is restarted.
+ */
 export function markOrphanedJobs(): number {
   const result = getDb()
     .prepare(
@@ -193,6 +222,51 @@ export function markOrphanedJobs(): number {
     log.warn({ count: result.changes }, 'marked orphaned running jobs as error');
   }
   return result.changes;
+}
+
+/**
+ * Park every running job as `interrupted`, recording what is needed to start
+ * it again: the prompt and mode are already on the row, `session_id` carries
+ * the CLI conversation to resume, and `worktree` / `provider` say where and
+ * with what.
+ */
+export function markJobsInterrupted(): number {
+  const result = getDb()
+    .prepare(
+      `UPDATE job SET
+         status = 'interrupted',
+         error  = 'Bridge restarted mid-task — queued for resume'
+       WHERE status = 'running'`,
+    )
+    .run();
+  if (result.changes > 0) {
+    log.info({ count: result.changes }, 'parked running jobs for resume');
+  }
+  return result.changes;
+}
+
+/** Jobs waiting to be resumed after a restart, oldest first. */
+export function listInterruptedJobs(): Job[] {
+  const rows = getDb()
+    .prepare(`SELECT * FROM job WHERE status = 'interrupted' ORDER BY started_at ASC`)
+    .all() as JobRow[];
+  return rows.map(rowToJob);
+}
+
+/** Close out an interrupted job once it has been resumed (or abandoned). */
+export function settleInterruptedJob(id: string, outcome: 'resumed' | 'abandoned'): void {
+  getDb()
+    .prepare(
+      `UPDATE job SET status = 'error', error = @error, finished_at = datetime('now')
+       WHERE id = @id AND status = 'interrupted'`,
+    )
+    .run({
+      id,
+      error:
+        outcome === 'resumed'
+          ? 'Bridge restarted mid-task — continued in a new run'
+          : 'Bridge restarted mid-task — not resumed',
+    });
 }
 
 // ── Job events ────────────────────────────────────────────────────────────────
@@ -342,10 +416,6 @@ function formatJobEventLine(
       const cmd = String(parsed['command'] ?? parsed['cmd'] ?? parsed['shell'] ?? 'command');
       return { level: 'info', summary: `Ran ${cmd.slice(0, 120)}` };
     }
-    case 'progress_tick': {
-      const text = String(parsed['text'] ?? parsed['message'] ?? '');
-      return text ? { level: 'info', summary: text.slice(0, 200) } : null;
-    }
     case 'job_done':
       return { level: 'info', summary: 'Job finished' };
     case 'job_error': {
@@ -355,7 +425,7 @@ function formatJobEventLine(
     case 'ghost_killed':
       return { level: 'warn', summary: 'Ghost agent killed' };
     case 'system_init':
-      return { level: 'info', summary: 'Cursor session initialized' };
+      return { level: 'info', summary: 'Agent session initialized' };
     case 'raw':
       return payload
         ? { level: 'info', summary: payload.slice(0, 200) }

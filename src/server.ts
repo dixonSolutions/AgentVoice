@@ -54,6 +54,7 @@ import { registerMcpServer } from './mcp/server/index.js';
 import { attachDevWebProxy, registerProductionWeb } from './webDispatch.js';
 import { registerControlSocket } from './state/controlSocket.js';
 import { getPresence, type PresenceClient } from './state/presence.js';
+import { setReconnectDigestSource } from './mcp/server/voiceToolHandlers.js';
 import { registerPushRoutes } from './routes/push.js';
 import { registerApprovalRoutes } from './routes/approvals.js';
 import { registerTurnRoutes } from './routes/turns.js';
@@ -526,6 +527,18 @@ export async function buildServer(): Promise<FastifyInstance> {
         log.error({ err, sessionKey }, 'ws error');
       });
     });
+  });
+
+  /**
+   * The catch-up digest the agent receives with the first turn after the user
+   * comes back (docs/36 §3.5). Injected rather than imported so the voice tool
+   * handlers keep no dependency on the executor.
+   */
+  setReconnectDigestSource(() => {
+    const narrator = getNarrator();
+    const digest = narrator.buildDigest();
+    if (digest) narrator.clearBuffer();
+    return digest;
   });
 
   registerMcpServer(app);

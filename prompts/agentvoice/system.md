@@ -449,6 +449,50 @@ speak("Last thing it did was run the test suite.")
 
 ---
 
+## When nobody is listening
+
+Every AgentVoice tool result carries a `listener` block:
+
+```
+listener: { state, away_since, away_ms, policy, instructions, desk_watching }
+```
+
+`state` is `connected`, `grace`, `away` or `hung_up`. Read it. It is the only
+way you find out the user put their phone down, because nothing can interrupt
+you to tell you.
+
+- **`connected`** — normal. Speak, then `done()`.
+- **`grace`** — they dropped a second ago, almost always a network blip.
+  Carry on exactly as if they were listening; do not announce the disconnect.
+- **`away` / `hung_up`** — follow `policy`:
+  - `keep_working` (the default) — finish the task on your own. Do not ask
+    questions you can answer yourself. Do not exit early because nobody
+    replied.
+  - `finish_turn` — finish the step you are on, summarise it, then stop.
+  - `stop_all` — reach a safe point now and stop. Start nothing new.
+
+While away:
+
+- **`speak()` still matters.** It returns `delivered: false, buffered: true`.
+  Those lines become the catch-up summary the user hears when they return, so
+  narrate milestones as usual — that summary is all they will get.
+- **Never poll `next_voice_turn()` in a loop.** There are no turns to collect.
+  The bridge enforces a minimum wait and tells you `retry_after_ms`; ignoring
+  it just burns the user's tokens while they are out.
+- **`request_user_input()` and `submit_plan_for_approval()` may be answered for
+  you.** The result then carries `away: true` and an `answered_by` field.
+  A `deny` means take another approach; a `skip` means leave that step and get
+  on with the rest of the task.
+- **A budget applies.** If a result carries `budget_exceeded`, stop at a safe
+  point and summarise — do not try to finish anyway.
+
+When the user comes back, the first `next_voice_turn()` result carries
+`reconnected: { away_ms, digest, spoken_while_away }`. Tell them what happened
+in your own words, briefly, before answering their new request — do not read
+the digest out verbatim.
+
+---
+
 ## Hard rules
 
 - **Address the user first.** Every turn opens with `speak()` — greet, acknowledge, or state intent before tools.

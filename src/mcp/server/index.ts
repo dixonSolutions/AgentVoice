@@ -20,6 +20,7 @@
  *   Git          — agent_diff, agent_revert
  *   System       — agent_info, agent_status
  *   MCP inspect  — agent_mcp_list, agent_mcp_tools
+ *   Away policy  — agent_away_policy
  *   User display — show_images
  *   User interact — request_user_input, submit_plan_for_approval
  *
@@ -58,8 +59,18 @@ import { PERMISSION_PROMPT_TOOL } from '../../providers/agents/permissions.js';
 import { getActiveProvider } from '../../providers/agents/registry.js';
 import { notifyPhone } from '../../push/notifyPhone.js';
 import { instrumentMcpToolLogging } from './toolLogging.js';
+import { instrumentListenerEnvelope } from './listenerEnvelope.js';
 import { handleShowImages } from './imageToolHandlers.js';
 import { voiceTurnQueue } from './turnQueue.js';
+import {
+  approvalPolicy,
+  isListening,
+  effectiveAwayPolicy,
+  setConversationAwayPolicy,
+  getConversationAwayPolicy,
+} from '../../state/awayPolicy.js';
+import { AWAY_POLICIES, getConfig } from '../../config.js';
+import { phrase, shouldSpeakNarration, narrationPayload } from '../../voice/phrases.js';
 
 const log = childLogger('mcp:server');
 
@@ -113,6 +124,9 @@ function buildMcpServer(sessionKey: string): McpServer {
   );
 
   instrumentMcpToolLogging(server);
+  // Applied after the logging wrapper so the envelope lands on the outermost
+  // result — the one the CLI actually receives.
+  instrumentListenerEnvelope(server);
 
   // ── Voice I/O ──────────────────────────────────────────────────────────
 
@@ -273,7 +287,18 @@ function buildMcpServer(sessionKey: string): McpServer {
       'The API rejects this unless the user explicitly issued a recent stop/cancel command.',
     { id: z.string().min(1).describe('Agent or job ID from list_agents.') },
     async ({ id }) => {
-      if (hasActiveVoiceSession() && !voiceTurnQueue.checkAndClearInterrupt()) {
+      /**
+       * The guard used to be conditional on a voice session existing, so with
+       * the phone gone — exactly when nobody can object — an agent could stop
+       * any worker it liked (docs/36 §4 rails). The rule is the same either
+       * way: only a recent explicit user stop command releases it.
+       *
+       * The one exception is the away policy `stop_all`, which IS the user's
+       * standing instruction to stop.
+       */
+      const userAskedToStopEverything =
+        !isListening() && effectiveAwayPolicy() === 'stop_all';
+      if (!userAskedToStopEverything && !voiceTurnQueue.checkAndClearInterrupt()) {
         return {
           content: [
             {
@@ -496,6 +521,45 @@ function buildMcpServer(sessionKey: string): McpServer {
     async ({ mode }) => {
       const result = await dispatchTool('agent_permission_mode', { mode }, sessionKey);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    'agent_away_policy',
+    'Read or set what happens to running work when the user puts their phone down. ' +
+      'Call with no arguments to read the policy in force. Pass `policy` when the user ' +
+      'says something like "keep going while I am away" or "stop if you lose me" — ' +
+      'the override lasts for this conversation only and does not change their saved setting. ' +
+      'keep_working = finish the task alone; finish_turn = wrap up the current step then stop; ' +
+      'stop_all = reach a safe point and stop.',
+    {
+      policy: z
+        .enum(AWAY_POLICIES)
+        .optional()
+        .describe('Policy for this conversation. Omit to just read.'),
+      clear: z
+        .boolean()
+        .optional()
+        .describe('Drop the conversation override and go back to the saved setting.'),
+    },
+    async ({ policy, clear }) => {
+      if (clear) setConversationAwayPolicy(null);
+      else if (policy) setConversationAwayPolicy(policy);
+      const saved = getConfig().settings.session.onPhoneAway;
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify({
+              ok: true,
+              policy: effectiveAwayPolicy(),
+              saved_default: saved,
+              override: getConversationAwayPolicy(),
+              choices: AWAY_POLICIES,
+            }),
+          },
+        ],
+      };
     },
   );
 
@@ -779,11 +843,12 @@ function buildMcpServer(sessionKey: string): McpServer {
   server.tool(
     'request_user_input',
     'Ask the user a question and wait for their spoken or tapped reply. ' +
-      'The PWA shows a prompt card; the user answers by voice or tap. ' +
+      'The PWA shows a prompt card and, unless the user has turned that off, reads it aloud. ' +
       'This tool BLOCKS until the user responds, a new voice/text turn arrives, or timeout_ms elapses. ' +
       'If the user speaks/types while waiting, returns { interrupted: true, user_turn } instead of an answer — treat that as the new request. ' +
       'Use for yes/no decisions, short choices, or free-text clarifications. ' +
-      'Do NOT call speak() before this — the PWA card is the notification.',
+      'Do NOT call speak() with the same question first: the card speaks it, so you would ask it twice. ' +
+      'If nobody is listening the away policy answers for the user — read `away` in the result.',
     {
       question: z.string().min(1).max(1000).describe('The question to display and read aloud to the user.'),
       input_type: z
@@ -808,13 +873,23 @@ function buildMcpServer(sessionKey: string): McpServer {
         .describe('How long to wait for a response (default 120 000 ms = 2 min).'),
     },
     async ({ question, input_type, options, timeout_ms }) => {
-      if (!hasActiveVoiceSession()) {
+      /**
+       * With nobody listening this used to be a flat NO_VOICE_SESSION, so an
+       * unattended run stalled on its first question. The away policy decides
+       * instead: keep the card open on a push, answer no, or decline this one
+       * step and let the agent carry on elsewhere (docs/36 §4).
+       */
+      const policy = approvalPolicy(timeout_ms ?? 120_000);
+      if (policy.action !== 'ask') {
         return voiceToolResponse({
-          error: 'NO_VOICE_SESSION',
-          message: NO_VOICE_SESSION_ERROR,
+          answered_by: 'away_policy',
+          decision: policy.action,
+          answer: policy.action === 'deny' ? 'no' : '',
+          away: true,
+          message: policy.message ?? undefined,
         });
       }
-      const timeout = timeout_ms ?? 120_000;
+      const timeout = policy.timeoutMs;
 
       const { request_id, promise } = registerRequest((id) => {
         const req: UserInputRequest = {
@@ -882,6 +957,28 @@ function buildMcpServer(sessionKey: string): McpServer {
     async ({ tool_name, input }) => {
       const provider = getActiveProvider();
       const summary = summarizeToolUse(tool_name, input);
+      /**
+       * A CLI permission prompt with nobody listening follows the away policy
+       * rather than sitting open for five minutes (docs/36 §4). `deny` and
+       * `skip` both answer no — the difference is what the agent is told to do
+       * next — and neither ever silently allows.
+       */
+      const away = approvalPolicy(300_000);
+      if (away.action !== 'ask') {
+        log.info({ tool_name, action: away.action }, 'permission prompt answered by the away policy');
+        return {
+          content: [
+            {
+              type: 'text' as const,
+              text: JSON.stringify({
+                behavior: 'deny',
+                message: away.message ?? 'The user is away.',
+              }),
+            },
+          ],
+        };
+      }
+
       const { request_id, promise } = registerRequest((id) => {
         const req: PermissionRequest = {
           kind: 'permission',
@@ -893,12 +990,15 @@ function buildMcpServer(sessionKey: string): McpServer {
         };
         void notifyPhone({ type: 'permission_request', ...req });
         return req;
-      }, 300_000);
-      void notifyPhone({
-        type: 'narration',
-        kind: 'permission',
-        text: `${provider.displayName} wants to run ${summary}. Say yes or no, or answer on your phone.`,
-      });
+      }, away.timeoutMs);
+      void notifyPhone(
+        narrationPayload({
+          kind: 'permission',
+          text: phrase('permission', { provider: provider.displayName, summary }),
+          speak: shouldSpeakNarration('permission', { agentOwnsNarration: false }),
+          data: { tool_name, summary },
+        }),
+      );
       log.info({ request_id, tool_name, summary: summary.slice(0, 120) }, 'permission prompt relayed to phone');
 
       const decision = (behavior: 'allow' | 'deny', message?: string) => ({
@@ -969,13 +1069,16 @@ function buildMcpServer(sessionKey: string): McpServer {
         .describe('How long to wait for a response (default 180 000 ms = 3 min).'),
     },
     async ({ title, steps, estimated_impact, timeout_ms }) => {
-      if (!hasActiveVoiceSession()) {
+      const policy = approvalPolicy(timeout_ms ?? 180_000);
+      if (policy.action !== 'ask') {
         return voiceToolResponse({
-          error: 'NO_VOICE_SESSION',
-          message: NO_VOICE_SESSION_ERROR,
+          decision: 'rejected',
+          answered_by: 'away_policy',
+          away: true,
+          message: policy.message ?? undefined,
         });
       }
-      const timeout = timeout_ms ?? 180_000;
+      const timeout = policy.timeoutMs;
 
       const { request_id, promise } = registerRequest((id) => {
         const req: PlanApprovalRequest = {

@@ -195,6 +195,30 @@ function migrateSessionSelectionColumns(db: Database.Database): void {
   }
 }
 
+/**
+ * Restart survival (docs/36 §5) needs to know how to relaunch an interrupted
+ * run: which CLI owned it and whether it ran in a worktree. Neither was
+ * recorded, because before this a bridge restart simply failed every running
+ * job.
+ */
+function migrateJobRestartColumns(db: Database.Database): void {
+  const cols = new Set(
+    (db.prepare('PRAGMA table_info(job)').all() as Array<{ name: string }>).map((c) => c.name),
+  );
+  if (!cols.has('worktree')) {
+    db.exec('ALTER TABLE job ADD COLUMN worktree TEXT');
+    log.info('migrated job — added worktree');
+  }
+  if (!cols.has('provider')) {
+    db.exec('ALTER TABLE job ADD COLUMN provider TEXT');
+    log.info('migrated job — added provider');
+  }
+  if (!cols.has('resumed_from')) {
+    db.exec('ALTER TABLE job ADD COLUMN resumed_from TEXT');
+    log.info('migrated job — added resumed_from');
+  }
+}
+
 /** Carry the legacy single-row model_cache (always Cursor) into provider_model_cache once. */
 function migrateProviderModelCache(db: Database.Database): void {
   const legacy = db.prepare('SELECT fetched_at, models_json FROM model_cache WHERE id = 1').get() as
@@ -232,6 +256,7 @@ export function getDb(): Database.Database {
 
   migrateProviderModelCache(_db);
   migrateSessionSelectionColumns(_db);
+  migrateJobRestartColumns(_db);
 
   log.info({ dbPath }, 'database ready');
 

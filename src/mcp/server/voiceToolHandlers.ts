@@ -19,6 +19,16 @@ import { voiceTurnQueue } from './turnQueue.js';
 import { getActiveProvider } from '../../providers/agents/registry.js';
 import { getActiveVoiceAgent } from '../../executor/voiceAgent.js';
 import { recordTurn } from '../../state/turns.js';
+import {
+  withListener,
+  listenerBlock,
+  isListening,
+  effectiveAwayPolicy,
+  awayPollDelay,
+  chargeAwayBudget,
+  AWAY_POLL_FLOOR_MS,
+  type ListenerBlock,
+} from '../../state/awayPolicy.js';
 
 const log = childLogger('mcp:server:voiceTools');
 
@@ -95,6 +105,27 @@ const activeSessions = new Set<SendFn>();
 
 export const NO_VOICE_SESSION_ERROR =
   'No active phone voice session — speak/done/next_voice_turn only work while the PWA voice session is live. Use normal text in the desktop IDE.';
+
+/**
+ * Anything the agent says while the user is away, kept for the catch-up
+ * digest they hear on reconnect (docs/36 §3.5). Bounded: a long unattended run
+ * must not grow this without limit.
+ */
+const MAX_BUFFERED_SPEECH = 40;
+const bufferedSpeech: Array<{ at: string; text: string }> = [];
+
+export function bufferedAwaySpeech(): ReadonlyArray<{ at: string; text: string }> {
+  return bufferedSpeech;
+}
+
+export function clearBufferedAwaySpeech(): void {
+  bufferedSpeech.length = 0;
+}
+
+function bufferAwaySpeech(text: string): void {
+  bufferedSpeech.push({ at: new Date().toISOString(), text });
+  if (bufferedSpeech.length > MAX_BUFFERED_SPEECH) bufferedSpeech.shift();
+}
 
 export function hasActiveVoiceSession(): boolean {
   return activeSessions.size > 0;
@@ -209,6 +240,11 @@ export interface SpeakResult {
   message?: string;
   /** Turns the user has spoken that the agent has not collected yet. */
   pending_user_turns?: number;
+  /** False when nobody heard this line — it was kept for the catch-up digest. */
+  delivered?: boolean;
+  buffered?: boolean;
+  /** Presence and the away policy, on every agent-voice result (docs/36 §3.1). */
+  listener?: ListenerBlock;
 }
 
 /**
@@ -245,11 +281,30 @@ function pendingTurnNotice(result: { message?: string; pending_user_turns?: numb
 export function handleSpeak(args: SpeakArgs): SpeakResult {
   const text = (args.text ?? '').trim();
   if (!text) {
-    return { ok: false, sessions: 0 };
+    return withListener({ ok: false, sessions: 0 });
   }
   if (!hasActiveVoiceSession()) {
-    log.debug('speak rejected — no active PWA voice session');
-    return { ok: false, sessions: 0, error: 'NO_VOICE_SESSION', message: NO_VOICE_SESSION_ERROR };
+    /**
+     * Not an error any more. A `speak` with nobody listening used to come back
+     * as NO_VOICE_SESSION with a message telling the agent to "use normal
+     * text", so in practice it answered into a void and exited after its
+     * current step — whatever the user's away policy said. Now the line is
+     * kept for the catch-up digest and the agent is told to carry on.
+     */
+    bufferAwaySpeech(text);
+    log.info(
+      { text: text.slice(0, 80), policy: effectiveAwayPolicy() },
+      'speak buffered — nobody listening',
+    );
+    return withListener({
+      ok: true,
+      sessions: 0,
+      delivered: false,
+      buffered: true,
+      message:
+        'Nobody is listening right now — this line was saved for the catch-up ' +
+        'summary the user hears when they come back. Keep going per the listener policy.',
+    });
   }
 
   if (args.countTowardTurn !== false) {
@@ -266,9 +321,9 @@ export function handleSpeak(args: SpeakArgs): SpeakResult {
     recordTurn({ project: speaking.project, sessionId: speaking.sessionId ?? null, role: 'agent', text });
   }
 
-  const result: SpeakResult = { ok: true, sessions: activeSessions.size };
+  const result: SpeakResult = { ok: true, sessions: activeSessions.size, delivered: true };
   pendingTurnNotice(result);
-  return result;
+  return withListener(result);
 }
 
 export interface DoneResult {
@@ -276,6 +331,7 @@ export interface DoneResult {
   error?: string;
   message?: string;
   pending_user_turns?: number;
+  listener?: ListenerBlock;
 }
 
 /**
@@ -284,7 +340,14 @@ export interface DoneResult {
  */
 export function handleDone(): DoneResult {
   if (!hasActiveVoiceSession()) {
-    return { ok: false, error: 'NO_VOICE_SESSION', message: NO_VOICE_SESSION_ERROR };
+    // With nobody listening there is no mic to re-arm, so done() is simply
+    // the end of the run. Returning an error here made the agent retry.
+    return withListener({
+      ok: true,
+      message:
+        'Nobody is listening — the turn is closed. If work remains and the ' +
+        'policy is keep_working, carry on; otherwise this run may end.',
+    });
   }
 
   // Ending the turn with an uncollected utterance means the user is ignored
@@ -296,7 +359,7 @@ export function handleDone(): DoneResult {
   }
 
   broadcastVoiceTurnIdle();
-  return result;
+  return withListener(result);
 }
 
 /** Mark the turn complete — PWA waits for queued speech before re-arming. */
@@ -326,6 +389,24 @@ export interface NextVoiceTurnResult {
   queue_depth: number;
   error?: string;
   message?: string;
+  listener?: ListenerBlock;
+  /**
+   * Set while nobody is listening: how long the bridge will make the next poll
+   * wait. The floor is enforced server-side, not left to the agent's goodwill —
+   * an agent looping on "no turn" burns the user's tokens for as long as they
+   * are gone.
+   */
+  retry_after_ms?: number;
+  /**
+   * Attached to the first turn after the user comes back: how long they were
+   * away and what happened meanwhile, so the agent can tell them in its own
+   * words instead of the bridge speaking over it (docs/36 §3.5).
+   */
+  reconnected?: {
+    away_ms: number;
+    digest: string | null;
+    spoken_while_away: Array<{ at: string; text: string }>;
+  };
   /**
    * When the user barged in during TTS: what they heard (especially last_heard_words),
    * plus lines cut off / not spoken. The agent keeps running — do not stop workers.
@@ -351,17 +432,6 @@ const DEFAULT_POLL_MS = 30_000;
 export async function handleNextVoiceTurn(
   args: NextVoiceTurnArgs,
 ): Promise<NextVoiceTurnResult> {
-  if (!hasActiveVoiceSession()) {
-    return {
-      turn: null,
-      is_interrupt: false,
-      received_at: null,
-      queue_depth: 0,
-      error: 'NO_VOICE_SESSION',
-      message: NO_VOICE_SESSION_ERROR,
-    };
-  }
-
   const configuredDefault =
     getConfig().settings.voice.workerPollTimeoutMs ?? DEFAULT_POLL_MS;
   const timeoutMs = Math.min(
@@ -369,10 +439,30 @@ export async function handleNextVoiceTurn(
     MAX_POLL_MS,
   );
 
+  if (!hasActiveVoiceSession()) {
+    // Count this against the unattended budget before waiting, so a runaway
+    // loop is caught on its own next call rather than after it finishes.
+    const verdict = chargeAwayBudget();
+    await awayPollDelay(timeoutMs);
+    return withListener({
+      turn: null,
+      is_interrupt: false,
+      received_at: null,
+      queue_depth: 0,
+      retry_after_ms: AWAY_POLL_FLOOR_MS,
+      message:
+        verdict.exceeded && verdict.message
+          ? verdict.message
+          : 'Nobody is listening. There will be no turns until the user comes back — ' +
+            'do not poll in a tight loop; follow the listener policy instead.',
+    });
+  }
+
+  const wasAway = !isListening();
   const turn = await voiceTurnQueue.dequeue(timeoutMs);
 
   if (!turn) {
-    return { turn: null, is_interrupt: false, received_at: null, queue_depth: 0 };
+    return withListener({ turn: null, is_interrupt: false, received_at: null, queue_depth: 0 });
   }
 
   // New utterance handed to this agent process — re-arm mute-exit fallback.
@@ -389,11 +479,41 @@ export async function handleNextVoiceTurn(
     detail: turn.text.slice(0, 120),
   });
 
-  return {
+  const reconnected = buildReconnectBlock(wasAway);
+
+  return withListener({
     turn: turn.text,
     is_interrupt: turn.isInterrupt,
     received_at: turn.receivedAt,
     queue_depth: voiceTurnQueue.size,
     ...(turn.ttsInterrupt ? { tts_interrupt: turn.ttsInterrupt } : {}),
+    ...(reconnected ? { reconnected } : {}),
+  });
+}
+
+/** Digest supplier, injected so this module does not depend on the executor. */
+type DigestFn = () => { text: string } | null;
+let digestFn: DigestFn = () => null;
+
+export function setReconnectDigestSource(fn: DigestFn): void {
+  digestFn = fn;
+}
+
+/**
+ * Everything the user missed, handed to the agent with the first turn after
+ * they come back. The agent retells it in its own words; the bridge does not
+ * speak it, so the user is not talked over the moment they say something.
+ */
+function buildReconnectBlock(wasAway: boolean): NextVoiceTurnResult['reconnected'] {
+  const spoken = [...bufferedAwaySpeech()];
+  const digest = digestFn();
+  if (!wasAway && spoken.length === 0 && !digest) return undefined;
+
+  const block = {
+    away_ms: listenerBlock().away_ms,
+    digest: digest?.text ?? null,
+    spoken_while_away: spoken,
   };
+  clearBufferedAwaySpeech();
+  return block;
 }
