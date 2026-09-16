@@ -189,6 +189,34 @@ jobs:
         if: steps.shipped.outputs.already == 'false'
         run: npm install -g npm@latest
 
+      # ── Authentication: token if one is configured, OIDC otherwise ───────
+      #
+      # Trusted publishing cannot create a package that does not exist yet:
+      # the trusted publisher is configured *on a package*, so there is nothing
+      # to attach it to until a first version is up. Every publish of
+      # @ratitisrad/agentvoice so far has died on
+      #   404 Not Found - PUT https://registry.npmjs.org/@ratitisrad%2fagentvoice
+      # for exactly that reason.
+      #
+      # It cannot be bootstrapped by hand either. Publishing from a shell hits
+      # the account's 2FA, and npm answers with a browser URL whose id it
+      # redacts to `***` whenever stdout is not a TTY — so the OTP flow is
+      # unrunnable from any non-interactive shell, and retrying only stacks up
+      # failed auth attempts against the account.
+      #
+      # So: a granular access token breaks the deadlock once. Set NPM_TOKEN as
+      # a repository secret and this step authenticates with it; delete the
+      # secret once the package exists and Trusted Publishing is configured on
+      # it, and the OIDC branch below takes over again with no further change.
+      - name: Authenticate with the granular token
+        if: steps.shipped.outputs.already == 'false' && env.NPM_TOKEN != ''
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -eu
+          printf '//registry.npmjs.org/:_authToken=%s\n' "${NPM_TOKEN}" >> "$HOME/.npmrc"
+          echo 'Publishing with the NPM_TOKEN repository secret.'
+
       # setup-node's registry-url always writes
       #   //registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}
       # into ~/.npmrc. With no NODE_AUTH_TOKEN that expands to an empty token,
@@ -196,7 +224,9 @@ jobs:
       # exchange, and fails with ENEEDAUTH. Drop the line and keep the
       # registry= line that registry-url also wrote.
       - name: Let npm reach for OIDC instead of an empty token
-        if: steps.shipped.outputs.already == 'false'
+        if: steps.shipped.outputs.already == 'false' && env.NPM_TOKEN == ''
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -eu
           if [ -f "$HOME/.npmrc" ]; then
@@ -208,15 +238,15 @@ jobs:
       # prepublishOnly (typecheck + lint + build) runs as part of `npm publish`,
       # so dist/ and web/dist/ can never be stale in a published tarball.
       #
-      # No token. The package is configured on npmjs.com with this repo and
-      # this workflow as a trusted publisher, and npm exchanges the Actions
-      # OIDC token (hence `id-token: write` above) for a short-lived publish
-      # credential. That is what makes this work: a granular token has to have
-      # "Bypass two-factor authentication" set or npm answers 403, and npm is
-      # retiring those tokens for direct publishing in January 2027 anyway.
+      # Authenticated by whichever of the two steps above ran. Under trusted
+      # publishing provenance is automatic and the attestation is still signed;
+      # a token publish does not get one, which is another reason to delete the
+      # secret once the package exists.
       #
-      # Provenance is automatic under trusted publishing, so --provenance is
-      # gone too; the attestation is still signed and still published.
+      # A granular token must have "Bypass two-factor authentication" enabled
+      # or npm answers 403 here, and npm is restricting those tokens for direct
+      # publishing from January 2027 — so the token is a bootstrap, not a
+      # destination.
       - name: Publish
         if: steps.shipped.outputs.already == 'false'
         run: npm publish --access public
