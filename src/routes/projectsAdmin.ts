@@ -84,6 +84,7 @@ export async function registerProjectsAdminRoutes(app: FastifyInstance): Promise
           description: p.description ?? null,
           aliases: p.aliases,
           enabled: p.enabled,
+          discovered: p.discovered,
           allowExternalSessions: p.allowExternalSessions,
           externalMailbox: p.externalMailbox,
           resumeId: getProjectResumeId(p.name),

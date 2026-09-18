@@ -85,8 +85,11 @@ that home directory, so `npm update -g agentvoice` never touches your state.
 Run `agentvoice` from a directory that already has a `config.json` (a repo
 checkout, say) and it uses that directory instead.
 
-Then edit `~/.agentvoice/config.json` to point at your projects (absolute
-paths) and restart. Requires **Node 20+** and one of the agent CLIs —
+The default configuration is local-only (`test` mode with the `local` hosting
+provider), uses Codex, and discovers immediate Git repositories under
+`~/Projects`. Add nested project containers to
+`settings.projectDiscovery.hotPaths` when needed; no hand-maintained project
+list is required. Requires **Node 20+** and one of the agent CLIs —
 `cursor-agent`, `codex`, `claude`, or `codewhale` — on your `PATH`.
 
 ## The `agentvoice` command
@@ -127,6 +130,9 @@ npm run dev
 ```
 
 Open the web URL shown in the terminal (unified port in test mode).
+The example uses Codex with the workspace sandbox, no Tailscale or public
+hosting, and automatically picks up Git repositories directly under
+`~/Projects`.
 
 ## Host on Windows (one-command setup)
 
