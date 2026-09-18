@@ -30,6 +30,7 @@ export interface ProjectAdminView {
   description: string | null;
   aliases: string[];
   enabled: boolean;
+  discovered: boolean;
   /** docs/37 §4 — may the phone write into sessions this project did not start? */
   allowExternalSessions: boolean;
   /** docs/37 §2 — should sessions here poll check_messages()? */
@@ -66,6 +67,7 @@ export function listProjectsAdmin(filters: ProjectListFilters = {}): ProjectAdmi
     description: p.description ?? null,
     aliases: p.aliases,
     enabled: p.enabled,
+    discovered: p.discovered,
     allowExternalSessions: p.allowExternalSessions,
     externalMailbox: p.externalMailbox,
     pathExists: existsSync(p.path),
@@ -116,6 +118,7 @@ export function addProject(input: AddProjectInput): ProjectAdminView {
     description: input.description,
     aliases: input.aliases ?? [],
     enabled: input.enabled ?? true,
+    discovered: false,
     // Both default to off: injection into a session we did not start is
     // prompt injection, so it is opt-in per project.
     allowExternalSessions: input.allowExternalSessions ?? false,
@@ -132,6 +135,7 @@ export function addProject(input: AddProjectInput): ProjectAdminView {
     description: entry.description ?? null,
     aliases: entry.aliases,
     enabled: entry.enabled,
+    discovered: entry.discovered,
     allowExternalSessions: entry.allowExternalSessions,
     externalMailbox: entry.externalMailbox,
     pathExists: existsSync(entry.path),
@@ -167,6 +171,7 @@ export function updateProject(input: UpdateProjectInput): ProjectAdminView {
       input.description !== undefined ? (input.description ?? undefined) : existing.description,
     aliases: input.aliases ?? existing.aliases,
     enabled: input.enabled ?? existing.enabled,
+    discovered: existing.discovered,
     allowExternalSessions: input.allowExternalSessions ?? existing.allowExternalSessions,
     externalMailbox: input.externalMailbox ?? existing.externalMailbox,
   };
@@ -181,6 +186,7 @@ export function updateProject(input: UpdateProjectInput): ProjectAdminView {
     description: updated.description ?? null,
     aliases: updated.aliases,
     enabled: updated.enabled,
+    discovered: updated.discovered,
     allowExternalSessions: updated.allowExternalSessions,
     externalMailbox: updated.externalMailbox,
     pathExists: existsSync(updated.path),
@@ -193,10 +199,6 @@ export function removeProject(name: string): { name: string } {
   if (idx === -1) {
     throw new Error(`Project "${name}" not found.`);
   }
-  if (cfg.projects.length === 1) {
-    throw new Error('Cannot remove the last project — config requires at least one.');
-  }
-
   cfg.projects.splice(idx, 1);
   writeConfigFile(cfg);
   reconcileRegistry();

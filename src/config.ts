@@ -551,6 +551,30 @@ export const NarrationSettingsSchema = z
 export const AGENT_CLIENTS = ['cursor', 'codex', 'claude-code', 'codewhale'] as const;
 export type AgentClient = (typeof AGENT_CLIENTS)[number];
 
+/**
+ * Folders AgentVoice owns as sources for automatic project registration.
+ *
+ * A hot path is a container, never a project itself. Its immediate Git
+ * subdirectories become allowlisted projects; add a nested container as a
+ * second hot path when projects live below it. Discovery is deliberately off
+ * by default so upgrading does not silently broaden an existing installation's
+ * workspace allowlist.
+ */
+const ProjectDiscoverySettingsSchema = z
+  .object({
+    enabled: z.boolean().default(false),
+    hotPaths: z.array(z.string().min(1)).default(['~/Projects']),
+    /** Bare names exclude that name in every hot path; absolute paths exclude one folder. */
+    exclude: z.array(z.string().min(1)).default([]),
+    /** Keep the automatic allowlist to code repositories unless explicitly relaxed. */
+    requireGit: z.boolean().default(true),
+    /** Watch hot paths in this process and reconcile after directory changes. */
+    watch: z.boolean().default(true),
+    /** Safety-net rescan for filesystems that coalesce or lose watch events. */
+    rescanIntervalMs: z.number().int().min(1_000).max(3_600_000).default(60_000),
+  })
+  .default({});
+
 const SettingsSchema = z.object({
   /** `test` = localhost dev (backend + ng serve). `serve` = production / Tailscale. */
   runMode: z.enum(RUN_MODES).default('test'),
@@ -562,6 +586,8 @@ const SettingsSchema = z.object({
   serve: ServeSettingsSchema.default({}),
   /** Pluggable hosting/tunnel provider. See docs/25-hosting-providers.md. */
   hosting: HostingSettingsSchema,
+  /** In-process discovery of Git projects beneath configured hot paths. */
+  projectDiscovery: ProjectDiscoverySettingsSchema,
   defaultMode: z.enum(['agent', 'plan']).default('agent'),
   /** Default model for new sessions on the active CLI (agent_set_model global scope). */
   defaultActiveModel: z.string().min(1).default('auto'),
@@ -616,6 +642,8 @@ const ProjectConfigSchema = z.object({
   aliases: z.array(z.string()).default([]),
   description: z.string().optional(),
   enabled: z.boolean().default(true),
+  /** Managed by settings.projectDiscovery rather than a hand-authored entry. */
+  discovered: z.boolean().default(false),
   /**
    * Allow the phone to send messages into agent sessions this project did not
    * start (docs/37 §4).
@@ -637,7 +665,8 @@ const ProjectConfigSchema = z.object({
 
 export const ConfigFileSchema = z.object({
   settings: SettingsSchema,
-  projects: z.array(ProjectConfigSchema).min(1, 'At least one project must be registered'),
+  // Discovery can supply every project, so manual entries are optional.
+  projects: z.array(ProjectConfigSchema),
 });
 
 // ── Exported types ────────────────────────────────────────────────────────────
@@ -662,6 +691,7 @@ export type SessionSettings = z.infer<typeof SessionSettingsSchema>;
 export type UnattendedSettings = z.infer<typeof UnattendedSchema>;
 export type NarrationSettings = z.infer<typeof NarrationSettingsSchema>;
 export type HostingSettings = z.infer<typeof HostingSettingsSchema>;
+export type ProjectDiscoverySettings = z.infer<typeof ProjectDiscoverySettingsSchema>;
 export type Settings = Omit<z.infer<typeof SettingsSchema>, 'voice' | 'workflow'> & {
   voice: VoiceSettings;
   workflow: WorkflowSettings;

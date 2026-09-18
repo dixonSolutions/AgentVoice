@@ -7,9 +7,7 @@
         "webPort": 4200
       },
       "serve": {
-        "backendPort": 1234,
-        "webPort": 5671,
-        "publicBaseUrl": "https://your-machine.tailnet-name.ts.net"
+        "backendPort": 1234
       }
     },
     "workflow": {
@@ -88,6 +86,23 @@
     },
     "defaultMode": "agent",
     "defaultActiveModel": "auto",
+    "agentClient": "codex",
+    "permissionModes": {
+      "codex": "workspace"
+    },
+    "hosting": {
+      "provider": "local"
+    },
+    "projectDiscovery": {
+      "enabled": true,
+      "hotPaths": [
+        "~/Projects"
+      ],
+      "exclude": [],
+      "requireGit": true,
+      "watch": true,
+      "rescanIntervalMs": 60000
+    },
     "maxConcurrentJobs": 1,
     "jobTimeoutMs": 600000,
     "planFirst": false,
@@ -106,19 +121,6 @@
       "branch": "main"
     }
   },
-  "projects": [
-    {
-      "name": "cursorvoice",
-      "path": "/home/eva/Projects/SideProjects/CursorVoice",
-      "aliases": [
-        "agent voice",
-        "agentvoice",
-        "cursor voice",
-        "the voice project"
-      ],
-      "description": "AgentVoice \u2014 self-hosted voice bridge",
-      "enabled": true
-    }
-  ],
-  "_comment_projects": "Run: node scripts/apply-projects-registry.mjs \u2014 merges config/projects.registry.json for all ~/Projects entries"
+  "projects": [],
+  "_comment_projects": "Projects are discovered in-process from settings.projectDiscovery.hotPaths. Add nested project containers as additional hotPaths."
 }

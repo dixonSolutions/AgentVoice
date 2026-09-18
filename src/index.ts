@@ -19,6 +19,7 @@ import { getRunModeInfo } from './runMode.js';
 import { initLogger, getLogger } from './log.js';
 import { getDb, closeDb } from './state/db.js';
 import { reconcileRegistry } from './state/registry.js';
+import { startProjectDiscovery, synchronizeProjectDiscovery } from './state/projectDiscovery.js';
 import { migrateLegacyResumeIds } from './state/resumeMigration.js';
 import { markOrphanedJobs, markOrphanedVoiceAgentRuns } from './state/jobs.js';
 import { parkRunsForRestart, resumeInterruptedJobs } from './executor/restartSurvival.js';
@@ -54,8 +55,14 @@ async function main(): Promise<void> {
   // 3. Database + migrations
   getDb();
 
-  // 4. Registry reconciliation (upsert projects from config.json)
+  // 4. Discovery is an in-process source of allowlisted project paths. It runs
+  // before the registry so newly found Git worktrees are safe to select on the
+  // first request, then continues watching while the bridge is alive.
+  synchronizeProjectDiscovery();
+
+  // 4a. Registry reconciliation (upsert projects from config.json)
   reconcileRegistry();
+  const stopProjectDiscovery = startProjectDiscovery();
 
   // 4b. File any legacy provider-agnostic resume id under the CLI that owns it.
   migrateLegacyResumeIds();
@@ -134,6 +141,7 @@ async function main(): Promise<void> {
     }
     killActiveAgent('bridge shutdown');
     killVoiceAgent('bridge shutdown');
+    stopProjectDiscovery();
     try {
       await app.close();
       closeDb();

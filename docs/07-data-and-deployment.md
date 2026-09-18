@@ -95,12 +95,21 @@ startup; invalid config fails fast with a clear error.
 > startup the bridge **reconciles** the registry table from `config.json`
 > (adds/updates/disables entries) while preserving per-project `resume_id`.
 
-### Project registry (manual registration)
+### Project registry and in-process discovery
 
-- Projects are **registered manually** by the owner editing `config.json` (the
-  `projects` array) over SSH/iSH — **never created/edited via voice or by dad**.
-  This is a security boundary: the set of allowlisted directories is operator-
-  controlled.
+- Projects may be registered manually in `config.json`, or automatically by
+  `settings.projectDiscovery`. Discovery is disabled by default for existing
+  installs. When enabled, every immediate Git repository under a configured
+  `hotPaths` directory becomes a persisted `discovered: true` entry in
+  `config.json`; AgentVoice watches those folders in its own process and also
+  periodically rescans them. It never needs a separate daemon.
+- A hot path is a container, never a project. Add a nested container as another
+  hot path to discover its immediate children. Dot-directories and symlinks are
+  ignored; `exclude` accepts either a bare directory name or an absolute path.
+  `requireGit` defaults to true so random folders do not broaden the allowlist.
+- Discovery remains an operator-controlled boundary: the configured hot paths,
+  exclusions, and Git-repository requirement define the entire automatic
+  allowlist. Hand-authored entries win when they overlap a discovered path.
 - The registry is the **only** place workspace paths come from. Every tool that
   takes a `project` resolves `name → path`; a missing/disabled project is
   rejected at the API. The resolved `path` is what gets passed to
