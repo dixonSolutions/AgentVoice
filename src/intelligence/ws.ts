@@ -45,6 +45,7 @@ import { runIntelligenceTurn as runOrchestratorTurn, type OrchestratorCallbacks 
 import { parseTtsInterrupt } from '../voice/ttsInterrupt.js';
 import { phrase } from '../voice/phrases.js';
 import { getPresence, type PresenceClient } from '../state/presence.js';
+import { currentVoskStatus, ensureVoskModel, onVoskStatus } from '../serve/ensureVoskModel.js';
 import {
   registerTurnCompleteHook,
   registerVoiceSession,
@@ -117,6 +118,7 @@ export function registerWebSocket(app: FastifyInstance): void {
       let unregisterVoice: (() => void) | null = null;
       let unregisterTurnDone: (() => void) | null = null;
       let presence: PresenceClient | null = null;
+      let unsubscribeVosk: (() => void) | null = null;
 
       log.debug({ sessionKey }, 'ws connection attempt');
 
@@ -202,6 +204,18 @@ export function registerWebSocket(app: FastifyInstance): void {
                 socket.terminate?.();
               }
             },
+          });
+
+          // The bridge owns the wake-word model (not each client). Send the
+          // current preparation status, stream updates, and kick off a one-time
+          // preparation if it has not run yet (e.g. a fresh launch with no model
+          // installed). The client shows this as launch setup, not a fault.
+          send(socket, { type: 'vosk_status', ...currentVoskStatus() });
+          unsubscribeVosk = onVoskStatus((status) => {
+            if (socket.readyState === WS_OPEN) send(socket, { type: 'vosk_status', ...status });
+          });
+          void ensureVoskModel().catch(() => {
+            /* an error status has already been emitted to subscribers */
           });
 
           log.info({ sessionKey, workflow: workflowId }, 'ws authenticated');
@@ -316,6 +330,8 @@ export function registerWebSocket(app: FastifyInstance): void {
       socket.on('close', () => {
         presence?.release();
         presence = null;
+        unsubscribeVosk?.();
+        unsubscribeVosk = null;
         sessions.delete(socket);
         unregisterVoice?.();
         unregisterTurnDone?.();

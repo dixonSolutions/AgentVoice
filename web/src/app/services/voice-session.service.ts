@@ -508,6 +508,59 @@ export class VoiceSessionService {
    * the gap and retries with exponential backoff; only surfaces an error once
    * the retry budget is spent, so a transient blip never alarms the user.
    */
+  /** Show the bridge's one-time wake-word-model setup only once per session. */
+  private serverPrepareNoted = false;
+
+  /**
+   * The bridge is preparing the wake-word model — a one-time launch step, not a
+   * connection fault. Surface it clearly and point at the setup/doctor script,
+   * which prepares the model ahead of time and avoids this entirely.
+   */
+  private handleServerModelPrepare(status: {
+    phase: 'downloading' | 'unpacking' | 'ready' | 'error';
+    label: string;
+    fraction: number | null;
+    loadedBytes?: number;
+    totalBytes?: number | null;
+    message?: string;
+  }): void {
+    if (status.phase === 'ready') {
+      if (this.serverPrepareNoted) {
+        this.logs.append('info', 'voice', 'Wake-word model ready.');
+      }
+      this.serverPrepareNoted = false;
+      const cur = this.modelDownload();
+      if (cur && cur.label.startsWith('One-time setup')) this.modelDownload.set(null);
+      return;
+    }
+    if (status.phase === 'error') {
+      this.serverPrepareNoted = false;
+      this.modelDownload.set(null);
+      this.toast.warn(
+        'Wake-word setup failed',
+        `${status.message ?? 'preparation failed'} — run the setup or doctor script to prepare the model, then reconnect.`,
+      );
+      return;
+    }
+    // downloading / unpacking — one-time launch setup, not a disconnect.
+    if (!this.serverPrepareNoted) {
+      this.serverPrepareNoted = true;
+      this.toast.info(
+        'One-time setup',
+        'Preparing the wake-word model on the server. Tip: run the setup or doctor script to prepare it ahead of launch and skip this.',
+      );
+    }
+    this.modelDownload.set({
+      phase: status.phase,
+      label: 'One-time setup — wake-word model',
+      loadedBytes: status.loadedBytes ?? 0,
+      totalBytes: status.totalBytes ?? null,
+      fraction: status.fraction,
+      step: 1,
+      stepCount: 1,
+    });
+  }
+
   private scheduleSilentReconnect(reason: string): void {
     // Tear down the dead session but keep audio/keepalive (and the wake lock).
     this.stopSession({ userInitiated: false, keepKeepalive: true });
@@ -643,6 +696,7 @@ export class VoiceSessionService {
         // with backoff, keeping the keepalive/wake-lock alive across the gap.
         this.scheduleSilentReconnect(reason ?? 'connection lost');
       },
+      onServerModelPrepare: (status) => this.handleServerModelPrepare(status),
       onActivated: (phrase) => {
         this.logs.append('info', 'voice', `Wake phrase heard — "${phrase}"`);
         this._voiceActivated.set(true);

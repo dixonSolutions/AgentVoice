@@ -37,6 +37,7 @@ import { dispatchTool } from './mcp/handlers.js';
 import { getNarrator, PhoneRelaySession } from './executor/narrator.js';
 import { registerVoiceProviderRoutes } from './routes/voiceProviders.js';
 import { registerWebSocket } from './intelligence/ws.js';
+import { ensureVoskModel } from './serve/ensureVoskModel.js';
 import { registerIntelligenceAudioRoutes } from './routes/intelligenceAudio.js';
 import { registerAgentSessionRoutes } from './routes/agentSessions.js';
 import { registerVoiceSessionPrepareRoutes } from './routes/voiceSessionPrepare.js';
@@ -592,6 +593,12 @@ export async function startServer(app: FastifyInstance): Promise<string> {
   const run = getRunModeInfo(settings);
   const host = run.runMode === 'serve' ? '0.0.0.0' : '127.0.0.1';
   const listenAddress = await app.listen({ port: run.backendPort, host });
+
+  // Prepare the wake-word model on launch so it is ready (or visibly preparing)
+  // before any client needs it — the bridge owns it, not each client.
+  void ensureVoskModel().catch(() => {
+    /* preparation errors are logged and surfaced to clients via vosk_status */
+  });
   // Fastify derives that string's scheme from its `https` option, which
   // serverFactory-based TLS never sets (fastify/lib/server.js), so it would
   // claim http:// for a genuine HTTPS listener. Correct it from run.tls.

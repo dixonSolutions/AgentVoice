@@ -98,6 +98,12 @@ export class LlmIntelligenceSession {
   private ws: WebSocket | null = null;
   private stt: SttSession | null = null;
   private closed = false;
+  /** Resolves when the bridge reports the wake-word model is prepared (or fails). */
+  private serverModelReadyResolved = false;
+  private resolveServerModelReady!: () => void;
+  private readonly serverModelReady = new Promise<void>((resolve) => {
+    this.resolveServerModelReady = resolve;
+  });
   private wakeWords: WakeWords = { start: '', end: 'send' };
   private turnSubmit: TurnSubmit = { silenceMs: DEFAULT_REDEMPTION_MS, vadEnabled: true };
   private workflow = 'agent_native';
@@ -489,7 +495,21 @@ export class LlmIntelligenceSession {
       return;
     }
 
+    // The bridge prepares the wake-word model and reports readiness over the
+    // socket. Wait for it so we never try to load a half-prepared archive; fall
+    // through after a timeout so an older bridge that sends no status still works.
+    await Promise.race([
+      this.serverModelReady,
+      new Promise<void>((resolve) => setTimeout(resolve, 25_000)),
+    ]);
+
     await this.armStartSpotter();
+  }
+
+  private markServerModelReady(): void {
+    if (this.serverModelReadyResolved) return;
+    this.serverModelReadyResolved = true;
+    this.resolveServerModelReady();
   }
 
   /** Re-arm wake Vosk when idle — safe to call after TTS or turn_complete. */
@@ -1160,6 +1180,27 @@ export class LlmIntelligenceSession {
         // it as half-open after ~30s — dropping the session mid-listen.
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           this.ws.send(JSON.stringify({ type: 'pong' }));
+        }
+        break;
+      }
+
+      case 'vosk_status': {
+        // The bridge prepares the wake-word model and reports progress here.
+        const phase = msg['phase'];
+        if (phase === 'downloading' || phase === 'unpacking' || phase === 'ready' || phase === 'error') {
+          // 'ready' (or a terminal 'error') unblocks the wake-word load, which
+          // waits for the bridge to finish preparing the model.
+          if (phase === 'ready' || phase === 'error') this.markServerModelReady();
+          const totalRaw = msg['totalBytes'];
+          this.cb.onServerModelPrepare?.({
+            phase,
+            label: typeof msg['label'] === 'string' ? msg['label'] : 'Wake-word model',
+            fraction: typeof msg['fraction'] === 'number' ? msg['fraction'] : null,
+            loadedBytes: typeof msg['loadedBytes'] === 'number' ? msg['loadedBytes'] : undefined,
+            totalBytes:
+              typeof totalRaw === 'number' ? totalRaw : totalRaw === null ? null : undefined,
+            message: typeof msg['message'] === 'string' ? msg['message'] : undefined,
+          });
         }
         break;
       }
