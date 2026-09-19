@@ -6,7 +6,7 @@
  *   GET  /healthz            — unauthenticated health check
  *   /api/*                   — Bearer-authenticated REST endpoints
  *   /ws/control              — authenticated control WebSocket (voice model relay)
- *   /ws/intelligence         — authenticated WebSocket (llm_intelligence workflow)
+ *   /ws         — authenticated WebSocket (llm_intelligence workflow)
  *   /ws/events               — authenticated multi-client desk socket (IDE extension, docs/34)
  *   GET|POST|DELETE /mcp     — MCP Streamable HTTP server (the agent CLI registers this)
  *
@@ -36,7 +36,7 @@ import { childLogger } from './log.js';
 import { dispatchTool } from './mcp/handlers.js';
 import { getNarrator, PhoneRelaySession } from './executor/narrator.js';
 import { registerVoiceProviderRoutes } from './routes/voiceProviders.js';
-import { registerIntelligenceWebSocket } from './intelligence/ws.js';
+import { registerWebSocket } from './intelligence/ws.js';
 import { registerIntelligenceAudioRoutes } from './routes/intelligenceAudio.js';
 import { registerAgentSessionRoutes } from './routes/agentSessions.js';
 import { registerVoiceSessionPrepareRoutes } from './routes/voiceSessionPrepare.js';
@@ -302,7 +302,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   // ── Intelligence + MCP WebSockets ──────────────────────────────────────
 
-  registerIntelligenceWebSocket(app);
+  registerWebSocket(app);
   await registerVoiceProviderRoutes(app);
   await registerConfigRoutes(app);
   await registerIntelligenceAudioRoutes(app);

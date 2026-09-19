@@ -248,7 +248,7 @@ export type ToolArgs<T extends ToolName> = z.infer<(typeof TOOL_SCHEMAS)[T]>;
 /**
  * Tool names shipped before the AgentVoice rename.
  *
- * They are accepted by `dispatchTool` (the control-WebSocket / intelligence
+ * They are accepted by `dispatchTool` (the control-WebSocket / WebSocket
  * relay path) so an in-flight session that still remembers the old vocabulary
  * keeps working. They are deliberately NOT registered on the MCP server: the
  * tool list is what the model reads on every turn, and 18 duplicate deprecated

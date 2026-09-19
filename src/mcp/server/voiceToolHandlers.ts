@@ -7,7 +7,7 @@
  *   next_voice_turn()   — long-poll dequeue of next user utterance
  *
  * The `speak` path mirrors the llm_intelligence `onSpeak` callback: it sends
- * { type: "speak", text } to all connected intelligence WebSocket clients.
+ * { type: "speak", text } to all connected WebSocket clients.
  *
  * See docs/16-mcp-server-agent-as-brain.md.
  */
@@ -98,7 +98,7 @@ export function hadSpeakThisTurn(): boolean {
 
 // ── Session broadcast registry ────────────────────────────────────────────
 //
-// Intelligence WebSocket connections register here so speak() can push audio.
+// WebSocket connections register here so speak() can push audio.
 
 type SendFn = (payload: unknown) => void;
 
