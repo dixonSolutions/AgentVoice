@@ -2,7 +2,7 @@
  * `/ws/events` — the multi-client desk socket (VS Code / Cursor extension,
  * docs/34-vscode-extension.md).
  *
- * Why a third socket: `/ws/control` and `/ws/intelligence` each register a
+ * Why a third socket: `/ws/control` and `/ws` each register a
  * single narrator / approval target, so a second connection would silently
  * displace the phone. This one is observe-and-submit only:
  *

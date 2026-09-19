@@ -1,6 +1,6 @@
 /**
  * One entry point for a user turn in the `agent_native` workflow, whichever
- * surface it came from: the phone (`/ws/intelligence` after STT), the desk
+ * surface it came from: the phone (`/ws` after STT), the desk
  * socket (`/ws/events`), or `POST /api/turns` (typed in the IDE).
  *
  * Spawn-or-queue, exactly as the phone path always did:

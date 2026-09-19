@@ -1,7 +1,7 @@
 /**
  * Event bus — fan-out of bridge events to every connected *desk* client.
  *
- * The phone has two single-client sockets (`/ws/control`, `/ws/intelligence`)
+ * The phone has two single-client sockets (`/ws/control`, `/ws`)
  * whose registration is last-writer-wins by design: one narrator, one approval
  * push target. A second UI (the VS Code / Cursor extension, docs/34) must not
  * displace the phone, so it observes through this bus instead — every payload

@@ -278,7 +278,7 @@ export class LlmIntelligenceSession {
     this.cb.onState('connecting');
     await primeTtsPlaybackUnlock();
 
-    const wsUrl = `${this.bridgeBase.replace(/^http/, 'ws')}/ws/intelligence`;
+    const wsUrl = `${this.bridgeBase.replace(/^http/, 'ws')}/ws`;
     this.ws = new WebSocket(wsUrl);
 
     await new Promise<void>((resolve, reject) => {
@@ -302,15 +302,15 @@ export class LlmIntelligenceSession {
       });
 
       ws.addEventListener('error', () =>
-        finish(() => reject(new Error('Intelligence WebSocket error'))),
+        finish(() => reject(new Error('WebSocket error'))),
       );
 
       ws.addEventListener('close', (ev) => {
         if (!this.closed && this.wsConnected) {
-          this.cb.onClosed?.('Intelligence WebSocket disconnected');
+          this.cb.onClosed?.('WebSocket disconnected');
         }
         finish(() =>
-          reject(new Error(ev.reason?.trim() || `Intelligence WebSocket closed (${ev.code})`)),
+          reject(new Error(ev.reason?.trim() || `WebSocket closed (${ev.code})`)),
         );
       });
     });

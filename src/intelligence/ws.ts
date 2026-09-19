@@ -1,5 +1,5 @@
 /**
- * WebSocket handler for cascade voice workflows (/ws/intelligence).
+ * WebSocket handler for cascade voice workflows (/ws).
  *
  * Supports:
  *   agent_native   — STT → VoiceTurnQueue → agent-voice MCP (speak/done)
@@ -107,9 +107,9 @@ function isCascadeWorkflow(workflow: WorkflowId): boolean {
   return workflow === 'agent_native' || workflow === 'llm_intelligence';
 }
 
-export function registerIntelligenceWebSocket(app: FastifyInstance): void {
+export function registerWebSocket(app: FastifyInstance): void {
   app.register(async (wsApp) => {
-    wsApp.get('/ws/intelligence', { websocket: true }, (socket, _req) => {
+    wsApp.get('/ws', { websocket: true }, (socket, _req) => {
       let authenticated = false;
       const sessionKey = 'default';
       let relaySession: PhoneRelaySession | null = null;
@@ -118,7 +118,7 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
       let unregisterTurnDone: (() => void) | null = null;
       let presence: PresenceClient | null = null;
 
-      log.debug({ sessionKey }, 'intelligence ws connection attempt');
+      log.debug({ sessionKey }, 'ws connection attempt');
 
       socket.on('message', (rawMsg: Buffer | string) => {
         const str = typeof rawMsg === 'string' ? rawMsg : rawMsg.toString('utf-8');
@@ -126,7 +126,7 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
         if (!authenticated) {
           const token = parseWsAuthMessage(str);
           if (!verifyWsToken(token)) {
-            log.warn({ sessionKey }, 'intelligence ws auth failed');
+            log.warn({ sessionKey }, 'ws auth failed');
             socket.close(4001, 'Unauthorized');
             return;
           }
@@ -204,7 +204,7 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
             },
           });
 
-          log.info({ sessionKey, workflow: workflowId }, 'intelligence ws authenticated');
+          log.info({ sessionKey, workflow: workflowId }, 'ws authenticated');
           return;
         }
 
@@ -310,7 +310,7 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
           return;
         }
 
-        log.debug({ type: msg['type'] }, 'unhandled intelligence ws message');
+        log.debug({ type: msg['type'] }, 'unhandled ws message');
       });
 
       socket.on('close', () => {
@@ -326,11 +326,11 @@ export function registerIntelligenceWebSocket(app: FastifyInstance): void {
           void getNarrator().setSession(null);
           relaySession = null;
         }
-        log.info({ sessionKey }, 'intelligence ws closed');
+        log.info({ sessionKey }, 'ws closed');
       });
 
       socket.on('error', (err: Error) => {
-        log.error({ err, sessionKey }, 'intelligence ws error');
+        log.error({ err, sessionKey }, 'ws error');
       });
     });
   });

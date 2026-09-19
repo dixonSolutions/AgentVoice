@@ -1,5 +1,5 @@
 /**
- * Live session log events — broadcast to connected intelligence WebSocket clients (PWA).
+ * Live session log events — broadcast to connected WebSocket clients (PWA).
  */
 
 import { broadcastToVoiceSessions } from './voiceToolHandlers.js';

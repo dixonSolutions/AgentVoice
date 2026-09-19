@@ -27,7 +27,7 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
   'Cross-Origin-Embedder-Policy': 'require-corp',
 } as const;
 
-const BACKEND_WS_PATHS = ['/ws/control', '/ws/intelligence', '/ws/events'] as const;
+const BACKEND_WS_PATHS = ['/ws/control', '/ws', '/ws/events'] as const;
 
 function pathnameOf(url: string): string {
   return url.split('?')[0] ?? url;
