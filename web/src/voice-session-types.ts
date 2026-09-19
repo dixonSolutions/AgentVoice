@@ -30,6 +30,18 @@ export interface SessionCallbacks {
   onSpeaking(speaking: boolean): void;
   onWorking(active: boolean): void;
   onClosed(reason?: string): void;
+  /**
+   * The bridge is preparing the wake-word model (a one-time launch step, not a
+   * fault). Shown as setup, with a note to run the setup/doctor script.
+   */
+  onServerModelPrepare?(status: {
+    phase: 'downloading' | 'unpacking' | 'ready' | 'error';
+    label: string;
+    fraction: number | null;
+    loadedBytes?: number;
+    totalBytes?: number | null;
+    message?: string;
+  }): void;
   onActivated?(phrase: string): void;
   onDeactivated?(): void;
   onWakeRejected?(heard: string, expectedWake: string): void;

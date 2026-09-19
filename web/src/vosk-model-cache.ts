@@ -10,9 +10,32 @@ import {
 
 let modelPromise: Promise<Model> | null = null;
 
+/**
+ * Confirm the bridge is serving a real gzip archive, not the SPA fallback
+ * (index.html) it returns while the model is still being prepared. Handing an
+ * HTML page to createModel() makes it try to untar HTML and hang forever, so we
+ * fail fast instead — the caller retries once the bridge reports the model
+ * ready over the socket.
+ */
+async function assertModelReady(): Promise<void> {
+  const res = await fetch(VOSK_MODEL_URL, { credentials: 'same-origin' });
+  const contentType = (res.headers.get('content-type') || '').toLowerCase();
+  try {
+    void res.body?.cancel();
+  } catch {
+    /* ignore */
+  }
+  if (!res.ok || contentType.includes('text/html')) {
+    throw new Error('wake-word model is not ready on the bridge yet');
+  }
+}
+
 export function loadVoskModel(): Promise<Model> {
   if (!modelPromise) {
     modelPromise = (async () => {
+      // Fail fast if the bridge is still preparing the model, so we never hand
+      // createModel() an HTML error page (which would untar forever).
+      await assertModelReady();
       // Pull the archive with progress first; createModel() then reads it from
       // Cache Storage instead of doing a silent 50 MB fetch inside its worker.
       await prefetchVoiceModels({ vosk: true, silero: false });
