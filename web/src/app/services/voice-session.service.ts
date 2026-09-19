@@ -88,6 +88,11 @@ export class VoiceSessionService {
   private keepaliveWired = false;
   /** Reconnect intelligence session after OS background suspend (not user hang-up). */
   private resumeOnVisible = false;
+  /** Silent reconnect after an unexpected foreground drop (network blip, etc.). */
+  private reconnecting = false;
+  private reconnectAttempts = 0;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly MAX_SILENT_RECONNECTS = 4;
   /** Native CallKit / foreground-call started for this session — screen may lock. */
   private nativeCallStarted = false;
   private readonly _voiceActivated = signal(false);
@@ -323,6 +328,9 @@ export class VoiceSessionService {
       await intelSession.start();
       // Fully connected and ready — everything up (WebSocket, models, wake word).
       playConnectDing();
+      // Connected — clear any silent-reconnect backoff.
+      this.reconnecting = false;
+      this.reconnectAttempts = 0;
       if (defaultMuted) {
         intelSession.setMicMuted(true);
       }
@@ -346,10 +354,16 @@ export class VoiceSessionService {
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       this.logs.append('error', 'voice', 'Could not start intelligence session', detail);
-      this.toast.error('Could not start voice', detail);
-      this.notifyVoiceError(detail);
       this.startAttemptFailed = true;
       this.stopSession();
+      if (this.reconnecting) {
+        // A silent reconnect attempt failed — back off and try again (or give
+        // up quietly once the budget is spent, inside scheduleSilentReconnect).
+        this.scheduleSilentReconnect(detail);
+      } else {
+        this.toast.error('Could not start voice', detail);
+        this.notifyVoiceError(detail);
+      }
     } finally {
       this.sessionConnecting.set(false);
     }
@@ -361,6 +375,13 @@ export class VoiceSessionService {
     this.prepareAbort = null;
     if (userInitiated) {
       this.resumeOnVisible = false;
+      // A real hang-up cancels any pending silent reconnect.
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      this.reconnecting = false;
+      this.reconnectAttempts = 0;
     }
     if (userInitiated || !options?.keepKeepalive) {
       this.keepalive.stop();
@@ -481,6 +502,37 @@ export class VoiceSessionService {
     await this.startSession();
   }
 
+  /**
+   * Reconnect the voice session silently after an unexpected foreground drop
+   * (network blip, bridge restart). Keeps the keepalive/wake-lock alive across
+   * the gap and retries with exponential backoff; only surfaces an error once
+   * the retry budget is spent, so a transient blip never alarms the user.
+   */
+  private scheduleSilentReconnect(reason: string): void {
+    // Tear down the dead session but keep audio/keepalive (and the wake lock).
+    this.stopSession({ userInitiated: false, keepKeepalive: true });
+    if (this.reconnectAttempts >= VoiceSessionService.MAX_SILENT_RECONNECTS) {
+      this.reconnecting = false;
+      this.reconnectAttempts = 0;
+      this.toast.warn('Voice disconnected', reason);
+      this.notifyVoiceError(reason);
+      return;
+    }
+    this.reconnecting = true;
+    const attempt = ++this.reconnectAttempts;
+    const delay = Math.min(4000, 400 * 2 ** (attempt - 1));
+    this.logs.append('info', 'voice', `Reconnecting… (attempt ${attempt})`);
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      // Watchdog: if an attempt stalls (bridge still down, prepare HTTP hanging),
+      // abort it so the catch schedules the next backoff — or gives up quietly
+      // once the budget is spent — rather than hanging silently forever.
+      const watchdog = setTimeout(() => this.prepareAbort?.abort(), 12_000);
+      void this.startSession().finally(() => clearTimeout(watchdog));
+    }, delay);
+  }
+
   private syncAppState(): void {
     if (this._jobRunning()) {
       this.appState.transitionTo('working');
@@ -587,11 +639,9 @@ export class VoiceSessionService {
           this.stopSession({ userInitiated: false, keepKeepalive: true });
           return;
         }
-        if (reason) {
-          this.toast.warn('Voice disconnected', reason);
-          this.notifyVoiceError(reason);
-        }
-        this.stopSession();
+        // Foreground drop (network blip, bridge restart): reconnect silently
+        // with backoff, keeping the keepalive/wake-lock alive across the gap.
+        this.scheduleSilentReconnect(reason ?? 'connection lost');
       },
       onActivated: (phrase) => {
         this.logs.append('info', 'voice', `Wake phrase heard — "${phrase}"`);
