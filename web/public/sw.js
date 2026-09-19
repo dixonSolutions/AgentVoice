@@ -89,12 +89,17 @@ self.addEventListener('fetch', (event) => {
           : null;
 
     if (modelCache) {
+      // A model URL that returns HTML is the SPA fallback (model missing) —
+      // never serve or store it, or the WASM untar hangs forever.
+      const isHtml = (res) =>
+        (res.headers.get('content-type') || '').toLowerCase().includes('text/html');
       event.respondWith(
         caches.open(modelCache).then(async (cache) => {
           const cached = await cache.match(url.pathname);
-          if (cached) return cached;
+          if (cached && !isHtml(cached)) return cached;
+          if (cached) await cache.delete(url.pathname); // drop a poisoned entry
           const response = await fetch(event.request);
-          if (response.ok) {
+          if (response.ok && !isHtml(response)) {
             await cache.put(url.pathname, response.clone());
           }
           return response;

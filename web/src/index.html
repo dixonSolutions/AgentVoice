@@ -37,7 +37,23 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
+          navigator.serviceWorker
+            .register('/sw.js')
+            .then((reg) => {
+              reg.update().catch(() => {});
+              // A worker that already controlled this page and then hands over
+              // is an update (skipWaiting + clients.claim): reload once so the
+              // new app shell and cleaned caches take effect. Skip the reload on
+              // a first install, when there was no controller to begin with.
+              const hadController = !!navigator.serviceWorker.controller;
+              let reloaded = false;
+              navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (reloaded || !hadController) return;
+                reloaded = true;
+                window.location.reload();
+              });
+            })
+            .catch(() => {});
         });
       }
     </script>

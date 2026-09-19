@@ -54,7 +54,7 @@ import {
 import { DEFAULT_REDEMPTION_MS, SileroVadDetector } from './silero-vad.js';
 import { prefetchVoiceModels } from './model-download.js';
 import { TurnSubmitBuffer } from './turn-submit-buffer.js';
-import { playConnectDing, playVoiceCueNow } from './sound-effects.js';
+import { playVoiceCueNow } from './sound-effects.js';
 import { errorSpeechText } from './error-feedback.js';
 import {
   looksLikeSilentPlayback,
@@ -278,6 +278,10 @@ export class LlmIntelligenceSession {
     this.cb.onState('connecting');
     await primeTtsPlaybackUnlock();
 
+    // Backend resolution is independent of the socket — run it concurrently with
+    // the connect handshake so the two latencies overlap instead of stacking.
+    const backendsPromise = resolveAudioBackendsAsync(this.audioConfig);
+
     const wsUrl = `${this.bridgeBase.replace(/^http/, 'ws')}/ws`;
     this.ws = new WebSocket(wsUrl);
 
@@ -296,10 +300,7 @@ export class LlmIntelligenceSession {
 
       ws.addEventListener('message', (ev) => {
         this.handleMessage(ev.data as string, {
-          onAuthOk: () => {
-            playConnectDing();
-            finish(resolve);
-          },
+          onAuthOk: () => finish(resolve),
           onError: (message) => finish(() => reject(new Error(message))),
         });
       });
@@ -318,7 +319,7 @@ export class LlmIntelligenceSession {
       });
     });
 
-    const resolved = await resolveAudioBackendsAsync(this.audioConfig);
+    const resolved = await backendsPromise;
     this.sttBackend = resolved.stt;
     this.ttsBackend = resolved.tts;
     console.info('[audio] STT:', this.sttBackend, 'TTS:', this.ttsBackend, resolved.sttNote ?? '');

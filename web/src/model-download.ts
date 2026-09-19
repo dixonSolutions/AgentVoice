@@ -152,19 +152,41 @@ function cacheHeaders(source: Response, totalBytes: number | null): Headers {
   return headers;
 }
 
+/**
+ * A model URL that resolves to HTML is the SPA fallback (index.html) served
+ * when the model is missing. Untarring that hangs forever, and caching it
+ * poisons every later load — so we never store or reuse such a response.
+ */
+function isHtmlResponse(res: Response): boolean {
+  return (res.headers.get('content-type') || '').toLowerCase().includes('text/html');
+}
+
 async function fetchAssetIntoCache(
   asset: ModelAsset,
   step: number,
   stepCount: number,
 ): Promise<void> {
   const cache = await openModelCache(asset.cacheName);
-  if (cache && (await cache.match(asset.url))) {
-    return;
+  if (cache) {
+    const cached = await cache.match(asset.url);
+    if (cached && !isHtmlResponse(cached)) {
+      return;
+    }
+    if (cached) {
+      // A prior fetch cached the SPA fallback (index.html) instead of the
+      // model archive — self-heal by dropping it and refetching.
+      await cache.delete(asset.url);
+    }
   }
 
   const response = await fetch(asset.url, { credentials: 'same-origin' });
   if (!response.ok) {
     throw new Error(`${response.status} ${response.statusText}`.trim());
+  }
+  if (isHtmlResponse(response)) {
+    throw new Error(
+      `${asset.label}: server returned HTML, not the model archive — the model is not installed on the bridge.`,
+    );
   }
 
   const totalBytes = parseContentLength(response.headers.get('content-length'));

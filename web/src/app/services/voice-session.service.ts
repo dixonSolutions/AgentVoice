@@ -17,9 +17,19 @@ import { cancelTtsFallback, clearTranscriptTts, configureTranscriptTts, schedule
 import { primeTtsPlaybackUnlock } from '../../audio.js';
 import { CallSession, isNativeShell } from '../../native/call-session.js';
 import { SessionKeepAlive } from '../../session-keepalive.js';
-import { preloadVoiceCues, playVoiceCueNow } from '../../sound-effects.js';
+import {
+  preloadVoiceCues,
+  playVoiceCueNow,
+  playStartBeep,
+  playConnectDing,
+} from '../../sound-effects.js';
+import { loadVoskModel } from '../../vosk-model-cache.js';
 import type { AudioBackendSummary } from '../../llm-intelligence-session.js';
-import { onModelDownload, type ModelDownloadState } from '../../model-download.js';
+import {
+  onModelDownload,
+  prefetchVoiceModels,
+  type ModelDownloadState,
+} from '../../model-download.js';
 import {
   promptSpeechLines,
   markPromptSpoken,
@@ -128,6 +138,24 @@ export class VoiceSessionService {
     // Model download progress drives the orb's Preparing state. The service lives
     // for the app's lifetime, so this subscription is never torn down.
     onModelDownload((state) => this.modelDownload.set(state));
+
+    // Warm the wake-word model in the background (idle time), so the first orb
+    // press connects in well under a second instead of waiting on a ~40 MB
+    // download + WASM unpack. loadVoskModel() memoises, so startWakeWordPhase
+    // reuses this exact promise. Best-effort — failures just fall back to the
+    // lazy load at connect time.
+    if (typeof window !== 'undefined') {
+      const warm = () => {
+        // Cache every offline model archive (Vosk + Silero VAD + ORT runtime) so
+        // start() never downloads at connect time, and warm the Vosk WASM model.
+        void prefetchVoiceModels({ vosk: true, silero: true }).catch(() => {});
+        void loadVoskModel().catch(() => {});
+      };
+      const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => void })
+        .requestIdleCallback;
+      if (ric) ric(warm);
+      else setTimeout(warm, 1500);
+    }
   }
 
   private readMicMutePref(): boolean | null {
@@ -243,6 +271,8 @@ export class VoiceSessionService {
     // iOS Safari: unlock TTS in the user-gesture stack before any long await.
     await primeTtsPlaybackUnlock();
     void preloadVoiceCues();
+    // Soft blip acknowledging the orb press; the connect ding comes at the end.
+    playStartBeep();
 
     try {
       await this.bridge.setActiveProject(project);
@@ -291,6 +321,8 @@ export class VoiceSessionService {
 
     try {
       await intelSession.start();
+      // Fully connected and ready — everything up (WebSocket, models, wake word).
+      playConnectDing();
       if (defaultMuted) {
         intelSession.setMicMuted(true);
       }

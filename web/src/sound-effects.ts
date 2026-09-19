@@ -119,3 +119,28 @@ export function playConnectDing(): void {
     // Best-effort — a missing/blocked AudioContext must not break connecting.
   }
 }
+
+/**
+ * A soft low blip when a session starts (orb pressed) — the counterpart to
+ * playConnectDing(), which fires only once everything is connected and ready.
+ * Best-effort, same as the ding.
+ */
+export function playStartBeep(): void {
+  try {
+    const ctx = getSharedAudioContext();
+    if (ctx.state === 'suspended') void ctx.resume();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(392, now); // G4 — lower and softer than the ding
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.14, now + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.26);
+  } catch {
+    // Best-effort.
+  }
+}
