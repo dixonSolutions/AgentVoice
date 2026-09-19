@@ -1138,6 +1138,16 @@ export class LlmIntelligenceSession {
     }
 
     switch (msg['type']) {
+      case 'ping': {
+        // Heartbeat from the bridge. The voice socket sends nothing while idle
+        // (wake-word spotting is local), so without this pong the bridge closes
+        // it as half-open after ~30s — dropping the session mid-listen.
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ type: 'pong' }));
+        }
+        break;
+      }
+
       case 'auth_ok': {
         this.workflow =
           typeof msg['workflow'] === 'string' ? msg['workflow'] : 'agent_native';
