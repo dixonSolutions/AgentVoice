@@ -16,8 +16,8 @@
  * MODEL_CACHE_NAME when the bundled model assets themselves change.
  */
 
-const CACHE_NAME = 'agentvoice-v5';
-const VOSK_CACHE_NAME = 'agentvoice-vosk-v1';
+const CACHE_NAME = 'agentvoice-v6';
+const VOSK_CACHE_NAME = 'agentvoice-vosk-v2';
 const MODEL_CACHE_NAME = 'agentvoice-models-v1';
 const VOSK_MODEL_PATH = '/vosk/model.tar.gz';
 const SILERO_ASSET_PREFIX = '/silero-vad/';

@@ -7,7 +7,7 @@
  * Use playVoiceCueNow() at recognition time (Vosk / VAD) — must not await STT.
  */
 import { CUE_FILENAME, VOICE_CUES, shouldPlayCue, type VoiceCue } from '@agentvoice/client';
-import { unlockAudioContext } from './audio.js';
+import { getSharedAudioContext, unlockAudioContext } from './audio.js';
 
 export type { VoiceCue };
 
@@ -87,4 +87,35 @@ export function playVoiceCueNow(cue: VoiceCue, opts?: { force?: boolean }): void
 /** @deprecated Prefer playVoiceCueNow at recognition sites. */
 export function playVoiceCue(cue: VoiceCue, opts?: { force?: boolean }): void {
   playVoiceCueNow(cue, opts);
+}
+
+/**
+ * A short synthesized "ding" — the successful-connection indicator.
+ *
+ * Deliberately not a VoiceCue: it needs no mp3 asset and no shared-package
+ * entry, just a two-note sine chime built on the shared AudioContext (already
+ * unlocked by the orb-tap gesture before a session connects). Best-effort:
+ * any audio failure is swallowed so it can never break the connect path.
+ */
+export function playConnectDing(): void {
+  try {
+    const ctx = getSharedAudioContext();
+    if (ctx.state === 'suspended') void ctx.resume();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    // Bright upward chime: A5 -> E6.
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(1318.5, now + 0.09);
+    // Quick attack, gentle exponential decay (~0.35s).
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(0.22, now + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.35);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.4);
+  } catch {
+    // Best-effort — a missing/blocked AudioContext must not break connecting.
+  }
 }

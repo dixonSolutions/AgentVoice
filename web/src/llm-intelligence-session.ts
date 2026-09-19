@@ -54,7 +54,7 @@ import {
 import { DEFAULT_REDEMPTION_MS, SileroVadDetector } from './silero-vad.js';
 import { prefetchVoiceModels } from './model-download.js';
 import { TurnSubmitBuffer } from './turn-submit-buffer.js';
-import { playVoiceCueNow } from './sound-effects.js';
+import { playConnectDing, playVoiceCueNow } from './sound-effects.js';
 import { errorSpeechText } from './error-feedback.js';
 import {
   looksLikeSilentPlayback,
@@ -296,7 +296,10 @@ export class LlmIntelligenceSession {
 
       ws.addEventListener('message', (ev) => {
         this.handleMessage(ev.data as string, {
-          onAuthOk: () => finish(resolve),
+          onAuthOk: () => {
+            playConnectDing();
+            finish(resolve);
+          },
           onError: (message) => finish(() => reject(new Error(message))),
         });
       });
