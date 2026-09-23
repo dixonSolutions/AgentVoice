@@ -275,6 +275,11 @@ async function runVoice() {
   const quoted = prompt.match(/User just spoke[^"]*"([^"]+)"/);
   log(`boot prompt carried user turn: ${quoted ? JSON.stringify(quoted[1]) : 'none'}`);
 
+  if (process.env.STUB_VOICE_SCRIPT === 'echo') {
+    await runEchoVoice(client, quoted ? quoted[1] : '');
+    return;
+  }
+
   await callTool(client, 'speak', { text: 'On it — let me look through the repository.' });
 
   // ── The thing under test ────────────────────────────────────────────────
@@ -306,6 +311,30 @@ async function runVoice() {
 
   await callTool(client, 'done', {});
   emitResult('stub voice turn complete');
+  await client.close();
+}
+
+/**
+ * STUB_VOICE_SCRIPT=echo — repeat every turn back, tagged with how it arrived.
+ * Used by scripts/live-pipe-test.mjs to prove streamed audio reaches the agent
+ * (source "stream", merged segments) and that its replies reach the pipe.
+ */
+async function runEchoVoice(client, bootTurn) {
+  const maxTurns = Number(process.env.STUB_ECHO_TURNS ?? 6);
+  await callTool(client, 'speak', { text: `ECHO boot: ${bootTurn || '(none)'}` });
+  await callTool(client, 'done', {});
+  for (let i = 0; i < maxTurns; i++) {
+    const res = await callTool(client, 'next_voice_turn', { timeout_ms: 15_000 });
+    if (!res.turn) {
+      log('echo: no more turns');
+      break;
+    }
+    const tag = `${res.source ?? 'voice'}${res.segments > 1 ? ` x${res.segments}` : ''}`;
+    log(`echo: turn (${tag}) ${JSON.stringify(res.turn)} hint=${Boolean(res.stream_hint)}`);
+    await callTool(client, 'speak', { text: `ECHO ${tag}: ${res.turn}` });
+    await callTool(client, 'done', {});
+  }
+  emitResult('stub echo session complete');
   await client.close();
 }
 

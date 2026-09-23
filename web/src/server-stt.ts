@@ -17,13 +17,14 @@ import {
   type MicProcessingChain,
 } from './audio.js';
 import { getVoiceAudioMeter } from './voice-audio-meter.js';
+import { concatPcm16, downsampleTo16k, PCM_SAMPLE_RATE } from './pcm16.js';
 import {
   minPcmBytes,
   speechRmsThreshold,
   type SttGate,
 } from './stt-gate.js';
 
-const INPUT_RATE = 16_000;
+const INPUT_RATE = PCM_SAMPLE_RATE;
 const SILENCE_FRAMES = 28;
 /** ~45s at 16 kHz — prevents runaway recordings when echo/VAD mis-fires. */
 const MAX_PCM_SAMPLES = INPUT_RATE * 45;
@@ -317,40 +318,4 @@ function computeRms(samples: Float32Array): number {
     sumSq += s * s;
   }
   return Math.sqrt(sumSq / Math.max(samples.length, 1));
-}
-
-function downsampleTo16k(input: Float32Array, inputRate: number): Int16Array {
-  if (inputRate === INPUT_RATE) return floatToPcm16(input);
-  const ratio = inputRate / INPUT_RATE;
-  const outLen = Math.floor(input.length / ratio);
-  const out = new Int16Array(outLen);
-  for (let i = 0; i < outLen; i++) {
-    const srcIdx = Math.floor(i * ratio);
-    out[i] = floatToPcm16Sample(input[srcIdx] ?? 0);
-  }
-  return out;
-}
-
-function floatToPcm16(input: Float32Array): Int16Array {
-  const out = new Int16Array(input.length);
-  for (let i = 0; i < input.length; i++) {
-    out[i] = floatToPcm16Sample(input[i] ?? 0);
-  }
-  return out;
-}
-
-function floatToPcm16Sample(sample: number): number {
-  const s = Math.max(-1, Math.min(1, sample));
-  return s < 0 ? s * 0x8000 : s * 0x7fff;
-}
-
-function concatPcm16(chunks: Int16Array[]): Int16Array {
-  const total = chunks.reduce((n, c) => n + c.length, 0);
-  const out = new Int16Array(total);
-  let offset = 0;
-  for (const chunk of chunks) {
-    out.set(chunk, offset);
-    offset += chunk.length;
-  }
-  return out;
 }

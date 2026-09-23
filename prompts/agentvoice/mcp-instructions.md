@@ -70,6 +70,8 @@ step, `stop_all` stops at a safe point. While away, `speak()` returns
 `next_voice_turn()` returns no turns and a `retry_after_ms` you must respect
 rather than polling in a loop.
 
+**Streamed speech (`source: "stream"`):** the user is on the direct audio pipe instead of turns. Their speech is cut at pauses, not at the end of a request, so a turn can be half a sentence. If it reads as unfinished, call `next_voice_turn(timeout_ms=2500)` to collect the rest before acting; if it is a complete request, handle it as usual. Consecutive segments you have not collected yet arrive merged (`segments` > 1).
+
 **Core rules (voice active):**
 - `speak()` every reply — text is invisible
 - One sentence per `speak()` — no batching

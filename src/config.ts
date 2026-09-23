@@ -126,6 +126,34 @@ export const TurnSubmitSchema = z.object({
   vadEnabled: z.boolean().default(true),
 });
 
+/**
+ * How speech reaches the agent.
+ *
+ * `turns` (recommended) — wake phrase → VAD / end phrase → one transcript per
+ *   turn. The agent sees whole requests, never half a sentence.
+ * `stream` — the mic is piped to the bridge continuously; it cuts the audio at
+ *   natural pauses and hands each transcript to the agent as soon as it lands.
+ *   Lower latency and hands-free, at the cost of the agent sometimes receiving
+ *   a thought in pieces. See docs/41-audio-stream-pipe.md.
+ */
+export const VOICE_INPUT_MODES = ['turns', 'stream'] as const;
+export type VoiceInputMode = (typeof VOICE_INPUT_MODES)[number];
+
+export const AudioStreamSettingsSchema = z.object({
+  /** Pause that ends a streamed segment. Shorter = snappier but choppier. */
+  segmentSilenceMs: z.number().int().min(200).max(5_000).default(700),
+  /** Hard cap on one segment, so continuous speech still flows to the agent. */
+  maxSegmentMs: z.number().int().min(2_000).max(60_000).default(15_000),
+  /** Segments with less speech than this are dropped as noise (coughs, clicks). */
+  minSpeechMs: z.number().int().min(50).max(5_000).default(300),
+  /** RMS level (0–1) above which a 20 ms frame counts as speech. */
+  speechThreshold: z.number().min(0.001).max(0.5).default(0.012),
+  /** Audio kept from just before speech starts, so first syllables are not clipped. */
+  preRollMs: z.number().int().min(0).max(2_000).default(300),
+});
+
+export type AudioStreamSettings = z.infer<typeof AudioStreamSettingsSchema>;
+
 /** Default WebKit speechSynthesis parameters (overridden per device in PWA localStorage). */
 export const WebkitTtsDefaultsSchema = z.object({
   /** Speech rate — Web API range 0.1–10; we clamp to 0.5–2 in the UI. */
@@ -192,6 +220,10 @@ export const VoiceSettingsSchema = z.object({
    * before checking `get_agent_status` again. Speak only when there is a real milestone.
    */
   workerPollTimeoutMs: z.number().int().min(5_000).max(60_000).default(25_000),
+  /** `turns` (recommended) or `stream` — see VOICE_INPUT_MODES. */
+  inputMode: z.enum(VOICE_INPUT_MODES).default('turns'),
+  /** Segmentation for `stream` mode and for `agentvoice pipe`. */
+  stream: AudioStreamSettingsSchema.default({}),
 });
 
 export type TouchControlsMode = z.infer<typeof VoiceSettingsSchema>['touchControls'];
@@ -546,6 +578,39 @@ export const NarrationSettingsSchema = z
   })
   .default({});
 
+// ── Logging (session .log files + voice transcripts) ───────────────────────
+
+export const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error'] as const;
+
+/**
+ * Where the bridge writes its own logs. See docs/42-logging.md.
+ *
+ *   <dir>/<runMode>/bridge/2026-09-23_14-05-12.log       one per bridge run
+ *   <dir>/<runMode>/transcripts/2026-09-23_14-06-01.log  one per voice session
+ *
+ * Older files are gzipped once more than `keepPlain` pile up in a folder.
+ */
+export const LoggingSettingsSchema = z
+  .object({
+    /** Relative paths resolve against the working directory. `AGENTVOICE_LOG_DIR` overrides. */
+    dir: z.string().min(1).default('logs'),
+    /** Write a text .log file per bridge session (terminal / journald output is unchanged). */
+    files: z.boolean().default(true),
+    /** Level for the .log files — independent of `logLevel`, which drives the terminal. */
+    fileLevel: z.enum(LOG_LEVELS).default('debug'),
+    /** Save a transcript file per voice session (what you said, what the agent said). */
+    transcripts: z.boolean().default(true),
+    /** Newest plain files kept per folder; everything older is gzip-compressed. */
+    keepPlain: z.number().int().min(1).max(100).default(3),
+    /** Start a new file past this size, in MB. 0 = only at midnight / restart. */
+    maxFileMb: z.number().int().min(0).max(1024).default(25),
+    /** Delete compressed files older than this many days. 0 = keep everything. */
+    retentionDays: z.number().int().min(0).max(3650).default(0),
+  })
+  .default({});
+
+export type LoggingSettings = z.infer<typeof LoggingSettingsSchema>;
+
 // ── config.json schema ───────────────────────────────────────────────────────
 
 export const AGENT_CLIENTS = ['cursor', 'codex', 'claude-code', 'codewhale'] as const;
@@ -620,7 +685,9 @@ const SettingsSchema = z.object({
   session: SessionSettingsSchema,
   /** Kill the worker immediately if it tries to spawn Task/subagent sessions. */
   ghostKillEnabled: z.boolean().default(true),
-  logLevel: z.enum(['trace', 'debug', 'info', 'warn', 'error']).default('info'),
+  logLevel: z.enum(LOG_LEVELS).default('info'),
+  /** Session log files and voice transcripts. */
+  logging: LoggingSettingsSchema,
   /** Optional name the voice agent uses when addressing the user. */
   userName: z.string().min(1).max(64).optional(),
   /**

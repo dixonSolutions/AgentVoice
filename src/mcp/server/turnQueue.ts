@@ -18,6 +18,11 @@
  * Step 2 is protocol-level, so it works identically on Cursor, Codex and
  * Claude Code — nothing here depends on a particular CLI.
  *
+ * Streamed input (voice.inputMode = "stream", or `agentvoice pipe`) enqueues
+ * one turn per audio segment. When several are waiting, a dequeue hands them
+ * over together — the agent gets everything said since it last listened,
+ * rather than one clause per poll. See docs/41-audio-stream-pipe.md.
+ *
  * See docs/16-mcp-server-agent-as-brain.md § 8.1 / § 8.4.
  */
 
@@ -27,8 +32,27 @@ import { interruptPendingWaits, type PendingWait } from './pendingWaits.js';
 
 const log = childLogger('mcp:server:turnQueue');
 
+/**
+ * Where a turn came from — the TurnSource from executor/agentTurns.ts (phone,
+ * desk, rest, …). Only `stream`, the direct audio pipe, changes behaviour.
+ */
+export type VoiceTurnSource = string;
+
+/**
+ * Streamed speech is cut at pauses, not at the end of a request, so the agent
+ * has to decide whether it has the whole thought. Turn-based input never
+ * needs this — which is why turns are the recommended mode.
+ */
+export const STREAM_TURN_HINT =
+  'Streamed speech: this was cut at a pause and may be only part of what the user is saying. ' +
+  'If it reads as unfinished, call next_voice_turn(timeout_ms=2500) to collect the rest before acting; ' +
+  'if it is a complete request, handle it normally.';
+
 export interface VoiceTurn {
   text: string;
+  source: VoiceTurnSource;
+  /** For streamed turns: how many audio segments were merged into this one. */
+  segments?: number;
   /** ISO timestamp of when the turn arrived. */
   receivedAt: string;
   /** Whether this turn should interrupt any in-progress work (e.g. "cancel", "stop"). */
@@ -40,6 +64,7 @@ export interface VoiceTurn {
 export interface EnqueueVoiceTurnOptions {
   isInterrupt?: boolean;
   ttsInterrupt?: TtsInterruptContext;
+  source?: VoiceTurnSource;
 }
 
 export type EnqueueDelivery =
@@ -113,8 +138,11 @@ class VoiceTurnQueue {
       );
     }
 
+    const source = options?.source ?? 'phone';
     const turn: VoiceTurn = {
       text,
+      source,
+      ...(source === 'stream' ? { segments: 1 } : {}),
       receivedAt: new Date().toISOString(),
       isInterrupt,
       ttsInterrupt: options?.ttsInterrupt,
@@ -129,11 +157,17 @@ class VoiceTurnQueue {
     }
 
     // No next_voice_turn waiter — hand the turn to whichever AgentVoice tool
-    // the agent is sitting in right now.
+    // the agent is sitting in right now. It carries the same stream fields
+    // next_voice_turn() returns: a pause-cut fragment must not read as a
+    // complete request just because it arrived mid-tool.
     const delivery = interruptPendingWaits({
       user_turn: turn.text,
       is_interrupt: turn.isInterrupt,
       received_at: turn.receivedAt,
+      source: turn.source,
+      ...(turn.source === 'stream'
+        ? { segments: turn.segments ?? 1, stream_hint: STREAM_TURN_HINT }
+        : {}),
       tts_interrupt: turn.ttsInterrupt,
     });
     if (delivery.aborted.length > 0 || delivery.annotated.length > 0) {
@@ -168,7 +202,7 @@ class VoiceTurnQueue {
    */
   dequeue(timeoutMs = 30_000): Promise<VoiceTurn | null> {
     if (this.queue.length > 0) {
-      return Promise.resolve(this.queue.shift()!);
+      return Promise.resolve(this.takeNext());
     }
 
     return new Promise<VoiceTurn | null>((resolve) => {
@@ -180,6 +214,26 @@ class VoiceTurnQueue {
 
       this.waiters.push({ resolve, timer });
     });
+  }
+
+  /**
+   * Shift the next turn. Consecutive streamed segments are merged: a thought
+   * spoken with pauses arrives as several segments, and handing them to the
+   * agent one poll at a time would have it answer half a sentence.
+   */
+  private takeNext(): VoiceTurn {
+    let turn = this.queue.shift()!;
+    if (turn.source !== 'stream') return turn;
+    while (this.queue[0]?.source === 'stream') {
+      const next = this.queue.shift()!;
+      turn = {
+        ...turn,
+        text: `${turn.text} ${next.text}`.trim(),
+        segments: (turn.segments ?? 1) + (next.segments ?? 1),
+        isInterrupt: turn.isInterrupt || next.isInterrupt,
+      };
+    }
+    return turn;
   }
 
   /** Check and reset recent user authorization for a destructive stop action. */

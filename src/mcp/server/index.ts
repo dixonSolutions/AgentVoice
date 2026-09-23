@@ -170,7 +170,9 @@ function buildMcpServer(sessionKey: string): McpServer {
       'Long-polls up to timeout_ms (default 30 s). ' +
       'Returns { turn: null } on timeout — call again immediately to keep listening. ' +
       'Call done() before next_voice_turn() to re-arm the mic first. ' +
-      'On TTS barge-in, tts_interrupt.last_heard_words is what the user heard aloud (~10 words). Agents keep running.',
+      'On TTS barge-in, tts_interrupt.last_heard_words is what the user heard aloud (~10 words). Agents keep running. ' +
+      'source="stream" means the user is on the direct audio pipe: speech is cut at pauses, so the turn may be ' +
+      'part of a longer thought — follow stream_hint.',
     {
       timeout_ms: z
         .number()
@@ -1086,6 +1088,9 @@ function buildMcpServer(sessionKey: string): McpServer {
                   user_turn: response.user_turn,
                   is_interrupt: response.is_interrupt,
                   received_at: response.received_at,
+                  source: response.source,
+                  segments: response.segments,
+                  stream_hint: response.stream_hint,
                   tts_interrupt: response.tts_interrupt ?? null,
                   pending_user_turns: 0,
                   message:
@@ -1275,6 +1280,9 @@ function buildMcpServer(sessionKey: string): McpServer {
                   user_turn: response.user_turn,
                   is_interrupt: response.is_interrupt,
                   received_at: response.received_at,
+                  source: response.source,
+                  segments: response.segments,
+                  stream_hint: response.stream_hint,
                   tts_interrupt: response.tts_interrupt ?? null,
                   pending_user_turns: 0,
                   message:

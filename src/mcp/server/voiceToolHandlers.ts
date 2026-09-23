@@ -15,7 +15,7 @@
 import { childLogger } from '../../log.js';
 import { getConfig } from '../../config.js';
 import { notifyPhone } from '../../push/notifyPhone.js';
-import { voiceTurnQueue } from './turnQueue.js';
+import { STREAM_TURN_HINT, voiceTurnQueue } from './turnQueue.js';
 import { getActiveProvider } from '../../providers/agents/registry.js';
 import { getActiveVoiceAgent } from '../../executor/voiceAgent.js';
 import { recordTurn } from '../../state/turns.js';
@@ -30,6 +30,12 @@ import {
   AWAY_POLL_FLOOR_MS,
   type ListenerBlock,
 } from '../../state/awayPolicy.js';
+import {
+  recordAgentSpeech,
+  recordTranscriptEvent,
+  transcriptClientConnected,
+  transcriptClientDisconnected,
+} from '../../logging/transcripts.js';
 
 const log = childLogger('mcp:server:voiceTools');
 
@@ -136,12 +142,22 @@ export function getActiveVoiceSessionCount(): number {
   return activeSessions.size;
 }
 
-export function registerVoiceSession(send: SendFn): () => void {
+/**
+ * Register a live voice client. `client` names it in the session transcript
+ * ("phone", "audio pipe"); the transcript opens with the first client and
+ * closes shortly after the last one leaves (logging/transcripts.ts).
+ */
+export function registerVoiceSession(send: SendFn, client = 'phone'): () => void {
   activeSessions.add(send);
-  log.debug({ sessions: activeSessions.size }, 'voice session registered');
+  transcriptClientConnected(client);
+  log.debug({ sessions: activeSessions.size, client }, 'voice session registered');
+  let registered = true;
   return () => {
+    if (!registered) return;
+    registered = false;
     activeSessions.delete(send);
-    log.debug({ sessions: activeSessions.size }, 'voice session unregistered');
+    transcriptClientDisconnected(client);
+    log.debug({ sessions: activeSessions.size, client }, 'voice session unregistered');
   };
 }
 
@@ -213,6 +229,11 @@ export function broadcastVoiceAgentStatus(payload: VoiceAgentStatusPayload): voi
   );
 
   const agent = activeAgentIdentity();
+  recordTranscriptEvent(
+    `${agent.displayName} ${payload.state}` +
+      (payload.pid ? ` (pid ${payload.pid})` : '') +
+      (payload.project ? ` — project ${payload.project}` : ''),
+  );
   broadcastToVoiceSessions({
     type: 'voice_agent_status',
     run_id: payload.runId,
@@ -293,6 +314,7 @@ export function handleSpeak(args: SpeakArgs): SpeakResult {
      * kept for the catch-up digest and the agent is told to carry on.
      */
     bufferAwaySpeech(text);
+    recordAgentSpeech(text, 'unheard');
     log.info(
       { text: text.slice(0, 80), policy: effectiveAwayPolicy() },
       'speak buffered — nobody listening',
@@ -312,6 +334,7 @@ export function handleSpeak(args: SpeakArgs): SpeakResult {
     spokeThisTurn = true;
   }
   log.info({ text: text.slice(0, 80), sessions: activeSessions.size }, 'speak called');
+  recordAgentSpeech(text);
   // eslint-disable-next-line no-console
   console.log(`[voice] ◀ speak: "${text.slice(0, 120)}${text.length > 120 ? '…' : ''}"`);
   broadcastToVoiceSessions({ type: 'speak', text });
@@ -389,6 +412,13 @@ export interface NextVoiceTurnResult {
   received_at: string | null;
   /** Turns still buffered after this dequeue. */
   queue_depth: number;
+  /** `voice` (a finished turn), `typed`, or `stream` (piped audio, may be partial). */
+  /** How the turn arrived: phone, desk, rest… or `stream` (direct audio pipe, may be partial). */
+  source?: string;
+  /** Streamed turns only: audio segments merged into this turn. */
+  segments?: number;
+  /** Streamed turns only: how to treat a turn that may be mid-thought. */
+  stream_hint?: string;
   error?: string;
   message?: string;
   listener?: ListenerBlock;
@@ -489,6 +519,10 @@ export async function handleNextVoiceTurn(
     is_interrupt: turn.isInterrupt,
     received_at: turn.receivedAt,
     queue_depth: voiceTurnQueue.size,
+    source: turn.source,
+    ...(turn.source === 'stream'
+      ? { segments: turn.segments ?? 1, stream_hint: STREAM_TURN_HINT }
+      : {}),
     ...(turn.ttsInterrupt ? { tts_interrupt: turn.ttsInterrupt } : {}),
     ...(reconnected ? { reconnected } : {}),
   });

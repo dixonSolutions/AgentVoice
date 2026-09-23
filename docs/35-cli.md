@@ -21,7 +21,9 @@ has — that behaviour is a published contract and nothing may take it back.
 | --- | --- |
 | `run` | Boot the bridge in the foreground. Seeds the home on first run. |
 | `start` / `stop` / `restart` | Manage the `agentvoice.service` systemd unit. |
-| `logs [-n N] [-f]` | `journalctl` for the unit. `-f` follows. |
+| `logs [-n N] [-f]` | `journalctl` for the unit. `-f` follows. With no unit, the bridge's own session log instead. |
+| `logs --list` / `--files` / `--transcripts` / `--cat <file\|latest>` | The session log files and voice transcripts under `<home>/logs/` — list, tail (`-f` follows across rollovers), or print (`.gz` included). `--profile test` for the dev folder. See docs/42. |
+| `pipe [--mic \| --file F]` | Stream audio (stdin by default) to the voice agent and print its replies. `--json`, `--no-listen`, `--url`, `--token`, `--silence`, `--threshold`. See docs/41. |
 | `status [--json]` | Install, version, service, port, health, token — one screen. |
 | `doctor [--json]` | Check Node, the native binding, config, data dir, agent CLI, port. |
 | `update [--stash] [--dry-run] [--branch <name>]` | Update this install. |

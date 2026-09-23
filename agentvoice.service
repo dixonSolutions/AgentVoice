@@ -17,8 +17,9 @@ RestartSec=3
 NoNewPrivileges=true
 ProtectSystem=strict
 # Adjust ReadWritePaths to include every allowlisted project workspace.
-# The bridge data dir and the project workspaces are the only writable locations.
-ReadWritePaths=/opt/agentvoice/data /home/projects
+# The bridge data dir, its log dir (session logs + transcripts, see
+# docs/33-logging.md) and the project workspaces are the only writable locations.
+ReadWritePaths=/opt/agentvoice/data /opt/agentvoice/logs /home/projects
 PrivateTmp=true
 
 [Install]

@@ -26,6 +26,7 @@ import { childLogger } from '../../log.js';
 import type { TtsInterruptContext } from '../../voice/ttsInterrupt.js';
 import { registerResolveWait, releaseWait, type VoiceTurnAnnotation } from './pendingWaits.js';
 import { publishAgentBusy } from '../../state/agentBusy.js';
+import type { VoiceTurnSource } from './turnQueue.js';
 
 const log = childLogger('approval-registry');
 
@@ -106,6 +107,12 @@ export interface InterruptedByVoiceTurnResponse {
   user_turn: string;
   is_interrupt: boolean;
   received_at: string;
+  /** How the turn arrived: phone, desk, rest… or `stream` (direct audio pipe, may be partial). */
+  source?: VoiceTurnSource;
+  /** Streamed turns only: audio segments merged into this turn. */
+  segments?: number;
+  /** Streamed turns only: how to treat a turn that may be mid-thought. */
+  stream_hint?: string;
   tts_interrupt?: TtsInterruptContext;
 }
 
@@ -179,6 +186,10 @@ export function registerRequest(
         user_turn: annotation.user_turn,
         is_interrupt: annotation.is_interrupt,
         received_at: annotation.received_at,
+        ...(annotation.source ? { source: annotation.source } : {}),
+        ...(annotation.stream_hint
+          ? { segments: annotation.segments, stream_hint: annotation.stream_hint }
+          : {}),
         ...(annotation.tts_interrupt ? { tts_interrupt: annotation.tts_interrupt } : {}),
       });
     });

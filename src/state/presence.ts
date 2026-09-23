@@ -25,6 +25,10 @@
  * everything and it suppresses push notifications (the user is clearly at a
  * screen), but the away policies in docs/36 act on *phone* presence only.
  *
+ * An `audio_pipe` (`agentvoice pipe`, docs/41) that listens for replies IS a
+ * listener: someone is speaking into it and hearing the agent back, exactly
+ * like the phone, just from a terminal.
+ *
  * See docs/36-disconnect-and-background-work.md §1.
  */
 
@@ -32,7 +36,7 @@ import { childLogger } from '../log.js';
 
 const log = childLogger('presence');
 
-export type ClientKind = 'phone_control' | 'phone_intelligence' | 'desk';
+export type ClientKind = 'phone_control' | 'phone_intelligence' | 'desk' | 'audio_pipe';
 
 export type ListenerState = 'connected' | 'grace' | 'away' | 'hung_up';
 
@@ -71,7 +75,8 @@ export interface PresenceClient {
 export const HEARTBEAT_INTERVAL_MS = 15_000;
 const MISSED_PONGS_BEFORE_CLOSE = 2;
 
-const PHONE_KINDS: ReadonlySet<ClientKind> = new Set(['phone_control', 'phone_intelligence']);
+/** Kinds that mean someone is listening. The name predates the audio pipe. */
+const PHONE_KINDS: ReadonlySet<ClientKind> = new Set(['phone_control', 'phone_intelligence', 'audio_pipe']);
 
 interface TrackedClient {
   id: string;
@@ -243,6 +248,7 @@ export class PresenceTracker {
       phone_control: 0,
       phone_intelligence: 0,
       desk: 0,
+      audio_pipe: 0,
     };
     for (const c of this.clients.values()) clients[c.kind]++;
     const awayMs = this.awaySince === null ? 0 : Math.max(0, this.now() - this.awaySince);

@@ -100,10 +100,27 @@ Booting the bridge is only the default. The same command manages the install:
 agentvoice status          # install, version, service, port, health — one screen
 agentvoice doctor          # Node, native binding, config, agent CLI, port
 agentvoice restart         # bounce the systemd unit
-agentvoice logs -f         # follow the service journal
+agentvoice logs -f         # follow the service journal (or the session log file)
+agentvoice logs --list     # every session log and voice transcript on disk
+agentvoice pipe --mic      # talk to the agent from this terminal, no phone needed
 agentvoice update          # rebase a clone, or npm-install a newer package
 agentvoice token --new     # rotate the pairing token
 ```
+
+Speech reaches the agent in **turns** by default — wake phrase, then VAD, then
+one whole request — and that is the recommended mode. A **direct audio stream**
+is also available, from the phone (Config → Listening & controls → Input mode)
+or from anything that produces PCM: the bridge cuts it at your pauses and hands
+each piece to the agent as you talk
+([`docs/41`](./docs/41-audio-stream-pipe.md)):
+
+```bash
+arecord -f S16_LE -r 16000 -c 1 -t raw | agentvoice pipe
+```
+
+Every bridge run writes a date-named session log and every voice session a
+transcript under `<home>/logs/`, gzipped as they pile up
+([`docs/42`](./docs/42-logging.md)).
 
 `status` is the one to reach for first. It reports how AgentVoice was installed
 and therefore how it updates, the version (branch and drift for a clone, the
@@ -240,6 +257,8 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 | [`38-system-packages.md`](./docs/38-system-packages.md) | Design: .deb / .rpm packages and a system install mode |
 | [`39-config-ui-and-narration-cleanup.md`](./docs/39-config-ui-and-narration-cleanup.md) | Config screen audit and bridge narration toggles + templates |
 | [`40-prompts-orb-and-permissions.md`](./docs/40-prompts-orb-and-permissions.md) | Design: prompts read aloud, ask tools and tool overlap, orb working state, remembered mic permission |
+| [`41-audio-stream-pipe.md`](./docs/41-audio-stream-pipe.md) | Direct audio stream input — the phone's stream mode and `agentvoice pipe` |
+| [`42-logging.md`](./docs/42-logging.md) | Session log files, voice transcripts, gzip rollover, `agentvoice logs` |
 | [`26-rename-agentvoice.md`](./docs/26-rename-agentvoice.md) | Cursor Voice → AgentVoice rename notes |
 
 ## Stack
@@ -254,6 +273,6 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 ## Configuration
 
 - **`.env`** — `APP_TOKEN`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
-- **`config.json`** — projects, wake words, workflow, operational settings
+- **`config.json`** — projects, wake words, input mode, workflow, logging, operational settings
 
 See [`docs/07-data-and-deployment.md`](./docs/07-data-and-deployment.md).

@@ -90,17 +90,22 @@ else
   section "Starting bridge manually (no systemd unit)"
   warn "No systemd service found. Run 'bash scripts/setup.sh' to install it."
   [[ -f "$DIST_FILE" ]] || err "dist/index.js not found — build first: npm run build"
-  mkdir -p "${PROJECT_DIR}/logs"
+  # The bridge writes its own session log (logs/serve/bridge/); this captures
+  # raw stdout/stderr too — crashes before the logger starts land only here.
+  # One file per start, named by date; the bridge gzips older ones.
+  CONSOLE_DIR="${AGENTVOICE_LOG_DIR:-${PROJECT_DIR}/logs}/serve/console"
+  mkdir -p "$CONSOLE_DIR"
+  CONSOLE_LOG="${CONSOLE_DIR}/$(date +%Y-%m-%d_%H-%M-%S).log"
   NODE_BIN="$(command -v node || echo node)"
-  nohup "$NODE_BIN" "$DIST_FILE" >> "${PROJECT_DIR}/logs/bridge.log" 2>&1 &
+  nohup "$NODE_BIN" "$DIST_FILE" >> "$CONSOLE_LOG" 2>&1 &
   PID=$!
   sleep 1
   if kill -0 "$PID" 2>/dev/null; then
     mkdir -p "${PROJECT_DIR}/data"
     echo "$PID" > "${PROJECT_DIR}/data/.bridge.pid"
-    ok "Bridge started (pid ${PID}). Log: ${PROJECT_DIR}/logs/bridge.log"
+    ok "Bridge started (pid ${PID}). Console: ${CONSOLE_LOG}"
   else
-    err "Bridge exited immediately — check ${PROJECT_DIR}/logs/bridge.log"
+    err "Bridge exited immediately — check ${CONSOLE_LOG}"
   fi
 fi
 
@@ -124,4 +129,5 @@ fi
 echo ""
 ok "Done."
 echo -e "  ${BLU}Logs:${NC} journalctl --user -u agentvoice -f"
+echo -e "  ${BLU}Files:${NC} logs/serve/bridge/ (session logs) · logs/serve/transcripts/ — npm run cli -- logs --list"
 echo ""

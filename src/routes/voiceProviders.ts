@@ -12,6 +12,7 @@ import {
   setUserName,
   setVoiceTts,
   setVoiceUi,
+  setVoiceInput,
 } from '../voice/voiceSettingsRegistry.js';
 import { childLogger } from '../log.js';
 
@@ -26,6 +27,7 @@ function handleError(err: unknown): { status: number; message: string } {
     'Provide touchControls',
     'Invalid TTS settings',
     'Invalid userName',
+    'Invalid voice input',
   ];
   const status = clientErrors.some((s) => message.includes(s)) ? 400 : 500;
   return { status, message };
@@ -81,6 +83,17 @@ export async function registerVoiceProviderRoutes(app: FastifyInstance): Promise
     } catch (err) {
       const { status, message } = handleError(err);
       log.warn({ err }, 'update voice UI settings failed');
+      return reply.code(status).send({ error: message });
+    }
+  });
+
+  /** PATCH /api/voice/input { inputMode?: "turns" | "stream", stream?: { segmentSilenceMs, … } } */
+  app.patch('/api/voice/input', async (req, reply) => {
+    try {
+      return setVoiceInput(req.body);
+    } catch (err) {
+      const { status, message } = handleError(err);
+      log.warn({ err }, 'update voice input settings failed');
       return reply.code(status).send({ error: message });
     }
   });

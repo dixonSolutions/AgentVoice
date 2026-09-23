@@ -96,7 +96,7 @@ export function registerEventsSocket(app: FastifyInstance): void {
             return;
           }
           authenticated = true;
-          unregisterVoice = registerVoiceSession(send);
+          unregisterVoice = registerVoiceSession(send, 'desk');
           unsubscribe = subscribeEvents(send);
           // No server-side ping here: desk clients already drive their own
           // `ping` → `pong` exchange, and an unsolicited server ping would be

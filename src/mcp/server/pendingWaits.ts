@@ -29,6 +29,7 @@
 import { randomUUID } from 'node:crypto';
 import { childLogger } from '../../log.js';
 import type { TtsInterruptContext } from '../../voice/ttsInterrupt.js';
+import type { VoiceTurnSource } from './turnQueue.js';
 
 const log = childLogger('mcp:server:pendingWaits');
 
@@ -38,6 +39,12 @@ export interface VoiceTurnInterruptPayload {
   user_turn: string;
   is_interrupt: boolean;
   received_at: string;
+  /** How the turn arrived: phone, desk, rest… or `stream` (direct audio pipe, may be partial). */
+  source?: VoiceTurnSource;
+  /** Streamed turns only: audio segments merged into this turn. */
+  segments?: number;
+  /** Streamed turns only: how to treat a turn that may be mid-thought. */
+  stream_hint?: string;
   tts_interrupt?: TtsInterruptContext;
 }
 
@@ -48,6 +55,9 @@ export interface VoiceTurnAnnotation {
   user_turn: string;
   is_interrupt: boolean;
   received_at: string;
+  source?: VoiceTurnSource;
+  segments?: number;
+  stream_hint?: string;
   tts_interrupt?: TtsInterruptContext;
 }
 
@@ -75,6 +85,10 @@ function toAnnotation(payload: VoiceTurnInterruptPayload): VoiceTurnAnnotation {
     user_turn: payload.user_turn,
     is_interrupt: payload.is_interrupt,
     received_at: payload.received_at,
+    ...(payload.source ? { source: payload.source } : {}),
+    ...(payload.stream_hint
+      ? { segments: payload.segments ?? 1, stream_hint: payload.stream_hint }
+      : {}),
     ...(payload.tts_interrupt ? { tts_interrupt: payload.tts_interrupt } : {}),
   };
 }

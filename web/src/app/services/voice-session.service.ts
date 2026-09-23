@@ -323,6 +323,11 @@ export class VoiceSessionService {
       callbacks,
     );
     this._session = intelSession;
+    // Before start(), not after: stream input mode pipes the mic to the bridge
+    // as soon as its socket is ready, so a mute applied afterwards is too late.
+    if (defaultMuted) {
+      intelSession.setMicMuted(true);
+    }
 
     try {
       await intelSession.start();
@@ -331,9 +336,6 @@ export class VoiceSessionService {
       // Connected — clear any silent-reconnect backoff.
       this.reconnecting = false;
       this.reconnectAttempts = 0;
-      if (defaultMuted) {
-        intelSession.setMicMuted(true);
-      }
       this._audioBackends.set(intelSession.getAudioBackends());
       configureTranscriptTts({
         bridgeBase: this.bridge.bridgeBase,
@@ -698,12 +700,18 @@ export class VoiceSessionService {
       },
       onServerModelPrepare: (status) => this.handleServerModelPrepare(status),
       onActivated: (phrase) => {
-        this.logs.append('info', 'voice', `Wake phrase heard — "${phrase}"`);
+        this.logs.append(
+          'info',
+          'voice',
+          phrase === '(direct stream)' ? 'Direct audio stream open' : `Wake phrase heard — "${phrase}"`,
+        );
         this._voiceActivated.set(true);
         this.vadListening.set(false);
         this.endPhraseArmed.set(false);
         this.syncAppState();
-        if (phrase !== '(typed input)') {
+        if (phrase === '(direct stream)') {
+          this.toast.success('Streaming', 'Direct audio stream — just talk; the agent hears you as you go.', false);
+        } else if (phrase !== '(typed input)') {
           this.toast.success('Listening', 'Activation phrase heard — speak your request.', false);
         }
       },

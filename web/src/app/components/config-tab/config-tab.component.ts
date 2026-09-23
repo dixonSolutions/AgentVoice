@@ -112,10 +112,11 @@ const ALL_SECTIONS: ConfigSection[] = [
     // that were removed.
     label: 'Listening & controls',
     icon: 'pi-microphone',
-    description: 'Wake phrases, on-screen controls, and when a turn is submitted',
+    description: 'Input mode, wake phrases, on-screen controls, and when a turn is submitted',
     keywords: [
       'wake', 'phrase', 'vad', 'silence', 'start', 'end', 'cancel', 'listen',
       'touch', 'mute', 'controls', 'turn', 'submit', 'activation', 'barge',
+      'input', 'mode', 'stream', 'pipe', 'segment',
     ],
   },
   {
@@ -522,6 +523,18 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     { label: 'Off', value: 'off' },
   ];
 
+  protected inputMode: 'turns' | 'stream' = 'turns';
+  protected streamSilenceMs = 700;
+  protected streamMaxSegmentMs = 15_000;
+  /** speechThreshold shown as % of full scale (0.012 → 1.2). */
+  protected streamThresholdPercent = 1.2;
+  protected savingInput = false;
+  protected readonly inputModeOptions: Array<{ label: string; value: 'turns' | 'stream' }> = [
+    { label: 'Turns (recommended)', value: 'turns' },
+    { label: 'Direct stream', value: 'stream' },
+  ];
+
+
   protected readonly readAloudOptions: Array<{
     label: string;
     value: 'replies' | 'titles' | 'summary' | 'everything';
@@ -641,6 +654,48 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     this.touchControls = data?.touchControls ?? 'when_muted';
     this.wakeWordsEnabled = data?.wakeWordsEnabled !== false;
     this.defaultMicMuted = data?.defaultMicMuted === true;
+    this.inputMode = data?.inputMode === 'stream' ? 'stream' : 'turns';
+    if (data?.stream) {
+      this.streamSilenceMs = data.stream.segmentSilenceMs;
+      this.streamMaxSegmentMs = data.stream.maxSegmentMs;
+      this.streamThresholdPercent = Math.round(data.stream.speechThreshold * 1000) / 10;
+    }
+  }
+
+  protected async onSaveInputMode(): Promise<void> {
+    const segmentSilenceMs = Number(this.streamSilenceMs);
+    const maxSegmentMs = Number(this.streamMaxSegmentMs);
+    const speechThreshold = Number(this.streamThresholdPercent) / 100;
+    if (!Number.isFinite(segmentSilenceMs) || segmentSilenceMs < 200 || segmentSilenceMs > 5_000) {
+      this.toast.warn('Invalid pause length', 'Use a value between 200 and 5000 ms.');
+      return;
+    }
+    if (!Number.isFinite(maxSegmentMs) || maxSegmentMs < 2_000 || maxSegmentMs > 60_000) {
+      this.toast.warn('Invalid segment length', 'Use a value between 2000 and 60000 ms.');
+      return;
+    }
+    if (!Number.isFinite(speechThreshold) || speechThreshold < 0.001 || speechThreshold > 0.5) {
+      this.toast.warn('Invalid speech level', 'Use a value between 0.1% and 50%.');
+      return;
+    }
+    this.savingInput = true;
+    try {
+      await this.voiceProviders.updateVoiceInput({
+        inputMode: this.inputMode,
+        stream: { segmentSilenceMs, maxSegmentMs, speechThreshold },
+      });
+      this.syncVoiceForm();
+      this.toast.success(
+        this.inputMode === 'stream' ? 'Direct stream on' : 'Turns on',
+        this.voiceSession.conversationActive()
+          ? 'Hang up and restart the session to apply.'
+          : 'Applies the next time you tap the orb.',
+      );
+    } catch (err) {
+      this.toast.error('Could not save input mode', err instanceof Error ? err.message : String(err));
+    } finally {
+      this.savingInput = false;
+    }
   }
 
   protected async onSaveTouchUi(): Promise<void> {
