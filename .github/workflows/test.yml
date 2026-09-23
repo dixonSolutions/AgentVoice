@@ -1,0 +1,85 @@
+# Tests — every PR and every push to main.
+#
+# npm-publish.yml's check job already typechecks, lints, builds and packs; it
+# does not run a single test. This runs them: the unit suite on the two Node
+# versions a user is likely to have, then the end-to-end scripts that drive
+# the real CLI, bridge, speech-to-text path and MCP transport
+# (scripts/live-pipe-test.mjs) and the real PWA in headless Chromium
+# (scripts/live-pwa-stream-test.mjs).
+name: test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit + end-to-end (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      # --legacy-peer-deps: same reason as npm-publish.yml (@openng/optimus-ui's
+      # peer on @angular/cdk ^21).
+      - name: Install
+        run: npm ci --no-audit --no-fund --legacy-peer-deps
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # agentvoice run / pipe / logs against a stand-in Whisper server and the
+      # stub agent: segmentation, delivery, replies, transcripts, session logs
+      # and their compression across restarts.
+      - name: End to end — audio pipe, transcripts, session logs
+        run: node scripts/live-pipe-test.mjs
+
+  pwa-stream:
+    name: PWA direct stream (headless Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund --legacy-peer-deps
+
+      - name: Build
+        run: npm run build
+
+      - name: Playwright + Chromium
+        run: |
+          npm install --no-save --no-audit --no-fund --legacy-peer-deps playwright@1.61.1
+          npx playwright install --with-deps chromium
+
+      # Switches Input mode through the Config screen, streams Chrome's fake
+      # microphone, and checks the agent heard and answered.
+      - name: PWA streams its mic to the agent
+        run: node scripts/live-pwa-stream-test.mjs
