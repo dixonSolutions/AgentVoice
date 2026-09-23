@@ -40,6 +40,9 @@ export interface AudioStreamPipeCallbacks {
 /** Stop queueing audio when the socket is this far behind (a stalled network). */
 const MAX_BUFFERED_BYTES = 512 * 1024;
 
+/** How long a hang-up waits for the bridge to finish the last segment. */
+const DRAIN_TIMEOUT_MS = 5000;
+
 export class AudioStreamPipeClient {
   private ws: WebSocket | null = null;
   private chain: MicProcessingChain | null = null;
@@ -47,6 +50,7 @@ export class AudioStreamPipeClient {
   private paused = false;
   private ready = false;
   private closed = false;
+  private drainTimer: ReturnType<typeof setTimeout> | null = null;
   private droppedFrames = 0;
 
   constructor(
@@ -82,6 +86,9 @@ export class AudioStreamPipeClient {
         } catch {
           return;
         }
+        // After stop() the socket is only there for the bridge to finish the
+        // last segment — the session is gone, so nothing else is worth raising.
+        if (this.closed && msg['type'] !== 'drained') return;
         switch (msg['type']) {
           case 'auth_ok':
             ws.send(
@@ -113,6 +120,9 @@ export class AudioStreamPipeClient {
             });
             break;
           }
+          case 'drained':
+            this.hangUp();
+            break;
           case 'error': {
             const message = typeof msg['message'] === 'string' ? msg['message'] : 'Audio stream error';
             const fatal = msg['fatal'] === true;
@@ -166,16 +176,38 @@ export class AudioStreamPipeClient {
     }
   }
 
+  /**
+   * Hang up. The bridge is told `end` first, so the segment in progress is
+   * still transcribed and handed to the agent — tapping the orb right after
+   * speaking must not drop that last request. The socket closes on `drained`,
+   * or after DRAIN_TIMEOUT_MS if the bridge stops answering.
+   */
   stop(): void {
+    if (this.closed) return;
     this.closed = true;
     this.processor?.disconnect();
     this.processor = null;
     this.chain?.dispose();
     this.chain = null;
-    if (this.ws && this.ws.readyState <= WebSocket.OPEN) {
-      this.ws.close(1000, 'session ended');
+    if (this.ready && this.ws?.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'end' }));
+      this.drainTimer = setTimeout(() => this.hangUp(), DRAIN_TIMEOUT_MS);
+      return;
     }
+    this.hangUp();
+  }
+
+  /** Close the socket the bridge was draining into. */
+  private hangUp(): void {
+    if (this.drainTimer !== null) {
+      clearTimeout(this.drainTimer);
+      this.drainTimer = null;
+    }
+    const ws = this.ws;
     this.ws = null;
+    if (ws && ws.readyState <= WebSocket.OPEN) {
+      ws.close(1000, 'session ended');
+    }
   }
 
   private onAudio(ev: AudioProcessingEvent, sampleRate: number): void {

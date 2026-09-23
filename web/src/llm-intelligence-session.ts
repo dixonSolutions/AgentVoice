@@ -296,7 +296,12 @@ export class LlmIntelligenceSession {
   }
 
   private registerMicStream(stream: MediaStream | null | undefined): void {
-    stream?.getAudioTracks().forEach((t) => this.micTracks.add(t));
+    stream?.getAudioTracks().forEach((t) => {
+      this.micTracks.add(t);
+      // The mute can be set before start() opens the device, and acquireMic()
+      // re-enables every track it hands out.
+      t.enabled = !this.micMuted;
+    });
   }
 
   async start(): Promise<void> {

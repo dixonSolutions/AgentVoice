@@ -323,6 +323,11 @@ export class VoiceSessionService {
       callbacks,
     );
     this._session = intelSession;
+    // Before start(), not after: stream input mode pipes the mic to the bridge
+    // as soon as its socket is ready, so a mute applied afterwards is too late.
+    if (defaultMuted) {
+      intelSession.setMicMuted(true);
+    }
 
     try {
       await intelSession.start();
@@ -331,9 +336,6 @@ export class VoiceSessionService {
       // Connected — clear any silent-reconnect backoff.
       this.reconnecting = false;
       this.reconnectAttempts = 0;
-      if (defaultMuted) {
-        intelSession.setMicMuted(true);
-      }
       this._audioBackends.set(intelSession.getAudioBackends());
       configureTranscriptTts({
         bridgeBase: this.bridge.bridgeBase,

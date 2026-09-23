@@ -44,6 +44,8 @@ save, and restart the session. Speech-to-text must be a **server** provider
 none is configured, the session says so and falls back to turns. While the
 agent is speaking, sending pauses (so it never hears itself), and the segment in
 progress is cut at that moment. Mute stops the stream; Speak just unmutes.
+Hanging up sends `end` and waits for `drained`, so a phrase spoken right before
+the orb is tapped is still transcribed and delivered rather than dropped.
 
 **Terminal:** `agentvoice pipe` reads stdin, `--mic`, or `--file`
 (`npm run cli -- pipe` in a clone). It finds the bridge the same way
