@@ -36,12 +36,12 @@
                 "output": "silero-vad"
               },
               {
-                "glob": "ort-wasm*.wasm",
+                "glob": "ort-wasm-simd-threaded.wasm",
                 "input": "node_modules/onnxruntime-web/dist",
                 "output": "silero-vad"
               },
               {
-                "glob": "ort-wasm*.mjs",
+                "glob": "ort-wasm-simd-threaded.mjs",
                 "input": "node_modules/onnxruntime-web/dist",
                 "output": "silero-vad"
               }
