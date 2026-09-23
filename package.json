@@ -83,6 +83,7 @@
     "simple-git": "^3.0.0",
     "strip-ansi": "^7.0.0",
     "web-push": "^3.6.7",
+    "ws": "^8.21.3",
     "zod": "^3.0.0"
   },
   "devDependencies": {
@@ -106,11 +107,11 @@
     "@types/http-proxy": "^1.17.16",
     "@types/node": "^22.0.0",
     "@types/web-push": "^3.6.4",
+    "@types/ws": "^8.18.1",
     "concurrently": "^9.2.1",
     "eslint": "^9.0.0",
     "http-proxy": "^1.18.1",
     "nodemon": "^3.1.11",
-    "pino-pretty": "^11.0.0",
     "primeicons": "^7.0.0",
     "sharp": "^0.35.2",
     "tsup": "^8.0.0",

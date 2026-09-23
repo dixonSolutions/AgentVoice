@@ -19,6 +19,7 @@ import type { TtsInterruptContext } from '../voice/ttsInterrupt.js';
 import { getSessionState, resolveProject } from '../state/registry.js';
 import { recordTurn } from '../state/turns.js';
 import { publishEvent } from '../state/eventBus.js';
+import { recordUserTurn } from '../logging/transcripts.js';
 import { childLogger } from '../log.js';
 import {
   getActiveVoiceAgent,
@@ -30,7 +31,12 @@ import {
 
 const log = childLogger('agent-turns');
 
-export type TurnSource = 'phone' | 'desk' | 'rest' | string;
+/**
+ * Where a turn came from. `stream` is the direct audio pipe (docs/41): its
+ * turns are segments cut at pauses, which the queue merges and the agent is
+ * told may be half a thought.
+ */
+export type TurnSource = 'phone' | 'desk' | 'rest' | 'stream' | string;
 
 export interface SubmitTurnOptions {
   /** Session key the turn belongs to — voice and desk share 'default'. */
@@ -96,6 +102,7 @@ export function submitAgentNativeTurn(rawText: string, opts: SubmitTurnOptions):
     const result = voiceTurnQueue.enqueue(text, {
       isInterrupt: opts.isInterrupt,
       ttsInterrupt: opts.ttsInterrupt,
+      source: opts.source,
     });
     delivery = result.kind;
   }
@@ -117,6 +124,8 @@ export function submitAgentNativeTurn(rawText: string, opts: SubmitTurnOptions):
   publishEvent({ type: 'user_turn', text, source: opts.source, delivery, run_id: out.run_id });
   // …and every turn is kept, so a client opened later can replay the thread.
   recordTurn({ project: out.project, sessionId: out.session_id, role: 'user', text, source: opts.source });
+  // The session transcript file (logging/transcripts.ts) gets it too.
+  recordUserTurn(text, opts.source);
   return out;
 }
 

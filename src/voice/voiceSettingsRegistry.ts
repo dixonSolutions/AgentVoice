@@ -6,9 +6,13 @@
 
 import { z } from 'zod';
 import {
+  AudioStreamSettingsSchema,
   LEGACY_WAKE_SENSITIVITY_THRESHOLD,
+  VOICE_INPUT_MODES,
   getConfig,
+  type AudioStreamSettings,
   type TouchControlsMode,
+  type VoiceInputMode,
   type TurnSubmit,
   type VoiceSettings,
   type VoiceSettingsInput,
@@ -29,6 +33,9 @@ export interface VoiceSettingsResponse {
   wakeWordsEnabled: boolean;
   defaultMicMuted: boolean;
   workerPollTimeoutMs: number;
+  /** `turns` (recommended) or `stream` (mic piped continuously to /ws/audio-stream). */
+  inputMode: VoiceInputMode;
+  stream: AudioStreamSettings;
   userName?: string;
 }
 
@@ -54,6 +61,8 @@ export function getVoiceSettingsView(): VoiceSettingsResponse {
     touchControls,
     wakeWordsEnabled,
     defaultMicMuted,
+    inputMode,
+    stream,
   } = settings.voice;
   const { userName } = settings;
   return {
@@ -64,6 +73,8 @@ export function getVoiceSettingsView(): VoiceSettingsResponse {
     wakeWordsEnabled: wakeWordsEnabled !== false,
     defaultMicMuted: defaultMicMuted === true,
     workerPollTimeoutMs: workerPollTimeoutMs ?? 25_000,
+    inputMode: inputMode ?? 'turns',
+    stream: stream ?? AudioStreamSettingsSchema.parse({}),
     ...(userName ? { userName } : {}),
   };
 }
@@ -221,6 +232,32 @@ export function setVoiceUi(raw: unknown): VoiceSettingsResponse {
     if (data.wakeWordsEnabled !== undefined) voice.wakeWordsEnabled = data.wakeWordsEnabled;
     if (data.defaultMicMuted !== undefined) voice.defaultMicMuted = data.defaultMicMuted;
   }, 'voice UI / touch controls updated');
+
+  return getVoiceSettingsView();
+}
+
+const VoiceInputBodySchema = z.object({
+  inputMode: z.enum(VOICE_INPUT_MODES).optional(),
+  stream: AudioStreamSettingsSchema.partial().optional(),
+});
+
+/** PATCH /api/voice/input — turns vs. direct stream, and stream segmentation. */
+export function setVoiceInput(raw: unknown): VoiceSettingsResponse {
+  const parsed = VoiceInputBodySchema.safeParse(raw);
+  if (!parsed.success) {
+    throw new Error(`Invalid voice input settings: ${parsed.error.issues.map((i) => i.message).join('; ')}`);
+  }
+  const { inputMode, stream } = parsed.data;
+  if (inputMode === undefined && stream === undefined) {
+    throw new Error('Invalid voice input settings: provide inputMode and/or stream');
+  }
+
+  persistVoiceUpdate((voice) => {
+    if (inputMode !== undefined) voice.inputMode = inputMode;
+    if (stream !== undefined) {
+      voice.stream = AudioStreamSettingsSchema.parse({ ...(voice.stream ?? {}), ...stream });
+    }
+  }, `voice input → mode=${inputMode ?? '(unchanged)'}${stream ? ` stream=${JSON.stringify(stream)}` : ''}`);
 
   return getVoiceSettingsView();
 }

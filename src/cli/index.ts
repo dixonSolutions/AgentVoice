@@ -24,6 +24,7 @@ import { parseArgs, rejectUnknown, intFlag, UsageError } from './args.js';
 import { doctorCommand } from './commands/doctor.js';
 import { runCommand } from './commands/run.js';
 import { logsCommand, serviceCommand } from './commands/service.js';
+import { pipeCommand, pipeOptions, PIPE_SWITCHES, PIPE_VALUE_FLAGS } from './commands/pipe.js';
 import { serviceInstallCommand } from './commands/serviceInstall.js';
 import { statusCommand } from './commands/status.js';
 import { tokenCommand } from './commands/token.js';
@@ -42,7 +43,10 @@ const USAGE = `
     run                    Boot the bridge in the foreground (the default)
     start | stop | restart Manage the agentvoice.service systemd unit
     service install        Write a systemd user unit for this install
-    logs [-n N] [-f]       Tail the service journal
+    logs [-n N] [-f]       Tail the service journal (or the session log file)
+    logs --list            Session logs + voice transcripts on disk
+    logs --transcripts     The newest voice transcript (--cat <file|latest> prints any)
+    pipe [--mic|--file F]  Stream audio to the voice agent (stdin by default)
 
   ${bold('Looking after it')}
     status [--json]        Install, version, service, port and health at a glance
@@ -56,7 +60,12 @@ const USAGE = `
   ${bold('Options')}
     --json                 Machine-readable output (status, doctor)
     -n, --lines N          Journal lines to show (logs, default 80)
-    -f, --follow           Follow the journal (logs)
+    -f, --follow           Follow the journal or log file (logs)
+    --files                Bridge session log files, not the journal (logs)
+    --profile serve|test   Which run profile's log folder (logs)
+    --mic, --file <path>   Audio source (pipe); stdin otherwise
+    --url, --token         Bridge to stream to (pipe; default: this home's)
+    --json                 Every bridge event as NDJSON (pipe)
     --new                  Rotate the APP_TOKEN (token)
     --now                  Enable and start it straight away (service install)
     --force                Re-download even if present (prepare-vosk);
@@ -144,14 +153,28 @@ async function dispatch(argv: string[]): Promise<void> {
 
     case 'logs': {
       const parsed = parseArgs(args, {
-        valueFlags: ['lines'],
+        valueFlags: ['lines', 'cat', 'profile'],
         aliases: { n: 'lines', f: 'follow' },
       });
-      rejectUnknown(parsed, ['lines', 'follow']);
+      rejectUnknown(parsed, ['lines', 'follow', 'files', 'transcripts', 'list', 'cat', 'profile']);
+      const cat = parsed.values.get('cat');
+      const profile = parsed.values.get('profile');
       process.exitCode = await logsCommand({
         lines: intFlag(parsed, 'lines', 80),
         follow: parsed.switches.has('follow'),
+        files: parsed.switches.has('files'),
+        transcripts: parsed.switches.has('transcripts'),
+        list: parsed.switches.has('list'),
+        ...(cat !== undefined ? { cat } : {}),
+        ...(profile !== undefined ? { profile } : {}),
       });
+      return;
+    }
+
+    case 'pipe': {
+      const parsed = parseArgs(args, { valueFlags: PIPE_VALUE_FLAGS });
+      rejectUnknown(parsed, [...PIPE_VALUE_FLAGS, ...PIPE_SWITCHES]);
+      process.exitCode = await pipeCommand(pipeOptions(parsed));
       return;
     }
 

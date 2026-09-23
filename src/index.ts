@@ -4,11 +4,12 @@
  * Boot sequence:
  *   1. Load .env (dotenv)
  *   2. Load + validate config (config.ts)
- *   3. Initialise logger (log.ts)
+ *   3. Initialise logger (log.ts) — terminal + a date-named session .log file,
+ *      and voice-session transcripts (logging/)
  *   4. Open DB + run migrations (db.ts)
  *   5. Reconcile project registry (registry.ts) + migrate legacy resume ids
  *   6. Mark orphaned jobs (jobs.ts)
- *   7. Start Fastify server (server.ts)
+ *   7. Start Fastify server (server.ts), then compress older log files
  *   8. Register graceful shutdown handlers
  */
 
@@ -16,7 +17,9 @@ import 'dotenv/config';
 
 import { loadConfig } from './config.js';
 import { getRunModeInfo } from './runMode.js';
-import { initLogger, getLogger } from './log.js';
+import { closeLogger, getLogger } from './log.js';
+import { archiveOldLogs, startLogging } from './logging/setup.js';
+import { closeTranscripts } from './logging/transcripts.js';
 import { getDb, closeDb } from './state/db.js';
 import { reconcileRegistry } from './state/registry.js';
 import { startProjectDiscovery, synchronizeProjectDiscovery } from './state/projectDiscovery.js';
@@ -35,8 +38,8 @@ async function main(): Promise<void> {
   // 1. Config (must be first — everything else depends on it)
   const config = loadConfig();
 
-  // 2. Logger
-  initLogger(config.settings.logLevel);
+  // 2. Logger — terminal, session .log file, voice transcripts
+  startLogging(config);
   const log = getLogger();
 
   log.info('agentvoice bridge starting');
@@ -99,6 +102,10 @@ async function main(): Promise<void> {
 
   await startServe();
 
+  // Only now is this provably the one live process for its run profile (the
+  // port bind would have failed otherwise), so older files are safe to gzip.
+  void archiveOldLogs(config);
+
   const run = getRunModeInfo(config.settings);
 
   // Re-point the active tunnel/proxy at this process's port, in case it
@@ -146,9 +153,13 @@ async function main(): Promise<void> {
       await app.close();
       closeDb();
       log.info('shutdown complete');
+      closeTranscripts(`bridge shutdown (${signal})`);
+      closeLogger(signal);
       process.exit(0);
     } catch (err) {
       log.error({ err }, 'error during shutdown');
+      closeTranscripts('bridge shutdown (error)');
+      closeLogger('error during shutdown');
       process.exit(1);
     }
   }
@@ -157,12 +168,19 @@ async function main(): Promise<void> {
   process.on('SIGINT', () => void shutdown('SIGINT'));
 
   process.on('uncaughtException', (err) => {
-    log.error({ err }, 'uncaught exception');
+    log.fatal({ err }, 'uncaught exception');
+    closeTranscripts('bridge crashed');
+    closeLogger('crash — uncaught exception');
     process.exit(1);
   });
 
   process.on('unhandledRejection', (reason) => {
-    log.error({ reason }, 'unhandled promise rejection');
+    log.fatal(
+      { err: reason instanceof Error ? reason : new Error(String(reason)) },
+      'unhandled promise rejection',
+    );
+    closeTranscripts('bridge crashed');
+    closeLogger('crash — unhandled rejection');
     process.exit(1);
   });
 }
@@ -170,5 +188,8 @@ async function main(): Promise<void> {
 main().catch((err: unknown) => {
   // Logger may not be initialised yet if config fails — fall back to console.
   console.error('Fatal startup error:', err instanceof Error ? err.message : String(err));
+  // If it was, make sure the session file records why this run ended.
+  getLogger().fatal({ err }, 'fatal startup error');
+  closeLogger('fatal startup error');
   process.exit(1);
 });

@@ -12,7 +12,8 @@
 
 import { detectInstallMode } from '../../serve/installMode.js';
 import { passthrough } from '../exec.js';
-import { fail, green, note, say } from '../out.js';
+import { dim, fail, green, note, say } from '../out.js';
+import { hasSessionLogs, logFilesCommand } from './logFiles.js';
 import { controlUnit, detectUnit, journalArgs, noUnitAdvice, readUnitState } from '../service.js';
 
 export async function serviceCommand(verb: 'start' | 'stop' | 'restart'): Promise<number> {
@@ -44,9 +45,38 @@ export async function serviceCommand(verb: 'start' | 'stop' | 'restart'): Promis
   return 0;
 }
 
-export async function logsCommand(opts: { lines: number; follow: boolean }): Promise<number> {
+export interface LogsOptions {
+  lines: number;
+  follow: boolean;
+  /** Any of these reads the bridge's own log files instead of the journal. */
+  files: boolean;
+  transcripts: boolean;
+  list: boolean;
+  cat?: string;
+  profile?: string;
+}
+
+export async function logsCommand(opts: LogsOptions): Promise<number> {
+  const fileOpts = {
+    transcripts: opts.transcripts,
+    list: opts.list,
+    follow: opts.follow,
+    lines: opts.lines,
+    ...(opts.cat !== undefined ? { cat: opts.cat } : {}),
+    ...(opts.profile ? { profile: opts.profile } : {}),
+  };
+  if (opts.files || opts.transcripts || opts.list || opts.cat !== undefined) {
+    return logFilesCommand(fileOpts);
+  }
+
   const unit = await detectUnit();
   if (unit.scope === 'none') {
+    // No unit means no journal — but the bridge writes its own session log
+    // however it was started (docs/42), so show that rather than give up.
+    if (hasSessionLogs(opts.profile)) {
+      note(dim('No agentvoice.service unit — showing the bridge\'s own session log.'));
+      return logFilesCommand(fileOpts);
+    }
     fail(noUnitAdvice(unit, detectInstallMode().root));
     return 1;
   }

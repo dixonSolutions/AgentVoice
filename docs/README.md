@@ -49,6 +49,8 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`38-system-packages.md`](./38-system-packages.md) | Design: .deb / .rpm packaging, a `system` install mode, and the npm fixes it depends on | Packaging, install modes, or the update path |
 | [`39-config-ui-and-narration-cleanup.md`](./39-config-ui-and-narration-cleanup.md) | Audit of the settings screen and every hardcoded bridge narration line, with the toggles + templates design | Editing the config tab or anything the bridge speaks on its own |
 | [`40-prompts-orb-and-permissions.md`](./40-prompts-orb-and-permissions.md) | Reading question and plan cards aloud, why the ask tools stay (and which of the 37 tools overlap), a working state on the orb, and remembering mic / audio permissions | Touching the approval panel, the MCP tool surface, the orb, or microphone capture |
+| [`41-audio-stream-pipe.md`](./41-audio-stream-pipe.md) | Direct audio stream input: the phone's stream mode, `agentvoice pipe`, segmentation, the `/ws/audio-stream` protocol | Hands-free input, talking to the agent from a terminal, or why turns are still recommended |
+| [`42-logging.md`](./42-logging.md) | Date-named session logs, voice transcripts, gzip rollover and retention, `agentvoice logs` | Finding what the bridge did or what was said, log disk use, crash forensics |
 
 ## One-paragraph summary
 

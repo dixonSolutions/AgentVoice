@@ -14,6 +14,18 @@ export interface TurnSubmit {
   vadEnabled?: boolean;
 }
 
+/** `turns` (recommended) or `stream` — the mic piped straight to the bridge. */
+export type VoiceInputMode = 'turns' | 'stream';
+
+/** Segmentation for the direct audio stream (mirrors settings.voice.stream). */
+export interface AudioStreamSettings {
+  segmentSilenceMs: number;
+  maxSegmentMs: number;
+  minSpeechMs: number;
+  speechThreshold: number;
+  preRollMs: number;
+}
+
 export interface WebkitTtsDefaults {
   rate: number;
   pitch: number;
@@ -48,5 +60,7 @@ export interface VoiceSettingsResponse {
   defaultMicMuted: boolean;
   /** next_voice_turn timeout while narrating workers (ms). */
   workerPollTimeoutMs: number;
+  inputMode: VoiceInputMode;
+  stream: AudioStreamSettings;
   userName?: string;
 }

@@ -11,7 +11,7 @@
  *   { type: "speaking", value }     WebKit TTS state (narrator cadence)
  *
  * Bridge → Phone:
- *   { type: "auth_ok", sessionKey, workflow, wakeWords, turnSubmit, model }
+ *   { type: "auth_ok", sessionKey, workflow, wakeWords, turnSubmit, inputMode, model }
  *   { type: "speak", text }         Pipe to WebKit TTS immediately
  *   { type: "thinking", value }     Orchestrator / Cursor busy
  *   { type: "turn_complete" }
@@ -51,6 +51,7 @@ import {
   registerVoiceSession,
 } from '../mcp/server/voiceToolHandlers.js';
 import { submitAgentNativeTurn, TurnError } from '../executor/agentTurns.js';
+import { recordAgentSpeech, recordUserTurn } from '../logging/transcripts.js';
 
 const log = childLogger('intelligence:ws');
 
@@ -152,7 +153,7 @@ export function registerWebSocket(app: FastifyInstance): void {
           };
           sessions.set(socket, intelSession);
 
-          unregisterVoice = registerVoiceSession((payload) => send(socket, payload));
+          unregisterVoice = registerVoiceSession((payload) => send(socket, payload), 'phone');
           unregisterTurnDone = registerTurnCompleteHook(() => {
             if (intelSession) intelSession.busy = false;
           });
@@ -171,6 +172,8 @@ export function registerWebSocket(app: FastifyInstance): void {
             turnSubmit: voice.turnSubmit,
             tts: voice.tts,
             wakeWordsEnabled: voice.wakeWordsEnabled !== false,
+            // `stream` = pipe the mic to /ws/audio-stream instead of taking turns.
+            inputMode: voice.inputMode,
             model: workflowId === 'agent_native' ? getActiveProvider().id : llm.model,
             audio: {
               sttProvider: audio.stt.provider,
@@ -290,10 +293,12 @@ export function registerWebSocket(app: FastifyInstance): void {
           }
 
           intelSession.busy = true;
+          recordUserTurn(text, 'phone');
           send(socket, { type: 'thinking', value: true });
 
           const callbacks: OrchestratorCallbacks = {
             onSpeak: (spoken) => {
+              recordAgentSpeech(spoken);
               send(socket, { type: 'speak', text: spoken });
               send(socket, { type: 'assistant_transcript', text: spoken });
             },

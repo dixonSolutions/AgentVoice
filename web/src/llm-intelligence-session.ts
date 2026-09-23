@@ -3,6 +3,11 @@
  *
  * Vosk (offline) gates the wake phrase; Silero VAD detects speech end and triggers STT submit.
  * STT only runs during an utterance and transcribes once — never used for phrase detection.
+ *
+ * `stream` input mode (Config → Voice → Input mode) skips all of that: the mic
+ * is piped straight to the bridge (audio-stream-pipe.ts), which segments and
+ * transcribes it and feeds the agent as the user talks. Turns stay the default
+ * and the recommendation.
  */
 
 import { acquireMic, type MicLease } from './mic-service.js';
@@ -32,6 +37,7 @@ import {
   type TtsInterruptSnapshot,
 } from './tts-interrupt.js';
 import { WebkitSttSession } from './webkit-stt.js';
+import { AudioStreamPipeClient } from './audio-stream-pipe.js';
 import { ServerSttSession } from './server-stt.js';
 import { speakServerTts, stopServerTts } from './server-tts.js';
 import { canUseWebkitTts } from './webkit-capabilities.js';
@@ -73,11 +79,14 @@ export interface VoiceTtsSettings {
   webkit: WebkitTtsDefaults;
 }
 
+export type VoiceInputMode = 'turns' | 'stream';
+
 export interface IntelligenceAuthOk {
   sessionKey: string;
   workflow: string;
   wakeWords: WakeWords;
   turnSubmit: TurnSubmit;
+  inputMode?: VoiceInputMode;
   tts?: VoiceTtsSettings;
   wakeWordsEnabled?: boolean;
   model: string;
@@ -107,6 +116,9 @@ export class LlmIntelligenceSession {
   private wakeWords: WakeWords = { start: '', end: 'send' };
   private turnSubmit: TurnSubmit = { silenceMs: DEFAULT_REDEMPTION_MS, vadEnabled: true };
   private workflow = 'agent_native';
+  /** `stream` pipes the mic to /ws/audio-stream instead of taking turns. */
+  private inputMode: VoiceInputMode = 'turns';
+  private streamPipe: AudioStreamPipeClient | null = null;
   private ttsSettings: VoiceTtsSettings = {
     agentVoiceEnabled: true,
     errorSoundEnabled: true,
@@ -255,7 +267,14 @@ export class LlmIntelligenceSession {
     if (this.micMuted) {
       this.setMicMuted(false);
     }
+    // Streaming is always listening — Speak only needs to unmute.
+    if (this.streamPipe) return;
     await this.onVoskStartDetected('(touch)');
+  }
+
+  /** True while the mic is piped straight to the bridge rather than taking turns. */
+  isStreamingInput(): boolean {
+    return this.streamPipe !== null;
   }
 
   setMicMuted(muted: boolean): void {
@@ -354,6 +373,20 @@ export class LlmIntelligenceSession {
     );
     this.wsConnected = true;
 
+    if (this.inputMode === 'stream' && !this.audioConfig.sttAvailable) {
+      // Browser STT cannot transcribe a raw stream — the bridge has to.
+      this.inputMode = 'turns';
+      this.voiceLog('pipeline', 'warn', 'Direct stream unavailable — using turns', 'no server speech-to-text provider');
+      this.cb.onSttError?.(
+        'Direct audio stream needs a server speech-to-text provider (Config → Speech). Using turns for this session.',
+      );
+    }
+
+    if (this.inputMode === 'stream' && (await this.startStreamPhase())) {
+      this.cb.onState('connected');
+      return;
+    }
+
     // Pull the offline models up front, with a progress bar, while the orb still
     // says "Preparing". Doing it lazily meant a silent ~50 MB download on the
     // first wake attempt and another one mid-turn when VAD first armed.
@@ -371,6 +404,8 @@ export class LlmIntelligenceSession {
   close(): void {
     this.closed = true;
     this.wsConnected = false;
+    this.streamPipe?.stop();
+    this.streamPipe = null;
     this.endUtteranceCapture(true);
     this.stt?.stop();
     this.stt = null;
@@ -481,6 +516,50 @@ export class LlmIntelligenceSession {
     void this.ensureMicMeter();
   }
 
+  /**
+   * Direct stream — pipe the mic to the bridge for the whole session.
+   * Returns false (after reporting why) if the bridge refused, so the caller
+   * falls back to turns rather than leaving a session that cannot hear.
+   */
+  private async startStreamPhase(): Promise<boolean> {
+    const mic = await this.ensureSharedMic();
+    await this.attachMicMeter(mic);
+    const pipe = new AudioStreamPipeClient(this.bridgeBase, this.appToken, {
+      onReady: ({ stt }) => {
+        this.voiceLog('pipeline', 'info', `Direct audio stream → ${stt}`, 'speech is cut at pauses and sent as you talk');
+      },
+      onSegment: (text, info) => {
+        this.voiceLog('stt', 'info', `Stream segment ${info.index}`, text.slice(0, 120));
+        this.cb.onUserTranscript(text);
+        if (!info.delivered && info.message) this.cb.onSttError?.(info.message);
+      },
+      onError: (message) => {
+        this.voiceLog('stt', 'error', 'Audio stream error', message);
+        this.cb.onSttError?.(message);
+      },
+      onClosed: (reason) => {
+        if (this.closed) return;
+        this.voiceLog('pipeline', 'error', 'Audio stream closed', reason);
+        this.cb.onClosed?.(`Audio stream closed — ${reason}`);
+      },
+    });
+    try {
+      await pipe.start(mic);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      pipe.stop();
+      this.inputMode = 'turns';
+      this.voiceLog('pipeline', 'error', 'Direct stream refused — using turns', message);
+      this.cb.onSttError?.(`Direct audio stream unavailable: ${message}. Using turns for this session.`);
+      return false;
+    }
+    this.streamPipe = pipe;
+    this.voiceActivated = true;
+    this.cb.onActivated?.('(direct stream)');
+    this.syncCapture();
+    return true;
+  }
+
   /** Idle phase — Vosk only; no STT pipeline (no Transcribe cost). */
   private async startWakeWordPhase(): Promise<void> {
     await this.ensureSharedMic();
@@ -516,6 +595,7 @@ export class LlmIntelligenceSession {
   private ensureWakeListening(): void {
     if (
       this.closed ||
+      this.streamPipe ||
       !this.wakeWordsEnabled ||
       this.voiceActivated ||
       this.capturingUtterance ||
@@ -568,7 +648,8 @@ export class LlmIntelligenceSession {
 
   /** After VAD speech-end or turn complete — Vosk wake only, orb back to inactive/red. */
   private async returnToWakeListen(): Promise<void> {
-    if (this.closed) return;
+    // A streaming session never goes back to waiting for a wake phrase.
+    if (this.closed || this.streamPipe) return;
     this.voiceActivated = false;
     this.capturingUtterance = false;
     this.vadListening = false;
@@ -1149,6 +1230,8 @@ export class LlmIntelligenceSession {
   }
 
   private syncCapture(): void {
+    // Never stream the agent's own voice back to it (or anything while muted).
+    this.streamPipe?.setPaused(this.micMuted || this.ttsSpeaking);
     if (this.sttGate.isPaused()) {
       if (this.stt instanceof WebkitSttSession) this.stt.pause();
       if (this.vadListening) this.vadDetector?.pause();
@@ -1213,6 +1296,7 @@ export class LlmIntelligenceSession {
         const submit = msg['turnSubmit'] as TurnSubmit | undefined;
         this.turnSubmit = submit ?? { silenceMs: DEFAULT_REDEMPTION_MS, vadEnabled: true };
         this.wakeWordsEnabled = msg['wakeWordsEnabled'] !== false;
+        this.inputMode = msg['inputMode'] === 'stream' ? 'stream' : 'turns';
         if (msg['tts'] && typeof msg['tts'] === 'object') {
           this.ttsSettings = msg['tts'] as VoiceTtsSettings;
           this.resolvedWebkitTts = resolveBrowserTtsOptions(this.ttsSettings.webkit);

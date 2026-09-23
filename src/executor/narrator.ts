@@ -25,6 +25,7 @@ import { getActiveProvider } from '../providers/agents/registry.js';
 import { notifyPhone } from '../push/notifyPhone.js';
 import { phrase, shouldSpeakNarration, narrationPayload } from '../voice/phrases.js';
 import type { NarrationKind as CatalogKind } from '../config.js';
+import { recordNarration } from '../logging/transcripts.js';
 import type { NarrationEvent } from './watcher.js';
 
 const log = childLogger('narrator');
@@ -267,10 +268,12 @@ export class PhoneRelaySession implements NarratorSession {
   }
 
   async injectText(text: string): Promise<void> {
+    recordNarration(text);
     await notifyPhone(narrationPayload({ kind: 'job_done', text, speak: true }));
   }
 
   async injectTextWithKind(text: string, kind: string, speak = true): Promise<void> {
+    recordNarration(text);
     await notifyPhone(
       narrationPayload({ kind: kind as CatalogKind, text, speak }),
     );

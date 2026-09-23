@@ -8,6 +8,7 @@
  *   /ws/control              — authenticated control WebSocket (voice model relay)
  *   /ws         — authenticated WebSocket (llm_intelligence workflow)
  *   /ws/events               — authenticated multi-client desk socket (IDE extension, docs/34)
+ *   /ws/audio-stream         — authenticated WebSocket: raw PCM piped to the voice agent (docs/41)
  *   GET|POST|DELETE /mcp     — MCP Streamable HTTP server (the agent CLI registers this)
  *
  * All /api/* and /mcp routes require a valid Bearer token (see auth.ts).
@@ -38,6 +39,7 @@ import { getNarrator, PhoneRelaySession } from './executor/narrator.js';
 import { registerVoiceProviderRoutes } from './routes/voiceProviders.js';
 import { registerWebSocket } from './intelligence/ws.js';
 import { ensureVoskModel } from './serve/ensureVoskModel.js';
+import { registerAudioStreamWebSocket } from './routes/audioStream.js';
 import { registerIntelligenceAudioRoutes } from './routes/intelligenceAudio.js';
 import { registerAgentSessionRoutes } from './routes/agentSessions.js';
 import { registerVoiceSessionPrepareRoutes } from './routes/voiceSessionPrepare.js';
@@ -154,6 +156,27 @@ export async function buildServer(): Promise<FastifyInstance> {
       }
     }
     return payload;
+  });
+
+  // Request log. API and MCP traffic at debug (it lands in the session .log
+  // file, not the terminal); anything that failed at warn/error. Static asset
+  // hits are skipped unless they fail. Query strings are dropped — image URLs
+  // carry a signed `k` parameter.
+  app.addHook('onResponse', async (req, reply) => {
+    const path = req.url.split('?')[0] ?? req.url;
+    const status = reply.statusCode;
+    const isBackend =
+      path.startsWith('/api/') || path.startsWith('/mcp') || path === '/ws' || path.startsWith('/ws/');
+    if (!isBackend && status < 400) return;
+    const entry = {
+      method: req.method,
+      path,
+      status,
+      ms: Math.round(reply.elapsedTime),
+    };
+    if (status >= 500) log.error(entry, 'request failed');
+    else if (status >= 400 && status !== 401) log.warn(entry, 'request rejected');
+    else log.debug(entry, 'request');
   });
 
   // Test mode: allow cross-origin API calls when the PWA is opened directly on the
@@ -304,6 +327,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   // ── Intelligence + MCP WebSockets ──────────────────────────────────────
 
   registerWebSocket(app);
+  registerAudioStreamWebSocket(app);
   await registerVoiceProviderRoutes(app);
   await registerConfigRoutes(app);
   await registerIntelligenceAudioRoutes(app);

@@ -698,12 +698,18 @@ export class VoiceSessionService {
       },
       onServerModelPrepare: (status) => this.handleServerModelPrepare(status),
       onActivated: (phrase) => {
-        this.logs.append('info', 'voice', `Wake phrase heard — "${phrase}"`);
+        this.logs.append(
+          'info',
+          'voice',
+          phrase === '(direct stream)' ? 'Direct audio stream open' : `Wake phrase heard — "${phrase}"`,
+        );
         this._voiceActivated.set(true);
         this.vadListening.set(false);
         this.endPhraseArmed.set(false);
         this.syncAppState();
-        if (phrase !== '(typed input)') {
+        if (phrase === '(direct stream)') {
+          this.toast.success('Streaming', 'Direct audio stream — just talk; the agent hears you as you go.', false);
+        } else if (phrase !== '(typed input)') {
           this.toast.success('Listening', 'Activation phrase heard — speak your request.', false);
         }
       },

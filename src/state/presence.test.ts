@@ -65,6 +65,17 @@ describe('PresenceTracker', () => {
     assert.equal(tracker.snapshot().deskPresent, true);
   });
 
+  test('a listening audio pipe is a listener, and leaving it starts the grace window', () => {
+    const { tracker, advance } = makeTracker(45_000);
+    const pipe = tracker.register({ kind: 'audio_pipe' });
+    assert.equal(tracker.getState(), 'connected');
+    assert.equal(tracker.snapshot().clients.audio_pipe, 1);
+    pipe.release();
+    assert.equal(tracker.getState(), 'grace');
+    advance(45_000);
+    assert.equal(tracker.getState(), 'away');
+  });
+
   test('a dropped phone goes to grace, then away once the window expires', () => {
     const { tracker, advance } = makeTracker(45_000);
     const client = tracker.register({ kind: 'phone_control' });

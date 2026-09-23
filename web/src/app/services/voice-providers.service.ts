@@ -1,6 +1,11 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { BridgeService } from './bridge.service';
-import type { TouchControlsMode, VoiceSettingsResponse } from '../models/voice-providers';
+import type {
+  AudioStreamSettings,
+  TouchControlsMode,
+  VoiceInputMode,
+  VoiceSettingsResponse,
+} from '../models/voice-providers';
 
 /**
  * Voice settings — wake words, turn-submit, TTS, and on-screen controls via /api/voice/*.
@@ -75,6 +80,17 @@ export class VoiceProvidersService {
     touchOnlyPreset?: boolean;
   }): Promise<void> {
     await this.mutate('/api/voice/ui', {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+  }
+
+  /** Turns vs. direct stream, and how the stream is cut into segments. */
+  async updateVoiceInput(patch: {
+    inputMode?: VoiceInputMode;
+    stream?: Partial<AudioStreamSettings>;
+  }): Promise<void> {
+    await this.mutate('/api/voice/input', {
       method: 'PATCH',
       body: JSON.stringify(patch),
     });

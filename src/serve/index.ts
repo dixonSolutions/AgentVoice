@@ -21,7 +21,8 @@ import { request as httpsRequest } from 'node:https';
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { getConfig, type ServeSettings } from '../config.js';
 import { getRunModeInfo } from '../runMode.js';
-import { childLogger } from '../log.js';
+import { childLogger, getSessionLog } from '../log.js';
+import { followFile, tailLines } from '../logging/tail.js';
 import { writeAudit } from '../state/db.js';
 import { getAppVersionInfo } from '../state/appVersion.js';
 import {
@@ -1078,30 +1079,65 @@ export async function runServeAction(action: ServeActionId): Promise<ServeAction
   }
 }
 
-async function journalctlUnitArgs(): Promise<string[]> {
-  const userArgs = ['--user', '-u', SERVICE_UNIT];
-  try {
-    const probe = await runCommand(process.cwd(), 'journalctl', [
-      ...userArgs,
-      '-n',
-      '1',
-      '--no-pager',
-    ]);
-    if (probe.code === 0) return userArgs;
-  } catch {
-    // fall through to system unit
+/**
+ * journalctl arguments for the bridge unit — user unit first, then system —
+ * or null when neither has any entries. That is the normal case for an npm
+ * install or a manual `node dist/index.js`, where the session .log file is the
+ * only record (see logging/sessionLog.ts).
+ */
+async function journalctlUnitArgs(): Promise<string[] | null> {
+  for (const unitArgs of [['--user', '-u', SERVICE_UNIT], ['-u', SERVICE_UNIT]]) {
+    try {
+      const probe = await runCommand(process.cwd(), 'journalctl', [
+        ...unitArgs,
+        '-n',
+        '1',
+        '--no-pager',
+        '-o',
+        'cat',
+        '-q',
+      ]);
+      if (probe.code === 0 && probe.stdout.trim()) return unitArgs;
+    } catch {
+      // journalctl missing (macOS, Windows, containers)
+    }
   }
-  return ['-u', SERVICE_UNIT];
+  return null;
+}
+
+/** The current session log file, as the fallback when journald has nothing. */
+function sessionLogFile(): string | null {
+  const path = getSessionLog()?.path ?? null;
+  return path && existsSync(path) ? path : null;
 }
 
 /**
- * Read recent systemd journal lines for the bridge service.
- * argv is fixed; only `lines` is clamped server-side.
+ * Read recent log lines for the bridge: journald when the service logs there,
+ * otherwise the session .log file. argv is fixed; only `lines` is clamped.
  */
 export async function getServeServiceLogs(lines = 80): Promise<ServeServiceLogs> {
   const n = Math.min(Math.max(Math.floor(lines) || 80, 1), 500);
+  const unitArgs = await journalctlUnitArgs();
+  if (!unitArgs) {
+    const file = sessionLogFile();
+    if (!file) {
+      return {
+        unit: SERVICE_UNIT,
+        lines: n,
+        text: '',
+        ok: false,
+        detail: 'No journald entries for the bridge and no session log file — is settings.logging.files off?',
+      };
+    }
+    return {
+      unit: `file:${file.split('/').pop()}`,
+      lines: n,
+      text: tailLines(file, n).join('\n'),
+      ok: true,
+      detail: `journald has no entries for ${SERVICE_UNIT} — showing the session log ${file}`,
+    };
+  }
   try {
-    const unitArgs = await journalctlUnitArgs();
     const { code, stdout, stderr } = await runCommand(process.cwd(), 'journalctl', [
       ...unitArgs,
       '-n',
@@ -1137,6 +1173,15 @@ export async function followServeServiceLogs(opts: {
 }): Promise<ServeLogFollow> {
   const n = Math.min(Math.max(Math.floor(opts.lines ?? 80) || 80, 1), 200);
   const unitArgs = await journalctlUnitArgs();
+  if (!unitArgs) {
+    const file = sessionLogFile();
+    if (!file) throw new Error('No journald entries for the bridge and no session log file to follow');
+    for (const line of tailLines(file, n)) opts.onLine(line);
+    const follow = followFile(sessionLogFile, (line) => {
+      if (line.length > 0) opts.onLine(line);
+    });
+    return { unit: `file:${file.split('/').pop()}`, stop: follow.stop };
+  }
   const child: ChildProcess = spawn(
     'journalctl',
     [...unitArgs, '-n', String(n), '-f', '--no-pager', '-o', 'short-iso'],

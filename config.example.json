@@ -82,7 +82,15 @@
       "touchControls": "when_muted",
       "wakeWordsEnabled": true,
       "defaultMicMuted": false,
-      "workerPollTimeoutMs": 25000
+      "workerPollTimeoutMs": 25000,
+      "inputMode": "turns",
+      "stream": {
+        "segmentSilenceMs": 700,
+        "maxSegmentMs": 15000,
+        "minSpeechMs": 300,
+        "speechThreshold": 0.012,
+        "preRollMs": 300
+      }
     },
     "defaultMode": "agent",
     "defaultActiveModel": "auto",
@@ -116,6 +124,15 @@
     "narratorMaxBufferEvents": 50,
     "ghostKillEnabled": true,
     "logLevel": "info",
+    "logging": {
+      "dir": "logs",
+      "files": true,
+      "fileLevel": "debug",
+      "transcripts": true,
+      "keepPlain": 3,
+      "maxFileMb": 25,
+      "retentionDays": 0
+    },
     "userName": "Alex",
     "serve": {
       "branch": "main"

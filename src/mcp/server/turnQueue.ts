@@ -18,6 +18,11 @@
  * Step 2 is protocol-level, so it works identically on Cursor, Codex and
  * Claude Code — nothing here depends on a particular CLI.
  *
+ * Streamed input (voice.inputMode = "stream", or `agentvoice pipe`) enqueues
+ * one turn per audio segment. When several are waiting, a dequeue hands them
+ * over together — the agent gets everything said since it last listened,
+ * rather than one clause per poll. See docs/41-audio-stream-pipe.md.
+ *
  * See docs/16-mcp-server-agent-as-brain.md § 8.1 / § 8.4.
  */
 
@@ -27,8 +32,17 @@ import { interruptPendingWaits, type PendingWait } from './pendingWaits.js';
 
 const log = childLogger('mcp:server:turnQueue');
 
+/**
+ * Where a turn came from — the TurnSource from executor/agentTurns.ts (phone,
+ * desk, rest, …). Only `stream`, the direct audio pipe, changes behaviour.
+ */
+export type VoiceTurnSource = string;
+
 export interface VoiceTurn {
   text: string;
+  source: VoiceTurnSource;
+  /** For streamed turns: how many audio segments were merged into this one. */
+  segments?: number;
   /** ISO timestamp of when the turn arrived. */
   receivedAt: string;
   /** Whether this turn should interrupt any in-progress work (e.g. "cancel", "stop"). */
@@ -40,6 +54,7 @@ export interface VoiceTurn {
 export interface EnqueueVoiceTurnOptions {
   isInterrupt?: boolean;
   ttsInterrupt?: TtsInterruptContext;
+  source?: VoiceTurnSource;
 }
 
 export type EnqueueDelivery =
@@ -113,8 +128,11 @@ class VoiceTurnQueue {
       );
     }
 
+    const source = options?.source ?? 'phone';
     const turn: VoiceTurn = {
       text,
+      source,
+      ...(source === 'stream' ? { segments: 1 } : {}),
       receivedAt: new Date().toISOString(),
       isInterrupt,
       ttsInterrupt: options?.ttsInterrupt,
@@ -168,7 +186,7 @@ class VoiceTurnQueue {
    */
   dequeue(timeoutMs = 30_000): Promise<VoiceTurn | null> {
     if (this.queue.length > 0) {
-      return Promise.resolve(this.queue.shift()!);
+      return Promise.resolve(this.takeNext());
     }
 
     return new Promise<VoiceTurn | null>((resolve) => {
@@ -180,6 +198,26 @@ class VoiceTurnQueue {
 
       this.waiters.push({ resolve, timer });
     });
+  }
+
+  /**
+   * Shift the next turn. Consecutive streamed segments are merged: a thought
+   * spoken with pauses arrives as several segments, and handing them to the
+   * agent one poll at a time would have it answer half a sentence.
+   */
+  private takeNext(): VoiceTurn {
+    let turn = this.queue.shift()!;
+    if (turn.source !== 'stream') return turn;
+    while (this.queue[0]?.source === 'stream') {
+      const next = this.queue.shift()!;
+      turn = {
+        ...turn,
+        text: `${turn.text} ${next.text}`.trim(),
+        segments: (turn.segments ?? 1) + (next.segments ?? 1),
+        isInterrupt: turn.isInterrupt || next.isInterrupt,
+      };
+    }
+    return turn;
   }
 
   /** Check and reset recent user authorization for a destructive stop action. */
