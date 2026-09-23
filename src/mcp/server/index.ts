@@ -1088,6 +1088,9 @@ function buildMcpServer(sessionKey: string): McpServer {
                   user_turn: response.user_turn,
                   is_interrupt: response.is_interrupt,
                   received_at: response.received_at,
+                  source: response.source,
+                  segments: response.segments,
+                  stream_hint: response.stream_hint,
                   tts_interrupt: response.tts_interrupt ?? null,
                   pending_user_turns: 0,
                   message:
@@ -1277,6 +1280,9 @@ function buildMcpServer(sessionKey: string): McpServer {
                   user_turn: response.user_turn,
                   is_interrupt: response.is_interrupt,
                   received_at: response.received_at,
+                  source: response.source,
+                  segments: response.segments,
+                  stream_hint: response.stream_hint,
                   tts_interrupt: response.tts_interrupt ?? null,
                   pending_user_turns: 0,
                   message:

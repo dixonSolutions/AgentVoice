@@ -1,6 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { afterEach, describe, it } from 'node:test';
-import { voiceTurnQueue } from './turnQueue.js';
+import { registerResolveWait, releaseWait, withVoiceInterrupt } from './pendingWaits.js';
+import { STREAM_TURN_HINT, voiceTurnQueue } from './turnQueue.js';
 
 afterEach(() => voiceTurnQueue.clear());
 
@@ -46,5 +47,29 @@ describe('voiceTurnQueue', () => {
     voiceTurnQueue.enqueue('stop that', { source: 'stream' });
     const turn = await voiceTurnQueue.dequeue(10);
     assert.equal(turn?.isInterrupt, true);
+  });
+
+  it('a streamed segment delivered through a waiting tool keeps its stream fields', async () => {
+    const wait = registerResolveWait({ tool: 'request_user_input' });
+    const delivery = voiceTurnQueue.enqueue('so what I meant was', { source: 'stream' });
+    assert.equal(delivery.kind, 'tool_interrupt');
+    const annotation = await wait.interrupted;
+    releaseWait(wait.id);
+    assert.equal(annotation.user_turn, 'so what I meant was');
+    assert.equal(annotation.source, 'stream');
+    assert.equal(annotation.segments, 1);
+    assert.equal(annotation.stream_hint, STREAM_TURN_HINT);
+  });
+
+  it('a phone turn riding on running work carries its source but no stream hint', async () => {
+    let release: () => void = () => {};
+    const work = withVoiceInterrupt('agent_ask', () => new Promise<{ answer: string }>((r) => (release = () => r({ answer: 'done' }))));
+    voiceTurnQueue.enqueue('also check the tests', { source: 'phone' });
+    release();
+    const result = await work;
+    assert.equal(result.answer, 'done');
+    assert.equal(result.user_turn, 'also check the tests');
+    assert.equal(result.source, 'phone');
+    assert.equal(result.stream_hint, undefined);
   });
 });

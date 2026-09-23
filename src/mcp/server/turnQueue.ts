@@ -38,6 +38,16 @@ const log = childLogger('mcp:server:turnQueue');
  */
 export type VoiceTurnSource = string;
 
+/**
+ * Streamed speech is cut at pauses, not at the end of a request, so the agent
+ * has to decide whether it has the whole thought. Turn-based input never
+ * needs this — which is why turns are the recommended mode.
+ */
+export const STREAM_TURN_HINT =
+  'Streamed speech: this was cut at a pause and may be only part of what the user is saying. ' +
+  'If it reads as unfinished, call next_voice_turn(timeout_ms=2500) to collect the rest before acting; ' +
+  'if it is a complete request, handle it normally.';
+
 export interface VoiceTurn {
   text: string;
   source: VoiceTurnSource;
@@ -147,11 +157,17 @@ class VoiceTurnQueue {
     }
 
     // No next_voice_turn waiter — hand the turn to whichever AgentVoice tool
-    // the agent is sitting in right now.
+    // the agent is sitting in right now. It carries the same stream fields
+    // next_voice_turn() returns: a pause-cut fragment must not read as a
+    // complete request just because it arrived mid-tool.
     const delivery = interruptPendingWaits({
       user_turn: turn.text,
       is_interrupt: turn.isInterrupt,
       received_at: turn.receivedAt,
+      source: turn.source,
+      ...(turn.source === 'stream'
+        ? { segments: turn.segments ?? 1, stream_hint: STREAM_TURN_HINT }
+        : {}),
       tts_interrupt: turn.ttsInterrupt,
     });
     if (delivery.aborted.length > 0 || delivery.annotated.length > 0) {

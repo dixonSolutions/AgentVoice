@@ -15,7 +15,7 @@
 import { childLogger } from '../../log.js';
 import { getConfig } from '../../config.js';
 import { notifyPhone } from '../../push/notifyPhone.js';
-import { voiceTurnQueue } from './turnQueue.js';
+import { STREAM_TURN_HINT, voiceTurnQueue } from './turnQueue.js';
 import { getActiveProvider } from '../../providers/agents/registry.js';
 import { getActiveVoiceAgent } from '../../executor/voiceAgent.js';
 import { recordTurn } from '../../state/turns.js';
@@ -455,16 +455,6 @@ export interface NextVoiceTurnResult {
 
 const MAX_POLL_MS = 60_000;
 const DEFAULT_POLL_MS = 30_000;
-
-/**
- * Streamed speech is cut at pauses, not at the end of a request, so the agent
- * has to decide whether it has the whole thought. Turn-based input never
- * needs this — which is why turns are the recommended mode.
- */
-export const STREAM_TURN_HINT =
-  'Streamed speech: this was cut at a pause and may be only part of what the user is saying. ' +
-  'If it reads as unfinished, call next_voice_turn(timeout_ms=2500) to collect the rest before acting; ' +
-  'if it is a complete request, handle it normally.';
 
 /**
  * next_voice_turn() — long-poll dequeue.

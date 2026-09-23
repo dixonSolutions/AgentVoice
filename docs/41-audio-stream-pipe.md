@@ -112,6 +112,10 @@ the agent that such a turn may be half a thought: if it reads as unfinished,
 call `next_voice_turn(timeout_ms=2500)` to collect the rest before acting;
 otherwise handle it normally. Turn-based input never carries these fields.
 
+A segment that arrives while the agent is inside another AgentVoice tool is
+delivered through that tool's result instead (docs/16 § 8.4) — with the same
+three fields, so a pause-cut fragment never reads as a finished request.
+
 ## Settings
 
 `settings.voice` in `config.json` (also Config → Listening & controls):
