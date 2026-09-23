@@ -294,18 +294,11 @@ export class LlmIntelligenceSession {
     await new Promise<void>((resolve, reject) => {
       const ws = this.ws!;
       let settled = false;
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const finish = (fn: () => void) => {
-        if (settled) return;
-        settled = true;
-        if (timer) clearTimeout(timer);
-        fn();
-      };
 
       // A socket that opens to a half-ready bridge (e.g. one still restarting)
       // may never send auth_ok and never error — without this the connect would
       // hang forever and the caller's reconnect backoff could never retry.
-      timer = setTimeout(() => {
+      const timer = setTimeout(() => {
         finish(() => {
           try {
             ws.close();
@@ -315,6 +308,13 @@ export class LlmIntelligenceSession {
           reject(new Error('WebSocket connect timed out'));
         });
       }, 10_000);
+
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn();
+      };
 
       ws.addEventListener('open', () => {
         ws.send(JSON.stringify({ type: 'auth', token: this.appToken }));
