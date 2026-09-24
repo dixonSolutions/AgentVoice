@@ -172,9 +172,11 @@ for f in "${rpms}"/*.rpm; do
     # up came back damaged, and signing it again would paper over that.
     out="$(rpmkeys --dbpath "${scratch}/signing-rpmdb" --checksig --nosignature "${f}" 2>&1)" || true
     [[ "${out}" == *"digests OK"* ]] || fail "$(basename "${f}") is damaged: ${out}"
-    # --addsign replaces the signature already there, it does not add a second.
+    # --resign, not --addsign: only --resign is defined to replace every
+    # signature already there. Newer rpm's --addsign keeps the old key's
+    # signature beside the new one, and step 7 rejects a package carrying it.
     if ! out="$(rpmsign --define "_gpg_name ${keys[0]}" --define "_gpg_path ${GNUPGHOME}" \
-        --addsign "${f}" 2>&1)"; then
+        --resign "${f}" 2>&1)"; then
       fail "rpmsign failed for $(basename "${f}"): ${out}"
     fi
     echo "re-signed $(basename "${f}") with ${keys[0]}"

@@ -122,11 +122,25 @@ jobs:
             echo "::error::PACKAGE_SIGNING_KEY is not set — packages for ${REQUESTED} cannot be published. See docs/43-package-repos.md."
             exit 1
           fi
-          status="$(curl -s -o /dev/null -w '%{http_code}' "${SITE_URL}/manifest.txt?cb=${GITHUB_RUN_ID}" || true)"
-          if [ "${status}" = 200 ]; then
-            echo "::error::packages are published at ${SITE_URL} but PACKAGE_SIGNING_KEY is not set — refusing to deploy a site without them. See docs/43-package-repos.md."
+          # Only a 404 says nothing is published — fetch-published.sh's rule.
+          # A site that cannot be reached, or any other answer, may well be
+          # hiding live packages that a landing-page-only deploy would drop.
+          if ! status="$(curl -sS -o /dev/null -w '%{http_code}' --retry 3 --retry-all-errors \
+              "${SITE_URL}/manifest.txt?cb=${GITHUB_RUN_ID}")"; then
+            echo "::error::could not check ${SITE_URL}/manifest.txt — refusing to deploy without PACKAGE_SIGNING_KEY while it is unknown whether packages are published. See docs/43-package-repos.md."
             exit 1
           fi
+          case "${status}" in
+            404) ;;
+            200)
+              echo "::error::packages are published at ${SITE_URL} but PACKAGE_SIGNING_KEY is not set — refusing to deploy a site without them. See docs/43-package-repos.md."
+              exit 1
+              ;;
+            *)
+              echo "::error::${SITE_URL}/manifest.txt answered HTTP ${status}; cannot tell whether packages are published, and deploying without PACKAGE_SIGNING_KEY would drop them. See docs/43-package-repos.md."
+              exit 1
+              ;;
+          esac
           echo "::warning::PACKAGE_SIGNING_KEY is not set — deploying the landing page only, no apt/dnf repositories (docs/43)."
           mkdir -p "${RUNNER_TEMP}/site"
 
