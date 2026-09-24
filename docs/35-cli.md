@@ -29,6 +29,7 @@ has — that behaviour is a published contract and nothing may take it back.
 | `doctor [--json]` | Check Node, the native binding, config, data dir, agent CLI, port. |
 | `update [--stash] [--dry-run] [--branch <name>]` | Update this install. |
 | `token [--new]` | Print the pairing token, or mint a fresh one. |
+| `migrate <path> [--to DIR] [--with-data] [--force] [--dry-run]` | Carry an existing bridge's `config.json` and `.env` into this install's home. Copies only — starts nothing. See [`migrate`](#migrate). |
 | `prepare-vosk [--force]` | Fetch the wake-word model now (the bridge also does on first boot). |
 | `version`, `--version` | Package version, plus branch and commit in a clone. |
 | `help`, `--help` | Usage screen. `agentvoice <command> --help` shows just that command and its options. |
@@ -157,6 +158,48 @@ shadows the one you are developing, and a rebase is meaningless under
 - **unknown** → refuses, says why, and explains how to reinstall into a mode
   that *can* be maintained.
 
+## `migrate`
+
+Moves an existing bridge — a clone, a hand-made install, an old home — onto
+this install in one action:
+
+```bash
+agentvoice migrate ~/Projects/AgentVoice --dry-run   # see what would move
+agentvoice migrate ~/Projects/AgentVoice             # do it
+agentvoice migrate ~/Projects/AgentVoice --with-data # and keep job/session history
+```
+
+It copies files and stops: no bridge is started, no service installed, and the
+source is never modified. `<path>` is the directory the old bridge ran from (or
+its `config.json`); the target is `$AGENTVOICE_HOME`, else `~/.agentvoice`, or
+`--to <dir>`.
+
+What "safely" means here:
+
+- **Secrets are never printed.** The report lists key *names* only.
+- **`.env` and `config.json` are written 0600, atomically** (temp file +
+  rename), into a 0700 home — there is no moment with a partial or
+  world-readable copy.
+- **Nothing is overwritten without `--force`**, and `--force` backs each
+  replaced file up first (`.env.bak-<timestamp>`, also 0600).
+- **The copy stands on its own.** Relative paths in `.env` (`HTTPS_CERT_PATH`,
+  `APNS_KEY_PATH`, the `<CLI>_PATH` pins, `AGENTVOICE_LOG_DIR`) become absolute;
+  `CONFIG_PATH`, `DB_PATH` and `settings.serve.repoDir` are left behind, since
+  they pointed back into the source — two bridges must never share one
+  database. A `test`-mode config is switched to `serve`, because an installed
+  package serves the PWA itself — keeping the port it was already listening on,
+  so tunnels and paired phones still reach it.
+- **`--with-data` uses SQLite's online backup**, so the snapshot is consistent
+  even while the old bridge is running. It is taken before anything in the
+  target is touched, and moved into place last.
+- **An invalid `config.json`, or a snapshot that fails, aborts before anything
+  is written.**
+
+`APP_TOKEN` carries over, so paired phones keep working. Stop the old bridge
+before starting the new one if they share a port, and run the new one from
+outside the old checkout — a directory with its own `config.json` takes
+precedence over `~/.agentvoice`.
+
 ## `token`
 
 The token goes to stdout on its own line; everything else goes to stderr, so
@@ -223,7 +266,7 @@ src/cli/home.ts        home resolution, seeding, .env and config.json reading
 src/cli/service.ts     service detection and control (systemd, launchd, Windows)
 src/cli/bridge.ts      port resolution and the /healthz probe
 src/cli/versions.ts    package version, git drift, registry latest
-src/cli/commands/*.ts  one file per command group
+src/cli/commands/*.ts  one file per command group (migrate.ts: the one-shot move into a home)
 ```
 
 The logic is TypeScript under `src/cli/` rather than JavaScript in `bin/` so it
