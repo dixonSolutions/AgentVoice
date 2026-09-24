@@ -69,8 +69,18 @@ npx @ratitisrad/agentvoice
 
 # Or install the `agentvoice` command globally
 npm install -g @ratitisrad/agentvoice
-agentvoice
+agentvoice setup      # guided: agent CLI + projects, then optionally a service + hosting
 ```
+
+`agentvoice setup` is the same wizard on every install — npm, a .deb/.rpm, or a
+clone (where `scripts/setup.sh` builds first and then runs it). It asks one
+question up front — **install a background service?** — then sets up the agent
+CLI and where your repos live. Answer no and that is all it does: config only,
+nothing installed or exposed. Answer yes and it also installs the service
+(systemd, launchd or a Windows service) and sets up hosting — Tailscale,
+Cloudflare Tunnel, ngrok, Dev Tunnels or LAN — so your phone can reach it.
+`--yes` takes every default; `--no-service`, `--service --hosting tailscale`,
+`--agent`, `--projects-dir` answer individual questions for scripts.
 
 On its first run the bridge creates a **home directory** — `~/.agentvoice`,
 or `$AGENTVOICE_HOME` if you set one — seeds `config.json` from the packaged
@@ -206,8 +216,9 @@ git clone https://github.com/dixonSolutions/AgentVoice.git
 cd AgentVoice
 # Formerly Cursor-Voice — see docs/26-rename-agentvoice.md
 
-# 2. Run setup — installs Tailscale, builds, creates .env,
-#    installs a systemd user service, and configures tailscale serve.
+# 2. Build, then run the setup wizard (`agentvoice setup`): agent CLI and
+#    projects, then — if you want it — a systemd user service and hosting
+#    (e.g. Tailscale). `--local` skips the service; `--hosting=tailscale` picks it.
 bash scripts/setup.sh
 ```
 
