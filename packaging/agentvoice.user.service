@@ -1,4 +1,4 @@
-# Systemd *user* unit shipped by the .deb / .rpm, deliberately not enabled.
+# Systemd *user* unit shipped by the .deb / .rpm, enabled for every user on install (packaging/scripts/postinstall.sh).
 #
 # A user unit, not a system one: the bridge spawns the agent CLIs with the
 # developer's own credentials and writes their ~/.cursor/mcp.json,

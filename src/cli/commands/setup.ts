@@ -142,10 +142,18 @@ export async function setupCommand(opts: SetupOptions): Promise<number> {
 
     // ── 1. The one up-front question ──────────────────────────────────────
     const serviceSupported = process.platform !== 'linux' || ran(await capture('systemctl', ['--user', '--version']));
+    // A global npm install or a .deb/.rpm has usually installed the service
+    // already; then the question is whether to keep it (and set up hosting).
+    const hasService = serviceSupported && (await detectUnit()).scope !== 'none';
     const wantService =
       opts.service ??
       (serviceSupported
-        ? await ask.confirm('Install AgentVoice as a background service (starts at login, reachable from your phone)?', false)
+        ? await ask.confirm(
+            hasService
+              ? 'Keep AgentVoice running as a background service, and set up hosting for your phone?'
+              : 'Install AgentVoice as a background service (starts at login, reachable from your phone)?',
+            hasService,
+          )
         : false);
     if (wantService && !serviceSupported) {
       fail('no service manager on this host — continuing with project config only.');

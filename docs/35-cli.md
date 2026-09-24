@@ -322,6 +322,19 @@ else, which is what you want after editing `config.json`.
 
 ### `service install`
 
+**Out of the box**, nothing needs running by hand: a global npm install's
+`postinstall` (`bin/postinstall.mjs`) runs `service install --now` — or
+`restart` on an upgrade, so the new version is the one running — and a
+.deb/.rpm enables the packaged unit for every user. Both skip with
+`AGENTVOICE_NO_SERVICE=1`; npm's hook also skips CI, root, Windows (a service
+there needs an elevated terminal) and a clone's plain `npm install`, and never
+fails the install. If your npm ignores install scripts, run
+`agentvoice service install --now` once.
+
+`agentvoice service uninstall` stops the service and removes what `install`
+wrote (a packaged unit is masked for your user instead). npm runs no uninstall
+hooks, so run it before `npm uninstall -g`. `~/.agentvoice` is never touched.
+
 Installs a service that runs **as you** — the bridge spawns your agent CLIs with
 your sign-ins and edits your projects — pointing at this install's Node and
 launcher by absolute path, with `AGENTVOICE_HOME` pinned and a `PATH` that

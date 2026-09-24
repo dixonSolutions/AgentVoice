@@ -30,7 +30,7 @@
  *     enable-linger` fixes that, and the command offers to run it.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import { detectInstallMode, PACKAGE_NAME } from '../../serve/installMode.js';
@@ -410,4 +410,84 @@ function safeRead(path: string): string | null {
   } catch {
     return null;
   }
+}
+
+// ── Uninstall ─────────────────────────────────────────────────────────────
+
+/**
+ * `agentvoice service uninstall` — stop the service and remove what `service
+ * install` wrote. npm (v7+) runs no uninstall scripts, so this is the step
+ * before `npm uninstall -g`. The bridge home (~/.agentvoice: config, database,
+ * token) is never touched.
+ */
+export async function serviceUninstallCommand(opts: { dryRun?: boolean } = {}): Promise<number> {
+  if (process.platform === 'darwin') {
+    const path = launchdPlistPath();
+    if (!existsSync(path)) {
+      say(`${dim('nothing to do')} — no ${LAUNCHD_LABEL} agent is installed.`);
+      return 0;
+    }
+    if (opts.dryRun) {
+      say(`${yellow('dry run')} — would boot out ${LAUNCHD_LABEL} and remove ${path}`);
+      return 0;
+    }
+    await capture('launchctl', ['bootout', `gui/${process.getuid?.() ?? 0}/${LAUNCHD_LABEL}`]);
+    rmSync(path, { force: true });
+    say(`${green('removed')}  ${path}`);
+    return 0;
+  }
+
+  if (process.platform === 'win32') {
+    const exists = (await capture('sc.exe', ['query', WINDOWS_SERVICE])).code === 0;
+    if (!exists) {
+      say(`${dim('nothing to do')} — no ${WINDOWS_SERVICE} service is installed.`);
+      return 0;
+    }
+    if (opts.dryRun) {
+      say(`${yellow('dry run')} — would stop and delete the ${WINDOWS_SERVICE} service`);
+      return 0;
+    }
+    await capture('sc.exe', ['stop', WINDOWS_SERVICE]);
+    const nssm = findNssm();
+    const removed = nssm
+      ? await capture(nssm, ['remove', WINDOWS_SERVICE, 'confirm'])
+      : await capture('sc.exe', ['delete', WINDOWS_SERVICE]);
+    if (removed.code !== 0) {
+      fail(`could not remove the service — ${(removed.stderr || removed.stdout).trim()}\n  Run this from an elevated (Administrator) terminal.`);
+      return 1;
+    }
+    say(`${green('removed')}  ${WINDOWS_SERVICE} (Windows service)`);
+    return 0;
+  }
+
+  const probe = await capture('systemctl', ['--user', '--version']);
+  if (!ran(probe)) {
+    say(`${dim('nothing to do')} — systemd user services are not available on this host.`);
+    return 0;
+  }
+  const path = userUnitPath();
+  const ours = existsSync(path);
+  const packaged = existsSync(PACKAGED_USER_UNIT);
+  if (!ours && !packaged) {
+    say(`${dim('nothing to do')} — no ${SERVICE_UNIT} is installed for this user.`);
+    return 0;
+  }
+  if (opts.dryRun) {
+    say(`${yellow('dry run')} — would disable and stop ${SERVICE_UNIT}${ours ? ` and remove ${path}` : ''}`);
+    return 0;
+  }
+  await passthrough('systemctl', ['--user', 'disable', '--now', SERVICE_UNIT]);
+  if (ours) {
+    rmSync(path, { force: true });
+    say(`${green('removed')}  ${path}`);
+  }
+  await capture('systemctl', ['--user', 'daemon-reload']);
+  if (packaged && !ours) {
+    // The package's unit stays on disk (the package owns it) and may be
+    // enabled for every user; mask it so it stays off for this one.
+    await capture('systemctl', ['--user', 'mask', SERVICE_UNIT]);
+    say(`${green('disabled')}  ${SERVICE_UNIT} ${dim('(packaged unit, masked for this user — `systemctl --user unmask agentvoice` undoes it)')}`);
+  }
+  say(dim('  Your bridge home (~/.agentvoice) is left as it was.'));
+  return 0;
 }

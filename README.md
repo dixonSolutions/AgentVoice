@@ -61,41 +61,47 @@ Bridge (Node/TS) ── VoiceTurnQueue ── MCP /mcp ──► Cursor voice ag
 ## Install
 
 AgentVoice ships as an npm package. The bridge and the built web app come in
-the same tarball — no checkout, no build step:
+the same tarball — no checkout, no build step. Install it **globally**:
 
 ```bash
-# Run it once, without installing
-npx @ratitisrad/agentvoice
-
-# Or install the `agentvoice` command globally
 npm install -g @ratitisrad/agentvoice
-agentvoice setup      # guided: agent CLI + projects, then optionally a service + hosting
+agentvoice setup      # guided: agent CLI + projects, then hosting such as Tailscale
 ```
 
-`agentvoice setup` is the same wizard on every install — npm, a .deb/.rpm, or a
-clone (where `scripts/setup.sh` builds first and then runs it). It asks one
-question up front — **install a background service?** — then sets up the agent
-CLI and where your repos live. Answer no and that is all it does: config only,
-nothing installed or exposed. Answer yes and it also installs the service
-(systemd, launchd or a Windows service) and sets up hosting — Tailscale,
-Cloudflare Tunnel, ngrok, Dev Tunnels or LAN — so your phone can reach it.
-`--yes` takes every default; `--no-service`, `--service --hosting tailscale`,
-`--agent`, `--projects-dir` answer individual questions for scripts.
+`-g` makes it a system tool rather than a project dependency: npm installs the
+package into `<prefix>/lib/node_modules/@ratitisrad/agentvoice` and links the
+`agentvoice` command into `<prefix>/bin`, on your `PATH`.
 
-On its first run the bridge creates a **home directory** — `~/.agentvoice`,
-or `$AGENTVOICE_HOME` if you set one — seeds `config.json` from the packaged
-example, generates a random `APP_TOKEN` into `~/.agentvoice/.env`, and prints
-that token once. Then it starts up and logs the address it is listening on
-(`http://127.0.0.1:5089` — an installed package starts in the `serve` profile,
-because it serves the built PWA itself; `PORT` picks another port on first run). Open that address —
-the PWA is served from the same port — and paste the token when it asks you to
-pair.
+**It runs as a background service out of the box.** A global install
+registers and starts a *user* service — systemd on Linux, launchd on macOS —
+so the bridge is up at `http://127.0.0.1:5089` straight away and comes back at
+every login; `npm update -g @ratitisrad/agentvoice` restarts it on the new
+version. It listens on this machine only: nothing is exposed until you set up
+hosting. Skip it with `AGENTVOICE_NO_SERVICE=1 npm install -g …`; on Windows,
+or if your npm is set to ignore install scripts, run
+`agentvoice service install --now` once. Before uninstalling, stop it with
+`agentvoice service uninstall` (npm runs no uninstall hooks).
+
+`agentvoice setup` is the same wizard on every install — npm, a .deb/.rpm, or a
+clone (where `scripts/setup.sh` builds first and then runs it). It asks whether
+you want the background service (already there after `npm install -g`), sets up
+the agent CLI and where your repos live, and — with the service — sets up
+hosting: Tailscale, Cloudflare Tunnel, ngrok, Dev Tunnels or LAN, so your phone
+can reach it. `--yes` takes every default; `--no-service`,
+`--service --hosting tailscale`, `--agent`, `--projects-dir` answer individual
+questions for scripts.
+
+The bridge keeps everything in a **home directory** — `~/.agentvoice`, or
+`$AGENTVOICE_HOME` — seeded on first start: `config.json` from the packaged
+example and a random `APP_TOKEN` in `~/.agentvoice/.env`. Open
+`http://127.0.0.1:5089` (the PWA is served from the same port) and paste the
+token from `agentvoice token` when it asks you to pair.
 
 **Moving from a clone?** `agentvoice migrate ~/Projects/AgentVoice` carries
 its `config.json` and `.env` (keys and pairing token included, written 0600,
 never printed) into `~/.agentvoice` in one step; `--with-data` brings the job
-history too, and `--dry-run` shows what would move. It starts nothing — run
-`agentvoice` or `agentvoice service install --now` afterwards.
+history too, and `--dry-run` shows what would move. It starts nothing — restart
+the service (`agentvoice restart`) to load what it carried.
 
 Everything the bridge writes — `config.json`, `data/state.db`, logs — stays in
 that home directory, so `npm update -g @ratitisrad/agentvoice` never touches your state.
@@ -115,7 +121,8 @@ Booting the bridge is only the default. The same command manages the install:
 ```bash
 agentvoice status          # install, version, service, port, health, public URL — one screen
 agentvoice doctor          # Node, native binding, config, agent CLI + sign-in, port, service, hosting
-agentvoice service install --now   # run it in the background (systemd, launchd or Windows service)
+agentvoice service install --now   # (re)install the background service — npm -g and .deb/.rpm already did
+agentvoice service uninstall       # stop and remove it, e.g. before npm uninstall -g
 agentvoice restart         # bounce the service
 agentvoice logs -f         # follow the service journal (or the session log file)
 agentvoice logs --list     # every session log and voice transcript on disk

@@ -58,6 +58,7 @@
     "gen-vapid-keys": "bash scripts/gen-vapid-keys.sh",
     "mobile:sync": "npm run build:web && cd mobile && npm install --legacy-peer-deps && npx cap sync",
     "prepare:vosk": "node scripts/download-vosk-model.mjs",
+    "postinstall": "node bin/postinstall.mjs",
     "lint": "eslint src web/src packages/client/src",
     "typecheck": "tsc --noEmit && npx tsc --noEmit -p web/tsconfig.app.json && npx tsc --noEmit -p web/tsconfig.spec.json && npx tsc --noEmit -p packages/client/tsconfig.json",
     "stop": "bash scripts/stop.sh",
