@@ -282,8 +282,8 @@ jobs:
             AgentVoice v${{ steps.v.outputs.version }} is on npm.
 
             ```bash
-            npm install -g @ratitisrad/agentvoice     # then: agentvoice status
-            npx @ratitisrad/agentvoice                # or run it once
+            npm install -g @ratitisrad/agentvoice     # starts as a background service
+            agentvoice setup                          # agent CLI, projects, hosting
             ```
 
             Or install the .deb / .rpm attached below — they bundle Node, so
@@ -293,6 +293,11 @@ jobs:
             sudo apt install ./agentvoice_${{ steps.v.outputs.version }}_amd64.deb
             sudo dnf install ./agentvoice-${{ steps.v.outputs.version }}.x86_64.rpm
             ```
+
+            Both enable AgentVoice as a background user service out of the box.
+
+            For upgrades through `apt upgrade` / `dnf upgrade`, add the
+            signed repository instead: https://dixonsolutions.github.io/AgentVoice/
 
             The wake-word model is not bundled — run `agentvoice prepare-vosk`
             if you want wake words.
@@ -440,3 +445,25 @@ jobs:
           files: |
             *.deb
             *.rpm
+
+  # ── apt / dnf repositories (docs/43) ───────────────────────────────────────
+  #
+  # Adds the packages just attached to the release to the signed repositories
+  # on GitHub Pages, so `apt upgrade` / `dnf upgrade` pick the release up.
+  # Only once every architecture built: a repository with a new amd64 and a
+  # stale arm64 is worse than a repository that is one release behind.
+  # Fails (red, nothing published) until PACKAGE_SIGNING_KEY is set — docs/43.
+  repos:
+    name: apt + dnf repositories
+    if: github.event_name != 'pull_request' && needs.release.outputs.published == 'true'
+    needs: [release, packages]
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    uses: ./.github/workflows/package-repos.yml
+    with:
+      tags: v${{ needs.release.outputs.version }}
+    secrets:
+      PACKAGE_SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
+      PACKAGE_SIGNING_PASSPHRASE: ${{ secrets.PACKAGE_SIGNING_PASSPHRASE }}
