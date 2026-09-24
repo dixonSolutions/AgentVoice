@@ -30,7 +30,7 @@ import { addCommand } from './commands/add.js';
 import { localCommand } from './commands/local.js';
 import { setupCommand } from './commands/setup.js';
 import { pipeCommand, pipeOptions, PIPE_SWITCHES, PIPE_VALUE_FLAGS } from './commands/pipe.js';
-import { serviceInstallCommand } from './commands/serviceInstall.js';
+import { serviceInstallCommand, serviceUninstallCommand } from './commands/serviceInstall.js';
 import { statusCommand } from './commands/status.js';
 import { tokenCommand } from './commands/token.js';
 import { updateCommand, UPDATE_FLAGS } from './commands/update.js';
@@ -52,7 +52,9 @@ const USAGE = `
     run                    Boot the bridge in the foreground (the default)
     start | stop | restart Manage the background service (systemd, launchd,
                            or a Windows service)
-    service install        Install that service for this install
+    service install        Install that service for this install (a global npm
+                           or .deb/.rpm install already did)
+    service uninstall      Stop and remove it (run it before npm uninstall -g)
     logs [-n N] [-f]       Tail the service journal (or the session log file)
     logs --list            Session logs + voice transcripts on disk
     logs --transcripts     The newest voice transcript (--cat <file|latest> prints any)
@@ -214,9 +216,15 @@ async function dispatch(argv: string[]): Promise<void> {
 
     case 'service': {
       const [verb = '', ...serviceArgs] = args;
+      if (verb === 'uninstall') {
+        const parsed = parseArgs(serviceArgs);
+        rejectUnknown(parsed, ['dry-run']);
+        process.exitCode = await serviceUninstallCommand({ dryRun: parsed.switches.has('dry-run') });
+        return;
+      }
       if (verb !== 'install') {
         throw new UsageError(
-          `unknown service verb "${verb || '(none)'}" — the only one is: install`,
+          `unknown service verb "${verb || '(none)'}" — install or uninstall`,
         );
       }
       const parsed = parseArgs(serviceArgs);

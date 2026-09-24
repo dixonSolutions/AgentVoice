@@ -56,8 +56,12 @@ repo's system unit (`agentvoice.service`, `User=agentvoice`) only suits a
 dedicated server.
 
 - Ship a **user** unit at `/usr/lib/systemd/user/agentvoice.service`
-  (`ExecStart=/usr/bin/agentvoice run`), **not enabled**; post-install prints
-  `systemctl --user enable --now agentvoice` and `loginctl enable-linger`.
+  (`ExecStart=/usr/bin/agentvoice run`), **enabled out of the box**: on a fresh
+  install (not upgrades) post-install runs `systemctl --global enable`, so it
+  starts at every user's login, and starts it at once for the `SUDO_USER`
+  when their user manager is running. It listens on 127.0.0.1 only.
+  `AGENTVOICE_NO_SERVICE=1` skips it; pre-remove disables it again. Linger
+  (`loginctl enable-linger`) stays the user's choice and is suggested, not set.
 - Config stays per user in `~/.agentvoice` (`resolveHome()`).
 - A user unit's minimal `PATH` won't find `~/.local/bin/claude`: add a drop-in
   or make agent-CLI discovery independent of `PATH`.

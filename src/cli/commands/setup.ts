@@ -31,7 +31,7 @@ import { Prompter } from '../prompt.js';
 import { addCommand } from './add.js';
 import { serviceInstallCommand } from './serviceInstall.js';
 import { serviceCommand } from './service.js';
-import { describeUnit, detectUnit } from '../service.js';
+import { describeUnit, detectUnit, readUnitState } from '../service.js';
 
 export interface SetupOptions {
   /** Take every default without asking. */
@@ -65,6 +65,21 @@ const HOSTING_CHOICES = [
 function installedAgent(id: AgentBinId): string | null {
   const spec = AGENT_BIN_SPECS[id];
   return createBinResolver(spec).resolvedPath() ?? whichSync(spec.fallback);
+}
+
+/**
+ * "Set to run" across systemd, launchd and Windows. For launchd, readUnitState
+ * reports `installed` when the plist exists but is not bootstrapped — it still
+ * starts at login (RunAtLoad), e.g. after `agentvoice stop`.
+ */
+const ENABLED_STATES = new Set(['enabled', 'enabled-runtime', 'linked', 'linked-runtime', 'static', 'loaded', 'installed', 'auto']);
+
+/** Is a service installed *and* set to run (enabled) or running right now? */
+async function serviceIsLive(): Promise<boolean> {
+  const unit = await detectUnit();
+  if (unit.scope === 'none') return false;
+  const state = await readUnitState(unit);
+  return state?.activeState === 'active' || ENABLED_STATES.has(state?.enabled ?? '');
 }
 
 function step(n: number, total: number, title: string): void {
@@ -142,10 +157,20 @@ export async function setupCommand(opts: SetupOptions): Promise<number> {
 
     // ── 1. The one up-front question ──────────────────────────────────────
     const serviceSupported = process.platform !== 'linux' || ran(await capture('systemctl', ['--user', '--version']));
+    // A global npm install or a .deb/.rpm has usually installed the service
+    // already; then the question is whether to keep it (and set up hosting).
+    // "Has a service" means one that runs — enabled or active. A packaged unit
+    // file alone (every .deb/.rpm ships one) that nobody enabled does not count.
+    const hasService = serviceSupported && (await serviceIsLive());
     const wantService =
       opts.service ??
       (serviceSupported
-        ? await ask.confirm('Install AgentVoice as a background service (starts at login, reachable from your phone)?', false)
+        ? await ask.confirm(
+            hasService
+              ? 'Keep AgentVoice running as a background service, and set up hosting for your phone?'
+              : 'Install AgentVoice as a background service (starts at login, reachable from your phone)?',
+            hasService,
+          )
         : false);
     if (wantService && !serviceSupported) {
       fail('no service manager on this host — continuing with project config only.');
@@ -245,7 +270,7 @@ export async function setupCommand(opts: SetupOptions): Promise<number> {
     // ── 3. Service ────────────────────────────────────────────────────────
     step(2, total, 'Background service');
     const existing = await detectUnit();
-    if (existing.scope !== 'none') {
+    if (existing.scope !== 'none' && (await serviceIsLive())) {
       // Re-running setup: keep the service you have (it may be hand-tuned) and
       // restart it so it boots with the config just written.
       say(`  ${dim(`${describeUnit(existing)} is already installed — restarting it with the new config`)}`);
