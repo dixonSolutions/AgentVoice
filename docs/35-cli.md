@@ -20,6 +20,8 @@ has — that behaviour is a published contract and nothing may take it back.
 | Command | What it does |
 | --- | --- |
 | `run` | Boot the bridge in the foreground. Seeds the home on first run. |
+| `local <path>` / `local --this-dir` | Throwaway bridge + web client with only that directory as the project; logs stream in the terminal; nothing saved. See [`local`](#local). |
+| `add <path>` / `add --this-dir` | Register a directory as a project, with name, description and aliases filled in. See [`add`](#add). |
 | `start` / `stop` / `restart` | Manage the background service — `agentvoice.service` (systemd), `com.agentvoice.bridge` (launchd) or `AgentVoice` (Windows). |
 | `service install [--now] [--force] [--dry-run]` | Install that service for this install — see [The service](#the-service). |
 | `logs [-n N] [-f]` | `journalctl` for a systemd unit. `-f` follows. Everywhere else (launchd, Windows, no service), the bridge's own session log. |
@@ -157,6 +159,61 @@ shadows the one you are developing, and a rebase is meaningless under
   nothing — `npm i -g` would install a second copy the service never runs.
 - **unknown** → refuses, says why, and explains how to reinstall into a mode
   that *can* be maintained.
+
+## `local`
+
+What cloning the repo and running it used to be for — trying AgentVoice on
+one directory — without the clone and without touching your real bridge:
+
+```bash
+cd ~/code/my-app && agentvoice local --this-dir     # or: agentvoice local ~/code/my-app
+agentvoice local --this-dir --open                  # and open the web client
+```
+
+It starts the backend and the web client on the first free loopback port from
+5190, with **only that directory** as a project, prints the URL and a pairing
+token, and streams the bridge's log in the terminal. Ctrl-C stops it.
+
+Nothing is saved: it runs from a fresh temporary home (0700) — its own
+`config.json`, database and `APP_TOKEN` — deleted on exit (`--keep` to keep it).
+Log files and transcripts are off; the terminal is the log. From your real home
+it borrows, read-only:
+
+- your settings (agent CLI, permission mode, speech…), layered over the
+  packaged defaults, with projects, discovery, hosting and port replaced
+  (`--fresh` for the packaged defaults alone);
+- your `.env` keys, loaded into the process environment only — never written to
+  the temporary home (`--no-keys` to skip). Its `APP_TOKEN`, port, TLS and
+  layout keys are never borrowed.
+
+The wake-word model is shared with the real home, so it is not re-downloaded.
+One side effect, printed in the banner: the agent CLI's `agent-voice` MCP entry
+points at the throwaway instance while it runs; your main bridge restores its
+own on its next voice turn.
+
+## `add`
+
+```bash
+cd ~/code/my-app && agentvoice add --this-dir
+agentvoice add ~/code/my-app --alias "the app, frontend" --description "Customer web app"
+agentvoice add --this-dir --dry-run      # show what would be registered
+```
+
+Registers a directory as a project, filled in from the directory itself:
+
+| Field | From, first match wins |
+| --- | --- |
+| name | `package.json` (scope dropped), `Cargo.toml`, `pyproject.toml`, `go.mod`, the git remote's repo name, the folder name — slugified |
+| description | the manifest's description, else the README's first real paragraph (badges, headings and code skipped; ≤ 200 chars) |
+| aliases | spoken forms of the folder, package and repo names, for speech-to-text |
+
+`--name`, `--description` and `--alias` override. The path or `--this-dir` is
+required — registering whatever directory a terminal happens to be in is an
+easy mistake. With the bridge running, the project goes in through its admin
+API and is live immediately; otherwise `config.json` is edited and the next
+start picks it up. A directory discovery already found is adopted (its details
+filled in) rather than duplicated; an already-registered one is reported and
+left alone unless `--force`.
 
 ## `migrate`
 

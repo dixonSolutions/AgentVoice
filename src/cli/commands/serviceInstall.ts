@@ -129,6 +129,9 @@ function writeIfChanged(path: string, content: string, force: boolean | undefine
 
 // ── Linux: systemd user unit ───────────────────────────────────────────────
 
+/** The user unit a .deb / .rpm installs (packaging/agentvoice.user.service). */
+const PACKAGED_USER_UNIT = '/usr/lib/systemd/user/agentvoice.service';
+
 function userUnitPath(): string {
   const base = process.env['XDG_CONFIG_HOME']?.trim() || join(homedir(), '.config');
   return join(base, 'systemd', 'user', SERVICE_UNIT);
@@ -165,6 +168,26 @@ async function installSystemd(home: string, opts: ServiceInstallOptions): Promis
         '  Run the bridge in the foreground instead:  agentvoice run',
     );
     return 1;
+  }
+
+  // A .deb / .rpm already ships the unit (/usr/lib/systemd/user); writing a
+  // second copy into ~/.config would shadow it and miss the package's updates.
+  // Enabling it is the whole job.
+  if (detectInstallMode().mode === 'system' && existsSync(PACKAGED_USER_UNIT) && !existsSync(userUnitPath())) {
+    if (opts.dryRun) {
+      say(`${yellow('dry run')} — would enable the packaged unit ${PACKAGED_USER_UNIT}`);
+      return 0;
+    }
+    if (!opts.now) {
+      note(`  ${bold('The package ships the unit already.')} Enable and start it:`);
+      note(`    systemctl --user enable --now ${SERVICE_UNIT}`);
+      return 0;
+    }
+    const enable = await passthrough('systemctl', ['--user', 'enable', '--now', SERVICE_UNIT]);
+    if (enable !== 0) return enable;
+    say(`${green('started')}  ${SERVICE_UNIT} ${dim('(packaged unit)')}`);
+    await offerLinger();
+    return 0;
   }
 
   const path = userUnitPath();

@@ -144,6 +144,8 @@ export function addProject(input: AddProjectInput): ProjectAdminView {
 
 export interface UpdateProjectInput {
   name: string;
+  /** Take a discovered entry over: it becomes hand-owned (`discovered: false`). */
+  adopt?: boolean;
   path?: string;
   description?: string | null;
   aliases?: string[];
@@ -171,7 +173,7 @@ export function updateProject(input: UpdateProjectInput): ProjectAdminView {
       input.description !== undefined ? (input.description ?? undefined) : existing.description,
     aliases: input.aliases ?? existing.aliases,
     enabled: input.enabled ?? existing.enabled,
-    discovered: existing.discovered,
+    discovered: input.adopt ? false : existing.discovered,
     allowExternalSessions: input.allowExternalSessions ?? existing.allowExternalSessions,
     externalMailbox: input.externalMailbox ?? existing.externalMailbox,
   };

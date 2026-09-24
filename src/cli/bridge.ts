@@ -98,17 +98,24 @@ export interface Probe {
   foreign: boolean;
 }
 
-/** GET against the local bridge. Rejects on a network error, never on a status. */
-function get(
+/** A request to the local bridge. Rejects on a network error, never on a status. */
+function send(
   url: string,
   timeoutMs: number,
   headers: Record<string, string> = {},
+  method = 'GET',
+  body?: string,
 ): Promise<{ status: number; text: string }> {
   const https = url.startsWith('https:');
   return new Promise((settle, reject) => {
     const req = (https ? httpsRequest : httpRequest)(
       url,
-      { timeout: timeoutMs, headers, ...(https ? { rejectUnauthorized: false } : {}) },
+      {
+        method,
+        timeout: timeoutMs,
+        headers: body === undefined ? headers : { ...headers, 'content-type': 'application/json' },
+        ...(https ? { rejectUnauthorized: false } : {}),
+      },
       (res) => {
         let text = '';
         res.setEncoding('utf8');
@@ -120,7 +127,7 @@ function get(
     );
     req.on('timeout', () => req.destroy(new Error(`timed out after ${timeoutMs}ms`)));
     req.on('error', reject);
-    req.end();
+    req.end(body);
   });
 }
 
@@ -135,13 +142,28 @@ export async function bridgeApi<T>(
   endpoint: Endpoint,
   path: string,
   timeoutMs = 15_000,
+  init: { method?: string; body?: unknown } = {},
 ): Promise<{ ok: true; body: T } | { ok: false; error: string }> {
   const token = envValue(home, 'APP_TOKEN')?.trim();
   if (!token) return { ok: false, error: 'no APP_TOKEN to authenticate with' };
   try {
-    const res = await get(`${endpoint.url}${path}`, timeoutMs, { authorization: `Bearer ${token}` });
+    const res = await send(
+      `${endpoint.url}${path}`,
+      timeoutMs,
+      { authorization: `Bearer ${token}` },
+      init.method ?? 'GET',
+      init.body === undefined ? undefined : JSON.stringify(init.body),
+    );
     if (res.status === 401) return { ok: false, error: 'the bridge rejected this home\'s APP_TOKEN (restart it after rotating)' };
-    if (res.status < 200 || res.status >= 300) return { ok: false, error: `HTTP ${res.status}` };
+    if (res.status < 200 || res.status >= 300) {
+      let detail = '';
+      try {
+        detail = String((JSON.parse(res.text) as { error?: unknown }).error ?? '');
+      } catch {
+        /* not JSON */
+      }
+      return { ok: false, error: `HTTP ${res.status}${detail ? ` — ${detail}` : ''}` };
+    }
     return { ok: true, body: JSON.parse(res.text) as T };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
@@ -152,7 +174,7 @@ export async function probeHealth(endpoint: Endpoint, timeoutMs = 4000): Promise
   const url = `${endpoint.url}/healthz`;
 
   try {
-    const response = await get(url, timeoutMs);
+    const response = await send(url, timeoutMs);
 
     if (response.status < 200 || response.status >= 300) {
       return {
