@@ -105,6 +105,11 @@ jobs:
       # npm provenance: the publish is signed with a Sigstore attestation tying
       # the tarball to this workflow run and this commit.
       id-token: write
+    # The packages job builds from the tag this job pushes, and only when it
+    # pushed one.
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      published: ${{ steps.shipped.outputs.already == 'false' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -299,9 +304,12 @@ jobs:
   # Release the npm tarball is. One job per architecture: better-sqlite3's
   # binding is ABI- and arch-bound and the bundled Node has to match it, which
   # is also why the runtime is fetched here rather than depended on.
+  #
+  # Only when the release job actually published: a merge with no version bump
+  # would otherwise rebuild and re-upload onto the last release.
   packages:
     name: deb + rpm (${{ matrix.arch }})
-    if: github.event_name != 'pull_request'
+    if: github.event_name != 'pull_request' && needs.release.outputs.published == 'true'
     needs: release
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -320,7 +328,12 @@ jobs:
             runner: ubuntu-24.04-arm
             node_arch: arm64
     steps:
+      # The release tag, not github.sha: a workflow_dispatch bump commits the
+      # new version after this run started, so github.sha still carries the old
+      # one and the packages would be built — and attached — as that.
       - uses: actions/checkout@v5
+        with:
+          ref: v${{ needs.release.outputs.version }}
 
       - uses: actions/setup-node@v5
         with:
