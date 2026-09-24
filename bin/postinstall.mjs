@@ -77,7 +77,9 @@ try {
   // behind their back. A crashed (failed) or enabled-but-stopped service is
   // restarted — picking up a fix is what the update is for.
   const ENABLED = new Set(['enabled', 'enabled-runtime', 'linked', 'linked-runtime', 'static', 'loaded', 'installed', 'auto']);
-  const crashedOrStarting = /failed|activating|auto-restart/.test(service?.state ?? '');
+  // status reports "<ActiveState> (<SubState>)". Anchored: "deactivating"
+  // (stopping after a disable) must not read as "activating".
+  const crashedOrStarting = /^(failed|activating)\b|\(auto-restart\)/.test(service?.state ?? '');
   if (installed && !service.active && !crashedOrStarting && !ENABLED.has(service.enabled ?? '')) {
     console.log('AgentVoice updated. Its background service is stopped — start it with `agentvoice start` when you want it.');
     process.exit(0);
