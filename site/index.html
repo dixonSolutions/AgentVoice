@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>AgentVoice: talk to your coding agent from your phone</title>
+<meta name="description" content="AgentVoice is a self-hosted voice bridge. Drive Cursor, Codex, Claude Code or Codewhale by speech from your phone, with pluggable speech and networking. MIT licensed.">
+<meta name="theme-color" content="#15142a">
+<link rel="canonical" href="https://dixonsolutions.github.io/AgentVoice/">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="icon" href="assets/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="assets/icon-192.png">
+<link rel="stylesheet" href="assets/style.css">
+<script src="assets/site.js" defer></script>
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AgentVoice">
+<meta property="og:title" content="AgentVoice: talk to your coding agent from your phone">
+<meta property="og:description" content="Self-hosted voice bridge for Cursor, Codex, Claude Code and Codewhale. Pluggable speech in and out, pluggable networking, MIT licensed.">
+<meta property="og:url" content="https://dixonsolutions.github.io/AgentVoice/">
+<meta property="og:image" content="https://dixonsolutions.github.io/AgentVoice/assets/banner.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="360">
+<meta property="og:image:alt" content="AgentVoice: self-hosted voice bridge for your coding agent CLI">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="AgentVoice: talk to your coding agent from your phone">
+<meta name="twitter:description" content="Self-hosted voice bridge for Cursor, Codex, Claude Code and Codewhale. Pluggable speech in and out, pluggable networking, MIT licensed.">
+<meta name="twitter:image" content="https://dixonsolutions.github.io/AgentVoice/assets/banner.png">
+<meta name="twitter:image:alt" content="AgentVoice: self-hosted voice bridge for your coding agent CLI">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header">
+  <div class="wrap header-inner">
+    <a class="brand" href="./" aria-label="AgentVoice home">
+      <img src="assets/icon.svg" alt="" width="32" height="32">
+      <span>AgentVoice</span>
+    </a>
+    <nav aria-label="Primary">
+      <ul class="nav-list">
+        <li class="nav-opt"><a href="#how">How it works</a></li>
+        <li class="nav-opt"><a href="#features">Features</a></li>
+        <li><a href="#install">Install</a></li>
+        <li class="nav-opt"><a href="#cli">CLI</a></li>
+        <li><a class="nav-gh" href="https://github.com/dixonSolutions/AgentVoice">GitHub</a></li>
+      </ul>
+    </nav>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- Hero -->
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap">
+      <p class="eyebrow">Self-hosted &middot; open source &middot; MIT</p>
+      <h1 id="hero-title">Talk to your coding agent<br class="br-wide"> <span class="grad">from your phone.</span></h1>
+      <p class="lede">AgentVoice is a self-hosted voice bridge for the agent CLI you already use:
+        Cursor, Codex, Claude Code or Codewhale. Speak from the iPhone app or the web app, and the
+        agent on your own machine does the work in your repos.</p>
+      <div class="cta-row">
+        <a class="btn btn-primary" href="#install">Get started</a>
+        <a class="btn btn-ghost" href="https://github.com/dixonSolutions/AgentVoice">View source on GitHub</a>
+      </div>
+      <div class="hero-install">
+        <div class="code code-inline">
+          <pre><code>npm install -g @ratitisrad/agentvoice</code></pre>
+        </div>
+      </div>
+      <figure class="hero-banner">
+        <img src="assets/banner.png" width="1200" height="360"
+             alt="AgentVoice logo, a voice waveform ending in a terminal caret, beside the tagline: self-hosted voice bridge for your coding agent CLI. Works with Cursor, Codex, Claude Code and Codewhale.">
+      </figure>
+    </div>
+  </section>
+
+  <!-- How it works -->
+  <section id="how" class="section" aria-labelledby="how-title">
+    <div class="wrap">
+      <h2 id="how-title">How it works</h2>
+      <p class="section-lede">The bridge runs on your machine. Your agent CLI does the thinking.
+        It connects to the bridge through an MCP server called <code>agent-voice</code>, which gives it tools to
+        wait for your next request (<code>next_voice_turn</code>), answer out loud (<code>speak</code>) and finish a turn
+        (<code>done</code>). Coding work goes to worker agents started with <code>spawn_agent</code>.</p>
+
+      <ol class="flow" aria-label="Request flow">
+        <li class="flow-node">
+          <span class="flow-kicker">1 &middot; You</span>
+          <strong>Phone</strong>
+          <span>iPhone app with CallKit, or the PWA in any browser</span>
+        </li>
+        <li class="flow-link" aria-hidden="true"><span>speech, over your tunnel</span></li>
+        <li class="flow-node flow-node-accent">
+          <span class="flow-kicker">2 &middot; Your machine</span>
+          <strong>AgentVoice bridge</strong>
+          <span>Speech in and out, pairing token, MCP server <code>agent-voice</code></span>
+        </li>
+        <li class="flow-link" aria-hidden="true"><span>MCP tools</span></li>
+        <li class="flow-node">
+          <span class="flow-kicker">3 &middot; Reasoning</span>
+          <strong>Your agent CLI</strong>
+          <span><code>cursor-agent</code>, <code>codex</code>, <code>claude</code> or <code>codewhale</code></span>
+        </li>
+        <li class="flow-link" aria-hidden="true"><span><code>spawn_agent</code></span></li>
+        <li class="flow-node">
+          <span class="flow-kicker">4 &middot; Work</span>
+          <strong>Workers &rarr; your repos</strong>
+          <span>Worker agents edit, test and commit in your git projects</span>
+        </li>
+      </ol>
+
+      <div class="two-col">
+        <div class="card">
+          <h3>Turns <span class="tag">recommended</span></h3>
+          <p>Say the wake phrase, speak, pause. Voice activity detection closes the turn and the whole request
+            goes to the agent at once. This is the default.</p>
+        </div>
+        <div class="card">
+          <h3>Direct audio stream</h3>
+          <p>Stream audio continuously from the phone, or pipe PCM from any source. The bridge cuts it at
+            your pauses and hands each piece to the agent while you talk.</p>
+          <div class="code"><pre><code>arecord -f S16_LE -r 16000 -c 1 -t raw | agentvoice pipe</code></pre></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="section section-alt" aria-labelledby="features-title">
+    <div class="wrap">
+      <h2 id="features-title">Features</h2>
+      <ul class="grid" role="list">
+        <li class="feature">
+          <h3>Four agent CLIs</h3>
+          <p>Cursor (<code>cursor-agent</code>), Codex, Claude Code and Codewhale. Models, effort levels and speed tiers
+            are read from the CLI itself. If a CLI needs you to sign in, the app asks you right there.</p>
+        </li>
+        <li class="feature">
+          <h3>Speech in, your way</h3>
+          <p>Browser, a self-hosted Whisper container, Groq, OpenAI, Deepgram, Gemini, ElevenLabs, OpenRouter or
+            Amazon Transcribe, in an ordered fallback chain.</p>
+        </li>
+        <li class="feature">
+          <h3>Speech out, per language</h3>
+          <p>Browser, a local Kokoro voice, ElevenLabs, OpenAI, Gemini, Deepgram, Groq or Polly. A provider that can't
+            speak a language is skipped, so each reply goes to one that can.</p>
+        </li>
+        <li class="feature">
+          <h3>Reach it from anywhere</h3>
+          <p>Tailscale by default. Cloudflare Tunnel, ngrok, Azure Dev Tunnels, plain LAN or your own reverse proxy also
+            work, set up in one click from Config &rarr; Serve &rarr; Network.</p>
+        </li>
+        <li class="feature">
+          <h3>Self-hosted and private</h3>
+          <p>Everything runs on your host, and your phone pairs with a token. With Whisper and Kokoro,
+            audio never leaves your machine. A fresh install listens only on <code>127.0.0.1</code>.</p>
+        </li>
+        <li class="feature">
+          <h3>Throwaway instances</h3>
+          <p><code>agentvoice local --this-dir</code> starts a temporary bridge and web client for one directory,
+            with logs in the terminal. It saves nothing and leaves your main bridge alone.</p>
+        </li>
+        <li class="feature">
+          <h3>Project discovery</h3>
+          <p>Git repositories under <code>~/Projects</code> (or any folders you choose) are picked up automatically.
+            <code>agentvoice add --this-dir</code> registers anything else, filling in the details from the repo.</p>
+        </li>
+        <li class="feature">
+          <h3>Logs and transcripts</h3>
+          <p>Each bridge run writes a dated session log and each voice session writes a transcript, gzipped as they pile up.
+            <code>agentvoice logs -f</code> follows them live.</p>
+        </li>
+        <li class="feature">
+          <h3>Status and doctor</h3>
+          <p><code>agentvoice status</code> shows the install, version, service, port, health and public URL on one screen.
+            <code>agentvoice doctor</code> checks Node, config, the agent CLI and its sign-in, the port and hosting.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Install -->
+  <section id="install" class="section" aria-labelledby="install-title">
+    <div class="wrap">
+      <h2 id="install-title">Install</h2>
+      <p class="section-lede">You need <strong>one agent CLI on your <code>PATH</code></strong> (<code>cursor-agent</code>,
+        <code>codex</code>, <code>claude</code> or <code>codewhale</code>). The npm install also needs
+        <strong>Node.js 20 or newer</strong>. Every install method runs the same <code>agentvoice setup</code> wizard.</p>
+
+      <div class="tabs" data-tabs>
+        <section class="tab-panel" id="tab-npm" aria-labelledby="tab-npm-title">
+          <h3 id="tab-npm-title" class="tab-title">npm <span class="tab-sub">Linux, macOS, Windows</span></h3>
+          <ol class="steps">
+            <li>
+              <p><strong>Install the <code>agentvoice</code> command.</strong> The bridge and the built web app come in one
+                package, with no checkout and no build step.</p>
+              <div class="code"><pre><code>npm install -g @ratitisrad/agentvoice</code></pre></div>
+              <p class="note">A global install also registers and starts a background <em>user</em> service
+                (systemd on Linux, launchd on macOS), so the bridge is running at <code>http://127.0.0.1:5089</code>
+                right away and starts again at every login. It listens on this machine only until you set up hosting.
+                To skip the service, set <code>AGENTVOICE_NO_SERVICE=1</code> when you install:</p>
+              <div class="code"><pre><code>AGENTVOICE_NO_SERVICE=1 npm install -g @ratitisrad/agentvoice</code></pre></div>
+              <p class="note">On Windows, or if npm is set to ignore install scripts, run
+                <code>agentvoice service install --now</code> once instead. Before you uninstall the package,
+                run <code>agentvoice service uninstall</code>.</p>
+            </li>
+            <li>
+              <p><strong>Run the setup wizard.</strong> It asks which agent CLI to use and where your repos are, then sets up
+                hosting (Tailscale, Cloudflare Tunnel, ngrok, Dev Tunnels or LAN) so your phone can reach the bridge.</p>
+              <div class="code"><pre><code>agentvoice setup</code></pre></div>
+            </li>
+            <li>
+              <p><strong>Get your pairing token.</strong></p>
+              <div class="code"><pre><code>agentvoice token</code></pre></div>
+            </li>
+            <li>
+              <p><strong>Open the app and pair.</strong> Open <code>http://127.0.0.1:5089</code> on this machine, or the
+                public URL from <code>agentvoice status</code> on your phone. Paste the token when asked.</p>
+            </li>
+          </ol>
+          <p class="note">Your settings, database and logs live in <code>~/.agentvoice</code> (or <code>$AGENTVOICE_HOME</code>),
+            so updating the package never touches your data. <code>agentvoice update</code> installs the newest version.</p>
+        </section>
+
+        <section class="tab-panel" id="tab-apt" aria-labelledby="tab-apt-title">
+          <h3 id="tab-apt-title" class="tab-title">Debian / Ubuntu <span class="tab-sub">apt</span></h3>
+          <p>Signed amd64 and arm64 packages come from this site. After that, updates arrive with the rest of your
+            system through <code>apt upgrade</code>.</p>
+          <div class="code"><pre><code>sudo install -d -m 0755 /etc/apt/keyrings
+sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/agentvoice.asc -o /etc/apt/keyrings/agentvoice.asc
+sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/apt/agentvoice.sources -o /etc/apt/sources.list.d/agentvoice.sources
+sudo apt update &amp;&amp; sudo apt install agentvoice</code></pre></div>
+          <p>The package enables the background user service automatically. Next, run the wizard and get your pairing token:</p>
+          <div class="code"><pre><code>agentvoice setup
+agentvoice token</code></pre></div>
+          <p class="note">The signing key is trusted only for this repository (<code>signed-by</code>) and is never added
+            system-wide. <a href="agentvoice.asc">Public key</a> &middot; <a href="apt/agentvoice.sources">apt source file</a> &middot;
+            <a href="packages.html">published versions</a>.
+            To keep the bridge running after you log out, run <code>loginctl enable-linger "$USER"</code>.</p>
+        </section>
+
+        <section class="tab-panel" id="tab-dnf" aria-labelledby="tab-dnf-title">
+          <h3 id="tab-dnf-title" class="tab-title">Fedora / RHEL <span class="tab-sub">dnf</span></h3>
+          <p>Signed x86_64 and aarch64 packages. dnf checks both the repository metadata and every package, and asks you
+            to confirm the key's fingerprint the first time.</p>
+          <div class="code"><pre><code>sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/rpm/agentvoice.repo -o /etc/yum.repos.d/agentvoice.repo
+sudo dnf install agentvoice</code></pre></div>
+          <p>The package enables the background user service automatically. Next, run the wizard and get your pairing token:</p>
+          <div class="code"><pre><code>agentvoice setup
+agentvoice token</code></pre></div>
+          <p class="note"><a href="rpm/agentvoice.repo">Repo file</a> &middot; <a href="agentvoice.asc">public key</a> &middot;
+            <a href="packages.html">published versions</a>.
+            Updates come with <code>sudo dnf upgrade</code>. To keep the bridge running after you log out, run
+            <code>loginctl enable-linger "$USER"</code>.</p>
+        </section>
+
+        <section class="tab-panel" id="tab-source" aria-labelledby="tab-source-title">
+          <h3 id="tab-source-title" class="tab-title">From source <span class="tab-sub">git clone</span></h3>
+          <p>For hacking on AgentVoice itself. <code>scripts/setup.sh</code> installs dependencies, builds, and then
+            runs the same <code>agentvoice setup</code> wizard.</p>
+          <div class="code"><pre><code>git clone https://github.com/dixonSolutions/AgentVoice.git
+cd AgentVoice
+bash scripts/setup.sh</code></pre></div>
+          <p class="note">On Windows, run <code>.\scripts\setup.ps1</code> in an elevated PowerShell instead.
+            Already have a clone with its own config? Once you have the npm package,
+            <code>agentvoice migrate ~/Projects/AgentVoice</code> copies its <code>config.json</code> and keys
+            into <code>~/.agentvoice</code>.</p>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLI -->
+  <section id="cli" class="section section-alt" aria-labelledby="cli-title">
+    <div class="wrap">
+      <h2 id="cli-title">Next steps: the <code>agentvoice</code> command</h2>
+      <p class="section-lede">Running <code>agentvoice</code> with no command starts the bridge. The same command also
+        manages your install. Add <code>--help</code> after any command to see its options.</p>
+      <div class="table-scroll" tabindex="0" role="region" aria-label="CLI cheat-sheet">
+        <table class="cheats">
+          <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
+          <tbody>
+            <tr><td><code>agentvoice setup</code></td><td>Guided setup: keep or install the background service, agent CLI and projects, then hosting such as Tailscale</td></tr>
+            <tr><td><code>agentvoice status</code></td><td>Install, version, service, port, health and public URL on one screen (<code>--json</code> for scripts)</td></tr>
+            <tr><td><code>agentvoice doctor</code></td><td>Checks Node, the native binding, config, the agent CLI and its sign-in, the port, the service and hosting</td></tr>
+            <tr><td><code>agentvoice logs -f</code></td><td>Follows the service journal or session log (<code>--list</code> shows every log and transcript)</td></tr>
+            <tr><td><code>agentvoice add --this-dir</code></td><td>Registers the current directory as a project</td></tr>
+            <tr><td><code>agentvoice local --this-dir</code></td><td>Starts a throwaway bridge and web client for just this directory. Nothing is saved</td></tr>
+            <tr><td><code>agentvoice migrate &lt;path&gt;</code></td><td>Copies a clone's <code>config.json</code> and <code>.env</code> into this install's home</td></tr>
+            <tr><td><code>agentvoice service install</code></td><td>Installs or reinstalls the background service (systemd, launchd or a Windows service). <code>--now</code> also starts it</td></tr>
+            <tr><td><code>agentvoice service uninstall</code></td><td>Stops and removes the service, for example before <code>npm uninstall -g</code></td></tr>
+            <tr><td><code>agentvoice start | stop | restart</code></td><td>Controls the background service</td></tr>
+            <tr><td><code>agentvoice pipe --mic</code></td><td>Talks to the agent from this terminal, no phone needed</td></tr>
+            <tr><td><code>agentvoice update</code></td><td>Updates the install the way it was installed (npm, clone, or the apt / dnf command to run)</td></tr>
+            <tr><td><code>agentvoice token --new</code></td><td>Replaces the pairing token with a new one</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="more">Full reference: <a href="https://github.com/dixonSolutions/AgentVoice/blob/main/docs/35-cli.md">docs/35: the agentvoice CLI</a>.</p>
+    </div>
+  </section>
+
+  <!-- Links -->
+  <section id="links" class="section" aria-labelledby="links-title">
+    <div class="wrap">
+      <h2 id="links-title">Resources</h2>
+      <ul class="link-cards" role="list">
+        <li><a class="link-card" href="https://github.com/dixonSolutions/AgentVoice"><strong>GitHub</strong><span>Source, releases and discussion</span></a></li>
+        <li><a class="link-card" href="https://www.npmjs.com/package/@ratitisrad/agentvoice"><strong>npm</strong><span>@ratitisrad/agentvoice</span></a></li>
+        <li><a class="link-card" href="https://github.com/dixonSolutions/AgentVoice/tree/main/docs"><strong>Documentation</strong><span>Architecture, providers, hosting and the CLI</span></a></li>
+        <li><a class="link-card" href="https://github.com/dixonSolutions/AgentVoice/issues"><strong>Issues</strong><span>Report a bug or request a feature</span></a></li>
+        <li><a class="link-card" href="https://github.com/dixonSolutions/AgentVoice/blob/main/LICENSE"><strong>License</strong><span>MIT</span></a></li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap footer-inner">
+    <p class="footer-brand"><img src="assets/icon.svg" alt="" width="24" height="24"> AgentVoice</p>
+    <p>MIT licensed. This page uses no cookies or trackers.</p>
+    <nav aria-label="Footer">
+      <ul class="footer-links">
+        <li><a href="https://github.com/dixonSolutions/AgentVoice">GitHub</a></li>
+        <li><a href="https://www.npmjs.com/package/@ratitisrad/agentvoice">npm</a></li>
+        <li><a href="https://github.com/dixonSolutions/AgentVoice/tree/main/docs">Docs</a></li>
+        <li><a href="https://github.com/dixonSolutions/AgentVoice/blob/main/LICENSE">License</a></li>
+      </ul>
+    </nav>
+  </div>
+</footer>
+</body>
+</html>

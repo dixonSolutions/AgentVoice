@@ -3,10 +3,18 @@
 #   https://dixonsolutions.github.io/AgentVoice/apt   deb  …/apt stable main
 #   https://dixonsolutions.github.io/AgentVoice/rpm   /etc/yum.repos.d/agentvoice.repo
 #
-# Two ways in:
+# One Pages site holds both the AgentVoice landing page (site/ in this repo,
+# served at /) and the repositories (/apt, /rpm, /agentvoice.asc,
+# /packages.html). Every deploy replaces the whole site, so every run builds
+# both.
+#
+# Three ways in:
 #
 #   workflow_call      from npm-publish.yml, right after the deb/rpm job has
 #                      attached the new release's packages.
+#   push               to main, touching site/ — republish the landing page
+#                      (the latest release's packages are re-added, so the
+#                      repositories carry over unchanged).
 #   workflow_dispatch  by hand: republish, backfill older releases
 #                      (tags: "v0.1.1 v0.1.2"), or a dry run that builds and
 #                      verifies everything without deploying.
@@ -22,7 +30,9 @@
 # previous state is read back from the site instead (fetch-published.sh).
 #
 # Never publishes unsigned: no PACKAGE_SIGNING_KEY, or a key that cannot sign,
-# fails the run before anything is downloaded.
+# fails a release run before anything is downloaded. A push or manual run
+# without the key deploys the landing page alone — but only while no packages
+# are published yet, so a missing key can never wipe live repositories.
 name: package-repos
 
 on:
@@ -39,6 +49,12 @@ on:
         required: false
       PACKAGE_SIGNING_PASSPHRASE:
         required: false
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/package-repos.yml'
+      - 'packaging/repos/**'
   workflow_dispatch:
     inputs:
       tags:
@@ -88,8 +104,35 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends apt-utils createrepo-c rpm gnupg
 
+      # Without a key, only the landing page can go out — and only while there
+      # are no published packages it would otherwise drop from the site.
+      - name: Signing key available?
+        id: key
+        env:
+          HAS_KEY: ${{ secrets.PACKAGE_SIGNING_KEY != '' }}
+          # Release runs (workflow_call) and backfills always name tags; adding
+          # packages needs the key. (github.event_name is the caller's event
+          # inside a called workflow, so it cannot tell a release run apart.)
+          REQUESTED: ${{ inputs.tags }}
+        run: |
+          set -euo pipefail
+          if [ "${HAS_KEY}" = true ]; then echo "present=true" >> "$GITHUB_OUTPUT"; exit 0; fi
+          echo "present=false" >> "$GITHUB_OUTPUT"
+          if [ -n "$(echo "${REQUESTED}" | xargs)" ]; then
+            echo "::error::PACKAGE_SIGNING_KEY is not set — packages for ${REQUESTED} cannot be published. See docs/43-package-repos.md."
+            exit 1
+          fi
+          status="$(curl -s -o /dev/null -w '%{http_code}' "${SITE_URL}/manifest.txt?cb=${GITHUB_RUN_ID}" || true)"
+          if [ "${status}" = 200 ]; then
+            echo "::error::packages are published at ${SITE_URL} but PACKAGE_SIGNING_KEY is not set — refusing to deploy a site without them. See docs/43-package-repos.md."
+            exit 1
+          fi
+          echo "::warning::PACKAGE_SIGNING_KEY is not set — deploying the landing page only, no apt/dnf repositories (docs/43)."
+          mkdir -p "${RUNNER_TEMP}/site"
+
       # First, so a missing or broken key fails before ~300 MB is downloaded.
       - name: Import the signing key
+        if: steps.key.outputs.present == 'true'
         env:
           PACKAGE_SIGNING_KEY: ${{ secrets.PACKAGE_SIGNING_KEY }}
           PACKAGE_SIGNING_PASSPHRASE: ${{ secrets.PACKAGE_SIGNING_PASSPHRASE }}
@@ -97,6 +140,7 @@ jobs:
 
       - name: Resolve the releases to add
         id: tags
+        if: steps.key.outputs.present == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           # Via env, never interpolated into the script: it is free text.
@@ -119,6 +163,7 @@ jobs:
           echo "Adding: ${tags}"
 
       - name: Download their .deb and .rpm
+        if: steps.key.outputs.present == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAGS: ${{ steps.tags.outputs.tags }}
@@ -132,9 +177,11 @@ jobs:
           ls -la "${RUNNER_TEMP}/incoming"
 
       - name: Fetch the packages already published
+        if: steps.key.outputs.present == 'true'
         run: packaging/repos/fetch-published.sh "${SITE_URL}" "${RUNNER_TEMP}/site"
 
       - name: Build, sign and verify the repositories
+        if: steps.key.outputs.present == 'true'
         env:
           BASE_URL: ${{ env.SITE_URL }}
         run: packaging/repos/build-repos.sh "${RUNNER_TEMP}/site" "${RUNNER_TEMP}/incoming"
@@ -146,6 +193,19 @@ jobs:
         run: |
           gpgconf --kill gpg-agent || true
           rm -rf "${GNUPGHOME}"
+
+      # The landing page goes on top: index.html, 404.html, assets/… at the
+      # root. It must not ship anything under the repository paths.
+      - name: Add the landing page
+        run: |
+          set -euo pipefail
+          for reserved in apt rpm agentvoice.asc manifest.txt packages.html; do
+            if [ -e "site/${reserved}" ]; then
+              echo "::error::site/${reserved} would shadow the package repositories — rename it"
+              exit 1
+            fi
+          done
+          cp -a site/. "${RUNNER_TEMP}/site/"
 
       - name: Summary
         env:
@@ -160,7 +220,7 @@ jobs:
             echo
             echo '| file | size |'
             echo '| --- | --- |'
-            (cd "${RUNNER_TEMP}/site" && find apt/pool rpm/packages -type f -printf '| %p | %s |\n' | sort)
+            (cd "${RUNNER_TEMP}/site" && find apt/pool rpm/packages -type f -printf '| %p | %s |\n' 2>/dev/null | sort || true)
             echo
             echo "Site: ${SITE_URL}/"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -86,6 +86,15 @@ the repository as soon as it is added — it is the same package name.
 
 ## How publishing works
 
+The Pages site is shared: the AgentVoice landing page (`site/` in the repo) is
+served at `/`, the repositories at `/apt`, `/rpm`, `/agentvoice.asc` and
+`/packages.html`. A deploy replaces the whole site, so every run builds both —
+on a release, on a push to `main` that touches `site/` (or this workflow), and
+by hand. A push or manual run with no `PACKAGE_SIGNING_KEY` deploys the landing
+page alone, but only while nothing is published yet; once packages are live, a
+missing key fails the run rather than dropping them from the site. `site/` may
+not contain anything at those repository paths — the run checks.
+
 `.github/workflows/package-repos.yml`, one job:
 
 1. **Import the signing key** (`packaging/repos/import-signing-key.sh`) into a
@@ -113,7 +122,7 @@ the repository as soon as it is added — it is the same package name.
    - dnf: `createrepo_c` (gzip metadata, so EL8 can read it; no sqlite), and
      `repomd.xml` is signed as `repomd.xml.asc`;
    - writes `agentvoice.asc`, `agentvoice.repo`, `agentvoice.sources`,
-     `manifest.txt` and `index.html`.
+     `manifest.txt` and `packages.html` (the site root is the landing page in `site/`, laid over the repositories by the same workflow).
 5. **Verify with only the public key**: `gpgv` on `InRelease`, `Release.gpg`
    and `repomd.xml.asc`; `rpmkeys --checksig` in a scratch rpmdb on every RPM,
    requiring `signatures OK` (an unsigned RPM only says `digests OK`).

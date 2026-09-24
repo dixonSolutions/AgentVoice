@@ -243,7 +243,9 @@ SOURCES
 
 newest="${versions[${#versions[@]}-1]}"
 fingerprints="$(printf '%s<br>\n' "${keys[@]}")"
-cat > "${site}/index.html" <<HTML
+# packages.html, not index.html: the site root is the AgentVoice landing page
+# (site/ in the repo), which the workflow lays over this directory afterwards.
+cat > "${site}/packages.html" <<HTML
 <!doctype html>
 <html lang="en">
 <head>
@@ -260,7 +262,7 @@ cat > "${site}/index.html" <<HTML
 <body>
 <h1>AgentVoice package repositories</h1>
 <p>Signed apt and dnf repositories for
-<a href="https://github.com/dixonSolutions/AgentVoice">AgentVoice</a>, amd64 and arm64.
+<a href="./">AgentVoice</a>, amd64 and arm64 (<a href="https://github.com/dixonSolutions/AgentVoice">source</a>).
 Newest version: <strong>${newest}</strong>. Published versions: ${versions[*]}.</p>
 
 <h2>Debian / Ubuntu (apt)</h2>
@@ -277,9 +279,9 @@ sudo dnf install agentvoice</code></pre>
 <p>Upgrades then arrive with <code>sudo dnf upgrade</code>. dnf asks you to confirm the key on first use.</p>
 
 <h2>After installing</h2>
-<pre><code>systemctl --user enable --now agentvoice
-loginctl enable-linger "\$USER"
-agentvoice status</code></pre>
+<p>The package enables AgentVoice as a user service out of the box. Then:</p>
+<pre><code>agentvoice setup      # agent CLI, projects, and hosting such as Tailscale
+loginctl enable-linger "\$USER"   # keep it running after you log out</code></pre>
 
 <h2>Signing key</h2>
 <p><a href="agentvoice.asc">agentvoice.asc</a> — fingerprint(s):<br>

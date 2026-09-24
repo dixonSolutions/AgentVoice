@@ -114,7 +114,8 @@ sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/rpm/agentvoice.repo 
 sudo dnf install agentvoice
 ```
 
-Then `systemctl --user enable --now agentvoice` and `loginctl enable-linger "$USER"`.
+Both enable AgentVoice as a background user service out of the box; then run
+`agentvoice setup`, and `loginctl enable-linger "$USER"` to keep it running after logout.
 See [docs/43](docs/43-package-repos.md) for details.
 
 ## The `agentvoice` command

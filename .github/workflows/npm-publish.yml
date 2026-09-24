@@ -282,8 +282,8 @@ jobs:
             AgentVoice v${{ steps.v.outputs.version }} is on npm.
 
             ```bash
-            npm install -g @ratitisrad/agentvoice     # then: agentvoice status
-            npx @ratitisrad/agentvoice                # or run it once
+            npm install -g @ratitisrad/agentvoice     # starts as a background service
+            agentvoice setup                          # agent CLI, projects, hosting
             ```
 
             Or install the .deb / .rpm attached below — they bundle Node, so
@@ -293,6 +293,8 @@ jobs:
             sudo apt install ./agentvoice_${{ steps.v.outputs.version }}_amd64.deb
             sudo dnf install ./agentvoice-${{ steps.v.outputs.version }}.x86_64.rpm
             ```
+
+            Both enable AgentVoice as a background user service out of the box.
 
             For upgrades through `apt upgrade` / `dnf upgrade`, add the
             signed repository instead: https://dixonsolutions.github.io/AgentVoice/
