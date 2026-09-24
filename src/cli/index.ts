@@ -18,6 +18,7 @@
 // src/ takes a child of it. See src/cli/silence.ts.
 import './silence.js';
 
+import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { detectInstallMode } from '../serve/installMode.js';
 import { parseArgs, rejectUnknown, intFlag, UsageError } from './args.js';
@@ -25,6 +26,8 @@ import { doctorCommand } from './commands/doctor.js';
 import { runCommand } from './commands/run.js';
 import { logsCommand, serviceCommand } from './commands/service.js';
 import { migrateCommand } from './commands/migrate.js';
+import { addCommand } from './commands/add.js';
+import { localCommand } from './commands/local.js';
 import { pipeCommand, pipeOptions, PIPE_SWITCHES, PIPE_VALUE_FLAGS } from './commands/pipe.js';
 import { serviceInstallCommand } from './commands/serviceInstall.js';
 import { statusCommand } from './commands/status.js';
@@ -49,6 +52,13 @@ const USAGE = `
     logs --list            Session logs + voice transcripts on disk
     logs --transcripts     The newest voice transcript (--cat <file|latest> prints any)
     pipe [--mic|--file F]  Stream audio to the voice agent (stdin by default)
+    local <path>|--this-dir
+                           Throwaway bridge + web client with only that directory
+                           as the project, logs in the terminal; nothing saved
+
+  ${bold('Projects')}
+    add <path>|--this-dir  Register a directory as a project (name, description
+                           and aliases filled in from package.json / README / git)
 
   ${bold('Looking after it')}
     status [--json]        Install, version, service, port and health at a glance
@@ -81,12 +91,21 @@ const USAGE = `
     --now                  Enable and start it straight away (service install)
     --force                Re-download even if present (prepare-vosk);
                            overwrite an existing unit (service install);
-                           replace existing files, backed up first (migrate)
+                           replace existing files, backed up first (migrate);
+                           replace a registered project's details (add)
     --stash                Stash local changes across a git update (update)
     --dry-run              Report what would happen, change nothing
-                           (update, service install, migrate)
+                           (update, service install, migrate, add)
     --branch <name>        Rebase onto origin/<name> (update, git installs)
     --to <dir>             Home to migrate into (migrate; default ~/.agentvoice)
+    --this-dir             Use the directory the command is run from (add, local)
+    --port N               Port for the throwaway bridge (local; default: first free from 5190)
+    --open                 Open the web client once it answers (local)
+    --no-keys              Do not borrow the real home's .env keys (local)
+    --fresh                Packaged default settings, not your home's (local)
+    --keep                 Keep the temporary home on exit (local)
+    --name, --description  Override what was detected (add)
+    --alias "a, b"         Extra spoken aliases, comma-separated (add)
     --with-data            Also copy data/state.db as a consistent snapshot (migrate)
 
   ${bold('Environment')}
@@ -249,6 +268,42 @@ async function dispatch(argv: string[]): Promise<void> {
       return;
     }
 
+    case 'local': {
+      const parsed = parseArgs(args, { valueFlags: ['port'] });
+      rejectUnknown(parsed, ['port', 'no-keys', 'fresh', 'keep', 'open', 'this-dir']);
+      const dir = projectDir('local', parsed);
+      const port = parsed.values.has('port') ? intFlag(parsed, 'port', 0) : undefined;
+      const code = await localCommand({
+        dir,
+        ...(port !== undefined ? { port } : {}),
+        noKeys: parsed.switches.has('no-keys'),
+        fresh: parsed.switches.has('fresh'),
+        keep: parsed.switches.has('keep'),
+        open: parsed.switches.has('open'),
+      });
+      // null: the bridge owns the process now (see `run`).
+      if (code !== null) process.exitCode = code;
+      return;
+    }
+
+    case 'add': {
+      const parsed = parseArgs(args, { valueFlags: ['name', 'description', 'alias'] });
+      rejectUnknown(parsed, ['name', 'description', 'alias', 'dry-run', 'force', 'this-dir']);
+      const dir = projectDir('add', parsed);
+      const name = parsed.values.get('name');
+      const description = parsed.values.get('description');
+      const alias = parsed.values.get('alias');
+      process.exitCode = await addCommand({
+        dir,
+        ...(name !== undefined ? { name } : {}),
+        ...(description !== undefined ? { description } : {}),
+        ...(alias !== undefined ? { aliases: alias.split(',') } : {}),
+        dryRun: parsed.switches.has('dry-run'),
+        force: parsed.switches.has('force'),
+      });
+      return;
+    }
+
     case 'migrate': {
       const parsed = parseArgs(args, { valueFlags: ['to'] });
       rejectUnknown(parsed, ['to', 'dry-run', 'force', 'with-data']);
@@ -297,6 +352,21 @@ async function dispatch(argv: string[]): Promise<void> {
     default:
       throw new UsageError(`unknown command "${command}"`);
   }
+}
+
+/**
+ * The project directory for `add` / `local`: a path, or `--this-dir` for the
+ * one the command is run from. Explicit on purpose — registering whatever
+ * directory a terminal happened to be in is an easy mistake to make.
+ */
+function projectDir(command: string, parsed: ReturnType<typeof parseArgs>): string {
+  const thisDir = parsed.switches.has('this-dir');
+  const [path, ...extra] = parsed.positionals;
+  if (extra.length) throw new UsageError(`${command} takes one path (got ${parsed.positionals.length})`);
+  if (thisDir && path) throw new UsageError(`${command}: give a path or --this-dir, not both`);
+  if (thisDir) return process.cwd();
+  if (path) return resolve(path);
+  throw new UsageError(`${command} needs a directory — a path, or --this-dir for ${process.cwd()}`);
 }
 
 async function versionCommand(): Promise<void> {

@@ -113,6 +113,8 @@ agentvoice pipe --mic      # talk to the agent from this terminal, no phone need
 agentvoice update          # rebase a clone, or npm-install a newer package
 agentvoice token --new     # rotate the pairing token
 agentvoice migrate <path>  # carry a clone's config + keys into this install
+agentvoice add --this-dir   # register the directory you are in as a project
+agentvoice local --this-dir # throwaway bridge + web client for just this directory, logs in the terminal
 agentvoice <command> --help   # just that command's options
 ```
 
