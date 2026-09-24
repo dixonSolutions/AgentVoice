@@ -1,7 +1,8 @@
 # 38 — System packages (.deb / .rpm)
 
-> Added: September 2026. **Implemented** through step 3 of the plan below —
-> see the status section at the bottom. Companion to
+> Added: September 2026. **Implemented** through step 4 of the plan below —
+> see the status section at the bottom; step 4, the signed apt / dnf
+> repositories, is [`43-package-repos.md`](./43-package-repos.md). Companion to
 > [`21-serve-self-hosting.md`](./21-serve-self-hosting.md) and
 > [`35-cli.md`](./35-cli.md).
 
@@ -110,7 +111,7 @@ dedicated server.
 
 ## Status — implemented September 2026
 
-Plan steps 1–3 shipped:
+Plan steps 1–4 shipped:
 
 1. **`http-proxy`** ([#59](https://github.com/dixonSolutions/AgentVoice/issues/59))
    is loaded lazily inside the dev-only proxy path, so a production install no
@@ -129,6 +130,13 @@ Plan steps 1–3 shipped:
    which the bridge serves in preference to the packaged copy.
 3. **nfpm .deb and .rpm** with a bundled Node, amd64 and arm64, built and
    attached to each GitHub Release by `.github/workflows/npm-publish.yml`.
+4. **Signed apt and dnf repositories** — self-hosted on GitHub Pages at
+   https://dixonsolutions.github.io/AgentVoice/, rebuilt and signed by
+   `.github/workflows/package-repos.yml` on every release, so the
+   `apt` / `dnf` upgrade commands the Serve page shows actually work. Setup,
+   the signing key and rotation: [`43-package-repos.md`](./43-package-repos.md).
+   (Self-hosted rather than Cloudsmith / packagecloud: no third-party account,
+   and the maintainer owns the key.)
 
 One more prerequisite turned up while testing the package, and it was worse
 than the `http-proxy` one: **`prompts/` was neither published nor resolvable
@@ -139,9 +147,6 @@ resolved from the bridge home first and the install root second.
 
 Not shipped:
 
-4. **A hosted signed apt / dnf repository.** It needs a signing key and hosting
-   that the maintainer owns; the packages are attached to each GitHub Release
-   and install with `apt install ./agentvoice_*.deb` in the meantime.
 5. Homebrew tap and AUR, which were optional in the plan.
 
 Open questions answered by the implementation: the target is developer laptops

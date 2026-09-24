@@ -92,6 +92,31 @@ The default configuration is local-only (the `local` hosting provider), uses Cod
 list is required. Requires **Node 20+** and one of the agent CLIs —
 `cursor-agent`, `codex`, `claude`, or `codewhale` — on your `PATH`.
 
+### Install from apt / dnf
+
+Signed repositories for amd64 and arm64 are published at
+https://dixonsolutions.github.io/AgentVoice/ — upgrades then arrive with the
+rest of your system (`apt upgrade` / `dnf upgrade`).
+
+**Debian / Ubuntu**
+
+```bash
+sudo install -d -m 0755 /etc/apt/keyrings
+sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/agentvoice.asc -o /etc/apt/keyrings/agentvoice.asc
+sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/apt/agentvoice.sources -o /etc/apt/sources.list.d/agentvoice.sources
+sudo apt update && sudo apt install agentvoice
+```
+
+**Fedora / RHEL**
+
+```bash
+sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/rpm/agentvoice.repo -o /etc/yum.repos.d/agentvoice.repo
+sudo dnf install agentvoice
+```
+
+Then `systemctl --user enable --now agentvoice` and `loginctl enable-linger "$USER"`.
+See [docs/43](docs/43-package-repos.md) for details.
+
 ## The `agentvoice` command
 
 Booting the bridge is only the default. The same command manages the install:
