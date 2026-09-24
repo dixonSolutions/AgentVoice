@@ -11,13 +11,28 @@ after(() => rmSync(scratch, { recursive: true, force: true }));
 
 const SECRET = 'sk-test-DO-NOT-PRINT-4f9a';
 
+type Write = typeof process.stdout.write;
+
+/**
+ * Capture the CLI's own writes, which are always strings. node:test reports
+ * results to its parent as buffers on these same streams, so those have to
+ * pass through — swallowing one makes a sibling test vanish from the run.
+ */
+function capture(real: Write, sink: (text: string) => void): Write {
+  return ((chunk: Parameters<Write>[0], ...rest: unknown[]) => {
+    if (typeof chunk !== 'string') return (real as (...args: unknown[]) => boolean)(chunk, ...rest);
+    sink(chunk);
+    return true;
+  }) as Write;
+}
+
 /** Run the command with stdout/stderr captured, so we can assert no secret leaks. */
 async function run(opts: Parameters<typeof migrateCommand>[0]): Promise<{ code: number; output: string }> {
   let output = '';
   const out = process.stdout.write.bind(process.stdout);
   const err = process.stderr.write.bind(process.stderr);
-  process.stdout.write = ((chunk: string | Uint8Array) => ((output += String(chunk)), true)) as typeof process.stdout.write;
-  process.stderr.write = ((chunk: string | Uint8Array) => ((output += String(chunk)), true)) as typeof process.stderr.write;
+  process.stdout.write = capture(out, (text) => (output += text));
+  process.stderr.write = capture(err, (text) => (output += text));
   try {
     return { code: await migrateCommand(opts), output };
   } finally {
@@ -60,6 +75,15 @@ test('transformConfig switches to serve, drops repoDir, absolutises project path
   assert.equal(out.settings.serve.repoDir, undefined);
   assert.deepEqual(out.projects.map((p: { path: string }) => p.path), ['/src/a', '/abs']);
   assert.throws(() => transformConfig('{ nope', '/src'));
+});
+
+test('transformConfig keeps the port the source listened on, not an unused serve port', () => {
+  // config.example.json's shape: test mode on 5089, a serve profile never used.
+  const cfg = transformConfig(
+    JSON.stringify({ settings: { runMode: 'test', runModes: { test: { backendPort: 5089 }, serve: { backendPort: 1234 } } } }),
+    '/src',
+  );
+  assert.equal(JSON.parse(cfg.text).settings.runModes.serve.backendPort, 5089);
 });
 
 test('migrate copies config + .env at 0600 and never prints a secret', async () => {
@@ -140,4 +164,17 @@ test('--with-data takes a consistent SQLite snapshot', async (t) => {
   const copy = new Database(join(to, 'data', 'state.db'), { readonly: true });
   assert.equal((copy.prepare('SELECT v FROM t').get() as { v: string }).v, 'kept');
   copy.close();
+});
+
+test('--with-data: a snapshot that fails writes nothing at all', async () => {
+  const src = source('five');
+  mkdirSync(join(src, 'data'), { recursive: true });
+  writeFileSync(join(src, 'data', 'state.db'), 'not a database');
+  const to = join(scratch, 'home-five');
+  const { code, output } = await run({ source: src, to, withData: true });
+  assert.equal(code, 1);
+  assert.ok(!existsSync(join(to, 'config.json')), 'config.json was replaced by a migration that failed');
+  assert.ok(!existsSync(join(to, '.env')), '.env was replaced by a migration that failed');
+  assert.ok(!existsSync(join(to, 'data', 'state.db')));
+  assert.ok(!output.includes(SECRET));
 });

@@ -187,10 +187,13 @@ What "safely" means here:
   `CONFIG_PATH`, `DB_PATH` and `settings.serve.repoDir` are left behind, since
   they pointed back into the source — two bridges must never share one
   database. A `test`-mode config is switched to `serve`, because an installed
-  package serves the PWA itself.
+  package serves the PWA itself — keeping the port it was already listening on,
+  so tunnels and paired phones still reach it.
 - **`--with-data` uses SQLite's online backup**, so the snapshot is consistent
-  even while the old bridge is running.
-- **An invalid `config.json` aborts before anything is written.**
+  even while the old bridge is running. It is taken before anything in the
+  target is touched, and moved into place last.
+- **An invalid `config.json`, or a snapshot that fails, aborts before anything
+  is written.**
 
 `APP_TOKEN` carries over, so paired phones keep working. Stop the old bridge
 before starting the new one if they share a port, and run the new one from

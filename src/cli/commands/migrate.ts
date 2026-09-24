@@ -22,7 +22,7 @@
  *   - --dry-run reports all of the above and writes nothing.
  */
 
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { bold, dim, fail, green, note, say, yellow } from '../out.js';
@@ -127,7 +127,10 @@ export function transformConfig(text: string, sourceDir: string): ConfigTransfor
   if (cfg.settings && cfg.settings.runMode !== 'serve') {
     cfg.settings.runMode = 'serve';
     cfg.settings.runModes ??= {};
-    const port = cfg.settings.runModes.serve?.backendPort ?? cfg.settings.runModes.test?.backendPort ?? 5089;
+    // Keep the port the source was actually listening on: this profile is not
+    // serve, so it is the test one. A serve port it never used would move the
+    // install away from the phones and tunnels still aimed at the old one.
+    const port = cfg.settings.runModes.test?.backendPort ?? cfg.settings.runModes.serve?.backendPort ?? 5089;
     cfg.settings.runModes.serve = { ...(cfg.settings.runModes.serve ?? {}), backendPort: port };
     changes.push(`runMode → serve (port ${port}) — an installed package serves the PWA itself`);
   }
@@ -176,6 +179,25 @@ function backup(path: string, mode: number): string {
   copyFileSync(path, dest);
   chmodSync(dest, mode);
   return dest;
+}
+
+/**
+ * SQLite's online backup into `dest`, not a file copy: consistent even while
+ * the source bridge is running and mid-write (WAL included). Leaves no partial
+ * file behind if it fails.
+ */
+async function snapshotDatabase(source: string, dest: string): Promise<void> {
+  const { default: Database } = await import('better-sqlite3');
+  const db = new Database(source, { readonly: true, fileMustExist: true });
+  try {
+    await db.backup(dest);
+    chmodSync(dest, 0o600);
+  } catch (err) {
+    rmSync(dest, { force: true });
+    throw err;
+  } finally {
+    db.close();
+  }
 }
 
 export async function migrateCommand(opts: MigrateOptions): Promise<number> {
@@ -283,6 +305,22 @@ export async function migrateCommand(opts: MigrateOptions): Promise<number> {
 
   // ── Write ────────────────────────────────────────────────────────────────
   mkdirSync(target, { recursive: true, mode: 0o700 });
+
+  // The snapshot is taken first, into a temp file: loading the native binding
+  // and reading the source database are the only copy steps that can fail, and
+  // they must not fail once config.json and .env have been replaced.
+  let snapshot: string | null = null;
+  if (copyData) {
+    mkdirSync(dirname(targets.db), { recursive: true, mode: 0o700 });
+    snapshot = `${targets.db}.migrate-${process.pid}`;
+    try {
+      await snapshotDatabase(dbSource, snapshot);
+    } catch (err) {
+      fail(`--with-data: could not read ${dbSource} — ${err instanceof Error ? err.message : String(err)}. Nothing was copied.`);
+      return 1;
+    }
+  }
+
   const backups: string[] = [];
   if (config) {
     if (existsSync(targets.config)) backups.push(backup(targets.config, 0o600));
@@ -292,21 +330,9 @@ export async function migrateCommand(opts: MigrateOptions): Promise<number> {
     if (existsSync(targets.env)) backups.push(backup(targets.env, 0o600));
     writeAtomic(targets.env, env.text, 0o600);
   }
-  if (copyData) {
-    mkdirSync(dirname(targets.db), { recursive: true, mode: 0o700 });
+  if (snapshot) {
     if (existsSync(targets.db)) backups.push(backup(targets.db, 0o600));
-    // SQLite's online backup, not a file copy: consistent even while the source
-    // bridge is running and mid-write (WAL included).
-    const { default: Database } = await import('better-sqlite3');
-    const db = new Database(dbSource, { readonly: true, fileMustExist: true });
-    try {
-      const tmp = `${targets.db}.migrate-${process.pid}`;
-      await db.backup(tmp);
-      chmodSync(tmp, 0o600);
-      renameSync(tmp, targets.db);
-    } finally {
-      db.close();
-    }
+    renameSync(snapshot, targets.db);
   }
 
   for (const path of backups) say(`  ${dim(`backup  ${path}`)}`);
