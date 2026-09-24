@@ -49,6 +49,12 @@ const ProjectUpdateSchema = z
     enabled: z.boolean().optional(),
     allowExternalSessions: z.boolean().optional(),
     externalMailbox: z.boolean().optional(),
+    /**
+     * `false` adopts a discovered entry: hand-owned from then on, so discovery
+     * stops managing it (`agentvoice add`). Only ever false — a hand-written
+     * entry cannot be handed to discovery through the API.
+     */
+    discovered: z.literal(false).optional(),
   })
   .strict();
 
@@ -157,6 +163,7 @@ export async function registerProjectsAdminRoutes(app: FastifyInstance): Promise
         enabled: patch.enabled,
         allowExternalSessions: patch.allowExternalSessions,
         externalMailbox: patch.externalMailbox,
+        ...(patch.discovered === false ? { adopt: true } : {}),
       });
       log.info({ name }, 'project updated via admin API');
       return { ok: true, project };

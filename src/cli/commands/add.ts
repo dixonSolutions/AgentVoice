@@ -124,7 +124,14 @@ export async function addCommand(opts: AddOptions): Promise<number> {
     const result = existing
       ? await bridgeApi(home, endpoint, `/api/admin/projects/${encodeURIComponent(existing.name)}`, 15_000, {
           method: 'PATCH',
-          body: { description: entry.description, aliases: entry.aliases, enabled: true },
+          // discovered:false adopts it, exactly as the offline path below does —
+          // otherwise discovery would drop it once the folder leaves a hot path.
+          body: {
+            description: entry.description,
+            aliases: entry.aliases,
+            enabled: true,
+            ...(existing.discovered ? { discovered: false } : {}),
+          },
         })
       : await bridgeApi(home, endpoint, '/api/admin/projects', 15_000, {
           method: 'POST',

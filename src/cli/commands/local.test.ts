@@ -48,3 +48,16 @@ test('deepMerge layers settings over defaults without dropping nested keys', () 
   );
   assert.deepEqual(merged, { settings: { voice: { wake: 'hey' }, agentClient: 'cursor', list: [3] } });
 });
+
+test('local refuses a missing directory before creating anything', async () => {
+  const { localCommand } = await import('./local.js');
+  let output = '';
+  const err = process.stderr.write.bind(process.stderr);
+  process.stderr.write = ((chunk: string | Uint8Array) => ((output += String(chunk)), true)) as typeof process.stderr.write;
+  try {
+    assert.equal(await localCommand({ dir: '/definitely/not/here/agentvoice' }), 1);
+  } finally {
+    process.stderr.write = err;
+  }
+  assert.match(output, /not a directory/);
+});

@@ -26,7 +26,7 @@
  * address. Your main bridge puts its own address back on its next voice turn.
  */
 
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -165,6 +165,10 @@ function whenHealthy(url: string, then: () => void, tries = 60): void {
 }
 
 export async function localCommand(opts: LocalOptions): Promise<number | null> {
+  if (!existsSync(opts.dir) || !statSync(opts.dir).isDirectory()) {
+    fail(`${opts.dir} is not a directory — nothing was started.`);
+    return 1;
+  }
   const project = await detectProjectDetails(opts.dir);
 
   const port = opts.port ?? (await freePort(5190));
@@ -212,10 +216,12 @@ export async function localCommand(opts: LocalOptions): Promise<number | null> {
       borrowed.push(key);
     }
   }
+  // Anything in the shell that describes *a* bridge would win over the
+  // throwaway one (dotenv never overrides the environment): a token, a port,
+  // another config or database, TLS, a log dir — or NODE_ENV=development,
+  // which forces the test profile onto a port the banner never printed.
+  for (const key of NOT_BORROWED) delete process.env[key];
   process.env['AGENTVOICE_HOME'] = home;
-  // An APP_TOKEN in the shell would win over the throwaway one.
-  delete process.env['APP_TOKEN'];
-  delete process.env['PORT'];
 
   const url = `http://127.0.0.1:${port}`;
   const client = (((base['settings'] as Json | undefined) ?? {})['agentClient'] as string | undefined) ?? 'cursor';
