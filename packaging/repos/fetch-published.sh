@@ -14,7 +14,8 @@
 #                         that silently lost every older version.
 #
 # Old RPMs come back already signed, so they are not re-signed (and their bytes
-# do not change) on every release.
+# do not change) on every release — only when the signing key has changed under
+# them (build-repos.sh, step 3).
 
 set -euo pipefail
 

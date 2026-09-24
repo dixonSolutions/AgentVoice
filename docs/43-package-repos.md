@@ -101,8 +101,9 @@ the repository as soon as it is added — it is the same package name.
    the run, because carrying on would publish a repository that silently lost
    every older version.
 4. **Build** (`packaging/repos/build-repos.sh`):
-   - new RPMs are signed with `rpmsign` (already-published ones are not
-     touched, so their bytes never change);
+   - new RPMs are signed with `rpmsign`, and so is any already-published one
+     the current key no longer verifies (a leftover from a previous key, see
+     "Key rotation"); the rest are not touched, so their bytes never change;
    - keep the newest **3** versions (`KEEP_VERSIONS`), then drop the oldest
      until the packages fit **900 MB** (`SITE_BUDGET_MB`) — the newest version
      is never dropped;
@@ -261,6 +262,10 @@ key. Existing users keep working on the old key while they pick up the new
 file; after a release or two, set the secret to the new key alone. On
 **compromise**, skip the overlap: publish the new key alone, publish the
 revocation certificate, and tell users to re-run the key download.
+
+Either way, the first publish that no longer carries the old key signs the
+packages still holding its signature again with the new one, so nothing the
+site serves depends on a key that is not published any more.
 
 ## Testing it locally
 

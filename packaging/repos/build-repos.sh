@@ -73,6 +73,11 @@ pool="${site}/apt/pool/${component}/${package:0:1}/${package}"
 rpms="${site}/rpm/packages"
 mkdir -p "${pool}" "${rpms}"
 
+# Scratch space for the signature checks in steps 3 and 7: throwaway keyrings
+# that must not end up in GNUPGHOME or on the site.
+scratch="$(mktemp -d)"
+trap 'rm -rf "${scratch}"' EXIT
+
 # ── 1. Add the incoming packages ──────────────────────────────────────────────
 shopt -s nullglob
 added=0
@@ -91,9 +96,10 @@ for rpmfile in "${incoming}"/*.rpm; do
   [[ "${name}" == "${package}" ]] || fail "$(basename "${rpmfile}"): package is '${name}', expected '${package}'"
   dest="${rpms}/$(basename "${rpmfile}")"
   cp -f "${rpmfile}" "${dest}"
-  # Only newly added RPMs are signed: the ones already published were signed
-  # when they arrived, and re-signing would change their bytes (the signature
-  # carries a timestamp) for no reason.
+  # Only newly added RPMs are signed here: the ones already published were
+  # signed when they arrived, and re-signing would change their bytes (the
+  # signature carries a timestamp) for no reason. Step 3 signs the ones the
+  # current key no longer verifies.
   # Output captured: rpmsign warns about GPG_TTY on every call in CI, which is
   # noise unless the signing actually failed.
   if ! out="$(rpmsign --define "_gpg_name ${keys[0]}" --define "_gpg_path ${GNUPGHOME}" \
@@ -147,7 +153,35 @@ done
   || fail "the newest version alone is $(packages_mb) MB, over the ${budget_mb} MB budget (GitHub Pages sites max out at 1 GB)"
 echo "publishing versions: ${versions[*]} ($(packages_mb) MB)"
 
-# ── 3. apt metadata ───────────────────────────────────────────────────────────
+# ── 3. Re-sign the RPMs the current key does not verify ──────────────────────
+# Rotation (docs/43): packages published under an earlier key come back from
+# fetch-published.sh still signed by it, and once that key leaves
+# PACKAGE_SIGNING_KEY nothing accepts that signature any more — not a client,
+# not step 7 — so they are signed again with the current key. This is what
+# lets a rotation without an overlap, the one a compromise calls for, publish
+# at all. While the old key is still in the secret they verify as they are and
+# their bytes stay untouched. Before step 5, so the repodata records the bytes
+# that are actually published.
+gpg --batch --armor --export "${keys[@]}" > "${scratch}/signing-keys.asc"
+rpmkeys --dbpath "${scratch}/signing-rpmdb" --initdb 2>/dev/null || true
+rpmkeys --dbpath "${scratch}/signing-rpmdb" --import "${scratch}/signing-keys.asc"
+for f in "${rpms}"/*.rpm; do
+  out="$(rpmkeys --dbpath "${scratch}/signing-rpmdb" --checksig "${f}" 2>&1)" || true
+  if [[ "${out}" != *"signatures OK"* ]]; then
+    # Only the signature may be stale. A package whose own digests do not add
+    # up came back damaged, and signing it again would paper over that.
+    out="$(rpmkeys --dbpath "${scratch}/signing-rpmdb" --checksig --nosignature "${f}" 2>&1)" || true
+    [[ "${out}" == *"digests OK"* ]] || fail "$(basename "${f}") is damaged: ${out}"
+    # --addsign replaces the signature already there, it does not add a second.
+    if ! out="$(rpmsign --define "_gpg_name ${keys[0]}" --define "_gpg_path ${GNUPGHOME}" \
+        --addsign "${f}" 2>&1)"; then
+      fail "rpmsign failed for $(basename "${f}"): ${out}"
+    fi
+    echo "re-signed $(basename "${f}") with ${keys[0]}"
+  fi
+done
+
+# ── 4. apt metadata ───────────────────────────────────────────────────────────
 dists="${site}/apt/dists/${suite}"
 rm -rf "${site}/apt/dists"
 for arch in "${deb_arches[@]}"; do
@@ -176,7 +210,7 @@ gpg --batch --yes --digest-algo SHA512 "${signer_args[@]}" \
 gpg --batch --yes --digest-algo SHA512 "${signer_args[@]}" \
   --armor --detach-sign --output "${dists}/Release.gpg" "${dists}/Release"
 
-# ── 4. dnf metadata ───────────────────────────────────────────────────────────
+# ── 5. dnf metadata ───────────────────────────────────────────────────────────
 # gz, not the zstd newer createrepo_c defaults to, so EL8's dnf can read it.
 # No sqlite databases: dnf never reads them and they only cost Pages space.
 rm -rf "${site}/rpm/repodata"
@@ -184,7 +218,7 @@ createrepo_c --quiet --no-database --general-compress-type=gz "${site}/rpm" >/de
 gpg --batch --yes --digest-algo SHA512 "${signer_args[@]}" \
   --armor --detach-sign --output "${site}/rpm/repodata/repomd.xml.asc" "${site}/rpm/repodata/repomd.xml"
 
-# ── 5. Key, client config, landing page ───────────────────────────────────────
+# ── 6. Key, client config, landing page ───────────────────────────────────────
 gpg --batch --armor --export "${keys[@]}" > "${site}/agentvoice.asc"
 
 cat > "${site}/rpm/${package}.repo" <<REPO
@@ -258,22 +292,20 @@ HTML
 (cd "${site}" && find apt/pool rpm/packages -type f \( -name '*.deb' -o -name '*.rpm' \) \
   | sort | xargs -r sha256sum) > "${site}/manifest.txt"
 
-# ── 6. Verify what is about to be published, with only the public key ────────
-verify="$(mktemp -d)"
-trap 'rm -rf "${verify}"' EXIT
-gpg --batch --quiet --dearmor --output "${verify}/keyring.gpg" < "${site}/agentvoice.asc"
-gpgv --quiet --keyring "${verify}/keyring.gpg" "${dists}/InRelease" 2>/dev/null \
+# ── 7. Verify what is about to be published, with only the public key ────────
+gpg --batch --quiet --dearmor --output "${scratch}/keyring.gpg" < "${site}/agentvoice.asc"
+gpgv --quiet --keyring "${scratch}/keyring.gpg" "${dists}/InRelease" 2>/dev/null \
   || fail "InRelease does not verify against agentvoice.asc"
-gpgv --quiet --keyring "${verify}/keyring.gpg" "${dists}/Release.gpg" "${dists}/Release" 2>/dev/null \
+gpgv --quiet --keyring "${scratch}/keyring.gpg" "${dists}/Release.gpg" "${dists}/Release" 2>/dev/null \
   || fail "Release.gpg does not verify against agentvoice.asc"
-gpgv --quiet --keyring "${verify}/keyring.gpg" \
+gpgv --quiet --keyring "${scratch}/keyring.gpg" \
   "${site}/rpm/repodata/repomd.xml.asc" "${site}/rpm/repodata/repomd.xml" 2>/dev/null \
   || fail "repomd.xml.asc does not verify against agentvoice.asc"
 
-rpmkeys --dbpath "${verify}/rpmdb" --initdb 2>/dev/null || true
-rpmkeys --dbpath "${verify}/rpmdb" --import "${site}/agentvoice.asc"
+rpmkeys --dbpath "${scratch}/rpmdb" --initdb 2>/dev/null || true
+rpmkeys --dbpath "${scratch}/rpmdb" --import "${site}/agentvoice.asc"
 for f in "${rpms}"/*.rpm; do
-  out="$(rpmkeys --dbpath "${verify}/rpmdb" --checksig "${f}" 2>&1)" || fail "$(basename "${f}"): ${out}"
+  out="$(rpmkeys --dbpath "${scratch}/rpmdb" --checksig "${f}" 2>&1)" || fail "$(basename "${f}"): ${out}"
   [[ "${out}" == *"signatures OK"* ]] || fail "$(basename "${f}") is not signed by the published key: ${out}"
 done
 
