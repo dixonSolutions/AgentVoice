@@ -103,6 +103,8 @@ export function link(home: string, name: string): void {
 export function seedConfig(home: string): boolean {
   const dest = join(home, 'config.json');
   if (existsSync(dest)) return false;
+  // `setup` and `add` seed without `run` having created the home first.
+  mkdirSync(home, { recursive: true, mode: 0o700 });
 
   const example = join(packageRoot(), 'config.example.json');
   if (!existsSync(example)) {
@@ -123,7 +125,10 @@ export function seedConfig(home: string): boolean {
     cfg.settings.runModes ??= {};
     cfg.settings.runModes.serve = {
       ...(cfg.settings.runModes.serve ?? {}),
-      backendPort: Number(process.env['PORT']) || cfg.settings.runModes.serve?.backendPort || 5089,
+      // The example's serve port is for a hosted clone behind a proxy; an
+      // installed package listens where the docs say first run does — the
+      // test profile's loopback port (5089).
+      backendPort: Number(process.env['PORT']) || cfg.settings.runModes.test?.backendPort || 5089,
     };
     // The example's placeholder hostname is worse than nothing here.
     delete cfg.settings.runModes.serve.publicBaseUrl;
@@ -141,6 +146,7 @@ export function envPath(home: string): string {
 /** Mint an APP_TOKEN into `<home>/.env` unless one already exists. */
 export function seedEnv(home: string): string | null {
   const dest = envPath(home);
+  mkdirSync(home, { recursive: true, mode: 0o700 });
   const existing = existsSync(dest) ? readFileSync(dest, 'utf8') : '';
 
   // An APP_TOKEN already in the environment wins — nothing to generate.

@@ -28,6 +28,7 @@ import { logsCommand, serviceCommand } from './commands/service.js';
 import { migrateCommand } from './commands/migrate.js';
 import { addCommand } from './commands/add.js';
 import { localCommand } from './commands/local.js';
+import { setupCommand } from './commands/setup.js';
 import { pipeCommand, pipeOptions, PIPE_SWITCHES, PIPE_VALUE_FLAGS } from './commands/pipe.js';
 import { serviceInstallCommand } from './commands/serviceInstall.js';
 import { statusCommand } from './commands/status.js';
@@ -42,6 +43,10 @@ const USAGE = `
 
   ${bold('Usage')}
     agentvoice [command] [options]
+
+  ${bold('Getting started')}
+    setup                  Guided setup: agent CLI and projects, then (if you want
+                           it) a background service and hosting such as Tailscale
 
   ${bold('Running the bridge')}
     run                    Boot the bridge in the foreground (the default)
@@ -98,6 +103,12 @@ const USAGE = `
                            (update, service install, migrate, add)
     --branch <name>        Rebase onto origin/<name> (update, git installs)
     --to <dir>             Home to migrate into (migrate; default ~/.agentvoice)
+    --yes                  Take every default without asking (setup)
+    --service, --no-service
+                           Answer "install a background service?" (setup)
+    --hosting <id>         tailscale, cloudflare, ngrok, devtunnel, lan or none (setup)
+    --agent <id>           cursor, codex, claude-code or codewhale (setup)
+    --projects-dir <path>  Folder holding your git repos (setup)
     --this-dir             Use the directory the command is run from (add, local)
     --port N               Port for the throwaway bridge (local; default: first free from 5190)
     --open                 Open the web client once it answers (local)
@@ -265,6 +276,26 @@ async function dispatch(argv: string[]): Promise<void> {
       const parsed = parseArgs(args, { valueFlags: ['branch'] });
       rejectUnknown(parsed, UPDATE_FLAGS);
       process.exitCode = await updateCommand(parsed);
+      return;
+    }
+
+    case 'setup': {
+      const parsed = parseArgs(args, { valueFlags: ['hosting', 'agent', 'projects-dir'], aliases: { y: 'yes' } });
+      rejectUnknown(parsed, ['yes', 'service', 'no-service', 'hosting', 'agent', 'projects-dir']);
+      if (parsed.switches.has('service') && parsed.switches.has('no-service')) {
+        throw new UsageError('setup: --service or --no-service, not both');
+      }
+      const hosting = parsed.values.get('hosting');
+      const agent = parsed.values.get('agent');
+      const projectsDir = parsed.values.get('projects-dir');
+      process.exitCode = await setupCommand({
+        yes: parsed.switches.has('yes'),
+        ...(parsed.switches.has('service') ? { service: true } : {}),
+        ...(parsed.switches.has('no-service') ? { service: false } : {}),
+        ...(hosting !== undefined ? { hosting } : {}),
+        ...(agent !== undefined ? { agent } : {}),
+        ...(projectsDir !== undefined ? { projectsDir } : {}),
+      });
       return;
     }
 

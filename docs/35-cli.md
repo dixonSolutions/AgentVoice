@@ -19,6 +19,7 @@ has — that behaviour is a published contract and nothing may take it back.
 
 | Command | What it does |
 | --- | --- |
+| `setup` | Guided setup: agent CLI and projects, then optionally a background service and hosting. See [`setup`](#setup). |
 | `run` | Boot the bridge in the foreground. Seeds the home on first run. |
 | `local <path>` / `local --this-dir` | Throwaway bridge + web client with only that directory as the project; logs stream in the terminal; nothing saved. See [`local`](#local). |
 | `add <path>` / `add --this-dir` | Register a directory as a project, with name, description and aliases filled in. See [`add`](#add). |
@@ -159,6 +160,34 @@ shadows the one you are developing, and a rebase is meaningless under
   nothing — `npm i -g` would install a second copy the service never runs.
 - **unknown** → refuses, says why, and explains how to reinstall into a mode
   that *can* be maintained.
+
+## `setup`
+
+The guided setup, identical for npm, .deb/.rpm and clone installs — a clone's
+`scripts/setup.sh` only installs dependencies and compiles, then `exec`s this.
+
+1. **One question up front: install a background service?** (default no)
+2. **Projects and agent** — always. Which agent CLI does the work (each is
+   shown as installed or not), and which folder(s) hold your git repos
+   (`settings.projectDiscovery.hotPaths`). If you ran it from a repo that
+   discovery would not pick up, it offers to register that too (via `add`).
+3. **Only if you said yes:** the service is installed and started
+   (`service install --now`; an existing one is kept and restarted), linger is
+   offered on Linux, and then hosting is set up *through the running bridge* —
+   the same one-click flow as Config → Serve → Network, with its progress
+   relayed to the terminal (a Tailscale sign-in link, say).
+
+The question comes first but the service starts last, so the bridge boots once
+with the finished config rather than restarting mid-wizard. Everything is saved
+as it goes; Ctrl-C/Ctrl-D stops cleanly and re-running is safe.
+
+Non-interactive (no TTY, or `--yes`) takes every default. Flags answer single
+questions: `--service` / `--no-service`, `--hosting <tailscale|cloudflare|ngrok|devtunnel|lan|none>`,
+`--agent <id>`, `--projects-dir <path[,path]>`:
+
+```bash
+agentvoice setup --yes --service --hosting tailscale --agent claude-code --projects-dir ~/code
+```
 
 ## `local`
 
