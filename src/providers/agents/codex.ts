@@ -33,7 +33,8 @@ import { updateAgentEnvKeys } from '../../state/envFile.js';
 import type { Project, SessionState } from '../../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from '../../executor/agentPrompt.js';
 import { formatPathForLog, resolveUserHome } from '../../mcp/hostPaths.js';
-import { createBinResolver, homeCandidate } from '../binResolve.js';
+import { createBinResolver } from '../binResolve.js';
+import { AGENT_BIN_SPECS } from '../binSpecs.js';
 import { runLoginCommand } from './authFlowRunner.js';
 import {
   describeAction,
@@ -65,11 +66,7 @@ import type {
 const execFileAsync = promisify(execFile);
 const log = childLogger('provider:codex');
 
-const resolver = createBinResolver({
-  envVar: 'CODEX_PATH',
-  candidates: [homeCandidate('.local/bin/codex'), homeCandidate('.codex/bin/codex'), '/usr/local/bin/codex'],
-  fallback: 'codex',
-});
+const resolver = createBinResolver(AGENT_BIN_SPECS.codex);
 
 function codexEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   // Codex reads OPENAI_API_KEY itself for API-key auth — never strip it here.

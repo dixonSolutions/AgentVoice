@@ -9,7 +9,7 @@
  * during a cold start trigger a single download, not N.
  */
 import { execFileSync } from 'node:child_process';
-import { createWriteStream, existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -149,8 +149,9 @@ async function prepare(target: string, dir: string): Promise<void> {
     mkdirSync(dir, { recursive: true });
     const tmpTarget = `${target}.tmp`;
     execFileSync('tar', ['-czf', tmpTarget, '-C', extracted, '.'], { stdio: 'ignore' });
-    // Atomic swap so a client never fetches a half-written archive.
-    execFileSync('mv', ['-f', tmpTarget, target]);
+    // Atomic swap so a client never fetches a half-written archive. renameSync,
+    // not `mv`: there is no `mv` on Windows.
+    renameSync(tmpTarget, target);
 
     const mb = (statSync(target).size / 1024 / 1024).toFixed(1);
     log.info({ target, mb }, 'wake-word model ready');
@@ -161,18 +162,33 @@ async function prepare(target: string, dir: string): Promise<void> {
 }
 
 /**
- * Ensure the wake-word model exists in the directory the bridge serves from.
- * Memoised: concurrent callers share one preparation. Resolves when ready;
- * rejects (and emits an `error` status) if preparation fails.
+ * The first valid model.tar.gz in any directory `/vosk/` is served from, or
+ * null. A clone may already have one in web/public — that counts; fetching a
+ * second copy into the home would only waste 41 MB.
  */
-export function ensureVoskModel(): Promise<void> {
+export async function findPreparedModel(): Promise<string | null> {
+  for (const dir of voskPaths().serveFrom) {
+    const candidate = join(dir, 'model.tar.gz');
+    if (await looksLikeModel(candidate)) return candidate;
+  }
+  return null;
+}
+
+/**
+ * Ensure the wake-word model exists in a directory the bridge serves from,
+ * preparing it into the first one (the user's home) when none has it.
+ * Memoised: concurrent callers share one preparation. Resolves when ready;
+ * rejects (and emits an `error` status) if preparation fails. `force`
+ * re-downloads even when a model is already present.
+ */
+export function ensureVoskModel(opts: { force?: boolean } = {}): Promise<void> {
   if (inFlight) return inFlight;
   inFlight = (async () => {
     const dir = voskPaths().serveFrom[0];
     if (!dir) throw new Error('no serve directory for the wake-word model');
     const target = join(dir, 'model.tar.gz');
 
-    if (await looksLikeModel(target)) {
+    if (!opts.force && (await findPreparedModel())) {
       emit({ phase: 'ready', label: LABEL });
       return;
     }

@@ -27,6 +27,9 @@ function readGitShortSha(root: string): string | null {
       cwd: root,
       encoding: 'utf8',
       timeout: 3_000,
+      // An npm install is not a repo; git's "fatal: not a git repository" is
+      // the expected answer there, not something to print on every boot.
+      stdio: ['ignore', 'pipe', 'ignore'],
     }).trim();
     return sha || null;
   } catch {

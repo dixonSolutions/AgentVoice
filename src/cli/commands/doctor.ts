@@ -4,78 +4,35 @@
  * Every check answers with a remedy, not just a verdict: a doctor that says
  * "better-sqlite3: fail" and stops has moved the problem, not solved it. Order
  * runs outward from the runtime (Node, native binding) to the install (config,
- * data dir) to the world (agent CLI, port).
+ * data dir) to the world (agent CLI, port, service), and last to what only the
+ * running bridge can answer (agent sign-in, hosting).
  *
  * Exit code is 1 if anything failed, 0 otherwise — warnings do not fail the
  * run, because "no APP_TOKEN yet" is a normal state five seconds after install.
  */
 
-import { accessSync, constants, existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { createBinResolver, homeCandidate, type BinResolveSpec } from '../../providers/binResolve.js';
-import { candidateEndpoints, probeHealth } from '../bridge.js';
+import { createBinResolver, whichSync, type BinResolveSpec } from '../../providers/binResolve.js';
+import { AGENT_BIN_SPECS } from '../../providers/binSpecs.js';
+import { PACKAGE_NAME } from '../../serve/installMode.js';
+import { bridgeApi, candidateEndpoints, findBridge, probeHealth } from '../bridge.js';
+import { describeUnit, detectUnit, readUnitState } from '../service.js';
+import { capture, ran } from '../exec.js';
 import {
   checkNativeBinding,
   dbPath,
   envValue,
   errText,
   nativeBindingAdvice,
+  packageRoot,
+  projectSummary,
   readConfig,
+  readConfigFile,
   readEnvFile,
   resolveHome,
 } from '../home.js';
 import { bold, cyan, dim, mark, say, type Mark } from '../out.js';
-
-/**
- * Where each agent CLI lives, mirroring src/providers/agents/*.ts.
- *
- * Duplicated rather than imported: importing the provider registry drags in the
- * whole executor stack — including @aws-sdk — and the management CLI must stay
- * a fast, dependency-light binary. The authoritative answer still comes from
- * the bridge (`/healthz` reports the resolved CLI and its version); this table
- * only exists so `doctor` can say something useful while the bridge is down.
- */
-const AGENT_CLI_SPECS: Record<string, BinResolveSpec> = {
-  cursor: {
-    envVar: 'CURSOR_AGENT_PATH',
-    candidates: [
-      homeCandidate('.local/bin/cursor-agent'),
-      homeCandidate('.cursor/bin/cursor-agent'),
-      '/usr/local/bin/cursor-agent',
-    ],
-    fallback: 'cursor-agent',
-  },
-  codex: {
-    envVar: 'CODEX_PATH',
-    candidates: [
-      homeCandidate('.local/bin/codex'),
-      homeCandidate('.codex/bin/codex'),
-      '/usr/local/bin/codex',
-    ],
-    fallback: 'codex',
-  },
-  'claude-code': {
-    envVar: 'CLAUDE_CODE_PATH',
-    candidates: [
-      homeCandidate('.local/bin/claude'),
-      homeCandidate('.claude/bin/claude'),
-      '/usr/local/bin/claude',
-    ],
-    fallback: 'claude',
-  },
-  codewhale: {
-    envVar: 'CODEWHALE_PATH',
-    candidates: [
-      homeCandidate('.local/bin/codewhale'),
-      homeCandidate('.codewhale/bin/codewhale'),
-      homeCandidate('.cargo/bin/codewhale'),
-      '/usr/local/bin/codewhale',
-      homeCandidate('.local/bin/codew'),
-      '/usr/local/bin/codew',
-    ],
-    fallback: 'codewhale',
-  },
-};
 
 const MIN_NODE_MAJOR = 20;
 
@@ -98,6 +55,8 @@ export async function doctorCommand(opts: { json: boolean }): Promise<number> {
   checks.push(checkToken(home));
   checks.push(checkAgentCli(home));
   checks.push(await checkPort(home));
+  checks.push(...(await checkService()));
+  checks.push(...(await checkThroughBridge(home)));
 
   const failed = checks.some((c) => c.status === 'fail');
 
@@ -138,8 +97,10 @@ async function checkBinding(): Promise<Check> {
   return {
     name: 'sqlite',
     status: 'fail',
-    detail: `better-sqlite3 will not load — ${error.split('\n')[0]}`,
-    fix: nativeBindingAdvice(error) ?? 'Reinstall the package: npm i -g @ratitisrad/agentvoice',
+    detail: error.includes('NODE_MODULE_VERSION')
+      ? 'better-sqlite3 was built for a different Node version'
+      : `better-sqlite3 will not load — ${error.split('\n')[0]}`,
+    fix: nativeBindingAdvice(error) ?? `Reinstall the package: npm i -g ${PACKAGE_NAME}`,
   };
 }
 
@@ -162,19 +123,32 @@ function checkConfig(home: string): Check {
     };
   }
 
-  const projects = Array.isArray(cfg.config?.projects) ? cfg.config.projects : [];
-  if (projects.length === 0) {
+  // Projects are discovered under settings.projectDiscovery.hotPaths; a
+  // hand-written list is optional. Only warn when nothing can be found at all.
+  const p = projectSummary(cfg);
+  const count = `${p.projects} project${p.projects === 1 ? '' : 's'}`;
+  if (p.discovery && p.hotPaths.length > 0 && p.missingHotPaths.length === p.hotPaths.length) {
     return {
       name: 'config.json',
       status: 'warn',
-      detail: 'parses, but registers no projects',
-      fix: `Add your projects (absolute paths) to ${cfg.path}.`,
+      detail: `project discovery looks in ${p.hotPaths.join(', ')}, which does not exist`,
+      fix: 'Point settings.projectDiscovery.hotPaths at the folder(s) holding your git repos.',
+    };
+  }
+  if (!p.discovery && p.projects === 0) {
+    return {
+      name: 'config.json',
+      status: 'warn',
+      detail: 'project discovery is off and no projects are listed',
+      fix: `Turn settings.projectDiscovery.enabled back on, or list projects in ${cfg.path}.`,
     };
   }
   return {
     name: 'config.json',
     status: 'ok',
-    detail: `${projects.length} project${projects.length === 1 ? '' : 's'} · ${cfg.path}`,
+    detail: p.discovery
+      ? `discovery in ${p.hotPaths.join(', ')} · ${count} · ${cfg.path}`
+      : `${count} · ${cfg.path}`,
   };
 }
 
@@ -237,8 +211,12 @@ function checkToken(home: string): Check {
 
 function checkAgentCli(home: string): Check {
   const cfg = readConfig(home);
-  const client = cfg.config?.settings?.agentClient ?? 'cursor';
-  const spec = AGENT_CLI_SPECS[client];
+  // No config yet means the first run will seed one from the packaged example,
+  // so check the CLI that example selects — not the schema's fallback.
+  const client = cfg.exists
+    ? (cfg.config?.settings?.agentClient ?? 'cursor')
+    : (readConfigFile(join(packageRoot(), 'config.example.json')).config?.settings?.agentClient ?? 'cursor');
+  const spec = (AGENT_BIN_SPECS as Record<string, BinResolveSpec | undefined>)[client];
 
   if (!spec) {
     return {
@@ -302,24 +280,135 @@ async function checkPort(home: string): Promise<Check> {
 }
 
 /**
- * PATH lookup. binResolve's own fallback is a bare command name meant to be
- * handed to spawn(); `doctor` has to resolve it here or it could only ever
- * report "maybe".
+ * Is a background service installed and running? Not installed is only a
+ * warning — `agentvoice run` in a terminal is a perfectly good way to use it.
  */
-function whichSync(command: string): string | null {
-  const path = process.env['PATH'];
-  if (!path) return null;
-  for (const dir of path.split(':')) {
-    if (!dir) continue;
-    const candidate = join(dir, command);
-    try {
-      accessSync(candidate, constants.X_OK);
-      return candidate;
-    } catch {
-      /* next */
+async function checkService(): Promise<Check[]> {
+  const unit = await detectUnit();
+  if (unit.scope === 'none') {
+    return [
+      {
+        name: 'service',
+        status: 'warn',
+        detail: unit.noSystemd ? 'no service manager on this host' : 'none installed — the bridge only runs while a terminal does',
+        ...(unit.noSystemd ? {} : { fix: 'Install one:  agentvoice service install --now' }),
+      },
+    ];
+  }
+
+  const state = await readUnitState(unit);
+  const checks: Check[] = [
+    state?.activeState === 'active'
+      ? { name: 'service', status: 'ok', detail: `${describeUnit(unit)} · ${state.subState}` }
+      : {
+          name: 'service',
+          status: 'warn',
+          detail: `${describeUnit(unit)} is ${state ? `${state.activeState} (${state.subState})` : 'in an unknown state'}`,
+          fix: 'Start it:  agentvoice start   ·   Why it stopped:  agentvoice logs -n 50',
+        },
+  ];
+
+  // A systemd user unit dies at logout unless linger is on — exactly when you
+  // want to reach the bridge from your phone.
+  if (unit.scope === 'user') {
+    const user = process.env['USER'] ?? '';
+    const linger = await capture('loginctl', ['show-user', user, '--property=Linger']);
+    if (ran(linger) && linger.code === 0 && !linger.stdout.includes('Linger=yes')) {
+      checks.push({
+        name: 'linger',
+        status: 'warn',
+        detail: 'off — the service stops when you log out',
+        fix: `loginctl enable-linger ${user || '$USER'}`,
+      });
+    } else if (ran(linger) && linger.code === 0) {
+      checks.push({ name: 'linger', status: 'ok', detail: 'on — the service keeps running after logout' });
     }
   }
-  return null;
+  return checks;
+}
+
+interface ProviderAuth {
+  authenticated: boolean;
+  email: string | null;
+  detail?: string;
+}
+
+interface HostingDoctor {
+  ok: boolean;
+  checks: Array<{ label: string; ok: boolean; detail?: string }>;
+}
+
+/**
+ * Checks only the running bridge can answer: whether the agent CLI is signed
+ * in and whether the hosting provider is healthy. The management CLI stays
+ * dependency-light by asking, rather than loading every provider itself.
+ */
+async function checkThroughBridge(home: string): Promise<Check[]> {
+  const cfg = readConfig(home);
+  const bridge = await findBridge(home, cfg);
+  const endpoint = bridge.answering?.endpoint;
+  if (!endpoint) {
+    return [
+      {
+        name: 'bridge',
+        status: 'warn',
+        detail: 'not running — agent sign-in and hosting checks skipped',
+        fix: 'Start it (agentvoice start, or agentvoice run) and re-run doctor.',
+      },
+    ];
+  }
+
+  const checks: Check[] = [];
+  const client = bridge.answering?.health?.agentClient ?? cfg.config?.settings?.agentClient ?? 'cursor';
+  if (bridge.answering?.health?.cliFound !== false) {
+    const auth = await bridgeApi<ProviderAuth>(home, endpoint, `/api/providers/${encodeURIComponent(client)}/status`);
+    if (!auth.ok) {
+      checks.push({ name: 'agent sign-in', status: 'warn', detail: `could not ask the bridge — ${auth.error}` });
+    } else if (auth.body.authenticated) {
+      checks.push({
+        name: 'agent sign-in',
+        status: 'ok',
+        detail: `${client} signed in${auth.body.email ? ` as ${auth.body.email}` : ''}`,
+      });
+    } else {
+      checks.push({
+        name: 'agent sign-in',
+        status: 'fail',
+        detail: `${client} is not signed in${auth.body.detail ? ` — ${auth.body.detail}` : ''}`,
+        fix: 'Sign in from the app (it prompts on the first voice turn), or in a terminal with the CLI itself.',
+      });
+    }
+  }
+
+  const providers = await bridgeApi<{ active: string }>(home, endpoint, '/api/admin/hosting-providers');
+  const hosting = providers.ok ? providers.body.active : null;
+  if (hosting) {
+    const result = await bridgeApi<HostingDoctor>(
+      home,
+      endpoint,
+      `/api/admin/hosting-providers/doctor?provider=${encodeURIComponent(hosting)}`,
+      30_000,
+    );
+    if (!result.ok) {
+      checks.push({ name: 'hosting', status: 'warn', detail: `${hosting}: could not ask the bridge — ${result.error}` });
+    } else {
+      const failed = result.body.checks.filter((c) => !c.ok);
+      checks.push(
+        failed.length === 0
+          ? { name: 'hosting', status: 'ok', detail: `${hosting} · ${result.body.checks.length}/${result.body.checks.length} provider checks pass` }
+          : {
+              name: 'hosting',
+              status: 'fail',
+              detail: `${hosting} · ${failed.map((c) => c.label).join(', ')}`,
+              fix: failed
+                .map((c) => `${c.label}${c.detail ? `: ${c.detail}` : ''}`)
+                .concat('Fix it from Config → Serve → Network in the app.')
+                .join('\n'),
+            },
+      );
+    }
+  }
+  return checks;
 }
 
 function formatBytes(bytes: number): string {

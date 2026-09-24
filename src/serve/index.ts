@@ -33,6 +33,8 @@ import {
 
 import {
   canSelfUpdate,
+  npmProjectDir,
+  PACKAGE_NAME,
   detectInstallMode,
   type InstallModeInfo,
 } from './installMode.js';
@@ -44,9 +46,6 @@ const FALLBACK_TRACK_BRANCH = 'main';
 
 /** Fixed unit name — never interpolated from user input. */
 const execFileAsync = promisify(execFile);
-
-/** Our own name on the registry — what `npm view` and `npm install` target. */
-const PACKAGE_NAME = 'agentvoice';
 
 const SERVICE_UNIT = 'agentvoice.service';
 
@@ -860,12 +859,13 @@ export async function serveUpdate(mode: ServeUpdateMode): Promise<ServeActionRes
 
   // An npm install has no repo to rebase and no working tree to stash, so both
   // buttons collapse to the same thing there: ask npm for the newer version.
-  if (install.mode === 'npm') return serveNpmUpdate(install);
+  if (install.mode === 'npm' && !install.npx) return serveNpmUpdate(install);
   if (!canSelfUpdate(install)) {
     return withServeLock(`manual:${mode}`, async (runId) => {
-      const detail =
-        `Cannot update automatically — ${install.reason}. ` +
-        'Reinstall with npm, or run this from a git clone.';
+      const detail = install.updateCommand
+        ? `Cannot update automatically — ${install.reason}. Run: ${install.updateCommand}`
+        : `Cannot update automatically — ${install.reason}. ` +
+          'Reinstall with npm, or run this from a git clone.';
       recordStep(runId, 'finish', 'error', detail);
       return { runId, outcome: 'error' as const, detail };
     });
@@ -945,6 +945,9 @@ async function serveNpmUpdate(install: InstallModeInfo): Promise<ServeActionResu
     const args = ['install', ...(install.global ? ['-g'] : []), `${PACKAGE_NAME}@latest`];
     try {
       await execFileAsync('npm', [...args, '--no-audit', '--no-fund'], {
+        // A local install has to run in the project that depends on us, or npm
+        // installs a second copy into whatever the bridge's cwd happens to be.
+        ...(install.global ? {} : { cwd: npmProjectDir(install.root) }),
         timeout: 10 * 60_000,
         maxBuffer: 8 * 1024 * 1024,
       });

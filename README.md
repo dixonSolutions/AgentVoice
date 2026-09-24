@@ -5,8 +5,8 @@
 <h1 align="center">AgentVoice</h1>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/agentvoice"><img src="https://img.shields.io/npm/v/agentvoice?logo=npm&logoColor=white&label=npm&color=2f2a5e" alt="npm version"></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/agentvoice?logo=nodedotjs&logoColor=white&color=2f2a5e" alt="Node version"></a>
+  <a href="https://www.npmjs.com/package/@ratitisrad/agentvoice"><img src="https://img.shields.io/npm/v/%40ratitisrad%2Fagentvoice?logo=npm&logoColor=white&label=npm&color=2f2a5e" alt="npm version"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/%40ratitisrad%2Fagentvoice?logo=nodedotjs&logoColor=white&color=2f2a5e" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f2a5e" alt="MIT license"></a>
 </p>
 
@@ -76,17 +76,17 @@ On its first run the bridge creates a **home directory** — `~/.agentvoice`,
 or `$AGENTVOICE_HOME` if you set one — seeds `config.json` from the packaged
 example, generates a random `APP_TOKEN` into `~/.agentvoice/.env`, and prints
 that token once. Then it starts up and logs the address it is listening on
-(`http://127.0.0.1:5089` with the default `test` profile). Open that address —
+(`http://127.0.0.1:5089` — an installed package starts in the `serve` profile,
+because it serves the built PWA itself; `PORT` picks another port on first run). Open that address —
 the PWA is served from the same port — and paste the token when it asks you to
 pair.
 
 Everything the bridge writes — `config.json`, `data/state.db`, logs — stays in
-that home directory, so `npm update -g agentvoice` never touches your state.
+that home directory, so `npm update -g @ratitisrad/agentvoice` never touches your state.
 Run `agentvoice` from a directory that already has a `config.json` (a repo
 checkout, say) and it uses that directory instead.
 
-The default configuration is local-only (`test` mode with the `local` hosting
-provider), uses Codex, and discovers immediate Git repositories under
+The default configuration is local-only (the `local` hosting provider), uses Codex, and discovers immediate Git repositories under
 `~/Projects`. Add nested project containers to
 `settings.projectDiscovery.hotPaths` when needed; no hand-maintained project
 list is required. Requires **Node 20+** and one of the agent CLIs —
@@ -97,14 +97,16 @@ list is required. Requires **Node 20+** and one of the agent CLIs —
 Booting the bridge is only the default. The same command manages the install:
 
 ```bash
-agentvoice status          # install, version, service, port, health — one screen
-agentvoice doctor          # Node, native binding, config, agent CLI, port
-agentvoice restart         # bounce the systemd unit
+agentvoice status          # install, version, service, port, health, public URL — one screen
+agentvoice doctor          # Node, native binding, config, agent CLI + sign-in, port, service, hosting
+agentvoice service install --now   # run it in the background (systemd, launchd or Windows service)
+agentvoice restart         # bounce the service
 agentvoice logs -f         # follow the service journal (or the session log file)
 agentvoice logs --list     # every session log and voice transcript on disk
 agentvoice pipe --mic      # talk to the agent from this terminal, no phone needed
 agentvoice update          # rebase a clone, or npm-install a newer package
 agentvoice token --new     # rotate the pairing token
+agentvoice <command> --help   # just that command's options
 ```
 
 Speech reaches the agent in **turns** by default — wake phrase, then VAD, then
@@ -132,8 +134,10 @@ answering, so `agentvoice status >/dev/null` works as a liveness probe.
 
 `update` follows the install rather than guessing: a clone runs
 `scripts/update.sh` (pass `--stash` to carry local changes across the rebase),
-an npm install runs `npm install -g @ratitisrad/agentvoice@latest`, and an install that is
-neither says so instead of doing something destructive.
+an npm install runs `npm install -g @ratitisrad/agentvoice@latest` (without `-g`
+for a project dependency), an `npx` run tells you to start it with `@latest`,
+and a .deb / .rpm install prints the `apt` / `dnf` command instead of fighting
+the package manager.
 
 Full reference: [`docs/35-cli.md`](./docs/35-cli.md).
 
@@ -153,7 +157,7 @@ hosting, and automatically picks up Git repositories directly under
 
 ## Host on Windows (one-command setup)
 
-Prerequisites: [Node.js 20 LTS](https://nodejs.org), [Git](https://git-scm.com), [Cursor IDE](https://cursor.com) with `cursor-agent` on PATH.
+Prerequisites: [Node.js 20 LTS](https://nodejs.org), [Git](https://git-scm.com), and one agent CLI on PATH — `cursor-agent`, `codex`, `claude` or `codewhale`.
 
 ```powershell
 # 1. Clone the repo
@@ -185,7 +189,7 @@ After setup, the script prints your `APP_TOKEN`. Enter it in the PWA settings sc
 
 ## Host on Linux (one-command setup)
 
-Prerequisites: Node.js 20 LTS, Git, Cursor IDE with `cursor-agent` on PATH.
+Prerequisites: Node.js 20 LTS, Git, and one agent CLI on PATH — `cursor-agent`, `codex`, `claude` or `codewhale`.
 
 ```bash
 # 1. Clone the repo
@@ -265,8 +269,8 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 
 - **Bridge:** Node.js 20+, TypeScript, Fastify, MCP SDK, SQLite
 - **Web app:** Angular PWA + vanilla TS voice modules (Vosk, Silero VAD)
-- **Voice I/O:** WebKit STT/TTS; Amazon Polly/Transcribe fallback
-- **Reasoning:** Cursor IDE (`agent_native`) or Bedrock Claude (`llm_intelligence`)
+- **Voice I/O:** pluggable STT/TTS chains — browser, self-hosted Whisper / Kokoro, or cloud providers (see docs/29 and docs/30)
+- **Reasoning:** the active agent CLI (`agent_native`) or Bedrock Claude (`llm_intelligence`)
 - **Executor:** Cursor, Codex, Claude Code, or Codewhale CLI (`settings.agentClient`, see [`docs/24-agent-providers.md`](./docs/24-agent-providers.md))
 - **Network:** Tailscale by default; Cloudflare Tunnel, ngrok, Azure Dev Tunnels, LAN, or manual (see [`docs/25-hosting-providers.md`](./docs/25-hosting-providers.md))
 

@@ -9,7 +9,7 @@
  * bridge's cwd-relative lookups find the built PWA and the right version.
  *
  * Everything the bridge writes stays in that home, so `npm update -g
- * agentvoice` never destroys it.
+ * @ratitisrad/agentvoice` never destroys it.
  *
  * Every command needs the home, not just `run`: `status` reads the config
  * there, `doctor` checks it is writable, `token` rewrites its .env.
@@ -30,7 +30,7 @@ import {
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { detectInstallMode } from '../serve/installMode.js';
+import { detectInstallMode, PACKAGE_NAME } from '../serve/installMode.js';
 
 /** Root of the installed package — the clone, or the dir under node_modules. */
 export function packageRoot(): string {
@@ -108,7 +108,7 @@ export function seedConfig(home: string): boolean {
   if (!existsSync(example)) {
     throw new Error(
       `no config.json in ${home} and the packaged config.example.json is missing.\n` +
-        '  This install is incomplete — reinstall with: npm i -g @ratitisrad/agentvoice',
+        `  This install is incomplete — reinstall with: npm i -g ${PACKAGE_NAME}`,
     );
   }
 
@@ -203,12 +203,36 @@ interface ConfigShape {
   settings?: {
     runMode?: string;
     agentClient?: string;
+    projectDiscovery?: { enabled?: boolean; hotPaths?: string[] };
     runModes?: {
       test?: { backendPort?: number; webPort?: number };
       serve?: ServeRunMode;
     };
   };
   projects?: unknown[];
+}
+
+/**
+ * How the bridge finds projects: the discovery roots that exist on disk, and
+ * the project entries already in config.json (discovery writes them back, so
+ * after one boot this includes everything found under the hot paths).
+ */
+export function projectSummary(cfg: ConfigRead): {
+  discovery: boolean;
+  hotPaths: string[];
+  missingHotPaths: string[];
+  projects: number;
+} {
+  const settings = cfg.config?.settings;
+  const discovery = settings?.projectDiscovery?.enabled !== false;
+  const hotPaths = discovery ? (settings?.projectDiscovery?.hotPaths ?? ['~/Projects']) : [];
+  const expand = (p: string): string => (p === '~' || p.startsWith('~/') ? join(homedir(), p.slice(1)) : p);
+  return {
+    discovery,
+    hotPaths,
+    missingHotPaths: hotPaths.filter((p) => !existsSync(expand(p))),
+    projects: Array.isArray(cfg.config?.projects) ? cfg.config.projects.length : 0,
+  };
 }
 
 export interface ConfigRead {
@@ -227,7 +251,11 @@ export function configPath(home: string): string {
 }
 
 export function readConfig(home: string): ConfigRead {
-  const path = configPath(home);
+  return readConfigFile(configPath(home));
+}
+
+/** Read and parse any config-shaped JSON file, reporting rather than throwing. */
+export function readConfigFile(path: string): ConfigRead {
   if (!existsSync(path)) return { path, exists: false, error: null, config: null };
   try {
     return {
@@ -270,6 +298,18 @@ export async function checkNativeBinding(): Promise<string | null> {
 /** The remedy for a missing binding, or null when the failure is something else. */
 export function nativeBindingAdvice(message: string): string | null {
   if (!message.includes('bindings file') && !message.includes('better_sqlite3')) return null;
+  // Built fine, but for another Node — switching versions with nvm, or a
+  // global install shared between two Nodes. Only a rebuild fixes that.
+  if (message.includes('NODE_MODULE_VERSION')) {
+    return (
+      `better-sqlite3 was compiled for a different Node than this one (${process.version}).\n` +
+      '  Rebuild it for this Node, from the directory it is installed in:\n' +
+      '\n' +
+      '    npm rebuild better-sqlite3\n' +
+      '\n' +
+      '  Or run AgentVoice with the Node it was installed under.'
+    );
+  }
   return (
     'npm did not run better-sqlite3’s install script, so it has no compiled binding.\n' +
     '  Allow it and rebuild:\n' +

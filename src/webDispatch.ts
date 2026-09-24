@@ -13,7 +13,7 @@
 import type { FastifyInstance } from 'fastify';
 import fastifyStatic from '@fastify/static';
 import type HttpProxy from 'http-proxy';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import type { ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
 import { childLogger } from './log.js';
@@ -128,13 +128,23 @@ export async function attachDevWebProxy(app: FastifyInstance, webPort: number): 
  * Serve the Vosk wake-word model from the user's own directory.
  *
  * A distro install cannot write the ~41 MB model into `/usr/lib/agentvoice`,
- * so `prepare-vosk` puts it in `~/.agentvoice/vosk` instead and this mount
+ * so the model is prepared into `~/.agentvoice/vosk` instead and this mount
  * serves it — registered *before* the packaged web root so a model the user
  * downloaded always wins over a stale packaged one (docs/38).
  */
 async function registerUserVoskDir(app: FastifyInstance): Promise<void> {
   const userDir = voskPaths().serveFrom[0];
-  if (!userDir || !existsSync(userDir)) return;
+  if (!userDir) return;
+  // Create it rather than skip it: the bridge downloads the model into this
+  // directory on first boot (serve/ensureVoskModel.ts), and a mount skipped
+  // because the directory did not exist yet would hide that download until
+  // the next restart.
+  try {
+    mkdirSync(userDir, { recursive: true });
+  } catch (err) {
+    log.warn({ err, userDir }, 'cannot create the wake-word model directory');
+    return;
+  }
   await app.register(fastifyStatic, {
     root: userDir,
     prefix: '/vosk/',

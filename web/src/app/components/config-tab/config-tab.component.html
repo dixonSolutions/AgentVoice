@@ -789,7 +789,7 @@
                       <p-tag [value]="serveInstallMode" [severity]="serveIsGitInstall ? 'info' : 'secondary'" />
                       <span class="cv-cfg-muted">{{ serveInstallReason }}</span>
                     </div>
-                    @if (serveIsNpmInstall) {
+                    @if (serveIsNpmInstall || serveIsNpxRun) {
                       <div class="cv-cfg-serve-git">
                         <span class="cv-cfg-muted">version</span>
                         <strong>{{ serveInstalledVersion }}</strong>
@@ -947,6 +947,15 @@
                       <p-message severity="secondary" variant="simple"
                         [text]="'Already on ' + serveInstalledVersion + ' — nothing newer has been published.'" />
                     }
+                  } @else if (serveIsNpxRun) {
+                    <p-message severity="secondary" variant="simple"
+                      text="Running from the npx cache, so there is nothing installed to update. Start it with @latest to get the newest release — or install it for good with npm i -g." />
+                    <div class="cv-cfg-code-block">
+                      <code>{{ serveUpdateCommand }}</code>
+                    </div>
+                    <p-button label="Copy command" icon="pi pi-copy"
+                      severity="secondary" [outlined]="true"
+                      (onClick)="copyUpdateCommand()" />
                   } @else if (serveIsSystemInstall) {
                     <!--
                       docs/38: an in-app update cannot write to /usr/lib, and

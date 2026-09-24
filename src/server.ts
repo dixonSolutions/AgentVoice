@@ -88,15 +88,17 @@ const log = childLogger('server');
 
 let cachedCliVersion: string | null = null;
 let cachedCliClient: string | null = null;
+let cachedCliFound: boolean | null = null;
 let cliVersionRefreshInFlight: Promise<void> | null = null;
 
-async function fetchActiveCliVersion(): Promise<{ client: string; version: string | null }> {
+async function fetchActiveCliVersion(): Promise<{ client: string; version: string | null; found: boolean }> {
   const provider = getActiveProvider();
+  const found = provider.isInstalled();
   try {
-    const about = provider.getAbout ? await provider.getAbout() : null;
-    return { client: provider.id, version: about?.cliVersion ?? null };
+    const about = found && provider.getAbout ? await provider.getAbout() : null;
+    return { client: provider.id, version: about?.cliVersion ?? null, found };
   } catch {
-    return { client: provider.id, version: null };
+    return { client: provider.id, version: null, found };
   }
 }
 
@@ -104,9 +106,10 @@ function refreshCliVersionCache(): void {
   if (cliVersionRefreshInFlight) return;
   cliVersionRefreshInFlight = (async () => {
     try {
-      const { client, version } = await fetchActiveCliVersion();
+      const { client, version, found } = await fetchActiveCliVersion();
       cachedCliClient = client;
       cachedCliVersion = version;
+      cachedCliFound = found;
     } finally {
       cliVersionRefreshInFlight = null;
     }
@@ -222,6 +225,8 @@ export async function buildServer(): Promise<FastifyInstance> {
       db: db.open ? 'ok' : 'error',
       projects: projects.length,
       cliVersion,
+      /** null until the first background probe finishes. */
+      cliFound: cachedCliFound,
       agentClient: cachedCliClient ?? settings.agentClient,
       appVersion,
       gitCommit,

@@ -14,7 +14,7 @@
 
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { detectInstallMode } from '../../serve/installMode.js';
+import { detectInstallMode, npmProjectDir, PACKAGE_NAME } from '../../serve/installMode.js';
 import type { Parsed } from '../args.js';
 import { passthrough } from '../exec.js';
 import { dim, fail, note, say, yellow } from '../out.js';
@@ -32,10 +32,27 @@ export async function updateCommand(parsed: Parsed): Promise<number> {
       `cannot update this install — ${install.reason}.\n` +
         `  Root: ${install.root}\n` +
         '  Reinstall it the way you want to maintain it:\n' +
-        '    npm install -g @ratitisrad/agentvoice  # managed by npm\n' +
+        `    npm install -g ${PACKAGE_NAME}  # managed by npm\n` +
         '    git clone https://github.com/dixonSolutions/AgentVoice.git\n',
     );
     return 1;
+  }
+
+  // The package manager owns a .deb / .rpm install. `npm i -g` here would put a
+  // second copy on PATH that the service never runs (docs/38).
+  if (install.mode === 'system') {
+    say(`Installed from a system package — ${install.reason}.`);
+    say(`  Update it with:  ${install.updateCommand}`);
+    note(dim('  Then restart it:  agentvoice restart'));
+    return dryRun ? 0 : 1;
+  }
+
+  // npx runs a cached copy; the next `npx …@latest` is the update.
+  if (install.mode === 'npm' && install.npx) {
+    say('Running from the npx cache — there is nothing installed to update.');
+    say(`  Start the newest release with:  ${install.updateCommand}`);
+    say(`  Or install it for good:        npm install -g ${PACKAGE_NAME}`);
+    return 0;
   }
 
   if (install.mode === 'git') {
@@ -52,14 +69,16 @@ export async function updateCommand(parsed: Parsed): Promise<number> {
   // npm: the registry replaces the package wholesale. `global` decides whether
   // that is the shared install or a project-local dependency — installing the
   // wrong one leaves the running copy untouched and looks like a no-op.
-  const args = ['install', ...(install.global ? ['-g'] : []), '@ratitisrad/agentvoice@latest'];
+  const args = ['install', ...(install.global ? ['-g'] : []), `${PACKAGE_NAME}@latest`];
+  // A local install must run in the project that depends on us.
+  const cwd = install.global ? undefined : npmProjectDir(install.root);
   if (dryRun) {
     say(`${yellow('dry run')} — would run:`);
-    say(`  npm ${args.join(' ')}`);
+    say(`  npm ${args.join(' ')}${cwd ? `  (in ${cwd})` : ''}`);
     return 0;
   }
-  say(dim(`$ npm ${args.join(' ')}`));
-  const code = await passthrough('npm', args);
+  say(dim(`$ npm ${args.join(' ')}${cwd ? `  (in ${cwd})` : ''}`));
+  const code = await passthrough('npm', args, cwd ? { cwd } : {});
   if (code === 0) {
     note('');
     note('  Updated. Restart the bridge to pick it up:  agentvoice restart');

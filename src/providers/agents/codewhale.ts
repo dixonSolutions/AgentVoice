@@ -33,7 +33,8 @@ import { childLogger } from '../../log.js';
 import type { Project, SessionState } from '../../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from '../../executor/agentPrompt.js';
 import { formatPathForLog, resolveUserHome } from '../../mcp/hostPaths.js';
-import { createBinResolver, homeCandidate } from '../binResolve.js';
+import { createBinResolver } from '../binResolve.js';
+import { AGENT_BIN_SPECS } from '../binSpecs.js';
 import { runLoginCommand } from './authFlowRunner.js';
 import {
   describeAction,
@@ -75,19 +76,7 @@ const log = childLogger('provider:codewhale');
  */
 export const CODEWHALE_TOKEN_ENV_VAR = 'AGENTVOICE_MCP_TOKEN';
 
-/** Release installs expose the same runtime as both `codewhale` and `codew`. */
-const resolver = createBinResolver({
-  envVar: 'CODEWHALE_PATH',
-  candidates: [
-    homeCandidate('.local/bin/codewhale'),
-    homeCandidate('.codewhale/bin/codewhale'),
-    homeCandidate('.cargo/bin/codewhale'),
-    '/usr/local/bin/codewhale',
-    homeCandidate('.local/bin/codew'),
-    '/usr/local/bin/codew',
-  ],
-  fallback: 'codewhale',
-});
+const resolver = createBinResolver(AGENT_BIN_SPECS.codewhale);
 
 /**
  * Codewhale reads provider keys from its own config + OS keyring + env, and
