@@ -1,9 +1,10 @@
 /**
- * `start` / `stop` / `restart` / `logs` — the systemd verbs.
+ * `start` / `stop` / `restart` / `logs` — the service verbs, for a systemd
+ * unit, a launchd agent or a Windows service (see ../service.ts).
  *
- * These are thin on purpose. systemd already reports failures well, so the CLI
- * adds exactly two things: it picks the right unit scope, and it turns the one
- * failure systemd explains badly — "no unit at all" — into instructions.
+ * These are thin on purpose. The service manager already reports failures, so
+ * the CLI adds exactly two things: it picks the right service, and it turns the
+ * one failure it explains badly — "no service at all" — into instructions.
  *
  * A restart here is not scripts/restart.sh: that script rebuilds first, which
  * is an update concern. `agentvoice restart` bounces the service and nothing
@@ -14,9 +15,18 @@ import { detectInstallMode } from '../../serve/installMode.js';
 import { passthrough } from '../exec.js';
 import { dim, fail, green, note, say } from '../out.js';
 import { hasSessionLogs, logFilesCommand } from './logFiles.js';
-import { controlUnit, detectUnit, journalArgs, noUnitAdvice, readUnitState } from '../service.js';
+import {
+  controlFailureAdvice,
+  controlUnit,
+  detectUnit,
+  hasJournal,
+  journalArgs,
+  noUnitAdvice,
+  readUnitState,
+  type ServiceVerb,
+} from '../service.js';
 
-export async function serviceCommand(verb: 'start' | 'stop' | 'restart'): Promise<number> {
+export async function serviceCommand(verb: ServiceVerb): Promise<number> {
   const unit = await detectUnit();
   if (unit.scope === 'none') {
     fail(noUnitAdvice(unit, detectInstallMode().root));
@@ -25,10 +35,8 @@ export async function serviceCommand(verb: 'start' | 'stop' | 'restart'): Promis
 
   const code = await controlUnit(unit, verb);
   if (code !== 0) {
-    if (unit.scope === 'system') {
-      note('  A system unit needs root. `sudo -n` was used so this never hangs on a');
-      note('  hidden password prompt — configure passwordless sudo, or run as root.');
-    }
+    const advice = controlFailureAdvice(unit);
+    if (advice) note(advice);
     return 1;
   }
 
@@ -70,12 +78,17 @@ export async function logsCommand(opts: LogsOptions): Promise<number> {
   }
 
   const unit = await detectUnit();
-  if (unit.scope === 'none') {
-    // No unit means no journal — but the bridge writes its own session log
-    // however it was started (docs/42), so show that rather than give up.
+  if (!hasJournal(unit)) {
+    // No systemd unit means no journal — but the bridge writes its own session
+    // log however it was started (docs/42), launchd agent and Windows service
+    // included, so show that rather than give up.
     if (hasSessionLogs(opts.profile)) {
-      note(dim('No agentvoice.service unit — showing the bridge\'s own session log.'));
+      if (unit.scope === 'none') note(dim('No service installed — showing the bridge\'s own session log.'));
       return logFilesCommand(fileOpts);
+    }
+    if (unit.scope !== 'none') {
+      fail('no session logs yet — has the service started? Try: agentvoice status');
+      return 1;
     }
     fail(noUnitAdvice(unit, detectInstallMode().root));
     return 1;

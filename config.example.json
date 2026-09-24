@@ -113,14 +113,13 @@
     },
     "maxConcurrentJobs": 1,
     "jobTimeoutMs": 600000,
-    "planFirst": false,
     "preRunFlags": [
-      "--force",
       "--trust"
     ],
     "modelCacheTtlMs": 3600000,
-    "narratorEnabled": true,
-    "narratorCadenceMs": 15000,
+    "narration": {
+      "enabled": true
+    },
     "narratorMaxBufferEvents": 50,
     "ghostKillEnabled": true,
     "logLevel": "info",

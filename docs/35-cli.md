@@ -1,7 +1,7 @@
 # 35 — The `agentvoice` CLI
 
 `agentvoice` is the management surface for a self-hosted bridge. It boots the
-bridge, manages its systemd unit, reports what is installed and whether it is
+bridge, manages its background service (systemd, launchd, or a Windows service), reports what is installed and whether it is
 healthy, rotates the pairing token, and updates the install the way that
 install was actually made.
 
@@ -20,16 +20,18 @@ has — that behaviour is a published contract and nothing may take it back.
 | Command | What it does |
 | --- | --- |
 | `run` | Boot the bridge in the foreground. Seeds the home on first run. |
-| `start` / `stop` / `restart` | Manage the `agentvoice.service` systemd unit. |
-| `logs [-n N] [-f]` | `journalctl` for the unit. `-f` follows. With no unit, the bridge's own session log instead. |
+| `start` / `stop` / `restart` | Manage the background service — `agentvoice.service` (systemd), `com.agentvoice.bridge` (launchd) or `AgentVoice` (Windows). |
+| `service install [--now] [--force] [--dry-run]` | Install that service for this install — see [The service](#the-service). |
+| `logs [-n N] [-f]` | `journalctl` for a systemd unit. `-f` follows. Everywhere else (launchd, Windows, no service), the bridge's own session log. |
 | `logs --list` / `--files` / `--transcripts` / `--cat <file\|latest>` | The session log files and voice transcripts under `<home>/logs/` — list, tail (`-f` follows across rollovers), or print (`.gz` included). `--profile test` for the dev folder. See docs/42. |
 | `pipe [--mic \| --file F]` | Stream audio (stdin by default) to the voice agent and print its replies. `--json`, `--no-listen`, `--url`, `--token`, `--silence`, `--threshold`. See docs/41. |
 | `status [--json]` | Install, version, service, port, health, token — one screen. |
 | `doctor [--json]` | Check Node, the native binding, config, data dir, agent CLI, port. |
 | `update [--stash] [--dry-run] [--branch <name>]` | Update this install. |
 | `token [--new]` | Print the pairing token, or mint a fresh one. |
+| `prepare-vosk [--force]` | Fetch the wake-word model now (the bridge also does on first boot). |
 | `version`, `--version` | Package version, plus branch and commit in a clone. |
-| `help`, `--help` | Usage screen. |
+| `help`, `--help` | Usage screen. `agentvoice <command> --help` shows just that command and its options. |
 
 ### Exit codes
 
@@ -101,29 +103,37 @@ diagnostic goes to stderr, so it stays parseable.
 
 ## `doctor`
 
-Seven checks, each with a remedy attached:
+Every check comes with a remedy:
 
-| Check | Fails when |
+| Check | Fails / warns when |
 | --- | --- |
 | `node` | Older than Node 20. |
-| `sqlite` | The `better-sqlite3` native binding will not load. |
-| `config.json` | Missing or unparseable. Warns when it registers no projects. |
+| `sqlite` | The `better-sqlite3` native binding will not load — not built, or built for another Node (each gets its own fix). |
+| `config.json` | Missing or unparseable. Warns when project discovery has nowhere to look (its hot paths do not exist, or it is off and no projects are listed). |
 | `data dir` | The directory holding `DB_PATH` is not writable (tested by writing, not by `access()`). |
 | `APP_TOKEN` | Absent (warn) or shorter than the 16 characters the bridge's own schema demands (fail). |
-| `agent CLI` | The CLI named by `settings.agentClient` cannot be found. |
+| `agent CLI` | The CLI named by `settings.agentClient` cannot be found. With no config yet, the one the packaged example selects. |
 | `port` | The configured port is held by something that is not AgentVoice. |
+| `service` | None installed, or installed but not running (warn). |
+| `linger` | A systemd user unit without `loginctl enable-linger` — it stops at logout (warn). |
+| `agent sign-in` | The running bridge reports the agent CLI is not signed in. |
+| `hosting` | The running bridge's hosting provider fails its own checks (Tailscale up, HTTPS, tunnel…). |
+
+The last two need the bridge: `doctor` asks it over the API with this home's
+`APP_TOKEN`, rather than loading every provider itself. With the bridge down
+they are skipped, and a `bridge` warning says so.
 
 Warnings do not fail the run — "no `APP_TOKEN` yet" is a normal state five
 seconds after install. Any `fail` exits 1.
 
 The agent-CLI check covers all four providers (Cursor, Codex, Claude Code,
-Codewhale). It resolves the binary the same way the providers do — `<CLI>_PATH`
-override, then the known install directories, then `PATH` — but it does **not**
-import the provider registry: that would drag the whole executor stack,
-`@aws-sdk` included, into a management CLI that is otherwise 48 KB. The
-authoritative answer still comes from the bridge, which reports the resolved CLI
-and its version on `/healthz`; `doctor`'s copy exists so it can say something
-useful while the bridge is down.
+Codewhale). It resolves the binary exactly as the providers do — `<CLI>_PATH`
+override, then the known install directories, then `PATH` (with `PATHEXT` on
+Windows) — from the same table, `src/providers/binSpecs.ts`. That module
+imports nothing but the resolver, so the CLI gets the providers' answer without
+importing the provider registry, which would drag the whole executor stack,
+`@aws-sdk` included, into a management CLI. `/healthz` reports `cliFound` and
+the CLI version from the bridge's side.
 
 ## `update`
 
@@ -137,8 +147,13 @@ shadows the one you are developing, and a rebase is meaningless under
   uses (see [`21-serve-self-hosting.md`](./21-serve-self-hosting.md)). `--stash`,
   `--dry-run`, `--force`, `--no-restart` and `--branch <name>` are forwarded
   verbatim; anything after `--` is forwarded too.
-- **npm** → `npm install -g @ratitisrad/agentvoice@latest`, dropping `-g` when the install
-  is a local dependency rather than a global one.
+- **npm** → `npm install -g @ratitisrad/agentvoice@latest`, dropping `-g` (and
+  running in the depending project) when the install is a local dependency.
+  Global vs local is read from where the package sits: a global prefix has no
+  `package.json` of its own, a project that depends on us does.
+- **npx** → nothing to update in place; prints `npx @ratitisrad/agentvoice@latest`.
+- **system** (.deb / .rpm) → prints the `apt` / `dnf` command and changes
+  nothing — `npm i -g` would install a second copy the service never runs.
 - **unknown** → refuses, says why, and explains how to reinstall into a mode
   that *can* be maintained.
 
@@ -154,23 +169,46 @@ surprise. Every paired client is locked out afterwards and has to re-pair, and
 the bridge needs a restart to load the new value. If `APP_TOKEN` is also set in
 the environment it wins over the file, and the command says so.
 
-## The systemd unit
+## The service
 
-`start`, `stop`, `restart` and `logs` all resolve the unit the same way
-`scripts/update.sh` and `src/serve/index.ts` do, and the order matters:
+`start`, `stop`, `restart`, `status` and `logs` drive whichever service manager
+the platform has:
 
-1. `systemctl --user cat agentvoice.service` — the user unit
-   `scripts/install-systemd.sh` writes, which is what most installs have.
-2. `systemctl cat agentvoice.service` — a system unit.
-3. Neither: say so, and point at the installer or at `agentvoice run`.
+| Platform | Service | Detected by |
+| --- | --- | --- |
+| Linux | `agentvoice.service` | `systemctl --user cat` (the user unit `service install` and `scripts/install-systemd.sh` write), then `systemctl cat` (a system unit) — the order `scripts/update.sh` and `src/serve/index.ts` use. |
+| macOS | `com.agentvoice.bridge` launchd agent | `~/Library/LaunchAgents/com.agentvoice.bridge.plist` exists. |
+| Windows | `AgentVoice` service (NSSM) | `sc.exe query AgentVoice` — the service `scripts/setup.ps1` has always installed. |
+
+None found: say so, and point at `agentvoice service install` or `agentvoice run`.
 
 A system unit needs root, so it is driven through `sudo -n` — non-interactive on
 purpose. A CLI that silently blocks on a hidden password prompt is worse than
-one that says "passwordless sudo required".
+one that says "passwordless sudo required". A Windows service needs an elevated
+terminal; that is reported, not worked around.
 
 `agentvoice restart` is deliberately *not* `scripts/restart.sh`: that script
 rebuilds first, which is an update concern. This bounces the service and nothing
 else, which is what you want after editing `config.json`.
+
+### `service install`
+
+Installs a service that runs **as you** — the bridge spawns your agent CLIs with
+your sign-ins and edits your projects — pointing at this install's Node and
+launcher by absolute path, with `AGENTVOICE_HOME` pinned and a `PATH` that
+includes the per-user bin directories agent CLIs install into.
+
+- **Linux** writes a systemd user unit; `--now` enables and starts it and
+  reminds you about `loginctl enable-linger`.
+- **macOS** writes a launchd agent (`RunAtLoad`, restart on crash, output in
+  `<home>/logs/launchd.log`); `--now` bootstraps it.
+- **Windows** installs an NSSM service (needs `nssm.exe` on `PATH` or in a
+  clone's `tools/`, and an elevated terminal), then tells you how to make it run
+  under your account rather than LocalSystem.
+
+`--dry-run` prints what it would write or run. An existing, different service is
+left alone unless you pass `--force`. From the npx cache it refuses: npm may
+delete that cache, taking the service's target with it.
 
 ## Structure
 
@@ -182,7 +220,7 @@ src/cli/args.ts        flag parser
 src/cli/out.ts         colour, aligned key/value rendering
 src/cli/exec.ts        capture (probes) vs passthrough (long jobs)
 src/cli/home.ts        home resolution, seeding, .env and config.json reading
-src/cli/service.ts     systemd unit detection and control
+src/cli/service.ts     service detection and control (systemd, launchd, Windows)
 src/cli/bridge.ts      port resolution and the /healthz probe
 src/cli/versions.ts    package version, git drift, registry latest
 src/cli/commands/*.ts  one file per command group
@@ -208,17 +246,20 @@ The CLI adds no runtime dependencies.
 
 Wake words need Vosk's small English model — about 41 MB of weights. It is **not
 in the published tarball**: bundling it would more than double the download for
-every install, including the many that never turn wake words on.
+every install, including the many that never turn wake words on. The bridge
+fetches it itself on first boot; this command does the same thing ahead of time
+(before going offline) or again (`--force`, to repair a bad download).
 
 ```bash
-agentvoice prepare-vosk           # fetch it
+agentvoice prepare-vosk           # fetch it now
 agentvoice prepare-vosk --force   # fetch it again
 ```
 
-It lands where this install actually serves static assets from — `web/public/`
-in a clone, so it survives the next `ng build`, and `web/dist/` in an installed
-package, which has no build step to run. The PWA asks for `/vosk/model.tar.gz`
-either way.
+Both paths run the same code (`src/serve/ensureVoskModel.ts`) and land in
+`<AGENTVOICE_HOME>/vosk` (`~/.agentvoice/vosk`), which no `npm update`, `ng
+build` or package upgrade touches. A model already present in any directory
+`/vosk/` is served from — `web/public/vosk` in a clone included — counts, so
+nothing is downloaded twice. A running bridge serves it straight away.
 
 Without it, wake words are unavailable and on-screen Speak / Cancel still work,
 which is what `touchControls` already falls back to.

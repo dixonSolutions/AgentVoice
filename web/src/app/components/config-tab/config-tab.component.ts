@@ -1151,7 +1151,12 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   }
 
   protected get serveIsNpmInstall(): boolean {
-    return this.serveInstallMode === 'npm';
+    return this.serveInstallMode === 'npm' && !this.serveIsNpxRun;
+  }
+
+  /** `npx @ratitisrad/agentvoice` — a cache copy, so the next npx run is the update. */
+  protected get serveIsNpxRun(): boolean {
+    return this.serveInstallMode === 'npm' && this.serveStatus?.install?.npx === true;
   }
 
   /**
@@ -1163,7 +1168,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   }
 
   protected get serveCanUpdate(): boolean {
-    return this.serveInstallMode === 'git' || this.serveInstallMode === 'npm';
+    return this.serveInstallMode === 'git' || this.serveIsNpmInstall;
   }
 
   protected async copyUpdateCommand(): Promise<void> {

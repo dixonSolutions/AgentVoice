@@ -9,6 +9,16 @@
 
 import { spawn } from 'node:child_process';
 
+/**
+ * On Windows `npm` is `npm.cmd`, and Node refuses to spawn a .cmd without a
+ * shell. Only these fixed names get one — never a command built from input.
+ */
+const WINDOWS_SHELL_COMMANDS = new Set(['npm', 'npx']);
+
+function needsShell(command: string): boolean {
+  return process.platform === 'win32' && WINDOWS_SHELL_COMMANDS.has(command);
+}
+
 export interface Captured {
   code: number;
   stdout: string;
@@ -24,6 +34,7 @@ export function capture(
     const child = spawn(command, args, {
       cwd: opts.cwd,
       stdio: ['ignore', 'pipe', 'pipe'],
+      shell: needsShell(command),
     });
     let stdout = '';
     let stderr = '';
@@ -62,7 +73,7 @@ export function passthrough(
   opts: { cwd?: string } = {},
 ): Promise<number> {
   return new Promise((settle) => {
-    const child = spawn(command, args, { cwd: opts.cwd, stdio: 'inherit' });
+    const child = spawn(command, args, { cwd: opts.cwd, stdio: 'inherit', shell: needsShell(command) });
     child.on('error', (err) => {
       process.stderr.write(`agentvoice: cannot run ${command} — ${err.message}\n`);
       settle(127);

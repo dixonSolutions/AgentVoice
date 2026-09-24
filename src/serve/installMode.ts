@@ -30,6 +30,13 @@ import { childLogger } from '../log.js';
 
 const log = childLogger('serve:install-mode');
 
+/**
+ * Our name on the npm registry. Scoped: the bare `agentvoice` name is not ours,
+ * and every `npm view` / `npm install` that used it got a 404. Kept in step
+ * with package.json#name by installMode.test.ts.
+ */
+export const PACKAGE_NAME = '@ratitisrad/agentvoice';
+
 export type InstallMode = 'git' | 'npm' | 'system' | 'unknown';
 
 /** Prefixes a distro package installs AgentVoice under. */
@@ -53,6 +60,12 @@ export interface InstallModeInfo {
   reason: string;
   /** Globally installed (`npm i -g`) rather than a local dependency. */
   global: boolean;
+  /**
+   * Running out of npx's cache (`npx @ratitisrad/agentvoice`). There is nothing
+   * to update in place — the next `npx …@latest` fetches a fresh copy — and a
+   * service must not point into a cache npm is free to delete.
+   */
+  npx: boolean;
   /** The command that updates this install, for display. */
   updateCommand: string;
 }
@@ -75,6 +88,31 @@ function packageRoot(): string {
 /** Is this path inside a node_modules tree? That is the npm-install tell. */
 function insideNodeModules(path: string): boolean {
   return path.split(sep).includes('node_modules');
+}
+
+/**
+ * Global install, local dependency, or npx cache — read from where the package
+ * sits, not from the cwd (which says nothing about how npm put it there).
+ *
+ * The directory holding the outermost node_modules is the npm prefix. A global
+ * prefix (`/usr/lib`, `~/.nvm/versions/node/v22/lib`, `%APPDATA%\npm`) has no
+ * package.json of its own; a project that depends on us does. npx keeps its
+ * installs under `…/_npx/<hash>/`, which does have one, so it is checked first.
+ */
+/** The directory `npm install` must run in for a local (non -g) install. */
+export function npmProjectDir(root: string): string {
+  const parts = root.split(sep);
+  const first = parts.indexOf('node_modules');
+  return first < 0 ? root : parts.slice(0, first).join(sep) || sep;
+}
+
+export function classifyNpmRoot(root: string): { global: boolean; npx: boolean } {
+  const parts = root.split(sep);
+  const first = parts.indexOf('node_modules');
+  if (first < 0) return { global: false, npx: false };
+  if (parts.slice(0, first).includes('_npx')) return { global: false, npx: true };
+  const prefix = npmProjectDir(root);
+  return { global: !existsSync(join(prefix, 'package.json')), npx: false };
 }
 
 let cached: InstallModeInfo | null = null;
@@ -102,18 +140,24 @@ export function detectInstallMode(opts: { refresh?: boolean } = {}): InstallMode
       root,
       reason: 'running from a git clone (.git found at the package root)',
       global: false,
+      npx: false,
       updateCommand: 'bash scripts/update.sh',
     };
   } else if (npmInstalled) {
-    const global = !insideNodeModules(process.cwd());
+    const { global, npx } = classifyNpmRoot(realpathOrSelf(root));
     info = {
       mode: 'npm',
       root,
-      reason: 'installed by npm (package lives under node_modules)',
+      reason: npx
+        ? 'running from the npx cache (nothing installed to update)'
+        : global
+          ? 'installed globally by npm (npm i -g)'
+          : 'installed by npm as a project dependency',
       global,
-      updateCommand: global
-        ? 'npm install -g @ratitisrad/agentvoice@latest'
-        : 'npm install agentvoice@latest',
+      npx,
+      updateCommand: npx
+        ? `npx ${PACKAGE_NAME}@latest`
+        : `npm install ${global ? '-g ' : ''}${PACKAGE_NAME}@latest`,
     };
   } else {
     // An extracted tarball, a container image, a copied directory. We can still
@@ -123,12 +167,13 @@ export function detectInstallMode(opts: { refresh?: boolean } = {}): InstallMode
       root,
       reason: 'no .git and not under node_modules — update path cannot be determined',
       global: false,
+      npx: false,
       updateCommand: '',
     };
   }
 
   cached = info;
-  log.info({ mode: info.mode, root: info.root, global: info.global }, 'install mode detected');
+  log.info({ mode: info.mode, root: info.root, global: info.global, npx: info.npx }, 'install mode detected');
   return info;
 }
 
@@ -163,6 +208,7 @@ function detectSystemPackage(root: string): InstallModeInfo | null {
       ? `installed from a ${marker} package (${INSTALL_SOURCE_MARKER} marker)`
       : `installed under ${root}, which is owned by the system package manager`,
     global: true,
+    npx: false,
     updateCommand: systemUpdateCommand(family),
   };
 }
@@ -203,7 +249,7 @@ function systemUpdateCommand(family: 'deb' | 'rpm' | null): string {
  * update button (docs/38).
  */
 export function canSelfUpdate(info = detectInstallMode()): boolean {
-  return info.mode === 'git' || info.mode === 'npm';
+  return info.mode === 'git' || (info.mode === 'npm' && !info.npx);
 }
 
 /** Test seam — forget the cached answer. */

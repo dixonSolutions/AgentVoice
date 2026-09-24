@@ -249,7 +249,7 @@ between machines, but this has to describe the install that is actually running.
 | | git clone | npm install |
 | --- | --- | --- |
 | Identity | branch, commit, ahead/behind | installed version vs registry `latest` |
-| Update | `scripts/update.sh` (`--stash` for a dirty tree) | `npm install [-g] agentvoice@latest` |
+| Update | `scripts/update.sh` (`--stash` for a dirty tree) | `npm install [-g] @ratitisrad/agentvoice@latest` |
 | Buttons | "Rebase & update" / "Stash, rebase & update" | one — "Update to *x.y.z*" |
 | Restart | `scripts/restart.sh` — rebuilds, then restarts the unit | `systemctl restart` directly; there is nothing to build |
 

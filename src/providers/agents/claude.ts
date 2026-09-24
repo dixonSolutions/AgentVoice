@@ -25,7 +25,8 @@ import { updateAgentEnvKeys } from '../../state/envFile.js';
 import type { Project, SessionState } from '../../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from '../../executor/agentPrompt.js';
 import { formatPathForLog, resolveBridgeDataDir, resolveUserHome } from '../../mcp/hostPaths.js';
-import { createBinResolver, homeCandidate } from '../binResolve.js';
+import { createBinResolver } from '../binResolve.js';
+import { AGENT_BIN_SPECS } from '../binSpecs.js';
 import { runLoginCommand } from './authFlowRunner.js';
 import {
   buildJsonMcpEntry,
@@ -97,11 +98,7 @@ function allowedToolsSpec(): string {
 /** Modes that must not be able to modify the repo. */
 const READ_ONLY_DISALLOWED = 'Write,Edit,MultiEdit,NotebookEdit';
 
-const resolver = createBinResolver({
-  envVar: 'CLAUDE_CODE_PATH',
-  candidates: [homeCandidate('.local/bin/claude'), homeCandidate('.claude/bin/claude'), '/usr/local/bin/claude'],
-  fallback: 'claude',
-});
+const resolver = createBinResolver(AGENT_BIN_SPECS['claude-code']);
 
 function claudeEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return { ...base, HOME: base.HOME ?? homedir() };

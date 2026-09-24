@@ -874,7 +874,7 @@ function migrateAudioSettings(audio: Record<string, unknown>): void {
   );
 }
 
-function migrateRawConfig(raw: unknown): unknown {
+export function migrateRawConfig(raw: unknown): unknown {
   if (typeof raw !== 'object' || raw === null) return raw;
   const obj = raw as Record<string, unknown>;
   const settings = obj['settings'];

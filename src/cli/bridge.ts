@@ -24,6 +24,8 @@ export interface Health {
   db?: string;
   projects?: number;
   cliVersion?: string | null;
+  /** Whether the bridge found the active agent CLI; null until its first probe. */
+  cliFound?: boolean | null;
   agentClient?: string;
   appVersion?: string;
   gitCommit?: string | null;
@@ -96,28 +98,61 @@ export interface Probe {
   foreign: boolean;
 }
 
+/** GET against the local bridge. Rejects on a network error, never on a status. */
+function get(
+  url: string,
+  timeoutMs: number,
+  headers: Record<string, string> = {},
+): Promise<{ status: number; text: string }> {
+  const https = url.startsWith('https:');
+  return new Promise((settle, reject) => {
+    const req = (https ? httpsRequest : httpRequest)(
+      url,
+      { timeout: timeoutMs, headers, ...(https ? { rejectUnauthorized: false } : {}) },
+      (res) => {
+        let text = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk: string) => {
+          text += chunk;
+        });
+        res.on('end', () => settle({ status: res.statusCode ?? 0, text }));
+      },
+    );
+    req.on('timeout', () => req.destroy(new Error(`timed out after ${timeoutMs}ms`)));
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+/**
+ * An authenticated API call to the running bridge, with this home's APP_TOKEN.
+ * For the checks only the bridge can answer — is the agent CLI signed in, is
+ * the hosting provider healthy — which the CLI cannot work out on its own
+ * without loading the whole provider stack.
+ */
+export async function bridgeApi<T>(
+  home: string,
+  endpoint: Endpoint,
+  path: string,
+  timeoutMs = 15_000,
+): Promise<{ ok: true; body: T } | { ok: false; error: string }> {
+  const token = envValue(home, 'APP_TOKEN')?.trim();
+  if (!token) return { ok: false, error: 'no APP_TOKEN to authenticate with' };
+  try {
+    const res = await get(`${endpoint.url}${path}`, timeoutMs, { authorization: `Bearer ${token}` });
+    if (res.status === 401) return { ok: false, error: 'the bridge rejected this home\'s APP_TOKEN (restart it after rotating)' };
+    if (res.status < 200 || res.status >= 300) return { ok: false, error: `HTTP ${res.status}` };
+    return { ok: true, body: JSON.parse(res.text) as T };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function probeHealth(endpoint: Endpoint, timeoutMs = 4000): Promise<Probe> {
   const url = `${endpoint.url}/healthz`;
-  const https = url.startsWith('https:');
 
   try {
-    const response = await new Promise<{ status: number; text: string }>((settle, reject) => {
-      const req = (https ? httpsRequest : httpRequest)(
-        url,
-        { timeout: timeoutMs, ...(https ? { rejectUnauthorized: false } : {}) },
-        (res) => {
-          let text = '';
-          res.setEncoding('utf8');
-          res.on('data', (chunk: string) => {
-            text += chunk;
-          });
-          res.on('end', () => settle({ status: res.statusCode ?? 0, text }));
-        },
-      );
-      req.on('timeout', () => req.destroy(new Error(`timed out after ${timeoutMs}ms`)));
-      req.on('error', reject);
-      req.end();
-    });
+    const response = await get(url, timeoutMs);
 
     if (response.status < 200 || response.status >= 300) {
       return {

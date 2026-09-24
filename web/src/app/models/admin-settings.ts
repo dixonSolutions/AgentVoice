@@ -125,6 +125,8 @@ export interface InstallModeInfo {
   root: string;
   reason: string;
   global: boolean;
+  /** Running from the npx cache — nothing to update in place. */
+  npx?: boolean;
   updateCommand: string;
 }
 

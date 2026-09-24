@@ -41,8 +41,9 @@ const USAGE = `
 
   ${bold('Running the bridge')}
     run                    Boot the bridge in the foreground (the default)
-    start | stop | restart Manage the agentvoice.service systemd unit
-    service install        Write a systemd user unit for this install
+    start | stop | restart Manage the background service (systemd, launchd,
+                           or a Windows service)
+    service install        Install that service for this install
     logs [-n N] [-f]       Tail the service journal (or the session log file)
     logs --list            Session logs + voice transcripts on disk
     logs --transcripts     The newest voice transcript (--cat <file|latest> prints any)
@@ -53,7 +54,7 @@ const USAGE = `
     doctor [--json]        Check Node, the native binding, config, CLI and port
     update [--stash]       Update this install the way it was installed
     token [--new]          Print the pairing token, or mint a fresh one
-    prepare-vosk [--force] Fetch the wake-word model (~41 MB, not bundled)
+    prepare-vosk [--force] Fetch the wake-word model now (the bridge also does on boot)
     version                Package version (plus the commit, in a clone)
     help                   This screen
 
@@ -66,13 +67,21 @@ const USAGE = `
     --mic, --file <path>   Audio source (pipe); stdin otherwise
     --url, --token         Bridge to stream to (pipe; default: this home's)
     --json                 Every bridge event as NDJSON (pipe)
+    --rate N, --channels N Raw PCM format on stdin (pipe; default 16000 Hz, mono)
+    --realtime             Pace a --file at real time instead of as fast as possible (pipe)
+    --no-listen            Send audio only; do not print the agent's replies (pipe)
+    --linger S             Seconds to wait for replies after input ends (pipe; default 30)
+    --silence MS, --max-segment MS, --threshold X
+                           Override where the bridge cuts segments (pipe)
+    --name <label>         Name this audio source for the bridge (pipe)
     --new                  Rotate the APP_TOKEN (token)
     --now                  Enable and start it straight away (service install)
     --force                Re-download even if present (prepare-vosk);
                            overwrite an existing unit (service install)
-    --stash                Stash local changes across a git update
-    --dry-run              Report what an update would do, change nothing
-    --branch <name>        Rebase onto origin/<name> (git installs)
+    --stash                Stash local changes across a git update (update)
+    --dry-run              Report what would happen, change nothing
+                           (update, service install)
+    --branch <name>        Rebase onto origin/<name> (update, git installs)
 
   ${bold('Environment')}
     AGENTVOICE_HOME        Bridge home. Defaults to the current directory when
@@ -80,6 +89,46 @@ const USAGE = `
 
   Docs: docs/35-cli.md
 `;
+
+/**
+ * `agentvoice <command> --help`: the USAGE lines for that command and the
+ * options whose parenthetical names it. Derived from USAGE rather than kept as
+ * a second copy, so the two cannot disagree.
+ */
+export function commandHelp(command: string): string | null {
+  const entries: Array<{ options: boolean; text: string[] }> = [];
+  let inOptions = false;
+  for (const line of USAGE.split('\n')) {
+    if (line.includes('Options')) inOptions = true;
+    else if (line.includes('Environment')) inOptions = false;
+    if (/^ {4}\S/.test(line)) entries.push({ options: inOptions, text: [line] });
+    else if (/^ {10,}\S/.test(line) && entries.length) entries[entries.length - 1]!.text.push(line);
+  }
+
+  const commands = entries.filter((e) => {
+    if (e.options) return false;
+    const names = e.text[0]!.trim().split(/\s{2,}/)[0]!.split(/\s*\|\s*/).map((n) => n.split(' ')[0]);
+    return names.includes(command);
+  });
+  if (commands.length === 0) return null;
+
+  const options = entries.filter((e) => {
+    if (!e.options) return false;
+    const scopes = [...e.text.join(' ').matchAll(/\(([^)]*)\)/g)].flatMap((m) =>
+      m[1]!.split(/[,;]/).map((part) => part.trim().split(' ')[0]),
+    );
+    return scopes.includes(command);
+  });
+
+  return [
+    '',
+    `  ${bold(`agentvoice ${command}`)}`,
+    '',
+    ...commands.flatMap((e) => e.text),
+    ...(options.length ? ['', `  ${bold('Options')}`, ...options.flatMap((e) => e.text)] : []),
+    '',
+  ].join('\n');
+}
 
 export async function main(argv: string[]): Promise<void> {
   try {
@@ -106,6 +155,15 @@ async function dispatch(argv: string[]): Promise<void> {
 
   const command = first.startsWith('-') ? 'run' : first || 'run';
   const args = first.startsWith('-') ? argv : rest;
+
+  // `agentvoice logs --help` — anywhere before a bare `--`.
+  const flagArgs = args.includes('--') ? args.slice(0, args.indexOf('--')) : args;
+  if (flagArgs.includes('--help') || flagArgs.includes('-h')) {
+    const text = commandHelp(command);
+    if (!text) throw new UsageError(`unknown command "${command}"`);
+    say(text);
+    return;
+  }
 
   switch (command) {
     case 'run': {

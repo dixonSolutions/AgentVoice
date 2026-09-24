@@ -11,11 +11,11 @@
  * is the one command allowed to show it.
  */
 
-import { detectInstallMode } from '../../serve/installMode.js';
+import { detectInstallMode, PACKAGE_NAME } from '../../serve/installMode.js';
 import { findBridge } from '../bridge.js';
-import { readConfig, readEnvFile, resolveHome } from '../home.js';
+import { projectSummary, readConfig, readEnvFile, resolveHome } from '../home.js';
 import { bold, cyan, dim, green, red, renderRows, say, yellow, type Row } from '../out.js';
-import { detectUnit, noUnitAdvice, readUnitState } from '../service.js';
+import { describeUnit, detectUnit, noUnitAdvice, readUnitState, type UnitScope } from '../service.js';
 import { gitVersion, isNewer, latestOnRegistry, packageVersion } from '../versions.js';
 
 export interface StatusReport {
@@ -28,7 +28,14 @@ export interface StatusReport {
     registryError?: string | null;
     git?: Awaited<ReturnType<typeof gitVersion>>;
   };
-  config: { path: string; exists: boolean; error: string | null; projects: number | null };
+  config: {
+    path: string;
+    exists: boolean;
+    error: string | null;
+    projects: number | null;
+    /** Discovery roots, or [] when discovery is off. */
+    hotPaths: string[];
+  };
   service: {
     unit: string;
     scope: string;
@@ -62,7 +69,7 @@ export async function collectStatus(): Promise<StatusReport> {
   if (install.mode === 'git') {
     version.git = await gitVersion(install.root);
   } else if (install.mode === 'npm') {
-    const latest = await latestOnRegistry('agentvoice');
+    const latest = await latestOnRegistry(PACKAGE_NAME);
     version.latest = latest.version;
     version.registryError = latest.error;
     version.updateAvailable = latest.version ? isNewer(latest.version, installed) : false;
@@ -80,13 +87,19 @@ export async function collectStatus(): Promise<StatusReport> {
   const tokenInFile = (envFile.get('APP_TOKEN') ?? '').trim().length > 0;
   const tokenInEnv = (process.env['APP_TOKEN'] ?? '').trim().length > 0;
 
-  const projects = Array.isArray(cfg.config?.projects) ? cfg.config.projects.length : null;
+  const summary = cfg.config ? projectSummary(cfg) : null;
 
   return {
     install,
     home,
     version,
-    config: { path: cfg.path, exists: cfg.exists, error: cfg.error, projects },
+    config: {
+      path: cfg.path,
+      exists: cfg.exists,
+      error: cfg.error,
+      projects: summary?.projects ?? null,
+      hotPaths: summary?.hotPaths ?? [],
+    },
     service: {
       unit: unit.unit,
       scope: unit.scope,
@@ -222,7 +235,8 @@ function configValue(report: StatusReport): string {
     return `${red('unparseable')} ${dim(`— ${report.config.error}`)}`;
   }
   const projects = report.config.projects;
-  return `${green('ok')} ${dim(`${projects ?? 0} project${projects === 1 ? '' : 's'}`)}`;
+  const discovery = report.config.hotPaths.length ? ` · discovery in ${report.config.hotPaths.join(', ')}` : '';
+  return `${green('ok')} ${dim(`${projects ?? 0} project${projects === 1 ? '' : 's'}${discovery}`)}`;
 }
 
 function serviceRow(report: StatusReport): Row {
@@ -234,7 +248,7 @@ function serviceRow(report: StatusReport): Row {
       notes: (svc.advice ?? '').split('\n').slice(1).map((line) => line.trim()),
     };
   }
-  const scope = `${svc.unit} (${svc.scope} unit${svc.enabled ? `, ${svc.enabled}` : ''})`;
+  const scope = `${describeUnit({ scope: svc.scope as UnitScope, unit: svc.unit, noSystemd: false })}${svc.enabled ? ` · ${svc.enabled}` : ''}`;
   const state = svc.active ? green(svc.state ?? 'active') : red(svc.state ?? 'inactive');
   const notes = [scope];
   if (svc.since) notes.push(`since ${svc.since}${svc.mainPid ? ` · pid ${svc.mainPid}` : ''}`);
@@ -263,13 +277,23 @@ function bridgeRows(report: StatusReport): Row[] {
     const client = String(health['agentClient'] ?? '?');
     const cliVersion = health['cliVersion'];
     const agent =
-      cliVersion === null || cliVersion === undefined
-        ? `${client} ${yellow('(not resolved yet)')}`
-        : `${client} ${String(cliVersion)}`;
+      health['cliFound'] === false
+        ? `${client} ${red('(not installed — see agentvoice doctor)')}`
+        : cliVersion === null || cliVersion === undefined
+          ? `${client} ${yellow('(version not read yet)')}`
+          : `${client} ${String(cliVersion)}`;
     rows.push({
       label: 'healthz',
       value: `db ${db === 'ok' ? green('ok') : red(db)} · ${projects} project${projects === 1 ? '' : 's'} · agent CLI ${agent}`,
       notes: [`runMode ${String(health['runMode'] ?? '?')} · open ${String(health['webUrl'] ?? b.url)}`],
+    });
+
+    // Where the phone reaches it — the address worth copying off this screen.
+    const publicUrl = health['publicBaseUrl'];
+    rows.push({
+      label: 'public',
+      value: typeof publicUrl === 'string' && publicUrl ? publicUrl : dim('none — reachable on this machine / LAN only'),
+      notes: typeof publicUrl === 'string' && publicUrl ? [] : ['Set up remote access in Config → Serve → Network'],
     });
   }
 

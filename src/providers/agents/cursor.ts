@@ -23,7 +23,8 @@ import { updateAgentEnvKeys } from '../../state/envFile.js';
 import { sessionSelection, type Project, type SessionState } from '../../state/registry.js';
 import { buildAgentPrompt, buildAskPrompt } from '../../executor/agentPrompt.js';
 import { formatPathForLog, resolveUserHome } from '../../mcp/hostPaths.js';
-import { createBinResolver, homeCandidate } from '../binResolve.js';
+import { createBinResolver } from '../binResolve.js';
+import { AGENT_BIN_SPECS } from '../binSpecs.js';
 import { runLoginCommand } from './authFlowRunner.js';
 import {
   buildJsonMcpEntry,
@@ -60,15 +61,7 @@ import type {
 const execFileAsync = promisify(execFile);
 const log = childLogger('provider:cursor');
 
-const resolver = createBinResolver({
-  envVar: 'CURSOR_AGENT_PATH',
-  candidates: [
-    homeCandidate('.local/bin/cursor-agent'),
-    homeCandidate('.cursor/bin/cursor-agent'),
-    '/usr/local/bin/cursor-agent',
-  ],
-  fallback: 'cursor-agent',
-});
+const resolver = createBinResolver(AGENT_BIN_SPECS.cursor);
 
 interface RawCursorModel {
   id: string;

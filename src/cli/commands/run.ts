@@ -20,6 +20,7 @@ import {
   seedConfig,
   seedEnv,
 } from '../home.js';
+import { PACKAGE_NAME } from '../../serve/installMode.js';
 import { fail, say } from '../out.js';
 
 export async function runCommand(): Promise<number | null> {
@@ -42,8 +43,9 @@ export async function runCommand(): Promise<number | null> {
     const line = '─'.repeat(62);
     say(`\n${line}\n AgentVoice first run — bridge home: ${home}`);
     if (seededConfig) {
-      say(' Created config.json from config.example.json. Edit it to add');
-      say(' your projects (absolute paths) before your first voice turn.');
+      say(' Created config.json from config.example.json. Git repos under');
+      say(' ~/Projects are picked up automatically — change where it looks with');
+      say(' settings.projectDiscovery.hotPaths in config.json.');
     }
     if (newToken) {
       say(`\n Your APP_TOKEN (saved to ${envPath(home)}):\n`);
@@ -69,7 +71,7 @@ export async function runCommand(): Promise<number | null> {
   } catch (err) {
     const code = (err as { code?: string } | null)?.code;
     if (code === 'ERR_MODULE_NOT_FOUND') {
-      fail(`${entry} is missing — this install is incomplete. Reinstall with: npm i -g @ratitisrad/agentvoice`);
+      fail(`${entry} is missing — this install is incomplete. Reinstall with: npm i -g ${PACKAGE_NAME}`);
       return 1;
     }
     const advice = nativeBindingAdvice(err instanceof Error ? err.message : String(err));
