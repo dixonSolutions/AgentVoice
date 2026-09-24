@@ -72,9 +72,13 @@ try {
   }
   const installed = service?.installed === true;
 
-  // Installed but stopped means someone stopped it (or `service uninstall`
-  // masked a packaged unit): an update must not start it behind their back.
-  if (installed && !service.active) {
+  // Stopped cleanly *and* not set to start means someone turned it off (or
+  // `service uninstall` masked a packaged unit): an update must not start it
+  // behind their back. A crashed (failed) or enabled-but-stopped service is
+  // restarted — picking up a fix is what the update is for.
+  const ENABLED = new Set(['enabled', 'enabled-runtime', 'linked', 'linked-runtime', 'static', 'loaded', 'installed', 'auto']);
+  const crashedOrStarting = /failed|activating|auto-restart/.test(service?.state ?? '');
+  if (installed && !service.active && !crashedOrStarting && !ENABLED.has(service.enabled ?? '')) {
     console.log('AgentVoice updated. Its background service is stopped — start it with `agentvoice start` when you want it.');
     process.exit(0);
   }

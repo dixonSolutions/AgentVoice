@@ -67,8 +67,12 @@ function installedAgent(id: AgentBinId): string | null {
   return createBinResolver(spec).resolvedPath() ?? whichSync(spec.fallback);
 }
 
-/** Enabled values across systemd, launchd (our readUnitState) and Windows. */
-const ENABLED_STATES = new Set(['enabled', 'enabled-runtime', 'linked', 'linked-runtime', 'static', 'loaded', 'auto']);
+/**
+ * "Set to run" across systemd, launchd and Windows. For launchd, readUnitState
+ * reports `installed` when the plist exists but is not bootstrapped — it still
+ * starts at login (RunAtLoad), e.g. after `agentvoice stop`.
+ */
+const ENABLED_STATES = new Set(['enabled', 'enabled-runtime', 'linked', 'linked-runtime', 'static', 'loaded', 'installed', 'auto']);
 
 /** Is a service installed *and* set to run (enabled) or running right now? */
 async function serviceIsLive(): Promise<boolean> {
