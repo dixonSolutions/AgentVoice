@@ -64,11 +64,19 @@ function agentvoice(...args) {
 try {
   // `status --json` exits 1 when the bridge is down; the JSON is still there.
   const status = agentvoice('status', '--json');
-  let installed = false;
+  let service = null;
   try {
-    installed = JSON.parse(status.stdout).service?.installed === true;
+    service = JSON.parse(status.stdout).service ?? null;
   } catch {
     /* no status — treat as not installed */
+  }
+  const installed = service?.installed === true;
+
+  // Installed but stopped means someone stopped it (or `service uninstall`
+  // masked a packaged unit): an update must not start it behind their back.
+  if (installed && !service.active) {
+    console.log('AgentVoice updated. Its background service is stopped — start it with `agentvoice start` when you want it.');
+    process.exit(0);
   }
 
   const result = installed ? agentvoice('restart') : agentvoice('service', 'install', '--now');

@@ -11,6 +11,12 @@ case "${1:-}" in
   0) removing=true ;;              # rpm: 0 = erase, 1 = upgrade
 esac
 
+if $removing; then
+  # Tells postinstall that a later install is a reinstall, not an upgrade, so
+  # the service is enabled again (dpkg reports both as "configure <old>").
+  mkdir -p /var/lib/agentvoice 2>/dev/null && : > /var/lib/agentvoice/reenable-service 2>/dev/null || true
+fi
+
 if $removing && command -v systemctl >/dev/null 2>&1; then
   systemctl --global disable agentvoice.service >/dev/null 2>&1 || true
   user="${SUDO_USER:-}"
