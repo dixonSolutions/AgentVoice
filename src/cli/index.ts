@@ -24,6 +24,7 @@ import { parseArgs, rejectUnknown, intFlag, UsageError } from './args.js';
 import { doctorCommand } from './commands/doctor.js';
 import { runCommand } from './commands/run.js';
 import { logsCommand, serviceCommand } from './commands/service.js';
+import { migrateCommand } from './commands/migrate.js';
 import { pipeCommand, pipeOptions, PIPE_SWITCHES, PIPE_VALUE_FLAGS } from './commands/pipe.js';
 import { serviceInstallCommand } from './commands/serviceInstall.js';
 import { statusCommand } from './commands/status.js';
@@ -53,6 +54,8 @@ const USAGE = `
     status [--json]        Install, version, service, port and health at a glance
     doctor [--json]        Check Node, the native binding, config, CLI and port
     update [--stash]       Update this install the way it was installed
+    migrate <path>         Carry an existing bridge's config.json + .env into
+                           this install's home (copies only; starts nothing)
     token [--new]          Print the pairing token, or mint a fresh one
     prepare-vosk [--force] Fetch the wake-word model now (the bridge also does on boot)
     version                Package version (plus the commit, in a clone)
@@ -77,11 +80,14 @@ const USAGE = `
     --new                  Rotate the APP_TOKEN (token)
     --now                  Enable and start it straight away (service install)
     --force                Re-download even if present (prepare-vosk);
-                           overwrite an existing unit (service install)
+                           overwrite an existing unit (service install);
+                           replace existing files, backed up first (migrate)
     --stash                Stash local changes across a git update (update)
     --dry-run              Report what would happen, change nothing
-                           (update, service install)
+                           (update, service install, migrate)
     --branch <name>        Rebase onto origin/<name> (update, git installs)
+    --to <dir>             Home to migrate into (migrate; default ~/.agentvoice)
+    --with-data            Also copy data/state.db as a consistent snapshot (migrate)
 
   ${bold('Environment')}
     AGENTVOICE_HOME        Bridge home. Defaults to the current directory when
@@ -240,6 +246,23 @@ async function dispatch(argv: string[]): Promise<void> {
       const parsed = parseArgs(args, { valueFlags: ['branch'] });
       rejectUnknown(parsed, UPDATE_FLAGS);
       process.exitCode = await updateCommand(parsed);
+      return;
+    }
+
+    case 'migrate': {
+      const parsed = parseArgs(args, { valueFlags: ['to'] });
+      rejectUnknown(parsed, ['to', 'dry-run', 'force', 'with-data']);
+      const [source, ...extra] = parsed.positionals;
+      if (!source) throw new UsageError('migrate needs a path — the directory the old bridge ran from');
+      if (extra.length) throw new UsageError(`migrate takes one path (got ${parsed.positionals.length})`);
+      const to = parsed.values.get('to');
+      process.exitCode = await migrateCommand({
+        source,
+        ...(to !== undefined ? { to } : {}),
+        dryRun: parsed.switches.has('dry-run'),
+        force: parsed.switches.has('force'),
+        withData: parsed.switches.has('with-data'),
+      });
       return;
     }
 

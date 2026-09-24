@@ -81,6 +81,12 @@ because it serves the built PWA itself; `PORT` picks another port on first run).
 the PWA is served from the same port — and paste the token when it asks you to
 pair.
 
+**Moving from a clone?** `agentvoice migrate ~/Projects/AgentVoice` carries
+its `config.json` and `.env` (keys and pairing token included, written 0600,
+never printed) into `~/.agentvoice` in one step; `--with-data` brings the job
+history too, and `--dry-run` shows what would move. It starts nothing — run
+`agentvoice` or `agentvoice service install --now` afterwards.
+
 Everything the bridge writes — `config.json`, `data/state.db`, logs — stays in
 that home directory, so `npm update -g @ratitisrad/agentvoice` never touches your state.
 Run `agentvoice` from a directory that already has a `config.json` (a repo
@@ -106,6 +112,7 @@ agentvoice logs --list     # every session log and voice transcript on disk
 agentvoice pipe --mic      # talk to the agent from this terminal, no phone needed
 agentvoice update          # rebase a clone, or npm-install a newer package
 agentvoice token --new     # rotate the pairing token
+agentvoice migrate <path>  # carry a clone's config + keys into this install
 agentvoice <command> --help   # just that command's options
 ```
 
