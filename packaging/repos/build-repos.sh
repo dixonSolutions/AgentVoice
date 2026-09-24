@@ -34,7 +34,7 @@
 #   agentvoice.asc                  the public key(s)
 #   manifest.txt                    sha256 + path of every package, read back
 #                                   by fetch-published.sh on the next run
-#   index.html
+#   packages.html      (the site root is the landing page, laid on top by the workflow)
 
 set -euo pipefail
 
