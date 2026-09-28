@@ -16,14 +16,15 @@
  *
  *   client → { type: "auth", token }                          first frame, always
  *   client → { type: "start", sampleRate: 16000, encoding: "pcm_s16le",
- *              channels: 1, client?: "cli" | "pwa", name?, listen?, segment? }
+ *              channels: 1, client?: "cli" | "pwa", name?, listen?, segment?,
+ *              project? }   ← makes that project active first (`pipe --project`)
  *   client → <binary>  PCM16LE mono 16 kHz, any chunk size
  *   client → { type: "flush" }   cut the current segment now (push-to-talk release)
  *   client → { type: "end" }     no more audio — finish transcribing, reply "drained"
  *   client → { type: "ping" }
  *
  *   bridge → { type: "auth_ok" }
- *   bridge → { type: "ready", sampleRate, encoding, channels, segment, stt }
+ *   bridge → { type: "ready", sampleRate, encoding, channels, segment, stt, project? }
  *   bridge → { type: "segment", index, text, audio_ms, latency_ms, provider, delivered, delivery?, reason?, message? }
  *   bridge → { type: "segment_empty", index, audio_ms }
  *   bridge → { type: "drained", stats }
@@ -54,7 +55,9 @@ import {
   registerVoiceSession,
 } from '../mcp/server/voiceToolHandlers.js';
 import { recordTranscriptEvent } from '../logging/transcripts.js';
+import { ensureClientMcpSetup } from '../mcp/agentMcpSetup.js';
 import { getPresence, type PresenceClient } from '../state/presence.js';
+import { getSessionState, resolveProject, setActiveProject } from '../state/registry.js';
 import { AudioStreamPipe } from '../voice/audioStream/pipe.js';
 
 const log = childLogger('api:audio-stream');
@@ -155,6 +158,20 @@ export function registerAudioStreamWebSocket(app: FastifyInstance): void {
           return;
         }
 
+        // `project` does what the phone's dropdown does — the same session
+        // setting as POST /api/active-project — so a pipe can start the agent
+        // without a phone having chosen a project first.
+        const wantedProject = typeof msg['project'] === 'string' ? msg['project'].trim() : '';
+        if (wantedProject) {
+          const resolved = resolveProject(wantedProject);
+          if (!resolved) {
+            fail(`Project "${wantedProject}" is not registered — agentvoice add <path>, or pick one of the configured projects.`, 4404);
+            return;
+          }
+          setActiveProject('default', resolved.name);
+        }
+        const activeProject = getSessionState('default').activeProject;
+
         const overrides = SegmentOverridesSchema.safeParse(msg['segment'] ?? {});
         const segment = { ...settings.voice.stream, ...(overrides.success ? overrides.data : {}) };
 
@@ -176,9 +193,30 @@ export function registerAudioStreamWebSocket(app: FastifyInstance): void {
           recordTranscriptEvent(`${clientName} started streaming`);
         }
 
+        // The agent CLI is launched with a generated MCP config that the phone
+        // writes through /api/voice-session/prepare before its first turn. A
+        // pipe has no prepare step, so write it here — and let the first
+        // transcript wait for it — or a fresh install's first phone-less
+        // session spawns an agent that cannot find the bridge.
+        const mcpReady = ensureClientMcpSetup(settings.agentClient)
+          .then((result) => {
+            if (!result.ok) {
+              log.warn({ client: clientName, message: result.message }, 'agent MCP registration failed for audio stream');
+              sendJson({ type: 'error', message: `Agent MCP registration failed: ${result.message}` });
+            }
+            return result.ok;
+          })
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            log.warn({ client: clientName, err }, 'agent MCP registration threw for audio stream');
+            sendJson({ type: 'error', message: `Agent MCP registration failed: ${message}` });
+            return false;
+          });
+
         pipe = new AudioStreamPipe({
           segmenter: { sampleRate: AUDIO_STREAM_SAMPLE_RATE, ...segment },
           transcribe: async (pcm, signal) => {
+            await mcpReady;
             const result = await transcribe(pcm, { signal });
             return { text: result.text, provider: result.provider, model: result.model };
           },
@@ -224,7 +262,7 @@ export function registerAudioStreamWebSocket(app: FastifyInstance): void {
         });
 
         log.info(
-          { client: clientName, listen, ip: req.ip, stt: sttLabel(), segment },
+          { client: clientName, listen, ip: req.ip, stt: sttLabel(), segment, project: activeProject },
           'audio stream started',
         );
         sendJson({
@@ -235,6 +273,7 @@ export function registerAudioStreamWebSocket(app: FastifyInstance): void {
           segment,
           stt: sttLabel(),
           listening: listen,
+          ...(activeProject ? { project: activeProject } : {}),
         });
       };
 

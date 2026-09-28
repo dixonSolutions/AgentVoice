@@ -58,6 +58,16 @@ point it at a remote bridge:
 agentvoice pipe --mic --url https://box.tailnet.ts.net --token "$APP_TOKEN"
 ```
 
+The agent works in the bridge's **active project** — what the phone's project
+dropdown sets. With no phone around, `--project <name>` selects it (any
+registered name or alias) before the first segment, exactly like
+`POST /api/active-project`; without it a bridge that has never had a project
+chosen answers "No project is selected":
+
+```bash
+agentvoice pipe --mic --project my-app
+```
+
 WAV input of any rate/channel count is converted on the client (16-bit PCM or
 32-bit float); raw stdin is taken as 16 kHz mono PCM16 unless `--rate` /
 `--channels` say otherwise; other formats go through `ffmpeg`. `--mic` uses the
@@ -144,11 +154,11 @@ Text frames are JSON; audio frames are binary PCM16LE mono at 16 kHz.
 | Direction | Message |
 | --- | --- |
 | client → | `{ type: "auth", token }` — first frame, always |
-| client → | `{ type: "start", sampleRate: 16000, encoding: "pcm_s16le", channels: 1, client?: "cli" \| "pwa", name?, listen?, segment? }` |
+| client → | `{ type: "start", sampleRate: 16000, encoding: "pcm_s16le", channels: 1, client?: "cli" \| "pwa", name?, listen?, segment?, project? }` — `project` (name or alias) is made active first, like the phone's dropdown |
 | client → | binary audio, any chunk size (≤ 256 KB per frame) |
 | client → | `{ type: "flush" }` — cut the current segment now |
 | client → | `{ type: "end" }` — no more audio; finish transcribing |
-| bridge → | `{ type: "auth_ok" }`, then `{ type: "ready", segment, stt, listening }` |
+| bridge → | `{ type: "auth_ok" }`, then `{ type: "ready", segment, stt, listening, project? }` |
 | bridge → | `{ type: "segment", index, text, audio_ms, latency_ms, delivered, delivery }` — `delivery` is `spawn`, `waiter`, `queued` or `tool_interrupt`; undelivered segments carry `reason` + `message` |
 | bridge → | `{ type: "segment_empty", index, audio_ms }` |
 | bridge → | `{ type: "drained", stats }` — after `end`, once every segment is done |

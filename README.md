@@ -14,6 +14,14 @@
   <em>Formerly "Cursor Voice" — see <a href="./docs/26-rename-agentvoice.md"><code>docs/26-rename-agentvoice.md</code></a>.</em>
 </p>
 
+<p align="center">
+  <a href="./docs/demo/agentvoice-demo.mp4"><img src="./docs/demo/agentvoice-demo.gif" alt="55-second demo: agentvoice pipe --mic streams a spoken question to the bridge, Claude Code answers by voice" width="820"></a>
+</p>
+<p align="center">
+  <em>One voice session from a terminal — <code>agentvoice pipe --mic --project agentvoice</code>, two spoken questions, Claude Code answers.
+  <a href="./docs/demo/agentvoice-demo.mp4">▶ Watch with sound (MP4)</a> · <a href="./docs/demo/README.md">transcript &amp; how it was made</a></em>
+</p>
+
 Self-hosted voice bridge for driving a coding agent CLI —
 [Cursor](https://cursor.com/docs/cli) (`cursor-agent`), [Codex](https://github.com/openai/codex),
 [Claude Code](https://github.com/anthropics/claude-code), or
