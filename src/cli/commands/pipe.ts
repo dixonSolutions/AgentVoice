@@ -4,6 +4,7 @@
  *   arecord -f S16_LE -r 16000 -c 1 -t raw | agentvoice pipe
  *   agentvoice pipe --mic
  *   agentvoice pipe --file question.wav
+ *   agentvoice pipe --mic --project my-app     # select the project first
  *
  * Audio goes to the bridge's /ws/audio-stream, which cuts it at pauses,
  * transcribes each piece and hands it to the agent as it lands. The agent's
@@ -42,6 +43,7 @@ export const PIPE_VALUE_FLAGS = [
   'max-segment',
   'threshold',
   'linger',
+  'project',
 ];
 export const PIPE_SWITCHES = ['mic', 'realtime', 'json', 'no-listen'];
 
@@ -57,6 +59,8 @@ export interface PipeOptions {
   url?: string;
   token?: string;
   name?: string;
+  /** Project to make active before the first segment — what the phone's dropdown does. */
+  project?: string;
   segment: Record<string, number>;
 }
 
@@ -85,6 +89,7 @@ export function pipeOptions(parsed: Parsed): PipeOptions {
   const url = parsed.values.get('url');
   const token = parsed.values.get('token');
   const name = parsed.values.get('name');
+  const project = parsed.values.get('project')?.trim();
   return {
     mic,
     ...(file ? { file } : {}),
@@ -97,6 +102,7 @@ export function pipeOptions(parsed: Parsed): PipeOptions {
     ...(url ? { url } : {}),
     ...(token ? { token } : {}),
     ...(name ? { name } : {}),
+    ...(project ? { project } : {}),
     segment,
   };
 }
@@ -298,6 +304,7 @@ function runPipe(opts: PipeOptions, base: string, token: string, done: (code: nu
             client: 'cli',
             listen: opts.listen,
             ...(opts.name ? { name: opts.name } : {}),
+            ...(opts.project ? { project: opts.project } : {}),
             ...(Object.keys(opts.segment).length ? { segment: opts.segment } : {}),
           }),
         );
@@ -312,6 +319,7 @@ function runPipe(opts: PipeOptions, base: string, token: string, done: (code: nu
               (opts.listen ? '' : ' · not listening for replies'),
           ),
         );
+        if (typeof msg['project'] === 'string') status(dim(`  project: ${msg['project']}`));
         for (const pcm of queue.splice(0)) send(pcm);
         startInput();
         status(dim(opts.mic ? '  listening — speak; Ctrl-C to stop' : '  streaming…'));

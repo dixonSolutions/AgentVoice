@@ -94,6 +94,7 @@ const USAGE = `
     --silence MS, --max-segment MS, --threshold X
                            Override where the bridge cuts segments (pipe)
     --name <label>         Name this audio source for the bridge (pipe)
+    --project <name>       Select the active project before streaming (pipe)
     --new                  Rotate the APP_TOKEN (token)
     --now                  Enable and start it straight away (service install)
     --force                Re-download even if present (prepare-vosk);
