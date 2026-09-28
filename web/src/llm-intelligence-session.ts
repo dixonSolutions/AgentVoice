@@ -308,10 +308,6 @@ export class LlmIntelligenceSession {
     this.cb.onState('connecting');
     await primeTtsPlaybackUnlock();
 
-    // Backend resolution is independent of the socket — run it concurrently with
-    // the connect handshake so the two latencies overlap instead of stacking.
-    const backendsPromise = resolveAudioBackendsAsync(this.audioConfig);
-
     const wsUrl = `${this.bridgeBase.replace(/^http/, 'ws')}/ws`;
     this.ws = new WebSocket(wsUrl);
 
@@ -365,7 +361,11 @@ export class LlmIntelligenceSession {
       });
     });
 
-    const resolved = await backendsPromise;
+    // The speech chains arrive with auth_ok (`audio` in the hello), so the
+    // backends can only be chosen after the handshake. Resolving them
+    // concurrently used to read the placeholder config — a browser-first chain
+    // — and pick Browser STT even when the bridge was configured server-only.
+    const resolved = await resolveAudioBackendsAsync(this.audioConfig);
     this.sttBackend = resolved.stt;
     this.ttsBackend = resolved.tts;
     console.info('[audio] STT:', this.sttBackend, 'TTS:', this.ttsBackend, resolved.sttNote ?? '');

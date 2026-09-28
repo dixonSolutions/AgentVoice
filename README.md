@@ -15,10 +15,10 @@
 </p>
 
 <p align="center">
-  <a href="./docs/demo/agentvoice-demo.mp4"><img src="./docs/demo/agentvoice-demo.gif" alt="55-second demo: agentvoice pipe --mic streams a spoken question to the bridge, Claude Code answers by voice" width="820"></a>
+  <a href="./docs/demo/agentvoice-demo.mp4"><img src="./docs/demo/agentvoice-demo.gif" alt="One-minute demo: pick a project and the Claude Code model in the AgentVoice web client, ask by voice, Claude Code answers by voice" width="820"></a>
 </p>
 <p align="center">
-  <em>One voice session from a terminal — <code>agentvoice pipe --mic --project agentvoice</code>, two spoken questions, Claude Code answers.
+  <em>One voice session in the web client — pick the project and the Claude Code model, tap the orb, ask; Claude Code answers by voice.
   <a href="./docs/demo/agentvoice-demo.mp4">▶ Watch with sound (MP4)</a> · <a href="./docs/demo/README.md">transcript &amp; how it was made</a></em>
 </p>
 
