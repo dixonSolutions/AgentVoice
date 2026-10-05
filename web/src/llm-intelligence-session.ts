@@ -308,10 +308,6 @@ export class LlmIntelligenceSession {
     this.cb.onState('connecting');
     await primeTtsPlaybackUnlock();
 
-    // Backend resolution is independent of the socket — run it concurrently with
-    // the connect handshake so the two latencies overlap instead of stacking.
-    const backendsPromise = resolveAudioBackendsAsync(this.audioConfig);
-
     const wsUrl = `${this.bridgeBase.replace(/^http/, 'ws')}/ws`;
     this.ws = new WebSocket(wsUrl);
 
@@ -365,7 +361,10 @@ export class LlmIntelligenceSession {
       });
     });
 
-    const resolved = await backendsPromise;
+    // Resolve only after auth_ok: the bridge's STT/TTS chains arrive with it, and
+    // resolving against the browser-only default would pick webkit STT even when
+    // the bridge has a server provider ready (and webkit fails in e.g. Chromium).
+    const resolved = await resolveAudioBackendsAsync(this.audioConfig);
     this.sttBackend = resolved.stt;
     this.ttsBackend = resolved.tts;
     console.info('[audio] STT:', this.sttBackend, 'TTS:', this.ttsBackend, resolved.sttNote ?? '');
