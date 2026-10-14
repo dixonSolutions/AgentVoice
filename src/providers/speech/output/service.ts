@@ -32,10 +32,14 @@ export interface SynthesizeOutcome extends SpeechOutputResult {
   skipped: SkipRecord[];
 }
 
-/** Speak one line through the configured chain. */
+/**
+ * Speak one line through the configured chain. With `stream`, a streaming
+ * vendor answers with `pcm` (chunks as it produces them) instead of `audio`;
+ * a vendor that only returns whole files answers as usual.
+ */
 export async function synthesize(
   text: string,
-  opts: { language?: string; signal?: AbortSignal } = {},
+  opts: { language?: string; signal?: AbortSignal; stream?: boolean } = {},
 ): Promise<SynthesizeOutcome> {
   const language = opts.language ?? speechOutputLanguage();
   const outcome = await runThroughChain(
@@ -43,6 +47,7 @@ export async function synthesize(
       text,
       ...(language ? { language } : {}),
       ...(opts.signal ? { signal: opts.signal } : {}),
+      ...(opts.stream ? { stream: true } : {}),
     },
     speechOutputPolicy,
     { label: 'speech:output', emptyChainMessage: 'No text-to-speech provider is ready' },

@@ -33,6 +33,7 @@ export const localSpeechInput: SpeechInputVendor = {
     languageHint: true,
     sendsAudioOffMachine: false,
     approxUsdPerAudioHour: null,
+    liveStreaming: false,
     docsUrl: 'https://speaches.ai/',
   },
   models: [

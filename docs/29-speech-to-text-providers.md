@@ -157,6 +157,33 @@ Amazon streams the raw PCM; every other provider gets it wrapped in a WAV
 container ([`wav.ts`](../src/providers/speech/wav.ts)) since none of the HTTP
 APIs accept headerless PCM. That is a 44-byte header, not a transcode.
 
+### Uploaded while it is spoken — `/ws/stt`
+
+The phone no longer holds a turn's audio until the speaker stops. Its mic
+callback is 1024 frames (~20 ms), and each chunk goes to `/ws/stt` the moment
+it is captured ([`stt-uplink.ts`](../web/src/stt-uplink.ts),
+[`sttSocket.ts`](../src/routes/sttSocket.ts)):
+
+```
+phone → { type: "begin", id }  <PCM chunk> <PCM chunk> …  { type: "end", id }
+bridge → { type: "transcript", id, text, provider, model, live, latency_ms }
+```
+
+When the speaker stops, the bridge already has the whole utterance:
+
+- **Amazon Transcribe** (`capabilities.liveStreaming: true`) — a live
+  StartStreamTranscription session is fed each chunk as it arrives
+  ([`sttUpload.ts`](../src/voice/sttUpload.ts)), so `end` only waits for the
+  last results. If the live session fails, the collected audio goes through the
+  normal fallback chain instead.
+- **Every other engine** (`liveStreaming: false` — their APIs take a whole
+  file) — the utterance is sent the moment it ends, with no upload left to do.
+
+If the socket is unavailable — no connection, a drop after `end`, an older
+bridge — the phone POSTs the audio it kept to `/api/intelligence/transcribe`,
+the old path. A reconnect mid-utterance replays everything captured so far.
+An engine error is not retried over the POST.
+
 Errors name the engine that actually failed
 ([`errors.ts`](../src/providers/speech/errors.ts)) — "check AWS credentials" is
 worse than useless when the active provider is Groq.

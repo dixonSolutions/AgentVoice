@@ -14,6 +14,7 @@ import {
   speechServerSettings,
   speechServerUnavailableDetail,
 } from '../../server.js';
+import { bodyChunks, wavPcmStream } from '../pcmStream.js';
 import { resolveVendorCall } from '../settings.js';
 import type { SpeechOutputVendor, SpeechVoiceOption } from '../types.js';
 
@@ -48,6 +49,10 @@ export const localSpeechOutput: SpeechOutputVendor = {
     languages: ['en', 'es', 'fr', 'hi', 'it', 'ja', 'pt', 'zh'],
     sendsTextOffMachine: false,
     approxUsdPerMillionChars: null,
+    // speaches streams every format. A streamed reply asks for WAV rather than
+    // bare `pcm` because the header carries the model's real rate (Kokoro 24 kHz,
+    // Piper 22.05 kHz) — `sample_rate` is not honoured by every speaches release.
+    streaming: true,
     docsUrl: 'https://speaches.ai/',
   },
   models: [
@@ -102,7 +107,8 @@ export const localSpeechOutput: SpeechOutputVendor = {
     id: 'local_speech',
     encode(req) {
       const call = resolveVendorCall(localSpeechOutput, req);
-      const format = scopeString(call.scopes, 'response_format', 'mp3') === 'wav' ? 'wav' : 'mp3';
+      const format =
+        req.stream || scopeString(call.scopes, 'response_format', 'mp3') === 'wav' ? 'wav' : 'mp3';
 
       return {
         url: `${speechServerApiBase()}/audio/speech`,
@@ -121,6 +127,15 @@ export const localSpeechOutput: SpeechOutputVendor = {
     },
     async decode(res, req) {
       const call = resolveVendorCall(localSpeechOutput, req);
+      if (req.stream) {
+        return {
+          audio: Buffer.alloc(0),
+          contentType: 'audio/pcm',
+          model: call.model,
+          voice: call.voice,
+          pcm: await wavPcmStream(bodyChunks(res, { signal: req.signal })),
+        };
+      }
       const format = scopeString(call.scopes, 'response_format', 'mp3');
       return {
         audio: Buffer.from(await res.arrayBuffer()),

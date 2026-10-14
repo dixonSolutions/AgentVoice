@@ -74,6 +74,34 @@ headers, and the voice log names the engine per line. A silent fallback is
 still a fallback — if the primary is being skipped every turn, that should be
 visible without reading the bridge log.
 
+## Streaming — the phone plays the first chunk, not the whole file
+
+The phone asks `POST /api/intelligence/tts` for `{ text, stream: true }`. A
+vendor that declares `capabilities.streaming` answers with headerless PCM16LE
+mono (`Content-Type: audio/pcm;rate=…`, `X-Audio-Sample-Rate`), written to the
+phone chunk by chunk as the vendor produces it. The PWA schedules each chunk on
+Web Audio right behind the previous one ([`pcm-scheduler.ts`](../web/src/pcm-scheduler.ts)),
+so the first words play while the rest is still being synthesized, and a
+barge-in cancels the download as well as the playback (the bridge then stops
+the vendor's request).
+
+| Vendor | Streamed as |
+| --- | --- |
+| OpenAI | `response_format: "pcm"` — 24 kHz, chunked |
+| ElevenLabs | `/text-to-speech/{voice}/stream?output_format=pcm_24000` |
+| Deepgram | `encoding=linear16&container=none&sample_rate=24000` |
+| Amazon Polly | `OutputFormat: pcm`, 16 kHz — the SDK's audio stream, passed through |
+| Gemini | `streamGenerateContent?alt=sse`, base64 L16 per event (today the TTS models tend to send one event, so this plays no later than a file) |
+| Groq | WAV, header parsed and the PCM passed on as Groq sends it |
+| Self-hosted (speaches) | WAV — speaches writes it as it synthesizes; the header carries the model's real rate (Kokoro 24 kHz, Piper 22.05 kHz) |
+| Browser | `streaming: false` — speaks on the device |
+
+The first chunk is read before the reply starts, so a vendor that fails at its
+header still falls back down the chain; once audio is on its way there is
+nothing to fall back to, and a stream that breaks mid-line ends the line there.
+A reply that is not `audio/pcm` (an older bridge, or a request without `stream`)
+is played whole, as before. Helpers: [`pcmStream.ts`](../src/providers/speech/output/pcmStream.ts).
+
 ## Self-hosted, both directions
 
 One container serves both: `local_whisper` posts to `/audio/transcriptions`,
@@ -90,7 +118,7 @@ demo — the Whisper side is the part that wants a GPU, not this one.
 | `/api/speech/tts` | PATCH | provider / fallbacks / language / model / voice / scopes |
 | `/api/speech/tts/:id/voices` | GET | Live voice catalog (Polly DescribeVoices, ElevenLabs `/voices`) |
 | `/api/speech/tts/:id/test` | POST | Synthesize a sample line and return the audio |
-| `/api/intelligence/tts` | POST | The runtime path — `{ text, language? }` → audio through the chain |
+| `/api/intelligence/tts` | POST | The runtime path — `{ text, language?, stream? }` → audio through the chain; `stream` → `audio/pcm` chunks as produced |
 
 Speech-input routes and the shared self-hosted server lifecycle are in
 [docs/29](./29-speech-to-text-providers.md).

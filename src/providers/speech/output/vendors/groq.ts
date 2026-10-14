@@ -9,6 +9,7 @@
 
 import { scopeString } from '../../../scopes.js';
 import { baseLanguage } from '../../languages.js';
+import { bodyChunks, wavPcmStream } from '../pcmStream.js';
 import { resolveVendorCall } from '../settings.js';
 import type { SpeechOutputVendor, SpeechVoiceOption } from '../types.js';
 
@@ -46,6 +47,9 @@ export const groqSpeechOutput: SpeechOutputVendor = {
     languages: ['en', 'ar'],
     sendsTextOffMachine: true,
     approxUsdPerMillionChars: 50,
+    // As a WAV, read as it arrives — however Groq chunks it, playback starts
+    // on the first piece rather than after the whole download.
+    streaming: true,
     docsUrl: 'https://console.groq.com/docs/text-to-speech',
     apiKeyUrl: 'https://console.groq.com/keys',
   },
@@ -93,7 +97,8 @@ export const groqSpeechOutput: SpeechOutputVendor = {
       const model =
         req.modelOverride?.trim() ??
         (baseLanguage(call.language) === 'ar' ? 'playai-tts-arabic' : call.model);
-      const format = scopeString(call.scopes, 'response_format', 'wav') === 'mp3' ? 'mp3' : 'wav';
+      const format =
+        !req.stream && scopeString(call.scopes, 'response_format', 'wav') === 'mp3' ? 'mp3' : 'wav';
 
       return {
         url: ENDPOINT,
@@ -110,6 +115,15 @@ export const groqSpeechOutput: SpeechOutputVendor = {
     },
     async decode(res, req) {
       const call = resolveVendorCall(groqSpeechOutput, req);
+      if (req.stream) {
+        return {
+          audio: Buffer.alloc(0),
+          contentType: 'audio/pcm',
+          model: call.model,
+          voice: call.voice,
+          pcm: await wavPcmStream(bodyChunks(res, { signal: req.signal })),
+        };
+      }
       const format = scopeString(call.scopes, 'response_format', 'wav');
       return {
         audio: Buffer.from(await res.arrayBuffer()),

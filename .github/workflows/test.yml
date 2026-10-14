@@ -60,6 +60,10 @@ jobs:
       - name: End to end — transcript reaches the web client at once
         run: node scripts/live-transcript-latency-test.mjs
 
+      # TTS forwarded as the voice produces it; STT uploaded while spoken.
+      - name: End to end — speech audio moves in the chunks it is produced in
+        run: node scripts/live-speech-chunking-test.mjs
+
   pwa-stream:
     name: PWA direct stream (headless Chromium)
     runs-on: ubuntu-latest

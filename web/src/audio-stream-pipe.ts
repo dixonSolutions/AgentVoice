@@ -141,7 +141,9 @@ export class AudioStreamPipeClient {
     // No noise gate: the bridge's energy segmenter needs the quiet parts intact
     // to find the pauses between phrases.
     this.chain = createMicProcessingChain(mic, { highPassHz: 120, noiseGateEnabled: false });
-    this.processor = ctx.createScriptProcessor(4096, 1, 1);
+    // 1024-frame callbacks: each ~20 ms of audio is sent the moment the mic
+    // produces it, rather than in ~85 ms lumps that delay every segment's cut.
+    this.processor = ctx.createScriptProcessor(1024, 1, 1);
     this.processor.onaudioprocess = (ev) => this.onAudio(ev, ctx.sampleRate);
     this.chain.output.connect(this.processor);
     connectSilentSink(ctx, this.processor);

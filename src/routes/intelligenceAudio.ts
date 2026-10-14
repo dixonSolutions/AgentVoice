@@ -10,6 +10,7 @@
  * Security: all /api/* routes require Bearer APP_TOKEN (see server preHandler).
  */
 
+import { Readable } from 'node:stream';
 import type { FastifyInstance } from 'fastify';
 import { getConfig } from '../config.js';
 import { childLogger } from '../log.js';
@@ -29,8 +30,44 @@ import {
   speechOutputLanguage,
   synthesize,
 } from '../providers/speech/output/service.js';
+import type { PcmStream } from '../providers/speech/output/types.js';
 
 const log = childLogger('api:intelligence-audio');
+
+/** Content type of a streamed reply: headerless PCM16LE mono at `rate`. */
+export function pcmContentType(rate: number): string {
+  return `audio/pcm;rate=${rate};channels=1;bits=16`;
+}
+
+/** Pass the chunks on untouched, logging time to first audio and the total. */
+async function* metered(
+  pcm: PcmStream,
+  info: { provider: string; voice: string; startedAt: number },
+): AsyncGenerator<Buffer> {
+  let bytes = 0;
+  let firstAt = 0;
+  try {
+    for await (const chunk of pcm.chunks) {
+      if (!firstAt) firstAt = Date.now();
+      bytes += chunk.length;
+      yield chunk;
+    }
+    log.info(
+      {
+        provider: info.provider,
+        voice: info.voice,
+        sampleRate: pcm.sampleRate,
+        bytes,
+        firstChunkMs: firstAt - info.startedAt,
+        latencyMs: Date.now() - info.startedAt,
+      },
+      'tts streamed',
+    );
+  } catch (err) {
+    log.warn({ err, provider: info.provider, bytes }, 'tts stream ended early');
+    throw err;
+  }
+}
 
 function providerLabel(id: string | null, direction: 'input' | 'output'): string | null {
   if (!id) return null;
@@ -70,8 +107,16 @@ export async function registerIntelligenceAudioRoutes(app: FastifyInstance): Pro
     };
   });
 
-  /** POST /api/intelligence/tts { text, language? } → audio the phone can play. */
-  app.post<{ Body: { text?: string; language?: string } }>(
+  /**
+   * POST /api/intelligence/tts { text, language?, stream? } → audio the phone can play.
+   *
+   * With `stream: true` and a streaming vendor, the reply is `audio/pcm`
+   * (rate in the content type and `X-Audio-Sample-Rate`), written chunk by
+   * chunk as the vendor produces it, so the phone starts playing on the first
+   * one. Otherwise — or from a bridge that predates `stream` — it is one file,
+   * and the phone decodes it whole as before.
+   */
+  app.post<{ Body: { text?: string; language?: string; stream?: boolean } }>(
     '/api/intelligence/tts',
     {
       schema: {
@@ -81,6 +126,7 @@ export async function registerIntelligenceAudioRoutes(app: FastifyInstance): Pro
           properties: {
             text: { type: 'string', minLength: 1, maxLength: 4000 },
             language: { type: 'string', minLength: 2, maxLength: 16 },
+            stream: { type: 'boolean' },
           },
         },
       },
@@ -93,10 +139,28 @@ export async function registerIntelligenceAudioRoutes(app: FastifyInstance): Pro
       }
 
       const startedAt = Date.now();
+      // The phone hangs up mid-line on barge-in; stop pulling from the vendor.
+      const hangUp = new AbortController();
+      reply.raw.on('close', () => {
+        if (!reply.raw.writableFinished) hangUp.abort();
+      });
       try {
         const spoken = await synthesize(req.body.text ?? '', {
           ...(req.body.language ? { language: req.body.language } : {}),
+          ...(req.body.stream ? { stream: true } : {}),
+          signal: hangUp.signal,
         });
+        if (spoken.pcm) {
+          return reply
+            .header('Content-Type', pcmContentType(spoken.pcm.sampleRate))
+            .header('X-Audio-Sample-Rate', String(spoken.pcm.sampleRate))
+            .header('X-Speech-Provider', spoken.provider)
+            .header('X-Speech-Voice', spoken.voice)
+            // Nothing between here and the phone may hold chunks back.
+            .header('Cache-Control', 'no-cache, no-transform')
+            .header('X-Accel-Buffering', 'no')
+            .send(Readable.from(metered(spoken.pcm, { provider: spoken.provider, voice: spoken.voice, startedAt })));
+        }
         log.info(
           {
             provider: spoken.provider,

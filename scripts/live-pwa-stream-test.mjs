@@ -43,10 +43,14 @@ const chromium = await loadPlaywright();
 const av = await createInstance({
   bin: [process.execPath, join(ROOT, 'dist', 'cli.js')],
   canned: CANNED,
+  // The stand-in voice writes its WAV in pieces, like speaches does.
+  ttsChunkDelayMs: 150,
   configure: (config) => {
     // Starts on turns (the default) — the UI switches it to stream below.
-    // Browser speech output would try to speak in a headless shell with no voices.
-    config.settings.voice.tts.agentVoiceEnabled = false;
+    // The agent's replies are spoken by the self-hosted voice (the stand-in),
+    // streamed as PCM and played chunk by chunk by the page's Web Audio player.
+    const audio = config.settings.workflow.llmIntelligence.audio;
+    audio.tts = { provider: 'local_speech', fallbacks: [], language: 'auto', models: {}, voices: {}, scopes: {} };
   },
 });
 
@@ -93,6 +97,10 @@ try {
   page.on('console', (m) => consoleLines.push(`${m.type()}: ${m.text()}`));
   const sockets = [];
   page.on('websocket', (ws) => sockets.push(ws.url()));
+  const ttsReplies = [];
+  page.on('response', (r) => {
+    if (r.url().endsWith('/api/intelligence/tts')) ttsReplies.push(r.headers()['content-type'] ?? '');
+  });
 
   await page.goto(av.base, { waitUntil: 'networkidle' });
 
@@ -157,6 +165,17 @@ try {
 
   const bridgeLog = av.readNewest('bridge');
   check(/audio stream started client="phone \(stream\)" listen=false/.test(bridgeLog), 'bridge logged the phone stream');
+
+  // Speech output: streamed PCM, played while it downloads.
+  say(`tts replies: ${ttsReplies.join(' | ')}`);
+  check(ttsReplies.length > 0 && ttsReplies.every((t) => t.startsWith('audio/pcm;rate=24000')), 'the page asked for streamed speech and got PCM');
+  check(/tts streamed/.test(bridgeLog), 'bridge streamed the reply to the page');
+  check(/ done\b/.test(bodyText) && !/tts[^\n]*error/i.test(bodyText), 'the page played the reply to the end', bodyText.match(/[^\n]*(done|error)[^\n]*/gi)?.slice(0, 6).join(' / '));
+  check(
+    !consoleLines.some((l) => /stream ended early|playback failed|Text-to-speech failed/i.test(l)),
+    'no playback errors in the browser console',
+    consoleLines.filter((l) => /tts|speech/i.test(l)).slice(-5).join(' / '),
+  );
 
   if (report.failures) {
     await page.screenshot({ path: join(av.tmp, 'page.png'), fullPage: true });

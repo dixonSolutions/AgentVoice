@@ -39,6 +39,7 @@ export const openrouterSpeechInput: SpeechInputVendor = {
     languageHint: true,
     sendsAudioOffMachine: true,
     approxUsdPerAudioHour: 0.1,
+    liveStreaming: false,
     docsUrl: 'https://openrouter.ai/docs/features/multimodal/audio',
     apiKeyUrl: 'https://openrouter.ai/keys',
   },

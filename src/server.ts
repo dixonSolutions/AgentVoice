@@ -40,6 +40,7 @@ import { registerVoiceProviderRoutes } from './routes/voiceProviders.js';
 import { registerWebSocket } from './intelligence/ws.js';
 import { ensureVoskModel } from './serve/ensureVoskModel.js';
 import { registerAudioStreamWebSocket } from './routes/audioStream.js';
+import { registerSttWebSocket } from './routes/sttSocket.js';
 import { registerIntelligenceAudioRoutes } from './routes/intelligenceAudio.js';
 import { registerAgentSessionRoutes } from './routes/agentSessions.js';
 import { registerVoiceSessionPrepareRoutes } from './routes/voiceSessionPrepare.js';
@@ -333,6 +334,7 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   registerWebSocket(app);
   registerAudioStreamWebSocket(app);
+  registerSttWebSocket(app);
   await registerVoiceProviderRoutes(app);
   await registerConfigRoutes(app);
   await registerIntelligenceAudioRoutes(app);

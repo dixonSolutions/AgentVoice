@@ -7,11 +7,14 @@
  */
 
 import { scopeString } from '../../../scopes.js';
+import { bodyChunks, rawPcmStream } from '../pcmStream.js';
 import { resolveVendorCall } from '../settings.js';
 import type { SpeechOutputVendor, SpeechVoiceOption } from '../types.js';
 
 const ENDPOINT = 'https://api.deepgram.com/v1/speak';
 const MAX_CHARS = 2000;
+/** Streamed replies ask for `linear16` with `container=none`: bare PCM at this rate. */
+const PCM_RATE = 24_000;
 
 const VOICES: SpeechVoiceOption[] = [
   { id: 'thalia', label: 'Thalia', gender: 'female', note: 'Clear and brisk.', languages: ['en'] },
@@ -49,6 +52,7 @@ export const deepgramSpeechOutput: SpeechOutputVendor = {
     languages: ['en', 'es'],
     sendsTextOffMachine: true,
     approxUsdPerMillionChars: 30,
+    streaming: true,
     docsUrl: 'https://developers.deepgram.com/docs/text-to-speech',
     apiKeyUrl: 'https://console.deepgram.com/',
   },
@@ -81,12 +85,14 @@ export const deepgramSpeechOutput: SpeechOutputVendor = {
     id: 'deepgram',
     encode(req) {
       const call = resolveVendorCall(deepgramSpeechOutput, req);
-      const encoding = scopeString(call.scopes, 'encoding', 'mp3') === 'linear16' ? 'linear16' : 'mp3';
+      const encoding =
+        req.stream || scopeString(call.scopes, 'encoding', 'mp3') === 'linear16' ? 'linear16' : 'mp3';
       const params = new URLSearchParams({
         model: voiceModelId(call.model, call.voice, call.language),
         encoding,
       });
-      if (encoding === 'linear16') params.set('sample_rate', '24000');
+      if (encoding === 'linear16') params.set('sample_rate', String(PCM_RATE));
+      if (req.stream) params.set('container', 'none');
 
       return {
         url: `${ENDPOINT}?${params.toString()}`,
@@ -98,6 +104,15 @@ export const deepgramSpeechOutput: SpeechOutputVendor = {
     },
     async decode(res, req) {
       const call = resolveVendorCall(deepgramSpeechOutput, req);
+      if (req.stream) {
+        return {
+          audio: Buffer.alloc(0),
+          contentType: 'audio/pcm',
+          model: call.model,
+          voice: call.voice,
+          pcm: await rawPcmStream(bodyChunks(res, { signal: req.signal }), PCM_RATE),
+        };
+      }
       const encoding = scopeString(call.scopes, 'encoding', 'mp3');
       return {
         audio: Buffer.from(await res.arrayBuffer()),

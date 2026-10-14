@@ -4,14 +4,18 @@
  *
  * Gemini has no /audio/speech route; the TTS models return raw 24 kHz PCM
  * inside a generateContent response, so the decoder wraps the bytes in a WAV
- * header before they reach the phone.
+ * header before they reach the phone. A streamed reply uses
+ * streamGenerateContent (server-sent events) and passes each event's PCM on
+ * as it lands — today the TTS models tend to send the clip in one event, which
+ * plays no later than the whole-file path.
  */
 
 import { scopeString } from '../../../scopes.js';
 import { languageLabel } from '../../languages.js';
 import { pcm16ToWav } from '../../wav.js';
+import { bodyChunks, sseData } from '../pcmStream.js';
 import { resolveVendorCall } from '../settings.js';
-import type { SpeechOutputVendor, SpeechVoiceOption } from '../types.js';
+import type { PcmStream, SpeechOutputVendor, SpeechVoiceOption } from '../types.js';
 
 const BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
 const MAX_CHARS = 4000;
@@ -43,6 +47,49 @@ function apiKey(): string {
   return process.env['GEMINI_API_KEY']?.trim() ?? '';
 }
 
+/** The audio in one response (or one streamed event), or null if it carries none. */
+function audioOf(body: GeminiTtsResponse): { pcm: Buffer; rate: number } | null {
+  if (body.promptFeedback?.blockReason) {
+    throw new Error(`Gemini blocked the reply (${body.promptFeedback.blockReason})`);
+  }
+  const inline = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData;
+  if (!inline?.data) return null;
+  // `audio/L16;rate=24000` — headerless PCM that browsers cannot play directly.
+  const rate = Number(/rate=(\d+)/.exec(inline.mimeType ?? '')?.[1]) || GEMINI_TTS_SAMPLE_RATE;
+  return { pcm: Buffer.from(inline.data, 'base64'), rate };
+}
+
+/** streamGenerateContent events → PCM, the rate taken from the first audio event. */
+async function geminiPcmStream(events: AsyncIterable<string>): Promise<PcmStream> {
+  const it = events[Symbol.asyncIterator]();
+  let first: { pcm: Buffer; rate: number } | null = null;
+  try {
+    while (!first) {
+      const next = await it.next();
+      if (next.done) throw new Error('Gemini returned no audio');
+      first = audioOf(JSON.parse(next.value) as GeminiTtsResponse);
+    }
+  } catch (err) {
+    await it.return?.();
+    throw err;
+  }
+  const opening = first.pcm;
+  async function* chunks(): AsyncGenerator<Buffer> {
+    try {
+      yield opening;
+      for (;;) {
+        const next = await it.next();
+        if (next.done) return;
+        const audio = audioOf(JSON.parse(next.value) as GeminiTtsResponse);
+        if (audio?.pcm.length) yield audio.pcm;
+      }
+    } finally {
+      await it.return?.();
+    }
+  }
+  return { sampleRate: first.rate, chunks: chunks() };
+}
+
 export const geminiSpeechOutput: SpeechOutputVendor = {
   id: 'gemini',
   displayName: 'Google Gemini',
@@ -57,6 +104,7 @@ export const geminiSpeechOutput: SpeechOutputVendor = {
     ],
     sendsTextOffMachine: true,
     approxUsdPerMillionChars: 10,
+    streaming: true,
     docsUrl: 'https://ai.google.dev/gemini-api/docs/speech-generation',
     apiKeyUrl: 'https://aistudio.google.com/app/apikey',
   },
@@ -98,7 +146,9 @@ export const geminiSpeechOutput: SpeechOutputVendor = {
       const languageNote = call.language ? ` Speak in ${languageLabel(call.language)}.` : '';
 
       return {
-        url: `${BASE_URL}/${encodeURIComponent(call.model)}:generateContent`,
+        url: req.stream
+          ? `${BASE_URL}/${encodeURIComponent(call.model)}:streamGenerateContent?alt=sse`
+          : `${BASE_URL}/${encodeURIComponent(call.model)}:generateContent`,
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey() },
         body: JSON.stringify({
@@ -115,18 +165,20 @@ export const geminiSpeechOutput: SpeechOutputVendor = {
     },
     async decode(res, req) {
       const call = resolveVendorCall(geminiSpeechOutput, req);
-      const body = (await res.json()) as GeminiTtsResponse;
-      if (body.promptFeedback?.blockReason) {
-        throw new Error(`Gemini blocked the reply (${body.promptFeedback.blockReason})`);
+      if (req.stream) {
+        return {
+          audio: Buffer.alloc(0),
+          contentType: 'audio/pcm',
+          model: call.model,
+          voice: call.voice,
+          pcm: await geminiPcmStream(sseData(bodyChunks(res, { signal: req.signal }))),
+        };
       }
 
-      const inline = body.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data)?.inlineData;
-      if (!inline?.data) throw new Error('Gemini returned no audio');
-
-      // `audio/L16;rate=24000` — headerless PCM that browsers cannot play directly.
-      const rate = Number(/rate=(\d+)/.exec(inline.mimeType ?? '')?.[1]) || GEMINI_TTS_SAMPLE_RATE;
+      const audio = audioOf((await res.json()) as GeminiTtsResponse);
+      if (!audio) throw new Error('Gemini returned no audio');
       return {
-        audio: pcm16ToWav(Buffer.from(inline.data, 'base64'), rate),
+        audio: pcm16ToWav(audio.pcm, audio.rate),
         contentType: 'audio/wav',
         model: call.model,
         voice: call.voice,

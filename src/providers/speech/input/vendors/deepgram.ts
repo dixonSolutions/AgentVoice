@@ -43,6 +43,7 @@ export const deepgramSpeechInput: SpeechInputVendor = {
     languageHint: true,
     sendsAudioOffMachine: true,
     approxUsdPerAudioHour: 0.26,
+    liveStreaming: false,
     docsUrl: 'https://developers.deepgram.com/docs/pre-recorded-audio',
     apiKeyUrl: 'https://console.deepgram.com/',
   },

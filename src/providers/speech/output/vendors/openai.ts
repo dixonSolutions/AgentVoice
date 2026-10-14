@@ -8,11 +8,14 @@
 
 import type { ProviderScope } from '../../../scopes.js';
 import { scopeNumber, scopeString } from '../../../scopes.js';
+import { bodyChunks, rawPcmStream } from '../pcmStream.js';
 import { resolveVendorCall } from '../settings.js';
 import type { SpeechOutputVendor, SpeechVoiceOption } from '../types.js';
 
 const ENDPOINT = 'https://api.openai.com/v1/audio/speech';
 const MAX_CHARS = 4000;
+/** `response_format: "pcm"` is fixed at 24 kHz 16-bit mono, and arrives chunked. */
+const PCM_RATE = 24_000;
 
 /**
  * `instructions` is a 4o-only field — tts-1 rejects it, so it is declared on
@@ -57,6 +60,7 @@ export const openaiSpeechOutput: SpeechOutputVendor = {
     languages: 'all',
     sendsTextOffMachine: true,
     approxUsdPerMillionChars: 12,
+    streaming: true,
     docsUrl: 'https://platform.openai.com/docs/guides/text-to-speech',
     apiKeyUrl: 'https://platform.openai.com/api-keys',
   },
@@ -104,7 +108,7 @@ export const openaiSpeechOutput: SpeechOutputVendor = {
           model: call.model,
           input: req.text.slice(0, MAX_CHARS),
           voice: call.voice,
-          response_format: 'mp3',
+          response_format: req.stream ? 'pcm' : 'mp3',
           speed: scopeNumber(call.scopes, 'speed', 1),
           // Only the 4o line accepts steering; tts-1 400s on an unknown field.
           ...(call.model.startsWith('gpt-4o') && instructions ? { instructions } : {}),
@@ -114,6 +118,15 @@ export const openaiSpeechOutput: SpeechOutputVendor = {
     },
     async decode(res, req) {
       const call = resolveVendorCall(openaiSpeechOutput, req);
+      if (req.stream) {
+        return {
+          audio: Buffer.alloc(0),
+          contentType: 'audio/pcm',
+          model: call.model,
+          voice: call.voice,
+          pcm: await rawPcmStream(bodyChunks(res, { signal: req.signal }), PCM_RATE),
+        };
+      }
       return {
         audio: Buffer.from(await res.arrayBuffer()),
         contentType: 'audio/mpeg',

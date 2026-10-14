@@ -53,6 +53,13 @@ export interface SpeechInputCapabilities {
   sendsAudioOffMachine: boolean;
   /** Rough list price in USD per hour of audio. null = free/self-hosted. */
   approxUsdPerAudioHour: number | null;
+  /**
+   * Takes audio while it is being spoken (`openLive`), so the transcript is
+   * ready moments after the speaker stops. `false` is the explicit "whole
+   * utterance only": the bridge still receives the audio as it is spoken, and
+   * sends it to the engine the moment the utterance ends.
+   */
+  liveStreaming: boolean;
   docsUrl: string;
   apiKeyUrl?: string;
 }
@@ -85,6 +92,16 @@ export type SpeechInputSpecializer = Specializer<
 >;
 
 export type SpeechInputConverter = HttpConverter<SpeechInputRequest, SpeechInputResult>;
+
+/** One utterance fed to an engine as it is spoken. */
+export interface LiveTranscription {
+  /** 16 kHz mono PCM16LE, in speaking order. */
+  push(pcm: Buffer): void;
+  /** The speaker stopped: resolves with the transcript. */
+  finish(): Promise<SpeechInputResult>;
+  /** Drop the utterance; `finish()` will not be called. */
+  abort(): void;
+}
 
 /**
  * One vendor, declared in one file: what it is, what it can do, how to reach
@@ -119,6 +136,11 @@ export interface SpeechInputVendorMeta {
  */
 export type SpeechInputTransport =
   | { transport: 'http'; converter: SpeechInputConverter }
-  | { transport: 'custom'; handle(req: SpeechInputRequest): Promise<SpeechInputResult> };
+  | {
+      transport: 'custom';
+      handle(req: SpeechInputRequest): Promise<SpeechInputResult>;
+      /** Only with `capabilities.liveStreaming`. */
+      openLive?(req: Omit<SpeechInputRequest, 'pcm'>): LiveTranscription;
+    };
 
 export type SpeechInputVendor = SpeechInputVendorMeta & SpeechInputTransport;

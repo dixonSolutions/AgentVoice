@@ -29,6 +29,7 @@ export const groqSpeechInput: SpeechInputVendor = {
     languageHint: true,
     sendsAudioOffMachine: true,
     approxUsdPerAudioHour: 0.04,
+    liveStreaming: false,
     docsUrl: 'https://console.groq.com/docs/speech-to-text',
     apiKeyUrl: 'https://console.groq.com/keys',
   },

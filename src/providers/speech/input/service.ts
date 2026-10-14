@@ -19,7 +19,7 @@ import {
   speechInputPolicy,
 } from './orchestrator.js';
 import { resolveModelFor, scopeDefsFor, speechInputSettings } from './settings.js';
-import type { SpeechInputRequest, SpeechInputResult } from './types.js';
+import type { LiveTranscription, SpeechInputRequest, SpeechInputResult } from './types.js';
 
 const log = childLogger('speech:input:service');
 
@@ -125,6 +125,26 @@ export function primaryServerSpeechInputId(): SpeechInputProviderId | null {
     if (getSpeechInputSpecializer(id)?.isConfigured()) return id;
   }
   return null;
+}
+
+/**
+ * A live session on the engine the phone would reach first, when that engine
+ * takes audio while it is spoken (`capabilities.liveStreaming`). Null means
+ * transcribe the finished utterance with `transcribe()` — the explicit
+ * whole-utterance path every other engine declares.
+ */
+export function openLiveTranscription(): { provider: SpeechInputProviderId; session: LiveTranscription } | null {
+  const id = primaryServerSpeechInputId();
+  if (!id) return null;
+  const vendor = getSpeechInputVendor(id);
+  if (!vendor?.capabilities.liveStreaming || vendor.transport !== 'custom' || !vendor.openLive) return null;
+  const language = baseLanguage(speechInputSettings().language);
+  try {
+    return { provider: id, session: vendor.openLive(language ? { language } : {}) };
+  } catch (err) {
+    log.warn({ err, provider: id }, 'live transcription could not start — using the whole utterance');
+    return null;
+  }
 }
 
 /** One step of the configured chain, as the phone sees it. */

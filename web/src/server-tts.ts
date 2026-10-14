@@ -6,10 +6,16 @@
  * Gemini, a self-hosted Kokoro container, …); this just posts the text and
  * plays whatever audio comes back. The response's `X-Speech-Provider` header
  * names the engine that actually spoke, so a silent fallback is still visible
- * in the voice log. See docs/30-provider-scopes-and-speech-output.md.
+ * in the voice log. See docs/30-speech-output-providers.md.
+ *
+ * Replies are requested as a stream: a streaming engine answers `audio/pcm`,
+ * played chunk by chunk as it arrives (pcm-scheduler.ts), so the first words
+ * are heard while the rest is still being synthesized. Anything else — a
+ * whole-file engine, or an older bridge — is one file, played as before.
  */
 
 import { getSharedAudioContext, unlockAudioContext } from './audio.js';
+import { PcmScheduler, streamedPcmRate, type PcmContextLike } from './pcm-scheduler.js';
 import type { TtsPlayContext } from './tts-interrupt.js';
 import { canUseWebkitTts } from './webkit-capabilities.js';
 
@@ -17,6 +23,9 @@ const MAX_TTS_CHARS = 3000;
 let currentAudio: HTMLAudioElement | null = null;
 let currentBufferSource: AudioBufferSourceNode | null = null;
 let currentGainNode: GainNode | null = null;
+let currentScheduler: PcmScheduler | null = null;
+/** The reply being downloaded — aborted with the line, so a barge-in stops the transfer too. */
+let currentFetch: AbortController | null = null;
 
 function cleanText(text: string): string {
   return text.replace(/^\[Speak to user\]:\s*/i, '').trim().slice(0, MAX_TTS_CHARS);
@@ -32,6 +41,12 @@ function isIosDevice(): boolean {
 }
 
 export function stopServerTts(): void {
+  currentFetch?.abort();
+  currentFetch = null;
+  if (currentScheduler) {
+    currentScheduler.stop();
+    currentScheduler = null;
+  }
   if (currentBufferSource) {
     try {
       currentBufferSource.stop();
@@ -83,17 +98,31 @@ export async function speakServerTts(
 
   stopServerTts();
 
-  const res = await fetch(`${bridgeBase}/api/intelligence/tts`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${appToken}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      text: clean,
-      ...(options?.language ? { language: options.language } : {}),
-    }),
-  });
+  const download = new AbortController();
+  currentFetch = download;
+  const onLineAbort = () => download.abort();
+  ctx?.signal.addEventListener('abort', onLineAbort, { once: true });
+
+  let res: Response;
+  try {
+    res = await fetch(`${bridgeBase}/api/intelligence/tts`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${appToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        text: clean,
+        ...(options?.language ? { language: options.language } : {}),
+        stream: true,
+      }),
+      signal: download.signal,
+    });
+  } catch (err) {
+    ctx?.signal.removeEventListener('abort', onLineAbort);
+    if (download.signal.aborted) return;
+    throw err;
+  }
 
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
@@ -107,7 +136,28 @@ export async function speakServerTts(
   }
 
   lastProvider = res.headers.get('X-Speech-Provider');
-  const blob = await res.blob();
+
+  const pcmRate = streamedPcmRate(res.headers.get('Content-Type'), res.headers.get('X-Audio-Sample-Rate'));
+  if (pcmRate && res.body) {
+    try {
+      await playPcmStream(res.body, pcmRate, download, ctx);
+    } finally {
+      ctx?.signal.removeEventListener('abort', onLineAbort);
+      if (currentFetch === download) currentFetch = null;
+    }
+    return;
+  }
+
+  let blob: Blob;
+  try {
+    blob = await res.blob();
+  } catch (err) {
+    if (download.signal.aborted) return;
+    throw err;
+  } finally {
+    ctx?.signal.removeEventListener('abort', onLineAbort);
+    if (currentFetch === download) currentFetch = null;
+  }
 
   if (isIosDevice()) {
     await playBlobViaAudioContext(blob, ctx);
@@ -145,10 +195,59 @@ export async function speakServerTts(
     audio.onerror = () => {
       URL.revokeObjectURL(url);
       if (currentAudio === audio) currentAudio = null;
-      reject(new Error('Polly audio playback failed'));
+      reject(new Error('Server text-to-speech playback failed'));
     };
     void audio.play().catch(reject);
   });
+}
+
+/**
+ * Play a streamed `audio/pcm` reply while it downloads. Resolves when the
+ * last chunk has finished playing, or at once on abort. A connection that
+ * drops mid-line plays what arrived and ends the line there.
+ */
+async function playPcmStream(
+  body: ReadableStream<Uint8Array>,
+  sampleRate: number,
+  download: AbortController,
+  ctx?: TtsPlayContext,
+): Promise<void> {
+  await unlockAudioContext();
+  const audioCtx = getSharedAudioContext();
+  if (audioCtx.state === 'suspended') {
+    await audioCtx.resume();
+  }
+
+  const gain = audioCtx.createGain();
+  gain.gain.value = ctx?.baseVolume ?? 1;
+  gain.connect(audioCtx.destination);
+  const scheduler = new PcmScheduler(audioCtx as unknown as PcmContextLike, gain, sampleRate, {
+    onStart: () => ctx?.onStart(),
+  });
+  currentScheduler = scheduler;
+  const onAbort = () => scheduler.stop();
+  download.signal.addEventListener('abort', onAbort, { once: true });
+
+  const reader = body.getReader();
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) scheduler.push(value);
+    }
+  } catch (err) {
+    if (!download.signal.aborted) {
+      console.warn('[server-tts] stream ended early', err);
+    }
+  }
+
+  try {
+    await scheduler.finish();
+  } finally {
+    download.signal.removeEventListener('abort', onAbort);
+    if (currentScheduler === scheduler) currentScheduler = null;
+    gain.disconnect();
+  }
 }
 
 async function playBlobViaAudioContext(blob: Blob, ctx?: TtsPlayContext): Promise<void> {
