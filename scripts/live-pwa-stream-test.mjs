@@ -150,6 +150,10 @@ try {
   check(transcript.includes(`AGENT: ECHO stream: ${CANNED[1]}`), 'agent collected the second phrase as a stream turn');
   check(bodyText.includes(CANNED[0]), 'the Logs tab shows what was heard');
   check(bodyText.includes(`ECHO boot: ${CANNED[0]}`), 'the Logs tab shows the agent reply');
+  // The bridge sends each segment twice — `transcript` at once, `segment` after
+  // delivery — and the page must show it once.
+  const shownCounts = [1, 2].map((i) => (bodyText.match(new RegExp(`Stream segment ${i}\\b`, 'g')) ?? []).length);
+  check(shownCounts.every((n) => n === 1), 'each segment shown once', `counts ${shownCounts.join(',')}`);
 
   const bridgeLog = av.readNewest('bridge');
   check(/audio stream started client="phone \(stream\)" listen=false/.test(bridgeLog), 'bridge logged the phone stream');

@@ -533,10 +533,10 @@ export class LlmIntelligenceSession {
         this.voiceLog('pipeline', 'info', `Direct audio stream → ${stt}`, 'speech is cut at pauses and sent as you talk');
       },
       onSegment: (text, info) => {
-        this.voiceLog('stt', 'info', `Stream segment ${info.index}`, text.slice(0, 120));
         this.cb.onUserTranscript(text);
-        if (!info.delivered && info.message) this.cb.onSttError?.(info.message);
+        this.voiceLog('stt', 'info', `Stream segment ${info.index}`, text.slice(0, 120));
       },
+      onUndelivered: (message) => this.cb.onSttError?.(message),
       onError: (message) => {
         this.voiceLog('stt', 'error', 'Audio stream error', message);
         this.cb.onSttError?.(message);
@@ -1085,9 +1085,12 @@ export class LlmIntelligenceSession {
     this.endSubmitTimer = window.setTimeout(() => this.pollTurnSubmit(reason, 0), 50);
   }
 
-  /** Await Amazon Transcribe — single flush path (WebKit uses pollTurnSubmit instead). */
+  /**
+   * Await server STT — single flush path (WebKit uses pollTurnSubmit instead).
+   * Uploads at once: capture was frozen before this runs, so waiting gains no
+   * audio — it only delayed the transcript.
+   */
   private async submitAmazonTurn(reason: 'vad' | 'end_word'): Promise<void> {
-    await new Promise((resolve) => window.setTimeout(resolve, 50));
     if (this.closed || !(this.stt instanceof ServerSttSession)) return;
 
     try {

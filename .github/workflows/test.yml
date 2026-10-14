@@ -55,6 +55,11 @@ jobs:
       - name: End to end — audio pipe, transcripts, session logs
         run: node scripts/live-pipe-test.mjs
 
+      # Engine reply → web client, timed per segment: the words must go out
+      # before the agent is spawned or the turn queued.
+      - name: End to end — transcript reaches the web client at once
+        run: node scripts/live-transcript-latency-test.mjs
+
   pwa-stream:
     name: PWA direct stream (headless Chromium)
     runs-on: ubuntu-latest

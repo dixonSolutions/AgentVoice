@@ -109,6 +109,11 @@ mic / stdin / file
   so transcripts reach the agent in speaking order whatever each call's
   latency. If the engine falls behind, the waiting segments are merged into one
   request rather than queueing without bound.
+- **The words go out first** (`src/voice/audioStream/relay.ts`). Each
+  transcript is sent to the client as a `transcript` frame before delivery
+  starts — spawning the agent forks the bridge, and the turn-history insert and
+  transcript write are synchronous, none of which changes what was said. The
+  `segment` frame with the delivery outcome follows.
 - **Delivery** goes through the same `submitAgentNativeTurn()` as a phone, desk
   or REST turn (`src/executor/agentTurns.ts`) with `source: "stream"`: the
   first segment spawns the agent, later ones are queued, and each is recorded
@@ -159,7 +164,8 @@ Text frames are JSON; audio frames are binary PCM16LE mono at 16 kHz.
 | client → | `{ type: "flush" }` — cut the current segment now |
 | client → | `{ type: "end" }` — no more audio; finish transcribing |
 | bridge → | `{ type: "auth_ok" }`, then `{ type: "ready", segment, stt, listening, project? }` |
-| bridge → | `{ type: "segment", index, text, audio_ms, latency_ms, delivered, delivery }` — `delivery` is `spawn`, `waiter`, `queued` or `tool_interrupt`; undelivered segments carry `reason` + `message` |
+| bridge → | `{ type: "transcript", index, text, audio_ms, latency_ms, provider, merged }` — the moment a segment is transcribed, before the agent is spawned or the turn queued; show the words on this |
+| bridge → | `{ type: "segment", index, text, audio_ms, latency_ms, provider, merged, delivered, delivery }` — right after, same `index` and `text`; `delivery` is `spawn`, `waiter`, `queued` or `tool_interrupt`; undelivered segments carry `reason` + `message`. A bridge older than `transcript` sends only this, so clients show the words on whichever of the two arrives first |
 | bridge → | `{ type: "segment_empty", index, audio_ms }` |
 | bridge → | `{ type: "drained", stats }` — after `end`, once every segment is done |
 | bridge → | `{ type: "error", message, fatal? }` |
@@ -186,4 +192,8 @@ The stream is refused (fatal error, socket closed) unless the workflow is
   delivery, replies, transcripts and log files. `scripts/live-pwa-stream-test.mjs`
   does the same through the real PWA in headless Chromium with a fake
   microphone, switching the input mode through the Config screen first.
-  `.github/workflows/test.yml` runs both on every PR.
+  `scripts/live-transcript-latency-test.mjs` streams three phrases as the PWA
+  does and times each transcript from the stand-in engine's reply to the frame
+  arriving at the client — about 2 ms, spawn included; it fails above
+  `HOP_BUDGET_MS` (default 40) or if a `transcript` frame trails its `segment`.
+  `.github/workflows/test.yml` runs all three on every PR.
