@@ -15,10 +15,10 @@
 </p>
 
 <p align="center">
-  <a href="./docs/demo/agentvoice-demo.mp4"><img src="./docs/demo/agentvoice-demo.gif" alt="One-minute demo: pick a project and the Claude Code model in the AgentVoice web client, ask by voice, Claude Code answers by voice" width="820"></a>
+  <a href="./docs/demo/agentvoice-demo.mp4"><img src="./docs/demo/agentvoice-demo.gif" alt="43-second demo: in the AgentVoice web client, pick a project and model, say &quot;cursor listen&quot; and a question; Whisper transcribes it locally and Claude Code answers by voice" width="820"></a>
 </p>
 <p align="center">
-  <em>One voice session in the web client — pick the project and the Claude Code model, tap the orb, ask; Claude Code answers by voice.
+  <em>One real voice session in the web client — pick the project and model, tap the orb, say “cursor listen” and ask; Claude Code answers by voice.
   <a href="./docs/demo/agentvoice-demo.mp4">▶ Watch with sound (MP4)</a> · <a href="./docs/demo/README.md">transcript &amp; how it was made</a></em>
 </p>
 

@@ -1,44 +1,45 @@
 # README demo video
 
 `agentvoice-demo.mp4` (with sound) and `agentvoice-demo.gif` (silent preview
-embedded in the README) show one voice session in the AgentVoice web client:
-pick a project, pick the Claude Code model, tap the orb, ask two questions and
-hear Claude Code answer.
+embedded in the README) show one real voice session in the AgentVoice web
+client: pick the project and model, tap the orb, say the wake word and a
+question, and hear Claude Code answer.
 
 ## Transcript
 
-What is said to the agent (spoken into the app, transcribed by the bridge's
-speech-to-text chain — the self-hosted Whisper container in this take) and what
-the agent speaks back through `speak()`, played by the app through the
-self-hosted Kokoro voice. Replies vary from take to take; these are the lines
-in the published cut, verbatim.
+Both voices are in the MP4. The question is a pre-generated speech clip played
+into a virtual microphone; the answer is the app's own playback of the
+bridge's text-to-speech. These are the lines in the published cut, verbatim.
 
 | Who | Line |
 | --- | --- |
-| you | Hey, what does this project do? One sentence. |
-| agent | AgentVoice is a bridge that lets you talk hands-free from your phone to coding agents like me — Claude Code, Cursor, Codex or Codewhale — so you can give instructions, hear progress and approve work by voice. |
-| you | How do I install it? |
-| agent | Let me check the README for the install steps. |
-| agent | The easiest way is to run npm install dash g at ratitisrad slash agentvoice, which also starts it as a background service. |
-| agent | _(the cut fades out here; the full answer went on to describe `agentvoice setup`, pairing, and the apt/dnf repositories)_ |
+| you | Cursor listen. What does this project do? Answer in one sentence. |
+| agent | AgentVoice is a self-hosted voice bridge that lets you control a coding agent like Claude Code, Cursor, Codex or Codewhale by speaking from your phone. |
+
+The bridge's speech-to-text heard the question as "What does this project do
+answer in one sentence?" (the wake phrase is stripped before the turn is sent).
 
 ## How it was made
 
-- Bridge: `agentvoice run` on this machine, Claude Code as the agent CLI, three
-  registered projects, speech-to-text `local_whisper` and text-to-speech
-  `local_speech` (the speaches container: faster-whisper small + Kokoro).
-- Client: the built web app served by the bridge, opened in a chromeless
-  Chromium app-mode window at 150 % zoom, paired beforehand. The model list is
-  what Claude Code reports through the bridge (`listModels()`).
-- Recorded with [Kooha](https://github.com/SeaDve/Kooha) (MP4, 30 fps, desktop
-  audio + microphone) on a 1920×1200 (16:10) display. The window's title bar
-  and Chromium's "for testing" infobar are cropped off and the frame is padded
-  back to 16:10 with the page background; panels and dock are never in frame.
-- The "microphone" is a PipeWire virtual source fed from a null sink; the two
-  questions are Kokoro TTS clips played into that sink at the moment they are
-  asked, so the app hears them exactly like a real mic, Whisper transcribes
-  them live, and Kooha records them in sync. The agent's replies are the app's
-  own playback of the bridge's TTS, recorded as desktop audio.
-- Waiting time (transcription, Claude Code start-up, TTS synthesis) is cut out
-  and the second answer is faded out after its second sentence; nothing else
-  is altered.
+- **Bridge:** `node dist/index.js` from a checkout of `main`, run with a
+  throwaway config: Claude Code as the agent CLI (`manual` permission mode),
+  one project, speech-to-text `local_whisper` and text-to-speech
+  `local_speech` against a speaches container (faster-whisper small + Kokoro)
+  on `127.0.0.1:8770`.
+- **Client:** the built web app served by the bridge, opened by Playwright in
+  Chromium at a 420×800 phone-sized viewport and recorded with Playwright's
+  screen recording. The model list is what Claude Code reports through the
+  bridge (`listModels()`); the take picks Sonnet 5.5.
+- **The microphone:** a PipeWire virtual source (`Audio/Source/Virtual`) fed
+  from a null sink. The question is a Kokoro clip (voice `am_michael`, so it
+  sounds different from the agent's `af_heart`). It is played into that sink
+  once the session is live. Vosk hears the wake word, Silero VAD ends the turn,
+  and Whisper transcribes it, exactly as with a real mic.
+- **Audio:** the virtual mic feed and Chromium's output (routed to a second null
+  sink) are recorded with `parecord`, aligned to the screen recording by
+  wall-clock timestamps, and mixed.
+- **Edit (ffmpeg):** the footage sits in a phone frame next to step captions
+  and the transcript, which are HTML rendered to PNG. A title card and an
+  install card bracket it. The only cut is 9 s of waiting while Claude Code
+  answers and the reply is synthesised, and the video marks it on screen.
+  Nothing else is altered. GIF: steps only, 12 fps, 820 px wide.
