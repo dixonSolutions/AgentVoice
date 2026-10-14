@@ -25,7 +25,10 @@
  *
  *   bridge → { type: "auth_ok" }
  *   bridge → { type: "ready", sampleRate, encoding, channels, segment, stt, project? }
- *   bridge → { type: "segment", index, text, audio_ms, latency_ms, provider, delivered, delivery?, reason?, message? }
+ *   bridge → { type: "transcript", index, text, audio_ms, latency_ms, provider, merged }
+ *            the moment a segment is transcribed — before the agent hears it
+ *   bridge → { type: "segment", index, text, audio_ms, latency_ms, provider, merged, delivered, delivery?, reason?, message? }
+ *            right after, once the turn was spawned / queued (same index and text)
  *   bridge → { type: "segment_empty", index, audio_ms }
  *   bridge → { type: "drained", stats }
  *   bridge → { type: "error", message, fatal? }
@@ -59,6 +62,7 @@ import { ensureClientMcpSetup } from '../mcp/agentMcpSetup.js';
 import { getPresence, type PresenceClient } from '../state/presence.js';
 import { getSessionState, resolveProject, setActiveProject } from '../state/registry.js';
 import { AudioStreamPipe } from '../voice/audioStream/pipe.js';
+import { relayStreamTranscript } from '../voice/audioStream/relay.js';
 
 const log = childLogger('api:audio-stream');
 
@@ -80,7 +84,7 @@ function sttLabel(): string {
 }
 
 type StreamTurnOutcome =
-  | { ok: true; delivery: TurnDelivery }
+  | { ok: true; delivery: TurnDelivery['delivery'] }
   | { ok: false; reason: TurnError['code'] | 'ERROR'; message: string };
 
 /**
@@ -91,7 +95,7 @@ type StreamTurnOutcome =
 function deliverStreamTurn(text: string): StreamTurnOutcome {
   broadcastToVoiceSessions({ type: 'thinking', value: true });
   try {
-    return { ok: true, delivery: submitAgentNativeTurn(text, { source: 'stream' }) };
+    return { ok: true, delivery: submitAgentNativeTurn(text, { source: 'stream' }).delivery };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const reason = err instanceof TurnError ? err.code : 'ERROR';
@@ -221,7 +225,8 @@ export function registerAudioStreamWebSocket(app: FastifyInstance): void {
             return { text: result.text, provider: result.provider, model: result.model };
           },
           onTranscript: (t) => {
-            const outcome = deliverStreamTurn(t.text);
+            // The text reaches the client before the agent is spawned or queued.
+            const outcome = relayStreamTranscript(t, sendJson, deliverStreamTurn);
             log.info(
               {
                 client: clientName,
@@ -236,19 +241,6 @@ export function registerAudioStreamWebSocket(app: FastifyInstance): void {
               },
               'stream segment transcribed',
             );
-            sendJson({
-              type: 'segment',
-              index: t.index,
-              text: t.text,
-              audio_ms: t.audioMs,
-              latency_ms: t.latencyMs,
-              provider: t.provider ?? null,
-              merged: t.merged,
-              delivered: outcome.ok,
-              ...(outcome.ok
-                ? { delivery: outcome.delivery.delivery }
-                : { reason: outcome.reason, message: outcome.message }),
-            });
           },
           onEmpty: ({ index, audioMs }) => {
             log.debug({ client: clientName, index, audioMs }, 'stream segment had no speech');

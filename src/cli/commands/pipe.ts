@@ -278,6 +278,9 @@ function runPipe(opts: PipeOptions, base: string, token: string, done: (code: nu
     })();
   };
 
+  /** Segments whose words are printed but whose delivery frame has not arrived. */
+  const printedSegments = new Set<number>();
+
   ws.on('open', () => {
     ws.send(JSON.stringify({ type: 'auth', token }));
   });
@@ -325,12 +328,22 @@ function runPipe(opts: PipeOptions, base: string, token: string, done: (code: nu
         status(dim(opts.mic ? '  listening — speak; Ctrl-C to stop' : '  streaming…'));
         break;
       }
+      // `transcript` lands the moment the words exist; `segment` follows once the
+      // agent has them. An older bridge sends only `segment`.
+      case 'transcript':
       case 'segment': {
-        if (!opts.json) say(`you ▸ ${String(msg['text'] ?? '')}`);
-        const secs = (Number(msg['audio_ms'] ?? 0) / 1000).toFixed(1);
-        status(dim(`      (${secs} s audio, ${String(msg['latency_ms'] ?? '?')} ms to transcribe)`));
-        if (msg['delivered'] === false && typeof msg['message'] === 'string') {
-          status(`  ! not delivered: ${msg['message']}`);
+        const index = Number(msg['index'] ?? 0);
+        if (!printedSegments.has(index)) {
+          printedSegments.add(index);
+          if (!opts.json) say(`you ▸ ${String(msg['text'] ?? '')}`);
+          const secs = (Number(msg['audio_ms'] ?? 0) / 1000).toFixed(1);
+          status(dim(`      (${secs} s audio, ${String(msg['latency_ms'] ?? '?')} ms to transcribe)`));
+        }
+        if (msg['type'] === 'segment') {
+          printedSegments.delete(index);
+          if (msg['delivered'] === false && typeof msg['message'] === 'string') {
+            status(`  ! not delivered: ${msg['message']}`);
+          }
         }
         break;
       }

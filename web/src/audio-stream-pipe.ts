@@ -20,19 +20,10 @@ import {
   type MicProcessingChain,
 } from './audio.js';
 import { downsampleTo16k, PCM_SAMPLE_RATE } from './pcm16.js';
+import { StreamTranscriptTracker, type StreamTranscriptEvents } from './stream-transcripts.js';
 
-export interface StreamSegmentInfo {
-  index: number;
-  audioMs: number;
-  latencyMs: number;
-  delivered: boolean;
-  /** Why an undelivered segment was dropped (e.g. no project selected). */
-  message?: string;
-}
-
-export interface AudioStreamPipeCallbacks {
+export interface AudioStreamPipeCallbacks extends StreamTranscriptEvents {
   onReady?(info: { stt: string }): void;
-  onSegment(text: string, info: StreamSegmentInfo): void;
   onError(message: string, fatal: boolean): void;
   onClosed?(reason: string): void;
 }
@@ -65,6 +56,7 @@ export class AudioStreamPipeClient {
     const ws = new WebSocket(url);
     ws.binaryType = 'arraybuffer';
     this.ws = ws;
+    const transcripts = new StreamTranscriptTracker(this.cb);
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
@@ -108,18 +100,10 @@ export class AudioStreamPipeClient {
             this.cb.onReady?.({ stt: typeof msg['stt'] === 'string' ? msg['stt'] : 'server STT' });
             finish(resolve);
             break;
-          case 'segment': {
-            const text = typeof msg['text'] === 'string' ? msg['text'] : '';
-            if (!text) break;
-            this.cb.onSegment(text, {
-              index: Number(msg['index'] ?? 0),
-              audioMs: Number(msg['audio_ms'] ?? 0),
-              latencyMs: Number(msg['latency_ms'] ?? 0),
-              delivered: msg['delivered'] !== false,
-              ...(typeof msg['message'] === 'string' ? { message: msg['message'] } : {}),
-            });
+          case 'transcript':
+          case 'segment':
+            transcripts.handle(msg);
             break;
-          }
           case 'drained':
             this.hangUp();
             break;
