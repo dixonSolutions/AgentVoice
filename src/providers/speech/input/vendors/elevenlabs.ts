@@ -30,6 +30,7 @@ export const elevenlabsSpeechInput: SpeechInputVendor = {
     languageHint: true,
     sendsAudioOffMachine: true,
     approxUsdPerAudioHour: 0.4,
+    liveStreaming: false,
     docsUrl: 'https://elevenlabs.io/docs/api-reference/speech-to-text',
     apiKeyUrl: 'https://elevenlabs.io/app/settings/api-keys',
   },

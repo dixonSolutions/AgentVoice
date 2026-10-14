@@ -38,6 +38,7 @@ export const geminiSpeechInput: SpeechInputVendor = {
     languageHint: true,
     sendsAudioOffMachine: true,
     approxUsdPerAudioHour: 0.06,
+    liveStreaming: false,
     docsUrl: 'https://ai.google.dev/gemini-api/docs/audio',
     apiKeyUrl: 'https://aistudio.google.com/app/apikey',
   },

@@ -56,8 +56,9 @@ async function freePort() {
  * @param {string[]} opts.bin       command for the CLI, e.g. [node, dist/cli.js]
  * @param {string[]} opts.canned    transcripts the fake Whisper returns, in order
  * @param {(config: any) => void} [opts.configure]  last-minute config.json edits
+ * @param {number} [opts.ttsChunkDelayMs]  gap between the stand-in voice's audio pieces
  */
-export async function createInstance({ bin, canned, configure }) {
+export async function createInstance({ bin, canned, configure, ttsChunkDelayMs = 0 }) {
   const tmp = mkdtempSync(join(tmpdir(), 'agentvoice-e2e-'));
   const instance = join(tmp, 'instance');
   const project = join(tmp, 'project');
@@ -68,6 +69,7 @@ export async function createInstance({ bin, canned, configure }) {
 
   // ── Stand-in Whisper: OpenAI-compatible, answers from `canned` ──────────
   const sttRequests = [];
+  const ttsRequests = [];
   const stt = createServer((req, res) => {
     if (req.method === 'GET' && (req.url === '/health' || req.url === '/v1/models')) {
       res.writeHead(200, { 'content-type': 'application/json' }).end('{"data":[]}');
@@ -75,11 +77,49 @@ export async function createInstance({ bin, canned, configure }) {
     }
     if (req.method === 'POST' && req.url === '/v1/audio/transcriptions') {
       let bytes = 0;
+      const startedAt = Date.now();
       req.on('data', (c) => (bytes += c.length));
       req.on('end', () => {
         const text = canned[sttRequests.length] ?? `extra ${sttRequests.length + 1}`;
-        sttRequests.push({ bytes, text, at: Date.now() });
+        sttRequests.push({ bytes, text, at: Date.now(), startedAt });
         res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ text }));
+      });
+      return;
+    }
+    if (req.method === 'POST' && req.url === '/v1/audio/speech') {
+      // Speaks like speaches: WAV is written as it is synthesized — header first
+      // (streaming size fields, an ffmpeg LIST chunk), then a piece of audio
+      // every `ttsChunkDelayMs`. MP3 comes back whole.
+      let raw = '';
+      req.on('data', (c) => (raw += c));
+      req.on('end', () => {
+        const body = JSON.parse(raw || '{}');
+        const record = { format: body.response_format, startedAt: Date.now(), sent: [], closedEarly: false };
+        ttsRequests.push(record);
+        if (body.response_format !== 'wav') {
+          res.writeHead(200, { 'content-type': 'audio/mpeg' }).end(Buffer.from('ID3\u0004fake-mp3-bytes'));
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'audio/wav' });
+        res.on('close', () => {
+          if (!res.writableFinished) record.closedEarly = true;
+        });
+        const pieces = ttsPcm(TTS_RATE, TTS_PIECES, TTS_PIECE_MS);
+        let i = 0;
+        const next = () => {
+          if (res.destroyed) return;
+          if (i === 0) {
+            res.write(streamingWavHeader(TTS_RATE));
+          }
+          if (i >= pieces.length) {
+            res.end();
+            return;
+          }
+          record.sent.push(Date.now());
+          res.write(pieces[i++]);
+          setTimeout(next, ttsChunkDelayMs);
+        };
+        next();
       });
       return;
     }
@@ -195,6 +235,7 @@ export async function createInstance({ bin, canned, configure }) {
     port,
     token,
     sttRequests,
+    ttsRequests,
     run,
     api,
     startBridge,
@@ -209,6 +250,41 @@ export async function createInstance({ bin, canned, configure }) {
       if (!keep) rmSync(tmp, { recursive: true, force: true });
     },
   };
+}
+
+/** What the stand-in voice says: TTS_PIECES pieces of TTS_PIECE_MS each, 24 kHz mono. */
+export const TTS_RATE = 24_000;
+export const TTS_PIECES = 4;
+export const TTS_PIECE_MS = 250;
+
+/** A 220 Hz tone cut into `pieces` PCM16LE buffers. */
+export function ttsPcm(rate, pieces, pieceMs) {
+  const n = Math.round((rate * pieceMs) / 1000);
+  return Array.from({ length: pieces }, (_, p) => {
+    const buf = Buffer.alloc(n * 2);
+    for (let i = 0; i < n; i++) {
+      buf.writeInt16LE(Math.round(Math.sin((2 * Math.PI * 220 * (p * n + i)) / rate) * 8000), i * 2);
+    }
+    return buf;
+  });
+}
+
+/** The header ffmpeg writes to a pipe: unknown sizes, a LIST chunk before `data`. */
+export function streamingWavHeader(rate) {
+  const fmt = Buffer.alloc(24);
+  fmt.write('fmt ', 0, 'ascii');
+  fmt.writeUInt32LE(16, 4);
+  fmt.writeUInt16LE(1, 8);
+  fmt.writeUInt16LE(1, 10);
+  fmt.writeUInt32LE(rate, 12);
+  fmt.writeUInt32LE(rate * 2, 16);
+  fmt.writeUInt16LE(2, 20);
+  fmt.writeUInt16LE(16, 22);
+  const info = Buffer.from('INFOISFT\u000e\u0000\u0000\u0000Lavf61.7.100\u0000\u0000', 'latin1');
+  const list = Buffer.concat([Buffer.from('LIST'), Buffer.alloc(4), info]);
+  list.writeUInt32LE(info.length, 4);
+  const data = Buffer.from('data\xff\xff\xff\xff', 'latin1');
+  return Buffer.concat([Buffer.from('RIFF\xff\xff\xff\xffWAVE', 'latin1'), fmt, list, data]);
 }
 
 /** 16-bit PCM WAV from a plan of [kind, ms] steps. "speech" is a voiced, syllabic signal. */

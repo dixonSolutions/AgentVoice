@@ -11,10 +11,12 @@
 import { isAmazonAudioAvailable } from '../../../../intelligence/audio/awsClient.js';
 import {
   listPollyVoices,
+  streamPollyPcm,
   synthesizePollyMp3,
   type PollyEngine,
 } from '../../../../intelligence/audio/polly.js';
 import { baseLanguage } from '../../languages.js';
+import { rawPcmStream } from '../pcmStream.js';
 import { resolveVendorCall } from '../settings.js';
 import type { SpeechOutputVendor, SpeechVoiceOption } from '../types.js';
 
@@ -46,6 +48,7 @@ export const pollySpeechOutput: SpeechOutputVendor = {
     languages: POLLY_LANGUAGES,
     sendsTextOffMachine: true,
     approxUsdPerMillionChars: 16,
+    streaming: true,
     livesVoiceCatalog: true,
     docsUrl: 'https://docs.aws.amazon.com/polly/latest/dg/voicelist.html',
     apiKeyUrl: 'https://console.aws.amazon.com/iam/home#/security_credentials',
@@ -93,6 +96,21 @@ export const pollySpeechOutput: SpeechOutputVendor = {
       if (!chosen || baseLanguage(chosen.languageCode) !== language) {
         voiceId = catalog.find((v) => baseLanguage(v.languageCode) === language)?.id ?? voiceId;
       }
+    }
+
+    if (req.stream) {
+      const pcm = await streamPollyPcm(req.text, {
+        voiceId,
+        engine,
+        ...(req.signal ? { signal: req.signal } : {}),
+      });
+      return {
+        audio: Buffer.alloc(0),
+        contentType: 'audio/pcm',
+        model: call.model,
+        voice: voiceId,
+        pcm: await rawPcmStream(pcm.chunks, pcm.sampleRate),
+      };
     }
 
     const { audio, contentType } = await synthesizePollyMp3(req.text, { voiceId, engine });

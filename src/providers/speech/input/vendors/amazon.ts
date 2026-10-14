@@ -14,9 +14,13 @@
 
 import { scopeBool, scopeString } from '../../../scopes.js';
 import { isAmazonAudioAvailable } from '../../../../intelligence/audio/awsClient.js';
-import { transcribePcm16 } from '../../../../intelligence/audio/transcribe.js';
+import {
+  startLiveTranscription,
+  transcribePcm16,
+  type TranscribeStreamOptions,
+} from '../../../../intelligence/audio/transcribe.js';
 import { defaultLocale } from '../../languages.js';
-import { resolveVendorCall } from '../settings.js';
+import { resolveVendorCall, type VendorCall } from '../settings.js';
 import type { SpeechInputVendor } from '../types.js';
 
 /** Locales Transcribe streaming supports, narrowed to the app's catalog. */
@@ -38,6 +42,7 @@ export const amazonSpeechInput: SpeechInputVendor = {
     languageHint: true,
     sendsAudioOffMachine: true,
     approxUsdPerAudioHour: 1.44,
+    liveStreaming: true,
     docsUrl: 'https://docs.aws.amazon.com/transcribe/latest/dg/streaming.html',
     apiKeyUrl: 'https://console.aws.amazon.com/iam/home#/security_credentials',
   },
@@ -101,18 +106,31 @@ export const amazonSpeechInput: SpeechInputVendor = {
   transport: 'custom',
   async handle(req) {
     const call = resolveVendorCall(amazonSpeechInput, req);
-    const mode = scopeString(call.scopes, 'languageMode', 'fixed') === 'identify' ? 'identify' : 'fixed';
-    const stability = scopeString(call.scopes, 'stability', 'high');
-
-    const text = await transcribePcm16(req.pcm, {
-      // Transcribe insists on a full locale; the shared setting is a language.
-      languageCode: defaultLocale(call.language),
-      languageMode: mode,
-      languageOptions: scopeString(call.scopes, 'languageOptions', 'en-US'),
-      stabilize: scopeBool(call.scopes, 'stabilization', true),
-      stability: stability === 'low' || stability === 'medium' ? stability : 'high',
-    });
-
+    const text = await transcribePcm16(req.pcm, streamOptions(call));
     return { text, model: call.model };
   },
+
+  // Transcribe is a streaming API: feed it the utterance while it is spoken.
+  openLive(req) {
+    const call = resolveVendorCall(amazonSpeechInput, { ...req, pcm: Buffer.alloc(0) });
+    const live = startLiveTranscription(streamOptions(call));
+    return {
+      push: (pcm) => live.push(pcm),
+      finish: async () => ({ text: await live.finish(), model: call.model }),
+      abort: () => live.abort(),
+    };
+  },
 };
+
+function streamOptions(call: VendorCall): TranscribeStreamOptions {
+  const mode = scopeString(call.scopes, 'languageMode', 'fixed') === 'identify' ? 'identify' : 'fixed';
+  const stability = scopeString(call.scopes, 'stability', 'high');
+  return {
+    // Transcribe insists on a full locale; the shared setting is a language.
+    languageCode: defaultLocale(call.language),
+    languageMode: mode,
+    languageOptions: scopeString(call.scopes, 'languageOptions', 'en-US'),
+    stabilize: scopeBool(call.scopes, 'stabilization', true),
+    stability: stability === 'low' || stability === 'medium' ? stability : 'high',
+  };
+}

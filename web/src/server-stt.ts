@@ -23,9 +23,16 @@ import {
   speechRmsThreshold,
   type SttGate,
 } from './stt-gate.js';
+import { SttUplink, SttUplinkUnavailable } from './stt-uplink.js';
 
 const INPUT_RATE = PCM_SAMPLE_RATE;
-const SILENCE_FRAMES = 28;
+/**
+ * Mic callback size. Small, so each chunk reaches the bridge ~20 ms after it
+ * is spoken (stt-uplink.ts) instead of in ~85 ms lumps.
+ */
+const PROCESSOR_FRAMES = 1024;
+/** Quiet this long after speech ends the utterance (silence-submit mode). */
+const SILENCE_MS = 2400;
 /** ~45s at 16 kHz — prevents runaway recordings when echo/VAD mis-fires. */
 const MAX_PCM_SAMPLES = INPUT_RATE * 45;
 
@@ -48,19 +55,23 @@ export class ServerSttSession {
   private silenceFlush = false;
   private utteranceFlushed = false;
   private recording = false;
-  private silenceFrames = 0;
+  private silenceMs = 0;
   private pcmChunks: Int16Array[] = [];
   private transcribing = false;
   private flushInFlight: Promise<string> | null = null;
   private flushAbort: AbortController | null = null;
   private discardNextFinal = false;
+  /** Sends each utterance to the bridge while it is spoken; the POST is the fallback. */
+  private readonly uplink: SttUplink;
 
   constructor(
     private readonly bridgeBase: string,
     private readonly appToken: string,
     private readonly gate: SttGate,
     private readonly cb: ServerSttCallbacks,
-  ) {}
+  ) {
+    this.uplink = new SttUplink(bridgeBase, appToken);
+  }
 
   async start(mediaStream?: MediaStream): Promise<void> {
     if (this.processor || this.closed) return;
@@ -84,10 +95,11 @@ export class ServerSttSession {
     const ctx = this.audioCtx;
     const tap = getVoiceAudioMeter().tapMic(ctx, this.micChain.output);
     connectSilentSink(ctx, tap);
-    this.processor = this.audioCtx.createScriptProcessor(4096, 1, 1);
+    this.processor = this.audioCtx.createScriptProcessor(PROCESSOR_FRAMES, 1, 1);
     this.processor.onaudioprocess = (ev) => this.onAudio(ev);
     this.micChain.output.connect(this.processor);
     connectSilentSink(this.audioCtx, this.processor);
+    this.uplink.connect();
   }
 
   /** Stop accepting new audio but keep buffered PCM for flushNow(). */
@@ -102,16 +114,18 @@ export class ServerSttSession {
     this.silenceFlush = options?.silenceFlush ?? false;
     this.utteranceFlushed = false;
     this.recording = false;
-    this.silenceFrames = 0;
+    this.silenceMs = 0;
     this.pcmChunks = [];
+    this.uplink.begin();
   }
 
   /** Stop buffering without transcribing (cancelled utterance). */
   endCapture(): void {
     this.capturing = false;
     this.recording = false;
-    this.silenceFrames = 0;
+    this.silenceMs = 0;
     this.pcmChunks = [];
+    this.uplink.cancel();
   }
 
   /**
@@ -135,8 +149,9 @@ export class ServerSttSession {
     this.micChain?.dispose();
     this.micChain = null;
     this.recording = false;
-    this.silenceFrames = 0;
+    this.silenceMs = 0;
     this.pcmChunks = [];
+    this.uplink.close();
     if (this.ownsMic) {
       // Release the lease rather than stopping the tracks: stopping is what
       // made the next session re-request the microphone (docs/40 §4).
@@ -186,6 +201,7 @@ export class ServerSttSession {
     const input = ev.inputBuffer.getChannelData(0);
     const pcm = downsampleTo16k(input, this.audioCtx.sampleRate);
     this.pcmChunks.push(pcm);
+    this.uplink.send(pcm);
 
     const totalSamples = this.pcmChunks.reduce((n, c) => n + c.length, 0);
     if (totalSamples >= MAX_PCM_SAMPLES) {
@@ -201,14 +217,14 @@ export class ServerSttSession {
 
     if (speaking) {
       this.recording = true;
-      this.silenceFrames = 0;
+      this.silenceMs = 0;
       return;
     }
 
     if (!this.recording) return;
 
-    this.silenceFrames += 1;
-    if (this.silenceFrames >= SILENCE_FRAMES) {
+    this.silenceMs += (input.length / this.audioCtx.sampleRate) * 1000;
+    if (this.silenceMs >= SILENCE_MS) {
       void this.flushRecording().catch(() => undefined);
     }
   }
@@ -229,7 +245,7 @@ export class ServerSttSession {
     this.utteranceFlushed = true;
     this.pcmChunks = [];
     this.recording = false;
-    this.silenceFrames = 0;
+    this.silenceMs = 0;
 
     const pcm = concatPcm16(chunks);
     this.transcribing = true;
@@ -268,6 +284,21 @@ export class ServerSttSession {
   }
 
   private async transcribe(pcm: Int16Array): Promise<string> {
+    // Normally the bridge already has this utterance — it went up while it was
+    // spoken — and only the transcript is left to wait for.
+    try {
+      const result = await this.uplink.finish();
+      console.debug('[server-stt] transcript via live upload', { live: result.live, provider: result.provider });
+      return result.text.trim();
+    } catch (err) {
+      if (!(err instanceof SttUplinkUnavailable)) throw err;
+      console.debug('[server-stt] posting the recording —', err.message);
+    }
+    return this.postRecording(pcm);
+  }
+
+  /** The old path: one upload of the whole utterance after it ended. */
+  private async postRecording(pcm: Int16Array): Promise<string> {
     // Raw PCM body (not JSON+base64) — smaller upload; nginx default 1m was rejecting ~45s clips.
     const bytes = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
 

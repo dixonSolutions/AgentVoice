@@ -30,6 +30,7 @@ export const openaiSpeechInput: SpeechInputVendor = {
     languageHint: true,
     sendsAudioOffMachine: true,
     approxUsdPerAudioHour: 0.18,
+    liveStreaming: false,
     docsUrl: 'https://platform.openai.com/docs/guides/speech-to-text',
     apiKeyUrl: 'https://platform.openai.com/api-keys',
   },

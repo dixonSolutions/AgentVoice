@@ -41,9 +41,58 @@ export function sanitizeLanguageOptions(raw: string): string {
   return out.join(',') || 'en-US';
 }
 
+/** Smallest utterance Transcribe is worth asking about. */
+const MIN_PCM_BYTES = 3200;
+
+type AudioEvents = AsyncIterable<{ AudioEvent: { AudioChunk: Uint8Array } }>;
+
 async function* pcmAudioStream(pcm: Buffer): AsyncGenerator<{ AudioEvent: { AudioChunk: Uint8Array } }> {
   for (let offset = 0; offset < pcm.length; offset += CHUNK_BYTES) {
     yield { AudioEvent: { AudioChunk: pcm.subarray(offset, offset + CHUNK_BYTES) } };
+  }
+}
+
+/**
+ * Audio that is still being spoken, as Transcribe's input stream: chunks are
+ * forwarded the moment they are pushed (split to CHUNK_BYTES), and the stream
+ * ends when the speaker does.
+ */
+export class LivePcmQueue implements AudioEvents {
+  private readonly queued: Buffer[] = [];
+  private ended = false;
+  private wake: (() => void) | null = null;
+
+  push(pcm: Buffer): void {
+    if (this.ended || pcm.length === 0) return;
+    for (let offset = 0; offset < pcm.length; offset += CHUNK_BYTES) {
+      this.queued.push(pcm.subarray(offset, offset + CHUNK_BYTES));
+    }
+    this.notify();
+  }
+
+  end(): void {
+    this.ended = true;
+    this.notify();
+  }
+
+  private notify(): void {
+    const wake = this.wake;
+    this.wake = null;
+    wake?.();
+  }
+
+  async *[Symbol.asyncIterator](): AsyncGenerator<{ AudioEvent: { AudioChunk: Uint8Array } }> {
+    for (;;) {
+      const next = this.queued.shift();
+      if (next) {
+        yield { AudioEvent: { AudioChunk: next } };
+        continue;
+      }
+      if (this.ended) return;
+      await new Promise<void>((resolve) => {
+        this.wake = resolve;
+      });
+    }
   }
 }
 
@@ -66,29 +115,68 @@ export async function transcribePcm16(
   pcm: Buffer,
   opts: TranscribeStreamOptions,
 ): Promise<string> {
-  if (pcm.length < 3200) {
+  if (pcm.length < MIN_PCM_BYTES) {
     throw new Error('Audio too short — speak for at least half a second');
   }
 
   const client = createTranscribeStreamingClient();
   try {
-    return await runTranscribeStream(client, pcm, opts);
+    return await runTranscribeStream(client, pcmAudioStream(pcm), opts);
   } finally {
     client.destroy();
   }
 }
 
+/**
+ * Transcribe an utterance while it is spoken: the stream opens now, every
+ * `push` goes straight to Amazon, and `finish()` — when the speaker stops —
+ * only waits for the last results instead of uploading the whole utterance.
+ */
+export function startLiveTranscription(opts: TranscribeStreamOptions): {
+  push(pcm: Buffer): void;
+  finish(): Promise<string>;
+  abort(): void;
+} {
+  const queue = new LivePcmQueue();
+  const abort = new AbortController();
+  const client = createTranscribeStreamingClient();
+  let bytes = 0;
+  const result = runTranscribeStream(client, queue, opts, abort.signal).finally(() => client.destroy());
+  // Surfaced through finish(); an aborted utterance's rejection goes nowhere.
+  result.catch(() => undefined);
+
+  return {
+    push(pcm) {
+      bytes += pcm.length;
+      queue.push(pcm);
+    },
+    async finish() {
+      queue.end();
+      if (bytes < MIN_PCM_BYTES) {
+        abort.abort();
+        throw new Error('Audio too short — speak for at least half a second');
+      }
+      return result;
+    },
+    abort() {
+      queue.end();
+      abort.abort();
+    },
+  };
+}
+
 async function runTranscribeStream(
   client: TranscribeStreamingClient,
-  pcm: Buffer,
+  audio: AudioEvents,
   opts: TranscribeStreamOptions,
+  signal?: AbortSignal,
 ): Promise<string> {
   const { stabilize, stability } = opts;
 
   const base = {
     MediaEncoding: MediaEncoding.PCM,
     MediaSampleRateHertz: 16000,
-    AudioStream: pcmAudioStream(pcm),
+    AudioStream: audio,
     ...(stabilize
       ? {
           EnablePartialResultsStabilization: true,
@@ -121,12 +209,12 @@ async function runTranscribeStream(
       languageCode: opts.languageCode,
       stabilize,
       stability,
-      pcmBytes: pcm.length,
+      live: audio instanceof LivePcmQueue,
     },
     'transcribe SFM stream start',
   );
 
-  const response = await client.send(command);
+  const response = await client.send(command, signal ? { abortSignal: signal } : {});
   const parts: string[] = [];
 
   for await (const event of response.TranscriptResultStream ?? []) {
@@ -141,7 +229,7 @@ async function runTranscribeStream(
 
   const transcript = parts.join(' ').trim();
   if (!transcript) {
-    log.debug({ pcmBytes: pcm.length }, 'transcribe returned empty');
+    log.debug('transcribe returned empty');
   }
   return transcript;
 }

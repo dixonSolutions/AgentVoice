@@ -8,11 +8,14 @@
 
 import { scopeNumber } from '../../../scopes.js';
 import { expectOk, speechFetch } from '../../http.js';
+import { bodyChunks, rawPcmStream } from '../pcmStream.js';
 import { resolveVendorCall } from '../settings.js';
 import type { SpeechOutputVendor, SpeechVoiceOption } from '../types.js';
 
 const BASE_URL = 'https://api.elevenlabs.io/v1';
 const MAX_CHARS = 4000;
+/** `/stream` with `pcm_24000` — headerless 16-bit mono, sent as it is generated. */
+const PCM_RATE = 24_000;
 
 /**
  * ElevenLabs voice ids are account-scoped, but these public library voices are
@@ -48,6 +51,7 @@ export const elevenlabsSpeechOutput: SpeechOutputVendor = {
     sendsTextOffMachine: true,
     approxUsdPerMillionChars: 150,
     livesVoiceCatalog: true,
+    streaming: true,
     docsUrl: 'https://elevenlabs.io/docs/api-reference/text-to-speech',
     apiKeyUrl: 'https://elevenlabs.io/app/settings/api-keys',
   },
@@ -139,7 +143,9 @@ export const elevenlabsSpeechOutput: SpeechOutputVendor = {
     encode(req) {
       const call = resolveVendorCall(elevenlabsSpeechOutput, req);
       return {
-        url: `${BASE_URL}/text-to-speech/${encodeURIComponent(call.voice)}?output_format=mp3_44100_128`,
+        url: req.stream
+          ? `${BASE_URL}/text-to-speech/${encodeURIComponent(call.voice)}/stream?output_format=pcm_${PCM_RATE}`
+          : `${BASE_URL}/text-to-speech/${encodeURIComponent(call.voice)}?output_format=mp3_44100_128`,
         method: 'POST',
         headers: { 'xi-api-key': apiKey(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -157,6 +163,15 @@ export const elevenlabsSpeechOutput: SpeechOutputVendor = {
     },
     async decode(res, req) {
       const call = resolveVendorCall(elevenlabsSpeechOutput, req);
+      if (req.stream) {
+        return {
+          audio: Buffer.alloc(0),
+          contentType: 'audio/pcm',
+          model: call.model,
+          voice: call.voice,
+          pcm: await rawPcmStream(bodyChunks(res, { signal: req.signal }), PCM_RATE),
+        };
+      }
       return {
         audio: Buffer.from(await res.arrayBuffer()),
         contentType: 'audio/mpeg',

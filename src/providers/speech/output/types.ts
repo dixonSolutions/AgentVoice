@@ -42,6 +42,12 @@ export interface SpeechOutputCapabilities {
   approxUsdPerMillionChars: number | null;
   /** Voice catalog comes from a live API rather than the static list. */
   livesVoiceCatalog?: boolean;
+  /**
+   * Can hand back raw PCM as the vendor produces it (`stream: true` →
+   * `SpeechOutputResult.pcm`), so the phone starts playing on the first chunk.
+   * `false` is the explicit "whole file only" — such a vendor ignores `stream`.
+   */
+  streaming: boolean;
   docsUrl: string;
   apiKeyUrl?: string;
 }
@@ -54,14 +60,28 @@ export interface SpeechOutputRequest {
   /** Preview-only overrides; a normal reply lets each vendor pick its own. */
   modelOverride?: string;
   voiceOverride?: string;
+  /**
+   * Ask for the audio as it is produced rather than as one file. Vendors with
+   * `capabilities.streaming` answer with `pcm`; the rest return `audio` as usual.
+   */
+  stream?: boolean;
+}
+
+/** Headerless PCM16LE mono, chunk by chunk as the vendor sends it. */
+export interface PcmStream {
+  sampleRate: number;
+  chunks: AsyncIterable<Buffer>;
 }
 
 export interface SpeechOutputResult {
+  /** The whole file. Empty when the reply is streamed as `pcm`. */
   audio: Buffer;
   /** e.g. `audio/mpeg`, `audio/wav` — passed straight to the phone. */
   contentType: string;
   model: string;
   voice: string;
+  /** Set only for a `stream` request to a streaming vendor. */
+  pcm?: PcmStream;
 }
 
 export type SpeechOutputSpecializer = Specializer<
