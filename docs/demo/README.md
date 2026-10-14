@@ -14,10 +14,11 @@ bridge's text-to-speech. These are the lines in the published cut, verbatim.
 | Who | Line |
 | --- | --- |
 | you | Cursor listen. What does this project do? Answer in one sentence. |
-| agent | AgentVoice is a self-hosted voice bridge that lets you control a coding agent like Claude Code, Cursor, Codex or Codewhale by speaking from your phone. |
+| agent | AgentVoice is a self-hosted voice bridge that lets you drive a coding agent like Claude Code, Cursor, Codex or Codewhale by speaking from your phone. |
 
-The bridge's speech-to-text heard the question as "What does this project do
-answer in one sentence?" (the wake phrase is stripped before the turn is sent).
+The bridge's speech-to-text heard the question word for word as "What does
+this project do? Answer in one sentence." (the wake phrase is stripped before
+the turn is sent).
 
 ## How it was made
 
@@ -29,7 +30,9 @@ answer in one sentence?" (the wake phrase is stripped before the turn is sent).
 - **Client:** the built web app served by the bridge, opened by Playwright in
   Chromium at a 420×800 phone-sized viewport and recorded with Playwright's
   screen recording. The model list is what Claude Code reports through the
-  bridge (`listModels()`); the take picks Sonnet 5.5.
+  bridge (`listModels()`); the take picks Sonnet 5.5. The app's appearance is
+  left on System, and the browser reports a dark system theme
+  (`prefers-color-scheme: dark`), so the app renders dark.
 - **The microphone:** a PipeWire virtual source (`Audio/Source/Virtual`) fed
   from a null sink. The question is a Kokoro clip (voice `am_michael`, so it
   sounds different from the agent's `af_heart`). It is played into that sink
@@ -40,6 +43,6 @@ answer in one sentence?" (the wake phrase is stripped before the turn is sent).
   wall-clock timestamps, and mixed.
 - **Edit (ffmpeg):** the footage sits in a phone frame next to step captions
   and the transcript, which are HTML rendered to PNG. A title card and an
-  install card bracket it. The only cut is 9 s of waiting while Claude Code
+  install card bracket it. The only cut is 10 s of waiting while Claude Code
   answers and the reply is synthesised, and the video marks it on screen.
   Nothing else is altered. GIF: steps only, 12 fps, 820 px wide.
