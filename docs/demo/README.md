@@ -1,47 +1,44 @@
 # README demo video
 
 `agentvoice-demo.mp4` (with sound) and `agentvoice-demo.gif` (silent preview
-embedded in the README) show one voice session driven entirely from a terminal:
-
-```bash
-agentvoice pipe --mic --project agentvoice
-```
-
-The bridge is running in the background (`agentvoice run`, or the service) with
-Claude Code as the agent CLI. The pipe streams the microphone to the bridge, the
-bridge transcribes each pause-delimited segment, hands it to the voice agent,
-and prints what the agent speaks back — no phone involved (docs/41).
+embedded in the README) show one voice session in the AgentVoice web client:
+pick a project, pick the Claude Code model, tap the orb, ask two questions and
+hear Claude Code answer.
 
 ## Transcript
 
-What is said to the agent (spoken, transcribed by the bridge's speech-to-text
-chain — the self-hosted Whisper container in this take) and what the agent
-speaks back through `speak()`. Replies vary from take to take; these are the
-lines in the published cut, verbatim.
+What is said to the agent (spoken into the app, transcribed by the bridge's
+speech-to-text chain — the self-hosted Whisper container in this take) and what
+the agent speaks back through `speak()`, played by the app through the
+self-hosted Kokoro voice. Replies vary from take to take; these are the lines
+in the published cut, verbatim.
 
 | Who | Line |
 | --- | --- |
 | you | Hey, what does this project do? One sentence. |
-| agent | AgentVoice lets you talk hands-free from your phone to coding agents like Claude Code, Cursor, Codex and Codewhale, so you can steer their work and hear what they're doing. |
+| agent | AgentVoice is a bridge that lets you talk hands-free from your phone to coding agents like me — Claude Code, Cursor, Codex or Codewhale — so you can give instructions, hear progress and approve work by voice. |
 | you | How do I install it? |
 | agent | Let me check the README for the install steps. |
-| agent | The quickest way is to install the npm package globally, at-ratitisrad slash agentvoice. |
-| agent | Then run agentvoice setup, which walks you through picking your agent CLI and projects, then hosting such as Tailscale. |
-| agent | On Debian, Ubuntu or Fedora you can also install it from the signed apt or dnf repositories, so updates come with the rest of your system. |
+| agent | The easiest way is to run npm install dash g at ratitisrad slash agentvoice, which also starts it as a background service. |
+| agent | _(the cut fades out here; the full answer went on to describe `agentvoice setup`, pairing, and the apt/dnf repositories)_ |
 
 ## How it was made
 
-- Recorded with [Kooha](https://github.com/SeaDve/Kooha) (MP4, 30 fps) on a
-  1920×1200 (16:10) display, cropped to the terminal's content area with ffmpeg
-  and padded to 16:10 with the terminal's background colour; header bar, panels
-  and pointer are not in the cut.
-- The "microphone" is a PipeWire null sink whose monitor is the default source;
-  the spoken questions are synthesized with Kokoro (via the bridge's speech
-  server container) and played into that sink, so the pipe hears them exactly
-  like a real mic and Kooha records them in sync.
-- The agent's replies are synthesized the same way in post-production and
-  aligned to the frame where each `agent ◂` line appears (on a phone the bridge
-  speaks them through the configured TTS provider; the terminal pipe prints
-  them).
-- Waiting time (transcription, Claude Code start-up) is cut out; nothing else
+- Bridge: `agentvoice run` on this machine, Claude Code as the agent CLI, three
+  registered projects, speech-to-text `local_whisper` and text-to-speech
+  `local_speech` (the speaches container: faster-whisper small + Kokoro).
+- Client: the built web app served by the bridge, opened in a chromeless
+  Chromium app-mode window at 150 % zoom, paired beforehand. The model list is
+  what Claude Code reports through the bridge (`listModels()`).
+- Recorded with [Kooha](https://github.com/SeaDve/Kooha) (MP4, 30 fps, desktop
+  audio + microphone) on a 1920×1200 (16:10) display. The window's title bar
+  and Chromium's "for testing" infobar are cropped off and the frame is padded
+  back to 16:10 with the page background; panels and dock are never in frame.
+- The "microphone" is a PipeWire virtual source fed from a null sink; the two
+  questions are Kokoro TTS clips played into that sink at the moment they are
+  asked, so the app hears them exactly like a real mic, Whisper transcribes
+  them live, and Kooha records them in sync. The agent's replies are the app's
+  own playback of the bridge's TTS, recorded as desktop audio.
+- Waiting time (transcription, Claude Code start-up, TTS synthesis) is cut out
+  and the second answer is faded out after its second sentence; nothing else
   is altered.
