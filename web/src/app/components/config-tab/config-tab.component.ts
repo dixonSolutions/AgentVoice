@@ -1268,8 +1268,14 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
       )
       .catch((err: unknown) => {
         if (ac.signal.aborted) return;
-        this.journalLive = false;
         this.journalError = err instanceof Error ? err.message : String(err);
+        this.cdr.markForCheck();
+      })
+      // A clean end of the live follow must not strand the pane on a stale
+      // snapshot either — fall back to polling whichever way the stream stops.
+      .then(() => {
+        if (ac.signal.aborted) return;
+        this.journalLive = false;
         this.cdr.markForCheck();
         this.startJournalPoll(ac.signal);
       });
