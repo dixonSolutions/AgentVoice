@@ -48,6 +48,13 @@ esac
 count=0
 while read -r sum path; do
   [[ -n "${sum}" ]] || continue
+  # Pre-rename packages (docs/45): `agentvoice` is replaced by `squeakr`, which
+  # Conflicts/Replaces (deb) and Obsoletes (rpm) it, so they are not carried
+  # over — dropping them is the point, not an error.
+  if [[ "${path}" =~ ^(apt/pool/main/a/agentvoice/|rpm/packages/agentvoice-)[A-Za-z0-9._+~-]+\.(deb|rpm)$ ]]; then
+    echo "dropping pre-rename ${path}"
+    continue
+  fi
   # Only package paths the build itself writes: the manifest is fetched over
   # the network and must not be able to write anywhere else.
   if [[ ! "${sum}" =~ ^[0-9a-f]{64}$ ]] \
