@@ -1,62 +1,33 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-label="Squeakr — self-hosted voice bridge for your coding agent CLI">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 360" width="1200" height="360" role="img" aria-label="Squeakr — voice control for coding agent CLIs">
   <title>Squeakr</title>
-  <desc>Self-hosted voice bridge for your coding agent CLI.</desc>
-
+  <desc>Voice control for coding agent CLIs. Self-hosted, open source.</desc>
   <defs>
-    <linearGradient id="bn-bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#1b1836"/>
-      <stop offset="1" stop-color="#121027"/>
-    </linearGradient>
     <linearGradient id="bn-tile" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#221f42"/>
       <stop offset="1" stop-color="#15142a"/>
     </linearGradient>
-    <linearGradient id="bn-wave" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#8b5cf6"/>
-      <stop offset="0.55" stop-color="#a78bfa"/>
-      <stop offset="1" stop-color="#c4b5fd"/>
+    <linearGradient id="bn-body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c4b5fd"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
     </linearGradient>
-    <radialGradient id="bn-glow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#7c3aed" stop-opacity="0.42"/>
-      <stop offset="1" stop-color="#7c3aed" stop-opacity="0"/>
-    </radialGradient>
   </defs>
+  <rect width="1200" height="360" rx="24" fill="#16142c"/>
 
-  <rect width="1200" height="360" rx="28" fill="url(#bn-bg)"/>
-  <ellipse cx="176" cy="180" rx="230" ry="200" fill="url(#bn-glow)"/>
-
-  <!-- Trailing waveform: the mark's own motif, decaying into the ground so the
-       banner reads as one object rather than a logo dropped on a rectangle. -->
-  <g fill="url(#bn-wave)" opacity="0.15">
-    <rect x="812"  y="150" width="14" height="60"  rx="7"/>
-    <rect x="844"  y="120" width="14" height="120" rx="7"/>
-    <rect x="876"  y="142" width="14" height="76"  rx="7"/>
-    <rect x="908"  y="96"  width="14" height="168" rx="7"/>
-    <rect x="940"  y="134" width="14" height="92"  rx="7"/>
-    <rect x="972"  y="112" width="14" height="136" rx="7"/>
-    <rect x="1004" y="152" width="14" height="56"  rx="7"/>
-    <rect x="1036" y="128" width="14" height="104" rx="7"/>
-    <rect x="1068" y="158" width="14" height="44"  rx="7"/>
-  </g>
-
-  <!-- The mark at 160px: icon.svg's 512 grid scaled by 0.3125. Kept numerically
-       identical to web/public/icon.svg — both come from scripts/gen-icons.mjs's
-       source-of-truth geometry, so they cannot drift. -->
-  <g transform="translate(96 100) scale(0.3125)">
+  <!-- the icon (site/assets/icon.svg), scaled to 220 px -->
+  <g transform="translate(70 70) scale(0.4296875)">
     <rect width="512" height="512" rx="112" fill="url(#bn-tile)"/>
-    <g fill="url(#bn-wave)">
-      <rect x="104" y="204" width="32" height="104" rx="16"/>
-      <rect x="156" y="180" width="32" height="152" rx="16"/>
-      <rect x="208" y="194" width="32" height="124" rx="16"/>
-      <rect x="260" y="154" width="32" height="204" rx="16"/>
-      <rect x="312" y="178" width="32" height="156" rx="16"/>
+    <circle cx="196" cy="196" r="70" fill="url(#bn-body)"/>
+    <circle cx="196" cy="196" r="40" fill="#6d4fd6"/>
+    <path d="M96 304 C96 236 146 196 210 196 C272 196 316 238 352 296 C360 309 356 324 340 328 L210 356 C146 370 96 352 96 304 Z" fill="url(#bn-body)"/>
+    <circle cx="262" cy="262" r="15" fill="#15142a"/>
+    <circle cx="348" cy="314" r="14" fill="#ffffff"/>
+    <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-width="22">
+      <path d="M384 268 A52 52 0 0 1 384 356" opacity="0.95"/>
+      <path d="M418 232 A100 100 0 0 1 418 392" opacity="0.55"/>
     </g>
-    <rect x="372" y="138" width="36" height="236" rx="8" fill="#ffffff"/>
   </g>
 
-  <g font-family="'Segoe UI', Inter, Roboto, 'Helvetica Neue', Helvetica, Arial, sans-serif">
-    <text x="304" y="182" font-size="74" font-weight="700" letter-spacing="-1.5" fill="#ffffff">Squeakr</text>
-    <text x="308" y="228" font-size="24" font-weight="400" fill="#a9a2d0">Self-hosted voice bridge for your coding agent CLI</text>
-    <text x="308" y="272" font-size="19" font-weight="500" letter-spacing="0.6" fill="#7d76a8">CURSOR &#183; CODEX &#183; CLAUDE CODE &#183; CODEWHALE</text>
-  </g>
+  <text x="340" y="172" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="92" font-weight="700" fill="#ffffff" letter-spacing="-2">Squeakr</text>
+  <text x="344" y="226" font-family="Inter, 'Segoe UI', Helvetica, Arial, sans-serif" font-size="26" fill="#c9c3e6">Voice control for coding agent CLIs. Self-hosted, open source.</text>
+  <text x="344" y="276" font-family="'JetBrains Mono', 'DejaVu Sans Mono', monospace" font-size="24" fill="#8f88b8">npm install -g squeakr</text>
 </svg>

@@ -1,35 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Squeakr">
   <title>Squeakr</title>
-  <desc>A speech waveform resolving into a terminal caret.</desc>
-
+  <desc>A mouse in profile, squeaking.</desc>
   <defs>
-    <linearGradient id="av-tile" x1="0" y1="0" x2="1" y2="1">
+    <linearGradient id="sq-tile" x1="0" y1="0" x2="1" y2="1">
       <stop offset="0" stop-color="#221f42"/>
       <stop offset="1" stop-color="#15142a"/>
     </linearGradient>
-    <linearGradient id="av-wave" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#8b5cf6"/>
-      <stop offset="0.55" stop-color="#a78bfa"/>
-      <stop offset="1" stop-color="#c4b5fd"/>
+    <linearGradient id="sq-body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#c4b5fd"/>
+      <stop offset="1" stop-color="#8b5cf6"/>
     </linearGradient>
   </defs>
-
-  <!-- Tile ground sits between the manifest's background_color and theme_color
-       (#1a1a2e) so the PWA splash never flashes a different colour than the icon. -->
-  <rect width="512" height="512" rx="112" fill="url(#av-tile)"/>
-
-  <!-- Waveform. Pill-capped and unevenly tall: speech is organic, so this is a
-       voice trace rather than a tidy equaliser staircase. -->
-    <g fill="url(#av-wave)">
-      <rect x="104" y="204" width="32" height="104" rx="16"/>
-      <rect x="156" y="180" width="32" height="152" rx="16"/>
-      <rect x="208" y="194" width="32" height="124" rx="16"/>
-      <rect x="260" y="154" width="32" height="204" rx="16"/>
-      <rect x="312" y="178" width="32" height="156" rx="16"/>
-    </g>
-
-  <!-- The caret. Squared off and the only pure white in the mark, against the
-       round violet wave — the one hard edge, and the whole point of it: what
-       you say becomes what the terminal does. -->
-  <rect x="372" y="138" width="36" height="236" rx="8" fill="#ffffff"/>
+  <rect width="512" height="512" rx="112" fill="url(#sq-tile)"/>
+  <!-- ear behind the head -->
+  <circle cx="196" cy="196" r="70" fill="url(#sq-body)"/>
+  <circle cx="196" cy="196" r="40" fill="#6d4fd6"/>
+  <!-- head: round at the back, tapering to the nose -->
+  <path d="M96 304 C96 236 146 196 210 196 C272 196 316 238 352 296 C360 309 356 324 340 328 L210 356 C146 370 96 352 96 304 Z" fill="url(#sq-body)"/>
+  <circle cx="262" cy="262" r="15" fill="#15142a"/>
+  <circle cx="348" cy="314" r="14" fill="#ffffff"/>
+  <!-- the squeak -->
+  <g fill="none" stroke="#ffffff" stroke-linecap="round" stroke-width="22">
+    <path d="M384 268 A52 52 0 0 1 384 356" opacity="0.95"/>
+    <path d="M418 232 A100 100 0 0 1 418 392" opacity="0.55"/>
+  </g>
 </svg>
