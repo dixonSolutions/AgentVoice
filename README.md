@@ -180,6 +180,16 @@ each piece to the agent as you talk
 arecord -f S16_LE -r 16000 -c 1 -t raw | agentvoice pipe
 ```
 
+**Channels** make Discord, Telegram, Slack and WhatsApp a way in too: call the
+bot in a Discord voice channel and talk to the agent, send it a voice message
+on Telegram or WhatsApp, or tag it (`@AgentVoice sessions`, `default 2`,
+`config tts openai`) to manage sessions and settings from any chat
+([`docs/44`](./docs/44-channels.md)):
+
+```bash
+agentvoice channel enable discord && agentvoice channel allow discord <your id>
+```
+
 Every bridge run writes a date-named session log and every voice session a
 transcript under `<home>/logs/`, gzipped as they pile up
 ([`docs/42`](./docs/42-logging.md)).

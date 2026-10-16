@@ -52,6 +52,7 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`41-audio-stream-pipe.md`](./41-audio-stream-pipe.md) | Direct audio stream input: the phone's stream mode, `agentvoice pipe`, segmentation, the `/ws/audio-stream` protocol | Hands-free input, talking to the agent from a terminal, or why turns are still recommended |
 | [`42-logging.md`](./42-logging.md) | Date-named session logs, voice transcripts, gzip rollover and retention, `agentvoice logs` | Finding what the bridge did or what was said, log disk use, crash forensics |
 | [`43-package-repos.md`](./43-package-repos.md) | Signed apt/dnf repositories on GitHub Pages: setup, signing key, rotation, user install | Package repos, signing key, release publishing |
+| [`44-channels.md`](./44-channels.md) | Discord / Telegram / Slack / WhatsApp as remote access: Discord voice calls, voice messages, the `@AgentVoice` command line, default sessions per conversation, platform research, Bedrock S2S answer | Channels, #93 |
 
 ## One-paragraph summary
 

@@ -13,7 +13,9 @@ export default defineConfig({
   // and the CLI's silenced pino logger would silence the bridge's own logs too.
   splitting: false,
   // Keep native / CJS-only modules external — resolved at runtime from node_modules
-  external: ['better-sqlite3', 'http-proxy'],
+  // Channel libraries are optionalDependencies, imported on first use only
+  // (docs/44): a failed install must leave the bridge running, not unbuildable.
+  external: ['better-sqlite3', 'http-proxy', 'discord.js', '@discordjs/voice', 'opusscript', '@snazzah/davey'],
   // Inline everything else so the bridge is a single file
   noExternal: [],
 });

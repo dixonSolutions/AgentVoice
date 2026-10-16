@@ -7,7 +7,7 @@ import {
   type AudioSpectrum,
 } from '../../voice-audio-meter.js';
 import { AppStateService } from './app-state.service';
-import { BridgeService } from './bridge.service';
+import { BridgeService, type ChannelCallEvent } from './bridge.service';
 import { LogService } from './log.service';
 import { ToastService } from './toast.service';
 import { VoiceProvidersService } from './voice-providers.service';
@@ -418,6 +418,47 @@ export class VoiceSessionService {
     // A new session must be able to hear a card that is still open.
     forgetSpokenPrompts();
     this.appState.transitionTo('idle');
+  }
+
+  /**
+   * A channel voice call (Discord), mirrored here as it happens: what each
+   * person said, the agent's lines, its activity, and the same sound effects
+   * the call plays. Replies already reach an open session over its own socket
+   * (and are spoken there), so they are only added when none is open.
+   */
+  mirrorChannelCall(e: ChannelCallEvent): void {
+    const where = e.source.charAt(0).toUpperCase() + e.source.slice(1);
+    switch (e.event) {
+      case 'started':
+        this.logs.append('info', 'voice', `${e.call} started${e.wake ? ' — wake words on' : ''}`);
+        this.toast.info(`${where} call started`, e.call);
+        break;
+      case 'ended':
+        this.logs.append('info', 'voice', `${e.call} ended`);
+        this.toast.info(`${where} call ended`, e.call);
+        break;
+      case 'heard': {
+        const mark = e.state === 'armed' ? ' 👂' : e.state === 'cancel' ? ' ✋' : e.state === 'held' ? ' …' : '';
+        if (e.state === 'ignored') {
+          this.logs.append('info', 'voice', `${where} · ${e.speaker} (not addressed): ${e.text}`, undefined, 'stt');
+        } else {
+          this.addEntry(`🎙️ ${e.speaker} (${where}): ${e.text}${mark}`, 'user');
+        }
+        break;
+      }
+      case 'reply':
+        if (e.own || !this.conversationActive()) this.addEntry(e.text, 'assistant');
+        break;
+      case 'cue':
+        playVoiceCueNow(e.cue, { force: true });
+        break;
+      case 'activity':
+        this.logs.append('info', 'voice', `${where} call · ${e.line}`, undefined, 'tool');
+        break;
+      case 'notice':
+        this.toast.warn(`${where} call`, e.text);
+        break;
+    }
   }
 
   injectNarration(text: string): void {

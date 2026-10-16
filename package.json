@@ -127,5 +127,10 @@
     "esbuild@0.27.7": true,
     "esbuild@0.28.1": true,
     "esbuild@0.21.5": true
+  },
+  "optionalDependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "discord.js": "^14.27.0",
+    "opusscript": "^0.1.1"
   }
 }

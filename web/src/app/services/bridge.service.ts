@@ -88,6 +88,20 @@ export interface NarrationEvent {
   data?: Record<string, unknown>;
 }
 
+/**
+ * One moment of a voice call on a channel (a Discord call, docs/44), mirrored
+ * to the app as it happens: what was heard, what was said, every cue played.
+ */
+export type ChannelCallEvent = { call: string; source: string } & (
+  | { event: 'started'; wake: boolean }
+  | { event: 'ended' }
+  | { event: 'heard'; speaker: string; text: string; state: 'request' | 'armed' | 'held' | 'cancel' | 'ignored' }
+  | { event: 'reply'; text: string; own: boolean }
+  | { event: 'cue'; cue: 'listening' | 'sent' | 'cancel' | 'error' }
+  | { event: 'activity'; line: string }
+  | { event: 'notice'; text: string }
+);
+
 // ── Approval push types ────────────────────────────────────────────────────
 //
 // Shared with the VS Code / Cursor extension through packages/client — one
@@ -184,6 +198,9 @@ export class BridgeService {
 
   /** Emits when the bridge pushes a narration event. AppComponent routes to voice session. */
   readonly narration$ = new Subject<NarrationEvent>();
+
+  /** Emits for every moment of a channel voice call (Discord) — see ChannelCallEvent. */
+  readonly channelCall$ = new Subject<ChannelCallEvent>();
 
   /** Emits when the bridge rejects the app token (WebSocket close 4001). */
   readonly authFailed$ = new Subject<void>();
@@ -647,6 +664,13 @@ export class BridgeService {
                 ? (msg['data'] as Record<string, unknown>)
                 : undefined,
           });
+        }
+        break;
+      }
+
+      case 'channel_call': {
+        if (typeof msg['event'] === 'string' && typeof msg['call'] === 'string') {
+          this.channelCall$.next(msg as unknown as ChannelCallEvent);
         }
         break;
       }

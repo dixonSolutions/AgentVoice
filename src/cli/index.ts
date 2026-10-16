@@ -27,6 +27,7 @@ import { runCommand } from './commands/run.js';
 import { logsCommand, serviceCommand } from './commands/service.js';
 import { migrateCommand } from './commands/migrate.js';
 import { addCommand } from './commands/add.js';
+import { channelCommand } from './commands/channel.js';
 import { localCommand } from './commands/local.js';
 import { setupCommand } from './commands/setup.js';
 import { pipeCommand, pipeOptions, PIPE_SWITCHES, PIPE_VALUE_FLAGS } from './commands/pipe.js';
@@ -37,6 +38,8 @@ import { updateCommand, UPDATE_FLAGS } from './commands/update.js';
 import { bold, cyan, dim, fail, note, say } from './out.js';
 import { packageVersion, gitVersion } from './versions.js';
 import { prepareVoskCommand } from './commands/vosk.js';
+import { CONTROL_VALUE_FLAGS, controlCommand } from './commands/control.js';
+import type { ControlCommand } from '../control/types.js';
 
 const USAGE = `
   ${bold(cyan('agentvoice'))} — self-hosted voice bridge for agent CLIs
@@ -66,6 +69,31 @@ const USAGE = `
   ${bold('Projects')}
     add <path>|--this-dir  Register a directory as a project (name, description
                            and aliases filled in from package.json / README / git)
+
+  ${bold('The voice agent')} (on the running bridge — every chat channel runs these too)
+    agent [status|stop]    What the agent is doing, project, who is listening; stop it
+    projects               Registered projects (▶ is active)
+    project [name]         Show or switch the active project
+    sessions [project]     Running and recent agent sessions, numbered
+    use <n|name|id>        Continue that session on the next turn
+    new [project]          Start a fresh session
+    say <text>             Send a turn as text
+    config [key] [value]   Settings a chat may change: agent, model, permissions,
+                           workflow, input, stt, tts, wake, vad, silence, phrases …
+    default [<n|name|project>|none]
+                           The session a chat conversation continues (with
+                           --channel and --conversation, or --user for calls)
+
+  ${bold('Channels')} (Discord, Telegram, Slack, WhatsApp — docs/44)
+    channel                Status of every channel
+    channel allow <channel> <user id>
+                           Let that person command the bridge from the channel
+    channel enable|disable <channel>
+                           Turn a channel on or off (tokens live in .env)
+    channel set <channel> <key> <value>
+                           messageChannel / voiceChannel <id|none> (the bot's own
+                           text channel and call room), or logs, voice, autoJoin,
+                           welcomeDm, voiceNotes, requireMention on|off
 
   ${bold('Looking after it')}
     status [--json]        Install, version, service, port and health at a glance
@@ -121,6 +149,8 @@ const USAGE = `
     --name, --description  Override what was detected (add)
     --alias "a, b"         Extra spoken aliases, comma-separated (add)
     --with-data            Also copy data/state.db as a consistent snapshot (migrate)
+    --channel, --conversation, --user <id>
+                           The chat a command came from (sessions, new, say, default, agent)
 
   ${bold('Environment')}
     AGENTVOICE_HOME        Bridge home. Defaults to the current directory when
@@ -212,6 +242,23 @@ async function dispatch(argv: string[]): Promise<void> {
       // null means the bridge is now running in this process — leave exitCode
       // alone or the process would exit as soon as the event loop settles.
       if (code !== null) process.exitCode = code;
+      return;
+    }
+
+    case 'agent':
+    case 'projects':
+    case 'project':
+    case 'sessions':
+    case 'use':
+    case 'new':
+    case 'say':
+    case 'config':
+    case 'default': {
+      const parsed = parseArgs(args, { valueFlags: CONTROL_VALUE_FLAGS });
+      rejectUnknown(parsed, CONTROL_VALUE_FLAGS);
+      // Text after `--` is taken as it is (`say -- -1 is wrong`).
+      parsed.positionals.push(...parsed.rest);
+      process.exitCode = await controlCommand(command as ControlCommand, parsed);
       return;
     }
 
@@ -358,6 +405,15 @@ async function dispatch(argv: string[]): Promise<void> {
         force: parsed.switches.has('force'),
         withData: parsed.switches.has('with-data'),
       });
+      return;
+    }
+
+    case 'channel':
+    case 'channels': {
+      const parsed = parseArgs(args);
+      rejectUnknown(parsed, []);
+      // After `--` too: ids such as a Telegram group's (-100…) look like flags.
+      process.exitCode = await channelCommand([...parsed.positionals, ...parsed.rest]);
       return;
     }
 
