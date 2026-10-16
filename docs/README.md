@@ -53,7 +53,7 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`42-logging.md`](./42-logging.md) | Date-named session logs, voice transcripts, gzip rollover and retention, `squeakr logs` | Finding what the bridge did or what was said, log disk use, crash forensics |
 | [`43-package-repos.md`](./43-package-repos.md) | Signed apt/dnf repositories on GitHub Pages: setup, signing key, rotation, user install | Package repos, signing key, release publishing |
 | [`44-channels.md`](./44-channels.md) | Discord / Telegram / Slack / WhatsApp as remote access: Discord voice calls, voice messages, the `@Squeakr` command line, default sessions per conversation, platform research, Bedrock S2S answer | Channels, #93 |
-| [`45-rename-squeakr.md`](./45-rename-squeakr.md) | AgentVoice → Squeakr: what was renamed, what was kept (stage B), `squeakr upgrade-from-agentvoice`, the final 0.1.6 hand-over release | Upgrading an AgentVoice install, releasing the rename |
+| [`45-rename-squeakr.md`](./45-rename-squeakr.md) | AgentVoice → Squeakr: everything renamed, what an old install keeps reading, `scripts/migrate-to-squeakr.sh` and `squeakr upgrade-from-agentvoice` for npm / .deb / .rpm / clones, the final 0.1.6 hand-over and the release order | Upgrading an AgentVoice install, releasing the rename |
 
 ## One-paragraph summary
 
