@@ -62,7 +62,7 @@ export function say(line = ''): void {
 }
 
 /**
- * Diagnostics go to stderr, so `agentvoice token` can be piped somewhere and
+ * Diagnostics go to stderr, so `squeakr token` can be piped somewhere and
  * `--json` output stays a single parseable document.
  */
 export function note(line = ''): void {
@@ -70,5 +70,5 @@ export function note(line = ''): void {
 }
 
 export function fail(message: string): void {
-  process.stderr.write(`${red('agentvoice:')} ${message}\n`);
+  process.stderr.write(`${red('squeakr:')} ${message}\n`);
 }

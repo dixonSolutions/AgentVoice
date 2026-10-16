@@ -1,7 +1,7 @@
 {
-  "//": "Reference only. The bridge auto-writes the GLOBAL ~/.cursor/mcp.json on voice-session start (dev: http://127.0.0.1:5089/mcp · host: https://<tailscale-hostname>/mcp). Do not keep a project-level agent-voice entry — it is removed automatically to avoid conflicting with the global config.",
+  "//": "Reference only. The bridge auto-writes the GLOBAL ~/.cursor/mcp.json on voice-session start (dev: http://127.0.0.1:5089/mcp · host: https://<tailscale-hostname>/mcp). Do not keep a project-level squeakr entry — it is removed automatically to avoid conflicting with the global config.",
   "mcpServers": {
-    "agent-voice": {
+    "squeakr": {
       "url": "https://<tailscale-hostname>/mcp",
       "type": "http",
       "transport": "http",

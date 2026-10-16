@@ -19,7 +19,7 @@ const argv = (text: string, opts?: { isDirect?: boolean }) => {
 };
 const HERE = ['--channel', 'discord', '--conversation', 'chan-1'];
 
-describe('chat → agentvoice CLI', () => {
+describe('chat → squeakr CLI', () => {
   it('translates the agent commands into the CLI, with where they came from', () => {
     assert.deepEqual(argv('status'), ['agent', ...HERE]);
     assert.deepEqual(argv('stop'), ['agent', 'stop']);
@@ -66,9 +66,9 @@ describe('chat → agentvoice CLI', () => {
 
   it('host commands run in every spelling; the rest stay on the host', () => {
     assert.deepEqual(argv('cli version'), ['version']);
-    assert.deepEqual(argv('agentvoice logs -n 5'), ['logs', '-n', '5']);
+    assert.deepEqual(argv('squeakr logs -n 5'), ['logs', '-n', '5']);
     assert.deepEqual(argv('doctor'), ['doctor']);
-    for (const text of ['cli update', 'cli token', 'agentvoice restart']) {
+    for (const text of ['cli update', 'cli token', 'squeakr restart']) {
       const a = parse(text);
       assert.equal(a.kind, 'reply', text);
       assert.match((a as { text: string }).text, /not available from chat/);
@@ -94,6 +94,6 @@ describe('chat → agentvoice CLI', () => {
     const control = { kind: 'cli' as const, argv: ['use', '9'] };
     assert.equal(renderCli(control, { ok: false, output: 'No session matches "9".' }), '⚠️ No session matches "9".');
     const host = { kind: 'cli' as const, argv: ['version'], host: true };
-    assert.equal(renderCli(host, { ok: true, output: 'agentvoice 0.1.5' }), '`agentvoice version`\n```\nagentvoice 0.1.5\n```');
+    assert.equal(renderCli(host, { ok: true, output: 'squeakr 0.1.5' }), '`squeakr version`\n```\nsqueakr 0.1.5\n```');
   });
 });

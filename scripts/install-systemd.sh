@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install agentvoice as a systemd user service (survives logout/reboot with linger).
+# Install squeakr as a systemd user service (survives logout/reboot with linger).
 #
 # Usage:
 #   bash scripts/install-systemd.sh
@@ -53,11 +53,11 @@ section "Installing systemd user units"
 SYSTEMD_DIR="${HOME}/.config/systemd/user"
 mkdir -p "$SYSTEMD_DIR"
 
-SERVICE_FILE="${SYSTEMD_DIR}/agentvoice.service"
+SERVICE_FILE="${SYSTEMD_DIR}/squeakr.service"
 info "Writing ${SERVICE_FILE}..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=AgentVoice Bridge
+Description=Squeakr Bridge
 After=network-online.target tailscaled.service
 Wants=network-online.target
 
@@ -72,21 +72,21 @@ RestartSec=3
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=agentvoice
+SyslogIdentifier=squeakr
 
 [Install]
 WantedBy=default.target
 EOF
 
-PATH_FILE="${SYSTEMD_DIR}/agentvoice-watch.path"
+PATH_FILE="${SYSTEMD_DIR}/squeakr-watch.path"
 info "Writing ${PATH_FILE}..."
 cat > "$PATH_FILE" <<EOF
 [Unit]
-Description=Watch AgentVoice build output for changes
+Description=Watch Squeakr build output for changes
 
 [Path]
 PathModified=${PROJECT_DIR}/dist/index.js
-Unit=agentvoice.service
+Unit=squeakr.service
 
 [Install]
 WantedBy=default.target
@@ -110,16 +110,16 @@ bash "${SCRIPT_DIR}/stop.sh" --quiet || true
 
 section "Starting systemd units"
 systemctl --user daemon-reload
-systemctl --user enable agentvoice.service agentvoice-watch.path
-systemctl --user restart agentvoice.service
-systemctl --user start agentvoice-watch.path
+systemctl --user enable squeakr.service squeakr-watch.path
+systemctl --user restart squeakr.service
+systemctl --user start squeakr-watch.path
 
 sleep 2
-if systemctl --user is-active --quiet agentvoice.service; then
-  ok "agentvoice.service is active."
+if systemctl --user is-active --quiet squeakr.service; then
+  ok "squeakr.service is active."
 else
-  warn "Service may have failed — check: journalctl --user -u agentvoice -n 30"
-  systemctl --user status agentvoice.service --no-pager -l | tail -15 || true
+  warn "Service may have failed — check: journalctl --user -u squeakr -n 30"
+  systemctl --user status squeakr.service --no-pager -l | tail -15 || true
   exit 1
 fi
 
@@ -132,8 +132,8 @@ fi
 
 echo ""
 ok "systemd install complete."
-echo -e "  ${BLU}Status:${NC} systemctl --user status agentvoice"
-echo -e "  ${BLU}Logs:${NC}   journalctl --user -u agentvoice -f"
+echo -e "  ${BLU}Status:${NC} systemctl --user status squeakr"
+echo -e "  ${BLU}Logs:${NC}   journalctl --user -u squeakr -f"
 echo -e "  ${BLU}Files:${NC}  ${PROJECT_DIR}/logs/serve/bridge/ and logs/serve/transcripts/ (older ones gzipped)"
 echo -e "  ${BLU}Restart:${NC} bash scripts/restart.sh --no-build"
 echo ""

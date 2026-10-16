@@ -88,7 +88,7 @@ async function postNativeToken(
     body: JSON.stringify({
       platform,
       token,
-      bundle_id: 'com.cursorvoice.app',
+      bundle_id: 'com.squeakr.app',
     }),
   });
 }

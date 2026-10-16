@@ -127,8 +127,8 @@ export async function attachDevWebProxy(app: FastifyInstance, webPort: number): 
 /**
  * Serve the Vosk wake-word model from the user's own directory.
  *
- * A distro install cannot write the ~41 MB model into `/usr/lib/agentvoice`,
- * so the model is prepared into `~/.agentvoice/vosk` instead and this mount
+ * A distro install cannot write the ~41 MB model into `/usr/lib/squeakr`,
+ * so the model is prepared into `~/.squeakr/vosk` instead and this mount
  * serves it — registered *before* the packaged web root so a model the user
  * downloaded always wins over a stale packaged one (docs/38).
  */

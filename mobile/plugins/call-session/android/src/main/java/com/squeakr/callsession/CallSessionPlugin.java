@@ -1,4 +1,4 @@
-package com.cursorvoice.callsession;
+package com.squeakr.callsession;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -16,7 +16,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 @CapacitorPlugin(name = "CallSession")
 public class CallSessionPlugin extends Plugin {
-    private static final String CHANNEL_ID = "cursor_voice_call";
+    private static final String CHANNEL_ID = "squeakr_call";
     private static final int NOTIFICATION_ID = 1001;
     private boolean callActive = false;
 
@@ -48,7 +48,7 @@ public class CallSessionPlugin extends Plugin {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                 CHANNEL_ID,
-                "AgentVoice Session",
+                "Squeakr Session",
                 NotificationManager.IMPORTANCE_LOW
             );
             channel.setDescription("Active voice session with home Cursor bridge");
@@ -61,7 +61,7 @@ public class CallSessionPlugin extends Plugin {
         );
 
         Notification notification = new NotificationCompat.Builder(ctx, CHANNEL_ID)
-            .setContentTitle("AgentVoice")
+            .setContentTitle("Squeakr")
             .setContentText("Voice session active")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentIntent(pi)

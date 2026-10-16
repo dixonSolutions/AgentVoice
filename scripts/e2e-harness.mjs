@@ -1,11 +1,11 @@
 /**
  * Shared scaffolding for the end-to-end scripts (live-pipe-test.mjs,
  * live-pwa-stream-test.mjs): a throwaway bridge home run by the real
- * `agentvoice` CLI, a stand-in Whisper server, and the stub agent as
+ * `squeakr` CLI, a stand-in Whisper server, and the stub agent as
  * "Claude Code".
  *
- * AGENTVOICE_HOME is the scratch home and HOME a scratch directory, so neither
- * ~/.agentvoice nor the MCP registration the bridge writes for the agent
+ * SQUEAKR_HOME is the scratch home and HOME a scratch directory, so neither
+ * ~/.squeakr nor the MCP registration the bridge writes for the agent
  * (~/.claude.json) is touched.
  */
 
@@ -60,7 +60,7 @@ async function freePort() {
  * @param {Record<string, string>} [opts.extraEnv]  more lines for the home's .env
  */
 export async function createInstance({ bin, canned, configure, ttsChunkDelayMs = 0, extraEnv = {} }) {
-  const tmp = mkdtempSync(join(tmpdir(), 'agentvoice-e2e-'));
+  const tmp = mkdtempSync(join(tmpdir(), 'squeakr-e2e-'));
   const instance = join(tmp, 'instance');
   const project = join(tmp, 'project');
   const home = join(tmp, 'home');
@@ -133,13 +133,13 @@ export async function createInstance({ bin, canned, configure, ttsChunkDelayMs =
 
   const env = {
     ...process.env,
-    AGENTVOICE_HOME: instance,
+    SQUEAKR_HOME: instance,
     HOME: home,
     NODE_ENV: 'production',
     STUB_VOICE_SCRIPT: 'echo',
     STUB_ECHO_TURNS: '6',
   };
-  for (const key of ['APP_TOKEN', 'CONFIG_PATH', 'DB_PATH', 'PORT', 'AGENTVOICE_LOG_DIR', 'LOG_LEVEL']) delete env[key];
+  for (const key of ['APP_TOKEN', 'CONFIG_PATH', 'DB_PATH', 'PORT', 'SQUEAKR_LOG_DIR', 'AGENTVOICE_HOME', 'AGENTVOICE_LOG_DIR', 'LOG_LEVEL']) delete env[key];
 
   function run(cmdArgs, { input, timeoutMs = 60_000 } = {}) {
     return new Promise((resolveRun) => {
@@ -158,7 +158,7 @@ export async function createInstance({ bin, canned, configure, ttsChunkDelayMs =
   }
 
   // ── A bridge home pointed at the stand-ins ──────────────────────────────
-  // What `agentvoice run` would seed on first start, but with the settings
+  // What `squeakr run` would seed on first start, but with the settings
   // the test needs already in place.
   const token = randomBytes(32).toString('base64url');
   const config = JSON.parse(readFileSync(join(ROOT, 'config.example.json'), 'utf-8'));

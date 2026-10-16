@@ -255,7 +255,7 @@ the default.
 
 **Decision:** Config → Serve has no scheduler. Heartbeat / interval auto-pull /
 auto-build / auto-restart are stripped on load. The hub is health check, live
-`journalctl` for `agentvoice.service`, restart via `scripts/restart.sh`, and
+`journalctl` for `squeakr.service`, restart via `scripts/restart.sh`, and
 rebase onto `origin/<branch>` (saved branch, else origin default, else `main`).
 Origin is trusted (`git fetch` + `git rebase -X ours origin/<branch>`).
 
@@ -274,7 +274,7 @@ CallKit (iOS) or the call-category foreground service (Android) is up. Orb FFT /
 canvas pause while `document.hidden`. Vosk wake-word spotting stays running.
 
 **Rationale:** A cellular call turns the display off and uses dedicated DSP.
-AgentVoice was draining more than Phone.app mainly because Wake Lock kept the
+Squeakr was draining more than Phone.app mainly because Wake Lock kept the
 **screen on for the whole session** — on top of WebView + Vosk WASM. CallKit
 already keeps the audio session alive with the screen locked.
 

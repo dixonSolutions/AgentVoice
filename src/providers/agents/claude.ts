@@ -78,7 +78,7 @@ function resolveMcpConfigPath(): string {
  *
  * The list covers every MCP server the user has registered, not just ours.
  * People add servers (gdr, playwright, …) precisely so the agent can use them,
- * and an allowlist denies anything omitted — so hardcoding only `agent-voice`
+ * and an allowlist denies anything omitted — so hardcoding only `squeakr`
  * silently made the voice agent the *least* capable way to run Claude Code,
  * even though the same servers work fine in an interactive session.
  */
@@ -119,7 +119,7 @@ async function checkAuth(): Promise<AuthCheckResult> {
  * Flags every `claude` spawn needs.
  *
  *  --verbose        stream-json output is rejected without it in print mode.
- *  --mcp-config     registers AgentVoice for this process regardless of what
+ *  --mcp-config     registers Squeakr for this process regardless of what
  *                   is (or is not) in the user's global config. Without
  *                   --strict-mcp-config the user's own servers still load.
  *  --allowedTools   print mode cannot prompt, so MCP tools must be pre-approved.
@@ -135,7 +135,7 @@ function baseArgs(oneShot: boolean): string[] {
  * End option parsing before the prompt.
  *
  * `--allowedTools` and `--disallowedTools` are variadic: given
- * `--allowedTools mcp__agent-voice "the prompt"` the CLI swallows the prompt as
+ * `--allowedTools mcp__squeakr "the prompt"` the CLI swallows the prompt as
  * a second tool pattern and then dies with "Input must be provided either
  * through stdin or as a prompt argument". Today the prompt survives only
  * because a single-value flag happens to sit last; `--` makes that ordering
@@ -328,7 +328,7 @@ async function probeClaudeCatalog(): Promise<ClaudeCatalogModel[]> {
       if (!stderr) stderr = err.message;
     });
     child.stdin.write(
-      JSON.stringify({ type: 'control_request', request_id: 'agentvoice-models', request: { subtype: 'initialize' } }) + '\n',
+      JSON.stringify({ type: 'control_request', request_id: 'squeakr-models', request: { subtype: 'initialize' } }) + '\n',
     );
   });
 }
@@ -627,7 +627,7 @@ function safeMtimeMs(path: string): number {
 /**
  * Claude Code's user-scope MCP servers live in `~/.claude.json` (what
  * `claude mcp add --scope user` writes) — NOT in `~/.claude/settings.json`,
- * which only has enable/disable switches. Older AgentVoice builds wrote the
+ * which only has enable/disable switches. Older Squeakr builds wrote the
  * latter, so Claude Code never saw the bridge at all and every voice session
  * was silently mute. We now:
  *

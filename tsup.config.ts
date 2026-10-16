@@ -2,13 +2,13 @@ import { defineConfig } from 'tsup';
 
 export default defineConfig({
   // Two entries: the bridge, and the management CLI that looks after it.
-  // bin/agentvoice.mjs is a shim over dist/cli.js — see docs/35-cli.md.
+  // bin/squeakr.mjs is a shim over dist/cli.js — see docs/35-cli.md.
   entry: { index: 'src/index.ts', cli: 'src/cli/index.ts' },
   format: ['esm'],
   target: 'node20',
   clean: true,
   sourcemap: true,
-  // No shared chunks. `agentvoice run` loads dist/cli.js and then dist/index.js
+  // No shared chunks. `squeakr run` loads dist/cli.js and then dist/index.js
   // in the same process; if they shared a chunk they would share module state,
   // and the CLI's silenced pino logger would silence the bridge's own logs too.
   splitting: false,

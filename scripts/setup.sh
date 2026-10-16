@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# AgentVoice — setup from a clone (Linux / macOS)
+# Squeakr — setup from a clone (Linux / macOS)
 #
-# This script only builds. Everything after that is `agentvoice setup`, the
+# This script only builds. Everything after that is `squeakr setup`, the
 # same guided wizard an npm or .deb/.rpm install runs:
 #
 #   1. install dependencies and compile the backend + web client
-#   2. agentvoice setup
+#   2. squeakr setup
 #        - asks whether to install a background service
 #        - project config: agent CLI, where your repos live
 #        - only if you said yes: the service, then hosting (e.g. Tailscale)
 #
 # Usage:
-#   bash scripts/setup.sh [options] [-- <agentvoice setup options>]
+#   bash scripts/setup.sh [options] [-- <squeakr setup options>]
 #
 # Options:
 #   --skip-install     Do not run npm install
@@ -24,7 +24,7 @@
 #                      (tailscale | cloudflare | ngrok | devtunnel | lan)
 #   -h, --help         This screen
 #
-# Anything after `--` goes to `agentvoice setup` unchanged
+# Anything after `--` goes to `squeakr setup` unchanged
 # (e.g. `-- --agent claude-code --projects-dir ~/code`). Re-running is safe.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -90,4 +90,4 @@ fi
 
 # ── 2. The wizard ──────────────────────────────────────────────────────────
 section "Setup"
-exec node "${PROJECT_DIR}/bin/agentvoice.mjs" setup ${WIZARD_ARGS[@]+"${WIZARD_ARGS[@]}"}
+exec node "${PROJECT_DIR}/bin/squeakr.mjs" setup ${WIZARD_ARGS[@]+"${WIZARD_ARGS[@]}"}

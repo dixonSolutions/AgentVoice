@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install a persistent SSH tunnel (systemd user service) for split-host hosting.
 #
-# Use when AgentVoice runs on a remote host/container but Tailscale Serve runs
+# Use when Squeakr runs on a remote host/container but Tailscale Serve runs
 # on this machine (e.g. eva → debian incus :5671).
 #
 # Usage:
@@ -10,7 +10,7 @@
 #
 # After install:
 #   tailscale serve --bg http://127.0.0.1:15671   # once, on this machine
-#   systemctl --user status agentvoice-tunnel
+#   systemctl --user status squeakr-tunnel
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,10 +33,12 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-TUNNEL_DIR="${HOME}/.config/agentvoice"
+TUNNEL_DIR="${HOME}/.config/squeakr"
+# A tunnel set up before the rename (docs/45) keeps its config where it is.
+[[ ! -d "${TUNNEL_DIR}" && -d "${HOME}/.config/agentvoice" ]] && TUNNEL_DIR="${HOME}/.config/agentvoice"
 ENV_FILE="${TUNNEL_DIR}/tunnel.env"
 SERVICE_DIR="${HOME}/.config/systemd/user"
-SERVICE_FILE="${SERVICE_DIR}/agentvoice-tunnel.service"
+SERVICE_FILE="${SERVICE_DIR}/squeakr-tunnel.service"
 TUNNEL_SCRIPT="${PROJECT_DIR}/scripts/ssh-remote-tunnel.sh"
 
 mkdir -p "$TUNNEL_DIR" "$SERVICE_DIR"
@@ -54,13 +56,13 @@ chmod 600 "$ENV_FILE"
 
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=AgentVoice SSH tunnel (${LOCAL_BIND_PORT} → ${REMOTE_SSH}:${REMOTE_BIND_PORT})
+Description=Squeakr SSH tunnel (${LOCAL_BIND_PORT} → ${REMOTE_SSH}:${REMOTE_BIND_PORT})
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-Environment=AGENTVOICE_TUNNEL_ENV=${ENV_FILE}
+Environment=SQUEAKR_TUNNEL_ENV=${ENV_FILE}
 ExecStart=${TUNNEL_SCRIPT}
 Restart=always
 RestartSec=5
@@ -71,14 +73,14 @@ WantedBy=default.target
 EOF
 
 systemctl --user daemon-reload
-systemctl --user enable --now agentvoice-tunnel.service
+systemctl --user enable --now squeakr-tunnel.service
 
 sleep 2
 if curl -sf --max-time 5 "http://127.0.0.1:${LOCAL_BIND_PORT}/healthz" >/dev/null; then
   echo "OK: tunnel healthy at http://127.0.0.1:${LOCAL_BIND_PORT}/healthz"
 else
   echo "WARN: tunnel service started but health check failed — check:" >&2
-  echo "  journalctl --user -u agentvoice-tunnel -n 30" >&2
+  echo "  journalctl --user -u squeakr-tunnel -n 30" >&2
   exit 1
 fi
 
@@ -86,4 +88,4 @@ echo ""
 echo "Tunnel installed. Ensure Tailscale Serve points at the local port:"
 echo "  tailscale serve --bg http://127.0.0.1:${LOCAL_BIND_PORT}"
 echo ""
-echo "Status: systemctl --user status agentvoice-tunnel"
+echo "Status: systemctl --user status squeakr-tunnel"

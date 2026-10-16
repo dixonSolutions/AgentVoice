@@ -1,12 +1,12 @@
 /**
- * `agentvoice migrate <path>` — move an existing bridge's config.json and .env
+ * `squeakr migrate <path>` — move an existing bridge's config.json and .env
  * (a clone, a hand-made install, an old home) into this install's home, so an
  * npm install picks up where that one left off: same projects, same keys, same
  * pairing token — every paired phone keeps working.
  *
  * One action, and only that action: it copies files and stops. It never starts
  * the bridge, never installs a service, never touches the source. Starting it is
- * the user's next command (`agentvoice run`, or `service install --now`).
+ * the user's next command (`squeakr run`, or `service install --now`).
  *
  * "Safely", concretely:
  *
@@ -23,14 +23,14 @@
  */
 
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { bold, dim, fail, green, note, say, yellow } from '../out.js';
+import { brandEnv, defaultHomeDir } from '../../brand.js';
 
 export interface MigrateOptions {
   /** A bridge directory (holding config.json / .env) or a config.json file. */
   source: string;
-  /** Target home. Defaults to $AGENTVOICE_HOME, else ~/.agentvoice. */
+  /** Target home. Defaults to $SQUEAKR_HOME, else ~/.squeakr. */
   to?: string;
   dryRun?: boolean;
   force?: boolean;
@@ -48,6 +48,7 @@ const PATH_KEYS = new Set([
   'CLAUDE_CODE_PATH',
   'CODEWHALE_PATH',
   'AGENTVOICE_LOG_DIR',
+  'SQUEAKR_LOG_DIR',
 ]);
 
 /**
@@ -55,7 +56,7 @@ const PATH_KEYS = new Set([
  * new install back into the old checkout — at its config, or worse, at its live
  * database.
  */
-const LAYOUT_KEYS = new Set(['CONFIG_PATH', 'DB_PATH', 'AGENTVOICE_HOME']);
+const LAYOUT_KEYS = new Set(['CONFIG_PATH', 'DB_PATH', 'SQUEAKR_HOME', 'AGENTVOICE_HOME']);
 
 export interface EnvTransform {
   text: string;
@@ -83,7 +84,7 @@ export function transformEnv(text: string, sourceDir: string): EnvTransform {
 
     if (LAYOUT_KEYS.has(key)) {
       dropped.push(key);
-      return [`# ${key} left behind by \`agentvoice migrate\` — it described the source install's layout.`];
+      return [`# ${key} left behind by \`squeakr migrate\` — it described the source install's layout.`];
     }
     keys.push(key);
 
@@ -161,8 +162,8 @@ function envLookup(text: string, key: string): string | undefined {
 }
 
 function defaultTarget(): string {
-  const fromEnv = process.env['AGENTVOICE_HOME']?.trim();
-  return fromEnv ? resolve(fromEnv) : join(homedir(), '.agentvoice');
+  const fromEnv = brandEnv('HOME')?.trim();
+  return fromEnv ? resolve(fromEnv) : defaultHomeDir();
 }
 
 /** Write via temp file + rename so no partial or wrongly-permissioned file ever exists. */
@@ -272,7 +273,7 @@ export async function migrateCommand(opts: MigrateOptions): Promise<number> {
 
   // ── Report (names only — never a value) ──────────────────────────────────
   say('');
-  say(`  ${bold(opts.dryRun ? 'agentvoice migrate — dry run, nothing will be written' : 'agentvoice migrate')}`);
+  say(`  ${bold(opts.dryRun ? 'squeakr migrate — dry run, nothing will be written' : 'squeakr migrate')}`);
   say(`  ${dim('from')} ${sourceDir}`);
   say(`  ${dim('to  ')} ${target}`);
   say('');
@@ -339,11 +340,11 @@ export async function migrateCommand(opts: MigrateOptions): Promise<number> {
   say(`  ${green('done')}  migrated into ${target}`);
   say('');
   note(`  ${bold('Nothing is running yet.')} Stop the old bridge first if it uses the same port, then:`);
-  note('    agentvoice doctor                 # check the carried config');
-  note('    agentvoice run                    # foreground, or');
-  note('    agentvoice service install --now  # as a background service');
-  if (!process.env['AGENTVOICE_HOME'] && !opts.to) {
-    note(dim('  Run those from outside the old checkout — a directory with its own config.json wins over ~/.agentvoice.'));
+  note('    squeakr doctor                 # check the carried config');
+  note('    squeakr run                    # foreground, or');
+  note('    squeakr service install --now  # as a background service');
+  if (!brandEnv('HOME') && !opts.to) {
+    note(dim('  Run those from outside the old checkout — a directory with its own config.json wins over ~/.squeakr.'));
   }
   return 0;
 }

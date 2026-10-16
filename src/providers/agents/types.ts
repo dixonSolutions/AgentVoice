@@ -36,7 +36,7 @@ export interface SpawnOptions {
 /**
  * One selectable model, exactly as the CLI reports it.
  *
- * Nothing here is hardcoded by AgentVoice: every provider builds these from a
+ * Nothing here is hardcoded by Squeakr: every provider builds these from a
  * live probe of its own CLI (`cursor-agent models`, Claude Code's `initialize`
  * control response, `codex debug models`, `codewhale model list`). Effort
  * levels and speed tiers therefore differ per model — Haiku has no effort
@@ -220,7 +220,7 @@ export interface AgentProvider {
   buildWorkerArgs(opts: SpawnOptions): string[];
   /**
    * Build the conversational voice-agent argv. `bootPrompt` is the fully
-   * assembled system/boot text from voiceAgent.ts (AgentVoice system prompt +
+   * assembled system/boot text from voiceAgent.ts (Squeakr system prompt +
    * pending-turn block) — providers just place it as the final prompt arg.
    */
   buildVoiceArgs(project: Project, session: SessionState, pendingTurn: string | undefined, bootPrompt: string): string[];
@@ -242,7 +242,7 @@ export interface AgentProvider {
   parseStreamEvent(raw: Record<string, unknown>): AgentStreamEvent[];
 
   /**
-   * Register the AgentVoice MCP server with this CLI's own configuration.
+   * Register the Squeakr MCP server with this CLI's own configuration.
    * Called on every voice-session prepare — must be idempotent, and must strip
    * `ctx.legacyServerNames` so a stale entry can't register a second server.
    */
@@ -281,7 +281,7 @@ export interface AgentProvider {
    * as "no past sessions found", exactly as `sessionStatus` treats `unknown`.
    *
    * Used by the session directory (docs/37 §1 kind C) so the phone can list
-   * and resume threads that AgentVoice did not start.
+   * and resume threads that Squeakr did not start.
    */
   listSessions?(project: Project, limit?: number): StoredSessionSummary[];
 

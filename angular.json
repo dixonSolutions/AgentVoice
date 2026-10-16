@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "agentvoice-web": {
+    "squeakr-web": {
       "projectType": "application",
       "root": "web",
       "sourceRoot": "web/src",
@@ -80,10 +80,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "agentvoice-web:build:production"
+              "buildTarget": "squeakr-web:build:production"
             },
             "development": {
-              "buildTarget": "agentvoice-web:build:development"
+              "buildTarget": "squeakr-web:build:development"
             }
           },
           "options": {

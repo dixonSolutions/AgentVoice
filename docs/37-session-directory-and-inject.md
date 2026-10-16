@@ -11,7 +11,7 @@ into any of them by voice.
 
 ## Decisions (2026-09-15)
 
-Tracked in [#56](https://github.com/dixonSolutions/AgentVoice/issues/56); the `inject` bug is [#57](https://github.com/dixonSolutions/AgentVoice/issues/57).
+Tracked in [#56](https://github.com/dixonSolutions/Squeakr/issues/56); the `inject` bug is [#57](https://github.com/dixonSolutions/Squeakr/issues/57).
 
 | Question | Decision |
 | --- | --- |
@@ -56,7 +56,7 @@ CLI store layouts are undocumented: treat parsing as best-effort with
 | Mechanism | Session kinds | Mid-run | Providers | Role |
 | --- | --- | --- | --- | --- |
 | Voice turn queue (`submitAgentNativeTurn`) | A | yes | all | exists |
-| **MCP mailbox** — per-session queue, new `check_messages()` tool, messages also piggyback on any agent-voice tool result | B, D (opt-in) | at the next AgentVoice tool call | all (agent-voice MCP is registered for every CLI) | **baseline** |
+| **MCP mailbox** — per-session queue, new `check_messages()` tool, messages also piggyback on any squeakr tool result | B, D (opt-in) | at the next Squeakr tool call | all (squeakr MCP is registered for every CLI) | **baseline** |
 | **Resume with a new turn** — queue, then respawn `--resume <job session id>` when the run ends or after a confirmed stop | B, C | between turns | all | **guaranteed fallback** |
 | **Fork** — Claude `--fork-session`, Codewhale `fork`, others declare | C, D | no (new branch of the conversation) | per provider | safe way into an external session's context |
 | Native live input — Claude stream-json stdin, Codex / Codewhale `app-server`, Cursor ACP | A, B | yes | optional `liveInput` capability | upgrade |
@@ -72,7 +72,7 @@ check no live process owns it (process scan + recent mtime); if one does,
 fork instead.
 
 **Opt-in mailbox for external sessions.** A session started outside the bridge
-only receives mailbox messages if its agent-voice rule tells it to call
+only receives mailbox messages if its squeakr rule tells it to call
 `check_messages()` — enabled per project.
 
 ## 3. Phone UX
@@ -141,7 +141,7 @@ Shipped:
   (implemented for Cursor, Codex, Claude Code and Codewhale), and external live
   sessions from a same-uid `/proc` scan matched to a registered project.
 - `src/state/sessionMailbox.ts` and `check_messages`, with messages also
-  piggybacking on any agent-voice tool result.
+  piggybacking on any squeakr tool result.
 - `list_sessions` / `send_to_session`, spoken two-word names, ordinals
   ("the second one"), disambiguation with candidates, honest `delivery`, the
   confirmation gate, and an audit row per send carrying a hash of the message
@@ -149,7 +149,7 @@ Shipped:
 - `GET /api/sessions` and `POST /api/sessions/send`.
 - Security as designed: sessions outside a registered project are hidden rather
   than read-only, the scan never leaves the current uid, and writing into a
-  session AgentVoice did not start is off unless the project opts in.
+  session Squeakr did not start is off unless the project opts in.
 
 Known limitations:
 

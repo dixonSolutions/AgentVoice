@@ -1,11 +1,11 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    AgentVoice — restart script for Windows
+    Squeakr — restart script for Windows
 
 .DESCRIPTION
     1. Builds the project (backend + PWA)
-    2. Restarts the AgentVoice Windows service
+    2. Restarts the Squeakr Windows service
     3. Runs a health check against /healthz
     4. Optionally streams the log
 
@@ -75,10 +75,10 @@ function Get-NpmBin {
     return 'npm'
 }
 
-Write-Host "AgentVoice — restart (Windows)" -ForegroundColor Magenta
+Write-Host "Squeakr — restart (Windows)" -ForegroundColor Magenta
 Write-Host "  Project: $ProjectDir"
 
-$ServiceName = 'AgentVoice'
+$ServiceName = 'Squeakr'
 $EnvFile     = Join-Path $ProjectDir '.env'
 $LogFile     = Join-Path $ProjectDir 'logs\bridge.log'
 $NodeBin     = Get-ServiceNodeBin -ProjectRoot $ProjectDir -SvcName $ServiceName

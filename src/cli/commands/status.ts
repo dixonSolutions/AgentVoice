@@ -1,5 +1,5 @@
 /**
- * `agentvoice status` — one screen that answers "is it running, and is it the
+ * `squeakr status` — one screen that answers "is it running, and is it the
  * version I think it is".
  *
  * Everything here is read-only and best-effort: a missing config, a dead
@@ -159,18 +159,18 @@ export async function statusCommand(opts: { json: boolean }): Promise<number> {
     label: 'token',
     value: report.token.configured
       ? `${green('configured')} ${dim(`(${report.token.source === 'env-file' ? '.env' : 'APP_TOKEN in environment'})`)}`
-      : `${red('not set')} ${dim('— run `agentvoice token --new`')}`,
+      : `${red('not set')} ${dim('— run `squeakr token --new`')}`,
   });
 
   rows.push({
     label: 'update',
     value: report.install.updateCommand
-      ? `agentvoice update ${dim(`→ ${report.install.updateCommand}`)}`
+      ? `squeakr update ${dim(`→ ${report.install.updateCommand}`)}`
       : `${yellow('not available')} ${dim('— install mode is unknown')}`,
   });
 
   say('');
-  say(`  ${bold(cyan('AgentVoice'))}`);
+  say(`  ${bold(cyan('Squeakr'))}`);
   say('');
   say(renderRows(rows));
   say('');
@@ -218,7 +218,7 @@ function versionRow(report: StatusReport): Row {
       return {
         label: 'version',
         value: `${version.installed} → ${yellow(`${version.latest} available`)}`,
-        notes: ['agentvoice update'],
+        notes: ['squeakr update'],
       };
     }
     return { label: 'version', value: `${version.installed} ${green('(latest)')}` };
@@ -229,7 +229,7 @@ function versionRow(report: StatusReport): Row {
 
 function configValue(report: StatusReport): string {
   if (!report.config.exists) {
-    return `${red('missing')} ${dim('— run `agentvoice` once to seed it')}`;
+    return `${red('missing')} ${dim('— run `squeakr` once to seed it')}`;
   }
   if (report.config.error) {
     return `${red('unparseable')} ${dim(`— ${report.config.error}`)}`;
@@ -278,7 +278,7 @@ function bridgeRows(report: StatusReport): Row[] {
     const cliVersion = health['cliVersion'];
     const agent =
       health['cliFound'] === false
-        ? `${client} ${red('(not installed — see agentvoice doctor)')}`
+        ? `${client} ${red('(not installed — see squeakr doctor)')}`
         : cliVersion === null || cliVersion === undefined
           ? `${client} ${yellow('(version not read yet)')}`
           : `${client} ${String(cliVersion)}`;

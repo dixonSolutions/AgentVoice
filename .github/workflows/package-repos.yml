@@ -1,10 +1,10 @@
 # Signed apt + dnf repositories on GitHub Pages (docs/43).
 #
-#   https://dixonsolutions.github.io/AgentVoice/apt   deb  …/apt stable main
-#   https://dixonsolutions.github.io/AgentVoice/rpm   /etc/yum.repos.d/agentvoice.repo
+#   https://dixonsolutions.github.io/Squeakr/apt   deb  …/apt stable main
+#   https://dixonsolutions.github.io/Squeakr/rpm   /etc/yum.repos.d/squeakr.repo
 #
-# One Pages site holds both the AgentVoice landing page (site/ in this repo,
-# served at /) and the repositories (/apt, /rpm, /agentvoice.asc,
+# One Pages site holds both the Squeakr landing page (site/ in this repo,
+# served at /) and the repositories (/apt, /rpm, /squeakr.asc,
 # /packages.html). Every deploy replaces the whole site, so every run builds
 # both.
 #
@@ -87,7 +87,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     env:
-      SITE_URL: https://dixonsolutions.github.io/AgentVoice
+      SITE_URL: https://dixonsolutions.github.io/Squeakr
       KEEP_VERSIONS: '3'
       SITE_BUDGET_MB: '900'
     steps:
@@ -213,7 +213,7 @@ jobs:
       - name: Add the landing page
         run: |
           set -euo pipefail
-          for reserved in apt rpm agentvoice.asc manifest.txt packages.html; do
+          for reserved in apt rpm squeakr.asc manifest.txt packages.html; do
             if [ -e "site/${reserved}" ]; then
               echo "::error::site/${reserved} would shadow the package repositories — rename it"
               exit 1

@@ -1,5 +1,5 @@
 /**
- * Listener envelope — the presence signal that rides on every agent-voice tool
+ * Listener envelope — the presence signal that rides on every squeakr tool
  * result (docs/36 §3.1).
  *
  * MCP is pull-only. There is no way for the bridge to push "the user just put
@@ -8,14 +8,14 @@
  * already call, which is why the pending-user-turn notice was hung off
  * `speak()` in the first place.
  *
- * This wrapper generalises that: every AgentVoice tool result gains a
+ * This wrapper generalises that: every Squeakr tool result gains a
  * `listener` block with the presence state, how long the user has been away,
  * the policy in force and one line of instruction. An agent that never calls
  * `speak()` — one grinding through its own Read/Bash tools — still learns the
- * user has gone the next time it touches any AgentVoice tool.
+ * user has gone the next time it touches any Squeakr tool.
  *
  * It is also the natural place to charge the unattended tool-call budget:
- * every agent-voice call while away is one tick, and the budget verdict comes
+ * every squeakr call while away is one tick, and the budget verdict comes
  * back in the same envelope.
  */
 

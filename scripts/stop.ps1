@@ -1,11 +1,11 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    AgentVoice — stop script for Windows (production host)
+    Squeakr — stop script for Windows (production host)
 
 .DESCRIPTION
-    Stops the production HOST bridge (the long-running AgentVoice service).
-      1. Stops the AgentVoice Windows service (if installed)
+    Stops the production HOST bridge (the long-running Squeakr service).
+      1. Stops the Squeakr Windows service (if installed)
       2. Falls back to killing the manual process (data\.bridge.pid)
       3. Frees the host bridge port (PORT, default 8787) as a safety net
 
@@ -42,7 +42,7 @@ function Test-Admin {
         [Security.Principal.WindowsBuiltinRole]::Administrator)
 }
 
-$ServiceName = 'AgentVoice'
+$ServiceName = 'Squeakr'
 $EnvFile     = Join-Path $ProjectDir '.env'
 
 # ── Load .env for PORT ──────────────────────────────────────────────────────
@@ -53,7 +53,7 @@ if (Test-Path $EnvFile) {
 }
 
 if (-not $Quiet) {
-    Write-Host "AgentVoice — stop host (Windows)" -ForegroundColor Magenta
+    Write-Host "Squeakr — stop host (Windows)" -ForegroundColor Magenta
     Write-Host "  Project: $ProjectDir"
 }
 
@@ -112,6 +112,6 @@ Clear-Port -Port $ActualPort -Label 'host bridge'
 
 if (-not $Quiet) {
     Write-Host ""
-    Ok "AgentVoice host stopped. Start it again with: npm run start:service"
+    Ok "Squeakr host stopped. Start it again with: npm run start:service"
     Write-Host ""
 }

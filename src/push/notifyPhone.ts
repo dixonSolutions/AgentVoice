@@ -30,7 +30,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
     case 'user_input_request': {
       const q = String(msg['question'] ?? `${agentDisplayName()} needs your answer`);
       return {
-        title: 'AgentVoice',
+        title: 'Squeakr',
         body: q.slice(0, 180),
         tag: `approval-${msg['request_id'] ?? 'input'}`,
         url: '/?tab=voice',
@@ -40,7 +40,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
     case 'plan_approval_request': {
       const title = String(msg['title'] ?? 'Plan ready for review');
       return {
-        title: 'AgentVoice — Plan',
+        title: 'Squeakr — Plan',
         body: title.slice(0, 180),
         tag: `plan-${msg['request_id'] ?? 'plan'}`,
         url: '/?tab=voice',
@@ -50,7 +50,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
     case 'permission_request': {
       const summary = String(msg['summary'] ?? msg['tool_name'] ?? 'an action');
       return {
-        title: 'AgentVoice — Permission',
+        title: 'Squeakr — Permission',
         body: `Allow ${summary}?`.slice(0, 180),
         tag: `permission-${msg['request_id'] ?? 'permission'}`,
         url: '/?tab=voice',
@@ -60,7 +60,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
     case 'secret_input_request': {
       const prompt = String(msg['prompt'] ?? 'Password needed');
       return {
-        title: 'AgentVoice — Password needed',
+        title: 'Squeakr — Password needed',
         body: prompt.slice(0, 180),
         tag: `secret-${msg['request_id'] ?? 'secret'}`,
         url: '/?tab=voice',
@@ -70,7 +70,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
     case 'away_finished': {
       const summary = String(msg['summary'] ?? 'Work finished while you were away.');
       return {
-        title: 'AgentVoice — Finished while you were away',
+        title: 'Squeakr — Finished while you were away',
         body: summary.slice(0, 180),
         tag: `away-finished-${msg['run_id'] ?? 'run'}`,
         url: '/?tab=voice',
@@ -82,7 +82,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
       if (kind !== 'job_done' && kind !== 'job_error') return null;
       const text = String(msg['text'] ?? (kind === 'job_done' ? 'Job finished' : 'Job failed'));
       return {
-        title: kind === 'job_done' ? 'AgentVoice — Done' : 'AgentVoice — Error',
+        title: kind === 'job_done' ? 'Squeakr — Done' : 'Squeakr — Error',
         body: text.slice(0, 180),
         tag: `narration-${kind}`,
         url: '/?tab=voice',
@@ -92,7 +92,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
     case 'show_images': {
       const caption = msg['caption'] as string | undefined;
       return {
-        title: 'AgentVoice',
+        title: 'Squeakr',
         // Provider parity (docs/39 Part B): this said "from Cursor" whichever
         // CLI produced the screenshots.
         body: caption?.slice(0, 180) ?? `New screenshots from ${agentDisplayName()}`,
@@ -104,7 +104,7 @@ function pushPayloadForType(msg: Record<string, unknown>): {
     case 'auth_required': {
       const displayName = String(msg['displayName'] ?? 'Your agent');
       return {
-        title: 'AgentVoice — Sign-in needed',
+        title: 'Squeakr — Sign-in needed',
         body: `${displayName} needs you to sign in before it can keep working.`,
         tag: 'auth-required',
         url: '/?tab=voice',

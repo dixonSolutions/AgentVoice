@@ -1,8 +1,8 @@
 /**
- * The channel command line — what `@AgentVoice …` (or a DM, `/av …`, `!av …`,
+ * The channel command line — what `@Squeakr …` (or a DM, `/av …`, `!av …`,
  * or a message in the channel's own message channel) means.
  *
- * A parser, not an implementation: a command is translated into `agentvoice`
+ * A parser, not an implementation: a command is translated into `squeakr`
  * CLI arguments (with where it came from — `--channel --conversation --user`)
  * and the real CLI runs it (cliRunner.ts), so a chat and a terminal are the
  * same commands with the same answers. Only what is about the chat itself is
@@ -29,7 +29,7 @@ export type ChatAction =
   | { kind: 'chat'; text: string }
   | { kind: 'stream'; op: 'on'; input: StreamInput; rep: StreamRep }
   | { kind: 'stream'; op: 'status' | 'break' }
-  /** Run `agentvoice <argv>`. `say`: it hands text to the agent, so keep relaying replies here. */
+  /** Run `squeakr <argv>`. `say`: it hands text to the agent, so keep relaying replies here. */
   | { kind: 'cli'; argv: string[]; say?: boolean; host?: boolean; footer?: string }
   | { kind: 'voice'; action: ChannelVoiceAction }
   | { kind: 'watch' };
@@ -45,7 +45,7 @@ export interface ParseContext {
 /** Chat words that are commands (first word of a message). Everything else is text for the agent. */
 const CHAT_WORDS = new Set([
   'help', 'commands', '?', 'whoami', 'status', 's', 'stop', 'projects', 'project', 'sessions', 'ls', 'use', 'continue',
-  'new', 'default', 'pin', 'say', 'ask', 'chat', 'stream', 'config', 'set', 'voice', 'calls', 'cli', 'agentvoice', 'doctor', 'version',
+  'new', 'default', 'pin', 'say', 'ask', 'chat', 'stream', 'config', 'set', 'voice', 'calls', 'cli', 'squeakr', 'doctor', 'version',
   'logs', 'channel', 'call', 'join', 'leave', 'hangup', 'watch',
 ]);
 
@@ -88,7 +88,7 @@ const HELP_TOPICS: Record<string, string[]> = {
     '`channel here` — this conversation becomes my message channel (untagged text, calls, logs)',
   ],
   cli: [
-    '**Host CLI** — every command here runs `agentvoice <command>` on the bridge host',
+    '**Host CLI** — every command here runs `squeakr <command>` on the bridge host',
     ...Object.entries(HOST_CLI).map(([k, v]) => `\`cli ${k}\` — ${v}`),
     'Service control, updates, setup and tokens stay on the host.',
   ],
@@ -110,7 +110,7 @@ function helpText(ctx: ParseContext, topic?: string): string {
   const groups = ['chat', 'sessions', ...(ctx.voice.supported ? ['voice'] : []), 'config', 'cli', 'other'];
   const how = ctx.howToAddress ?? 'Mention me or DM me with a command.';
   const noVoice = ctx.voice.supported ? [] : ['', `_Voice calls: ${ctx.voice.note}_`];
-  return [`**AgentVoice** — ${how}`, '', ...groups.flatMap((g) => [...HELP_TOPICS[g]!, '']), ...noVoice].join('\n').trim();
+  return [`**Squeakr** — ${how}`, '', ...groups.flatMap((g) => [...HELP_TOPICS[g]!, '']), ...noVoice].join('\n').trim();
 }
 
 /** Words the CLI must take as they are — after `--`, so an id like -100 or text like "-1 is wrong" is not a flag. */
@@ -233,14 +233,14 @@ export function parseCommand(ctx: ParseContext): ChatAction {
       return { kind: 'watch' };
 
     case 'cli':
-    case 'agentvoice':
+    case 'squeakr':
     case 'doctor':
     case 'version':
     case 'logs': {
-      const argv = cmd === 'cli' || cmd === 'agentvoice' ? args : [cmd, ...args];
+      const argv = cmd === 'cli' || cmd === 'squeakr' ? args : [cmd, ...args];
       if (!argv[0]) return { kind: 'reply', text: HELP_TOPICS['cli']!.join('\n') };
       if (!CHAT_CLI.has(argv[0])) {
-        return { kind: 'reply', text: `\`agentvoice ${argv[0]}\` is not available from chat — run it on the host. Allowed: ${[...CHAT_CLI].join(', ')}.` };
+        return { kind: 'reply', text: `\`squeakr ${argv[0]}\` is not available from chat — run it on the host. Allowed: ${[...CHAT_CLI].join(', ')}.` };
       }
       return { kind: 'cli', argv, host: !(CONTROL_COMMANDS as readonly string[]).includes(argv[0]) };
     }
@@ -280,5 +280,5 @@ export function renderCli(action: Extract<ChatAction, { kind: 'cli' }>, res: { o
     return action.footer && res.ok ? `${text}\n${action.footer}` : text;
   }
   const clipped = out.length > 1800 ? `…${out.slice(-1800)}` : out;
-  return `${res.ok ? '' : '⚠️ '}\`agentvoice ${action.argv.join(' ')}\`\n\`\`\`\n${clipped}\n\`\`\``;
+  return `${res.ok ? '' : '⚠️ '}\`squeakr ${action.argv.join(' ')}\`\n\`\`\`\n${clipped}\n\`\`\``;
 }

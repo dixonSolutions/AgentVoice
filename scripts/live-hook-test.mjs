@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Live end-to-end test of the AgentVoice interrupt hook.
+ * Live end-to-end test of the Squeakr interrupt hook.
  *
  * Unit tests prove the hook's mechanics in isolation. This drives the real
  * thing: a real bridge, a real coding CLI, a real MCP connection, a real task,

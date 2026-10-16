@@ -1,6 +1,6 @@
 # 20 — Native shell (CallKit) and push notifications
 
-AgentVoice on iPhone needs a **native Capacitor app** for iOS to treat an active
+Squeakr on iPhone needs a **native Capacitor app** for iOS to treat an active
 voice session as a **phone call** (CallKit). The PWA alone cannot do this.
 
 Push notifications reach your dad when the app is closed or backgrounded — for
@@ -29,7 +29,7 @@ agent approvals, job completion, and image carousels.
 
 | Event | Native behaviour |
 | --- | --- |
-| Orb tap / start session | `CXStartCallAction` — outbound call to "AgentVoice" |
+| Orb tap / start session | `CXStartCallAction` — outbound call to "Squeakr" |
 | Hang up | `CXEndCallAction` |
 | Screen lock / switch apps | Call stays active (green bar) while call is up |
 | Force-quit app | Call ends — session stops |
@@ -93,13 +93,13 @@ Requires **macOS + Xcode** and Apple Developer account ($99/yr).
 4. In Xcode → Signing & Capabilities, add:
    - **Background Modes**: Audio, Voice over IP
    - **Push Notifications**
-5. Set bundle ID `com.cursorvoice.app` (unchanged by the rename — kept for APNs device-token continuity; match `APNS_BUNDLE_ID`).
+5. Set bundle ID `com.squeakr.app` (unchanged by the rename — kept for APNs device-token continuity; match `APNS_BUNDLE_ID`).
 6. Create APNs Auth Key (.p8) in Apple Developer → Keys; add to `.env`:
    ```
    APNS_KEY_ID=...
    APNS_TEAM_ID=...
    APNS_KEY_PATH=./AuthKey_XXXX.p8
-   APNS_BUNDLE_ID=com.cursorvoice.app
+   APNS_BUNDLE_ID=com.squeakr.app
    APNS_PRODUCTION=false
    ```
 7. Archive → TestFlight → install on dad's iPhone.
@@ -108,7 +108,7 @@ Requires **macOS + Xcode** and Apple Developer account ($99/yr).
 
 ## Dad's workflow (native app)
 
-1. Open **AgentVoice** (native app).
+1. Open **Squeakr** (native app).
 2. Tap orb → iOS shows active call → speak command.
 3. **Lock the phone** (or let Auto-Lock fire) — the green call bar stays; the screen
    sleeping is what keeps battery reasonable. Using other apps is OK while the call is up.
@@ -117,7 +117,7 @@ Requires **macOS + Xcode** and Apple Developer account ($99/yr).
 6. **Hang up** (tap the orb) when you are done — leaving a live session runs the mic and
    wake-word model continuously.
 
-A carrier voice call is cheap because the phone's radio/DSP do the work. AgentVoice is
+A carrier voice call is cheap because the phone's radio/DSP do the work. Squeakr is
 still a live WebView listening for a wake phrase, so it will never match Phone.app
 battery life — but holding the **display on** was the avoidable part.
 

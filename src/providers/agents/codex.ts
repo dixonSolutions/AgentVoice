@@ -70,7 +70,7 @@ const resolver = createBinResolver(AGENT_BIN_SPECS.codex);
 
 function codexEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   // Codex reads OPENAI_API_KEY itself for API-key auth — never strip it here.
-  // AGENTVOICE_MCP_TOKEN is what config.toml's bearer_token_env_var points at,
+  // SQUEAKR_MCP_TOKEN is what config.toml's bearer_token_env_var points at,
   // so the bridge token never has to be written into a config file.
   return {
     ...base,
@@ -387,7 +387,7 @@ function resolveCodexConfigPath(): string {
  * rather than writing it into config.toml keeps the secret out of a file that
  * users routinely paste into issues.
  */
-export const CODEX_TOKEN_ENV_VAR = 'AGENTVOICE_MCP_TOKEN';
+export const CODEX_TOKEN_ENV_VAR = 'SQUEAKR_MCP_TOKEN';
 
 /**
  * Remove `[mcp_servers.<name>]` and any of its sub-tables from a TOML document.
@@ -412,11 +412,11 @@ function escapeRegex(value: string): string {
 
 const RMCP_FLAG = 'experimental_use_rmcp_client';
 
-/** The `[mcp_servers."agent-voice"]` table, appended at the end of the document. */
+/** The `[mcp_servers."squeakr"]` table, appended at the end of the document. */
 function buildCodexTomlEntry(ctx: McpRegistrationContext): string {
   return [
     '',
-    `# AgentVoice MCP registration — version ${ctx.version} (managed by AgentVoice, safe to delete)`,
+    `# Squeakr MCP registration — version ${ctx.version} (managed by Squeakr, safe to delete)`,
     `[mcp_servers."${ctx.serverName}"]`,
     `url = "${ctx.url}"`,
     `bearer_token_env_var = "${CODEX_TOKEN_ENV_VAR}"`,
@@ -452,7 +452,7 @@ async function ensureCodexMcpRegistration(
   ctx.log('check', 'info', `Checking Codex MCP config (${label})…`);
 
   let content = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : '';
-  const versionMatch = content.match(/# AgentVoice MCP registration — version ([\d.]+)/);
+  const versionMatch = content.match(/# Squeakr MCP registration — version ([\d.]+)/);
   const installedVersion = versionMatch?.[1] ?? null;
   const registered = content.includes(`[mcp_servers."${ctx.serverName}"]`);
 
@@ -470,7 +470,7 @@ async function ensureCodexMcpRegistration(
 
   if (action !== 'unchanged') {
     content = stripTomlServer(content, ctx.serverName)
-      .replace(/^# AgentVoice MCP registration.*$/gm, '')
+      .replace(/^# Squeakr MCP registration.*$/gm, '')
       .trimEnd();
     try {
       mkdirSync(dirname(configPath), { recursive: true });

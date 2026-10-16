@@ -16,7 +16,7 @@
 # What is deliberately NOT in here: the ~41 MB Vosk wake-word model. It would
 # more than double the package for every install, including the many that never
 # turn wake words on, and it cannot live under /usr/lib anyway — the bridge
-# serves it from ~/.agentvoice/vosk after `agentvoice prepare-vosk`.
+# serves it from ~/.squeakr/vosk after `squeakr prepare-vosk`.
 #
 # Usage: packaging/stage.sh <node-tarball-dir>
 #   where <node-tarball-dir> holds an extracted node-vNN-linux-<arch> tree.
@@ -25,7 +25,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 staging="${repo_root}/packaging/root"
-prefix="${staging}/usr/lib/agentvoice"
+prefix="${staging}/usr/lib/squeakr"
 node_src="${1:-}"
 
 if [[ -z "${node_src}" || ! -x "${node_src}/bin/node" ]]; then
@@ -36,7 +36,7 @@ fi
 for required in \
   "${repo_root}/dist/index.js" \
   "${repo_root}/web/dist/index.html" \
-  "${repo_root}/prompts/agentvoice/system.md"
+  "${repo_root}/prompts/squeakr/system.md"
 do
   if [[ ! -f "${required}" ]]; then
     echo "missing ${required} — run 'npm run build' first" >&2
@@ -49,7 +49,7 @@ mkdir -p "${prefix}" "${staging}/usr/bin" "${staging}/usr/lib/systemd/user"
 
 cp -r "${repo_root}/dist" "${prefix}/dist"
 cp -r "${repo_root}/bin" "${prefix}/bin"
-# The AgentVoice system prompt and MCP instructions. Without these the MCP
+# The Squeakr system prompt and MCP instructions. Without these the MCP
 # server answers 500 on every `initialize` and no agent can connect at all.
 cp -r "${repo_root}/prompts" "${prefix}/prompts"
 cp -r "${repo_root}/web" "${prefix}/web"
@@ -103,10 +103,14 @@ mkdir -p "${prefix}/node"
 cp -r "${node_src}/bin" "${node_src}/lib" "${prefix}/node/"
 rm -rf "${prefix}/node/lib/node_modules/npm/docs" "${prefix}/node/lib/node_modules/npm/man"
 
-cp "${repo_root}/packaging/agentvoice.launcher.sh" "${staging}/usr/bin/agentvoice"
-chmod 0755 "${staging}/usr/bin/agentvoice"
-cp "${repo_root}/packaging/agentvoice.user.service" \
-   "${staging}/usr/lib/systemd/user/agentvoice.service"
+cp "${repo_root}/packaging/squeakr.launcher.sh" "${staging}/usr/bin/squeakr"
+chmod 0755 "${staging}/usr/bin/squeakr"
+# Run by postinstall to move an AgentVoice apt / dnf source over (docs/45).
+mkdir -p "${prefix}/scripts"
+cp "${repo_root}/scripts/migrate-to-squeakr.sh" "${prefix}/scripts/migrate-to-squeakr.sh"
+chmod 0755 "${prefix}/scripts/migrate-to-squeakr.sh"
+cp "${repo_root}/packaging/squeakr.user.service" \
+   "${staging}/usr/lib/systemd/user/squeakr.service"
 
 # Read by src/serve/installMode.ts. Authoritative: a path check alone would
 # also claim a hand-extracted tarball in /opt.

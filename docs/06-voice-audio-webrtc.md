@@ -80,9 +80,9 @@ library call that follows resolves locally.
 
 | Asset | Size | Cache |
 | --- | --- | --- |
-| `/vosk/model.tar.gz` | ~50 MB | `agentvoice-vosk-v1` |
-| `/silero-vad/silero_vad_v5.onnx` | 2.2 MB | `agentvoice-models-v1` |
-| `/silero-vad/ort-wasm-simd-threaded.wasm` | 13 MB | `agentvoice-models-v1` |
+| `/vosk/model.tar.gz` | ~50 MB | `squeakr-vosk-v1` |
+| `/silero-vad/silero_vad_v5.onnx` | 2.2 MB | `squeakr-models-v1` |
+| `/silero-vad/ort-wasm-simd-threaded.wasm` | 13 MB | `squeakr-models-v1` |
 
 `LlmIntelligenceSession.start()` calls `prefetchVoiceModels()` after the
 WebSocket authenticates and before the wake phase, so the download happens while
@@ -148,9 +148,9 @@ Regenerate: `bash scripts/prepare-voice-cues.sh`.
 
 Playback: `web/src/sound-effects.ts` via `playVoiceCueNow()` — fired in `llm-intelligence-session.ts` at Vosk/VAD recognition, **before** STT flush. Preload on orb tap. Error cue uses `LlmIntelligenceSession.notifyError()` / `VoiceSessionService.notifyVoiceError()`.
 
-Configure error feedback under **Config → Voice → Cursor voice (TTS)**:
+Configure error feedback under **Config → Voice → Agent speech (TTS)**:
 - `errorSoundEnabled` — play the error earcon (default on)
-- `errorSpeakEnabled` — also speak the error message via TTS, independent of `agentVoiceEnabled` (default on; turn off for sound-only alerts)
+- `errorSpeakEnabled` — also speak the error message via TTS, independent of `agentSpeechEnabled` (default on; turn off for sound-only alerts)
 
 For **`agent_native`**, primary TTS comes from MCP `speak()` events pushed over
 `/ws/intelligence`. For **`llm_intelligence`**, orchestrator `speak` tool + optional
@@ -165,7 +165,7 @@ volume** (never ducks), keeps the queue for cancel-resume, and on submit snapsho
 Legacy `interruptMode` / `interruptDeafenFactor` config keys are stripped on load — volume
 ducking is gone.
 
-Set `settings.voice.tts.agentVoiceEnabled: false` to disable MCP `speak()` playback entirely
+Set `settings.voice.tts.agentSpeechEnabled: false` to disable MCP `speak()` playback entirely
 (transcripts still appear in the UI).
 
 Configure in Config tab → Voice & Wake Words, or `PATCH /api/voice/tts`.
@@ -225,7 +225,7 @@ Limits, battery notes, and user guidance: [`19-mobile-session-keepalive.md`](./1
 ## Related docs
 
 - [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) — barge-in snapshot + wake echo filter
-- [`16-mcp-server-agent-as-brain.md`](./16-mcp-server-agent-as-brain.md) — Cursor voice loop
+- [`16-mcp-server-agent-as-brain.md`](./16-mcp-server-agent-as-brain.md) — voice loop
 - [`15-llm-intelligence-workflow.md`](./15-llm-intelligence-workflow.md) — Bedrock orchestrator
 - [`13-voice-providers.md`](./13-voice-providers.md) — wake word config
 - [`27-touch-controls-and-cancel.md`](./27-touch-controls-and-cancel.md) — on-screen Speak / Cancel and cancel during Transcribe

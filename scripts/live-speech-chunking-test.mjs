@@ -2,7 +2,7 @@
 /**
  * End-to-end: audio moves in the chunks it is produced in, both directions.
  *
- * A real bridge (`agentvoice run`) with the real self-hosted providers —
+ * A real bridge (`squeakr run`) with the real self-hosted providers —
  * local_speech for the voice, local_whisper for transcription — pointed at the
  * harness's stand-in speech server, which writes its WAV the way speaches does:
  * header first, then a piece of audio every TTS_CHUNK_DELAY_MS.
@@ -24,7 +24,7 @@
  *   - the POST fallback still transcribes the same audio
  *
  * Usage:
- *   npm run build:backend && node scripts/live-speech-chunking-test.mjs [--bin agentvoice] [--keep]
+ *   npm run build:backend && node scripts/live-speech-chunking-test.mjs [--bin squeakr] [--keep]
  */
 
 import { join } from 'node:path';

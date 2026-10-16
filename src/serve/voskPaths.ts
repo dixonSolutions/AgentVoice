@@ -1,13 +1,13 @@
 /**
  * Where the Vosk wake-word model lives (docs/38).
  *
- * `agentvoice prepare-vosk` used to write the ~41 MB model into
+ * `squeakr prepare-vosk` used to write the ~41 MB model into
  * `<root>/web/dist/vosk`, which is fine for a clone or an npm install and
- * impossible for a distro package: `/usr/lib/agentvoice` belongs to root and
+ * impossible for a distro package: `/usr/lib/squeakr` belongs to root and
  * to the package manager, so the command would fail for every .deb user and
  * wake words would simply never work for them.
  *
- * The model therefore has a user-owned home — `~/.agentvoice/vosk` — which the
+ * The model therefore has a user-owned home — `~/.squeakr/vosk` — which the
  * bridge serves in preference to the packaged copy. A clone keeps writing into
  * `web/public/` so the file survives the next `ng build`.
  *
@@ -16,9 +16,9 @@
  */
 
 import { accessSync, constants, existsSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { detectInstallMode, type InstallMode } from './installMode.js';
+import { brandEnv, defaultHomeDir } from '../brand.js';
 
 export interface VoskPaths {
   /**
@@ -33,10 +33,10 @@ export interface VoskPaths {
   packagedRootReadOnly: boolean;
 }
 
-/** `~/.agentvoice`, or `AGENTVOICE_HOME` when the user pointed it elsewhere. */
-export function agentVoiceHome(): string {
-  const fromEnv = process.env['AGENTVOICE_HOME'];
-  return fromEnv ? fromEnv : join(homedir(), '.agentvoice');
+/** `~/.squeakr` (or a not-yet-migrated `~/.agentvoice`), or `SQUEAKR_HOME` (legacy `AGENTVOICE_HOME`) when the user pointed it elsewhere. */
+export function squeakrHome(): string {
+  const fromEnv = brandEnv('HOME');
+  return fromEnv ? fromEnv : defaultHomeDir();
 }
 
 export function voskPaths(
@@ -45,7 +45,7 @@ export function voskPaths(
   const install = detectInstallMode();
   const root = opts.root ?? install.root;
   const mode = opts.mode ?? install.mode;
-  const home = opts.home ?? agentVoiceHome();
+  const home = opts.home ?? squeakrHome();
 
   const userDir = join(home, 'vosk');
   const distDir = join(root, 'web', 'dist', 'vosk');

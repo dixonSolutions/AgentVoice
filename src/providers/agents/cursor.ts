@@ -408,21 +408,21 @@ function resolveCursorMcpJsonPath(): string {
   return join(resolveUserHome(), '.cursor', 'mcp.json');
 }
 
-const RULE_FILE = 'agent-voice.mdc';
-const LEGACY_RULE_FILES = ['cursor-voice.mdc'];
+const RULE_FILE = 'squeakr.mdc';
+const LEGACY_RULE_FILES = ['agent-voice.mdc', 'cursor-voice.mdc'];
 
 /**
  * Cursor reads project/user rules from `.mdc` files. Writing one means the
  * voice system prompt is present even on `--resume`, where we cannot re-send
  * the full boot prompt without confusing the resumed thread.
  */
-function ensureCursorVoiceRule(ctx: McpRegistrationContext): void {
+function ensureSqueakrRule(ctx: McpRegistrationContext): void {
   const rulesDir = join(resolveUserHome(), '.cursor', 'rules');
   const rulePath = join(rulesDir, RULE_FILE);
   const label = formatPathForLog(rulePath);
   const content = `---
 description: >
-  AgentVoice — use only during an active phone/PWA voice session.
+  Squeakr — use only during an active phone/PWA voice session.
   When a voice session is connected, all communication MUST go through ${ctx.serverName} MCP tools:
   speak() to talk, done() to re-arm the mic, next_voice_turn() to receive requests.
   If speak() returns NO_VOICE_SESSION, respond with normal IDE text instead.
@@ -484,7 +484,7 @@ async function ensureCursorMcpRegistration(
     // Always rewrite: removedLegacy and the enable flag both need to land even
     // when the version matched.
     writeJsonConfig(configPath, file);
-    ensureCursorVoiceRule(ctx);
+    ensureSqueakrRule(ctx);
   } catch (err) {
     return registrationFailure(ctx, configPath, err);
   }

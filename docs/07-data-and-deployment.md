@@ -87,7 +87,7 @@ sensitivity, so secrets and settings never mix:
 
 Rationale: keys rotate independently and must stay out of version control; the
 config file is the operator's control surface (settings + which directories
-AgentVoice may touch). Both are loaded and **schema-validated (zod)** at bridge
+Squeakr may touch). Both are loaded and **schema-validated (zod)** at bridge
 startup; invalid config fails fast with a clear error.
 
 > The DB (`state.db`) is **runtime state** (sessions, jobs, audit, resume ids),
@@ -101,7 +101,7 @@ startup; invalid config fails fast with a clear error.
   `settings.projectDiscovery`. Discovery is disabled by default for existing
   installs. When enabled, every immediate Git repository under a configured
   `hotPaths` directory becomes a persisted `discovered: true` entry in
-  `config.json`; AgentVoice watches those folders in its own process and also
+  `config.json`; Squeakr watches those folders in its own process and also
   periodically rescans them. It never needs a separate daemon.
 - A hot path is a container, never a project. Add a nested container as another
   hot path to discover its immediate children. Dot-directories and symlinks are
@@ -168,8 +168,8 @@ different ports and can run **side by side** — no `EADDRINUSE` collision.
 
 **Host service control** (independent of `npm run dev`):
 
-- `npm run stop` — stops the `agentvoice` systemd service **and** its rebuild watcher
-  (`agentvoice-watch.path`), then frees the host port (`8787`). Windows: `scripts\stop.ps1`.
+- `npm run stop` — stops the `squeakr` systemd service **and** its rebuild watcher
+  (`squeakr-watch.path`), then frees the host port (`8787`). Windows: `scripts\stop.ps1`.
 - `npm run start:service` — starts the host service back up, health-checked. Windows: `scripts\start.ps1`.
 
 **Serve** (manual self-hosting maintenance): Config tab → **Serve** — health
@@ -208,9 +208,9 @@ See [`21-serve-self-hosting.md`](./21-serve-self-hosting.md).
   },
   "projects": [
     {
-      "name": "cursorvoice",
-      "path": "/home/eva/Projects/SideProjects/CursorVoice",
-      "aliases": ["cursor voice", "the voice project"],
+      "name": "squeakr",
+      "path": "/home/eva/Projects/SideProjects/Squeakr",
+      "aliases": ["squeakr", "the voice project"],
       "description": "This project — the voice bridge",
       "enabled": true
     },
@@ -269,22 +269,22 @@ sudo tailscale serve --bg 443 http://127.0.0.1:PORT
 
 ```ini
 [Unit]
-Description=AgentVoice Bridge
+Description=Squeakr Bridge
 After=network-online.target tailscaled.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=agentvoice            # dedicated least-privileged user
-WorkingDirectory=/opt/agentvoice
-EnvironmentFile=/opt/agentvoice/.env
-ExecStart=/usr/bin/node /opt/agentvoice/dist/index.js
+User=squeakr            # dedicated least-privileged user
+WorkingDirectory=/opt/squeakr
+EnvironmentFile=/opt/squeakr/.env
+ExecStart=/usr/bin/node /opt/squeakr/dist/index.js
 Restart=on-failure
 RestartSec=3
 # hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/opt/agentvoice /path/to/allowlisted/projects
+ReadWritePaths=/opt/squeakr /path/to/allowlisted/projects
 PrivateTmp=true
 
 [Install]
@@ -313,8 +313,8 @@ OPENAI_API_KEY=                 # speech provider key (separate from Cursor)
 
 # Bootstrap paths / bind (non-secret but machine-specific)
 PORT=8787
-CONFIG_PATH=/opt/agentvoice/config/config.json
-DB_PATH=/opt/agentvoice/data/state.db
+CONFIG_PATH=/opt/squeakr/config/config.json
+DB_PATH=/opt/squeakr/data/state.db
 ```
 
 > Precedence: `.env` > `config.json` > built-in defaults. Anything non-secret

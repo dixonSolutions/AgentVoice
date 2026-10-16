@@ -1,6 +1,6 @@
 /**
- * How control answers read — in a terminal (`agentvoice sessions`) and in a
- * chat (the same command, run with AGENTVOICE_MARKDOWN=1). Text comes in with
+ * How control answers read — in a terminal (`squeakr sessions`) and in a
+ * chat (the same command, run with SQUEAKR_MARKDOWN=1). Text comes in with
  * `**bold**` and `` `code` `` marks; `Style` renders them for where it goes.
  */
 

@@ -37,7 +37,7 @@ import {
   forgetSpokenPrompts,
   type ReadPromptsMode,
 } from '../../prompt-speech.js';
-import type { ApprovalRequest } from '@agentvoice/client';
+import type { ApprovalRequest } from '@squeakr/client';
 
 export interface TranscriptEntry {
   id: number;
@@ -347,8 +347,8 @@ export class VoiceSessionService {
       const startMsg =
         workflow === 'agent_native'
           ? wakeOff
-            ? `AgentVoice session started on ${agent} — tap Speak (wake words off)`
-            : `AgentVoice session started on ${agent} — say the wake phrase to talk to it`
+            ? `Squeakr session started on ${agent} — tap Speak (wake words off)`
+            : `Squeakr session started on ${agent} — say the wake phrase to talk to it`
           : wakeOff
             ? 'Intelligence session started — tap Speak (wake words off)'
             : 'Intelligence session started — say wake phrase to activate';
@@ -652,7 +652,7 @@ export class VoiceSessionService {
           this.startMeterPoll();
           this.syncAppState();
           void this.keepalive.start({
-            title: 'AgentVoice',
+            title: 'Squeakr',
             artist: 'Voice session active',
             // CallKit / Android FGS keep audio alive with the screen off.
             // Holding a screen wake lock is the largest iPhone battery cost.
@@ -673,7 +673,7 @@ export class VoiceSessionService {
         // MCP speak() already drives TTS via the `speak` WS event. Scheduling fallback
         // here replays the same line after playback when assistant_transcript follows speak().
         const cursorVoiceTts =
-          this.voiceProviders.data()?.tts.agentVoiceEnabled ?? true;
+          this.voiceProviders.data()?.tts.agentSpeechEnabled ?? true;
         if (!cursorVoiceTts) {
           scheduleTtsFallback(text, () => this._speaking());
         }
@@ -714,7 +714,7 @@ export class VoiceSessionService {
         this.agentStatus.set({ ...event, at: Date.now() });
         const sid = event.sessionId ? `${event.sessionId.slice(0, 8)}…` : 'pending';
         // Name the CLI that is actually running. "Voice agent starting" read as
-        // if AgentVoice were narrating its own internals, and the old hardcoded
+        // if Squeakr were narrating its own internals, and the old hardcoded
         // "Cursor agent" was outright wrong under Codex / Claude Code.
         const agent = event.providerName ?? this.agentProviders.activeProviderName();
         const label =

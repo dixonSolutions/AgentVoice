@@ -6,7 +6,7 @@
  *
  * Use playVoiceCueNow() at recognition time (Vosk / VAD) — must not await STT.
  */
-import { CUE_FILENAME, VOICE_CUES, shouldPlayCue, type VoiceCue } from '@agentvoice/client';
+import { CUE_FILENAME, VOICE_CUES, shouldPlayCue, type VoiceCue } from '@squeakr/client';
 import { getSharedAudioContext, unlockAudioContext } from './audio.js';
 
 export type { VoiceCue };

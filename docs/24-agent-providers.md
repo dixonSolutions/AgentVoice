@@ -31,7 +31,7 @@ The contract members added in the follow-up pass:
 | Member                    | Owns                                                    |
 | ------------------------- | ------------------------------------------------------- |
 | `parseStreamEvent()`      | translating this CLI's NDJSON dialect to normalized events |
-| `ensureMcpRegistration()` | where and how `agent-voice` is registered for this CLI   |
+| `ensureMcpRegistration()` | where and how `squeakr` is registered for this CLI   |
 | `supportedModes()`        | which execution modes this CLI can actually *enforce*    |
 | `createSession()`         | minting a resumable thread id up front, if the CLI can   |
 
@@ -47,7 +47,7 @@ the full interface.
 | `token-paste` | — | — | ✅ (paste an existing setup token) | — |
 | `api-key`     | ✅ (Cursor Dashboard key) | ✅ (OpenAI key) | ✅ (Anthropic key) | ✅ (key for the *active* Codewhale provider) |
 
-Codewhale's `api-key` flow is the one that does not write to AgentVoice's
+Codewhale's `api-key` flow is the one that does not write to Squeakr's
 `.env`. Codewhale keys are per-provider and live in its own config plus the OS
 keyring, so the pasted value is handed to
 `codewhale auth set --provider <active> --api-key-stdin` instead — right scope,
@@ -181,7 +181,7 @@ voice agent never claim a level the CLI will not run.
 
 MCP: `agent_list_models(query?, refresh?)` and
 `agent_set_model(model_id, effort?, fast?, scope?)` carry the same fields;
-`prompts/agentvoice/system.md` tells the voice agent to read the accepted
+`prompts/squeakr/system.md` tells the voice agent to read the accepted
 levels back when a level is refused.
 
 If the CLI is unauthenticated, `GET /api/providers/models` returns **HTTP 400**
@@ -239,9 +239,9 @@ MCP configs and prompts referencing them are unaffected. See
 
 ## Prompt generalization
 
-`prompts/agentvoice/system.md` and `mcp-instructions.md` use
+`prompts/squeakr/system.md` and `mcp-instructions.md` use
 `{{AGENT_DISPLAY_NAME}}` instead of a hardcoded "Cursor". It's substituted at
-render time in [`src/mcp/agentVoicePrompt.ts`](../src/mcp/agentVoicePrompt.ts)
+render time in [`src/mcp/squeakrPrompt.ts`](../src/mcp/squeakrPrompt.ts)
 with `getActiveProvider().displayName`, so the same prompt text narrates
 correctly regardless of which CLI is active.
 
@@ -281,7 +281,7 @@ provider reads `~/.codewhale/sessions/*.json` (each carrying
 
 This is a heuristic and is documented as one: two concurrent runs in the same
 workspace could race, and the loser would resume the winner's thread. It is
-bounded by AgentVoice running one voice session per project, and
+bounded by Squeakr running one voice session per project, and
 `executor/resumeGuard.ts` still recovers at runtime. The alternative — no
 resume at all — means every turn starts a cold thread, which is worse.
 

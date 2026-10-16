@@ -24,7 +24,7 @@ enforcement regardless of the mode.
 | CLI | Mode id | Flags | When the CLI would ask |
 | --- | --- | --- | --- |
 | **Claude Code** | `bypass` (default) | `--permission-mode bypassPermissions` | never asks |
-| | `auto` | `--permission-mode auto --permission-prompt-tool mcp__agent-voice__approve_permission` | classifier decides; leftovers → **phone** |
+| | `auto` | `--permission-mode auto --permission-prompt-tool mcp__squeakr__approve_permission` | classifier decides; leftovers → **phone** |
 | | `acceptEdits` | `--permission-mode acceptEdits --permission-prompt-tool …` | edits free; other commands → **phone** |
 | | `manual` | `--permission-mode manual --permission-prompt-tool …` | everything non-read-only → **phone** |
 | | `dontAsk` | `--permission-mode dontAsk` | refused |
@@ -66,7 +66,7 @@ with `{ tool_name, input, tool_use_id }` and expects the tool's text to be
 the JSON decision — `{"behavior":"allow","updatedInput":…}` or
 `{"behavior":"deny","message":"…"}` (the CLI validates exactly that shape).
 
-`mcp/server/index.ts` registers `approve_permission` on the `agent-voice`
+`mcp/server/index.ts` registers `approve_permission` on the `squeakr`
 server for this purpose. It reuses the approval registry
 (`mcp/server/approvalRegistry.ts`, kind `permission`):
 
@@ -79,7 +79,7 @@ server for this purpose. It reuses the approval registry
    user's words in the message so the model treats them as the new request;
 4. timeout → deny with "nobody answered … do not retry".
 
-AgentVoice's own MCP tools stay on `--allowedTools` in every mode, so the
+Squeakr's own MCP tools stay on `--allowedTools` in every mode, so the
 voice loop (`speak`, `next_voice_turn`, …) never trips a prompt. The model
 is told in the tool description not to call `approve_permission` itself.
 
@@ -102,8 +102,8 @@ agent's `PATH` does not matter) and adds to every agent child process:
 ```
 SUDO_ASKPASS / GIT_ASKPASS / SSH_ASKPASS = <data>/askpass.sh
 SSH_ASKPASS_REQUIRE = force
-AGENTVOICE_BRIDGE_URL   = loopback bridge URL
-AGENTVOICE_ASKPASS_TOKEN = APP_TOKEN
+SQUEAKR_BRIDGE_URL   = loopback bridge URL
+SQUEAKR_ASKPASS_TOKEN = APP_TOKEN
 ```
 
 The helper POSTs the prompt text to `POST /api/askpass`

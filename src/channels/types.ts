@@ -3,7 +3,7 @@
  * (docs/44-channels.md).
  *
  * A channel is an adapter that turns one platform's events into the same
- * three things: a command addressed to AgentVoice (a mention, a DM, a slash
+ * three things: a command addressed to Squeakr (a mention, a DM, a slash
  * command), a voice call, or a voice note. Everything after that is shared —
  * the command line (commands.ts), the per-conversation default session
  * (bindings.ts), the voice-call engine (voiceCall.ts).
@@ -25,7 +25,7 @@ export interface ChannelCapability {
 }
 
 export interface ChannelCapabilities {
-  /** `@AgentVoice …` in a group / server channel. */
+  /** `@Squeakr …` in a group / server channel. */
   mentions: ChannelCapability;
   /** Direct messages to the bot. */
   directMessages: ChannelCapability;
@@ -52,7 +52,7 @@ export interface ChannelConversation {
   isDirect: boolean;
 }
 
-/** A message the adapter decided is addressed to AgentVoice, mention stripped. */
+/** A message the adapter decided is addressed to Squeakr, mention stripped. */
 export interface ChannelCommandInput {
   channel: ChannelId;
   user: ChannelUser;

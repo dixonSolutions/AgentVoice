@@ -4,10 +4,10 @@
 > for the in-app auth, live model selection, and generic MCP tools built on
 > top of this.
 
-AgentVoice supports four AI coding agent clients that can be used interchangeably
+Squeakr supports four AI coding agent clients that can be used interchangeably
 for both voice agent sessions and worker jobs. Each registers the shared
-`agent-voice` MCP server through its own provider
-(`src/providers/agents/<client>.ts`). The server key was `cursor-voice` before
+`squeakr` MCP server through its own provider
+(`src/providers/agents/<client>.ts`). The server key was `squeakr` before
 August 2026; stale entries are stripped on every session prepare — see
 [`docs/26-rename-agentvoice.md`](./26-rename-agentvoice.md).
 
@@ -122,14 +122,14 @@ Codex has no plan mode, so `plan` is refused rather than silently downgraded.
 
 ```bash
 claude -p --output-format stream-json --verbose \
-  --mcp-config <generated>.json --allowedTools mcp__agent-voice \
+  --mcp-config <generated>.json --allowedTools mcp__squeakr \
   [--model <alias>] [--resume <id>] --permission-mode bypassPermissions|plan <prompt>
 ```
 
 Three flags here are not optional:
 
 - `--verbose` — print mode rejects `--output-format stream-json` without it.
-- `--allowedTools mcp__agent-voice` — print mode cannot show a permission
+- `--allowedTools mcp__squeakr` — print mode cannot show a permission
   prompt, so an un-allowlisted MCP tool is denied. Without this, `speak()`,
   `done()` and `next_voice_turn()` are all unavailable and the session is mute.
 - `--permission-mode` — `bypassPermissions` for work, `plan` for read-only
@@ -192,23 +192,23 @@ the silence a missing `init` produces.
 
 ## MCP Registration
 
-When you start a voice session, the bridge automatically writes the agent-voice
+When you start a voice session, the bridge automatically writes the squeakr
 MCP server entry to the active client's global config file:
 
-- **Cursor**: adds/updates `agent-voice` in `~/.cursor/mcp.json`, and writes the
-  voice system prompt to `~/.cursor/rules/agent-voice.mdc`
-- **Codex**: adds/updates `[mcp_servers."agent-voice"]` in `~/.codex/config.toml`
+- **Cursor**: adds/updates `squeakr` in `~/.cursor/mcp.json`, and writes the
+  voice system prompt to `~/.cursor/rules/squeakr.mdc`
+- **Codex**: adds/updates `[mcp_servers."squeakr"]` in `~/.codex/config.toml`
   with `experimental_use_rmcp_client = true` (required for streamable-HTTP MCP)
   and `bearer_token_env_var`, so the token stays out of the file
 - **Claude Code**: writes `data/claude-code-mcp.json` (passed as `--mcp-config`)
   and merges the same entry into `~/.claude.json`
-- **Codewhale**: adds/updates `agent-voice` in `~/.codewhale/mcp.json` with
+- **Codewhale**: adds/updates `squeakr` in `~/.codewhale/mcp.json` with
   `bearer_token_env_var`, so the token stays out of the file. Codewhale's root
   key is `servers`, with `mcpServers` as a serde *alias* for the same field —
   writing both spellings makes the file fail to parse as a duplicate field, so
   the entry goes into whichever key the file already uses
 
-Each prepare also strips any leftover `cursor-voice` entry so a stale
+Each prepare also strips any leftover `squeakr` entry so a stale
 registration pointing at a dead port cannot shadow the live one.
 
 The entry contains the bridge MCP URL (`http://localhost:<port>/mcp`) and the
@@ -230,10 +230,10 @@ Codewhale is the one client whose id does not come from its own stream. It is
 read from `~/.codewhale/sessions/*.json` by matching the unredacted
 `metadata.workspace` and taking the most recently updated match. That is a
 heuristic — two concurrent runs in one workspace could race and the loser would
-resume the winner's thread — bounded by AgentVoice already running one voice
+resume the winner's thread — bounded by Squeakr already running one voice
 session per project, and backstopped at runtime by `executor/resumeGuard.ts`.
 
-Only Cursor persists AgentVoice's rules in a file the CLI reloads. On a resumed
+Only Cursor persists Squeakr's rules in a file the CLI reloads. On a resumed
 thread, Codex and Claude Code are therefore re-sent the full system prompt —
 otherwise a resumed session carries no voice instructions at all and the agent
 answers as text the user never hears.

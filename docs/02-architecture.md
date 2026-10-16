@@ -59,10 +59,10 @@ Loop: next_voice_turn() again
 
 | Spawn | Prompt passed to `cursor-agent -p` |
 | --- | --- |
-| **First session** (no `--resume`) | Full system prompt from `prompts/agentvoice/system.md` + boot suffix |
-| **Resume** (`--resume <id>`) | `@agent-voice` rule reference + short boot line |
+| **First session** (no `--resume`) | Full system prompt from `prompts/squeakr/system.md` + boot suffix |
+| **Resume** (`--resume <id>`) | `@squeakr` rule reference + short boot line |
 
-On resume, Cursor injects the rule from `~/.cursor/rules/agent-voice.mdc` (or project
+On resume, Cursor injects the rule from `~/.cursor/rules/squeakr.mdc` (or project
 `.cursor/rules/`). Conversation history is preserved via `--resume`; the full system
 prompt is not resent.
 
@@ -71,10 +71,10 @@ Implementation: `src/executor/voiceAgent.ts` — `buildVoiceBootPrompt(project)`
 ## Process & module layout
 
 ```
-agentvoice/
+squeakr/
 ├── docs/
 ├── prompts/
-│   └── agentvoice/            # Voice agent system + MCP instructions
+│   └── squeakr/            # Voice agent system + MCP instructions
 ├── src/
 │   ├── server.ts              # Fastify: PWA, /api, /ws/intelligence, /mcp
 │   ├── config.ts              # .env + config.json (zod)

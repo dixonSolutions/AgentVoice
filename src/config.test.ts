@@ -11,3 +11,44 @@ test('config.example.json needs no migration', () => {
   const before = JSON.stringify(raw);
   assert.equal(JSON.stringify(migrateRawConfig(structuredClone(raw))), before);
 });
+
+type Raw = { settings: { voice: { tts: Record<string, unknown> }; workflow: Record<string, unknown> } };
+const example = (): Raw =>
+  JSON.parse(readFileSync(new URL('../config.example.json', import.meta.url), 'utf8')) as Raw;
+
+test('the agent-speech flag carries over from both pre-Squeakr names', () => {
+  const tts = (flags: Record<string, unknown>) => {
+    const raw = example();
+    delete raw.settings.voice.tts['agentSpeechEnabled'];
+    Object.assign(raw.settings.voice.tts, flags);
+    migrateRawConfig(raw);
+    return raw.settings.voice.tts;
+  };
+  assert.equal(tts({ agentVoiceEnabled: false })['agentSpeechEnabled'], false);
+  assert.equal(tts({ cursorVoiceEnabled: false })['agentSpeechEnabled'], false);
+  // The newest name wins, and the old ones are gone afterwards.
+  const both = tts({ agentSpeechEnabled: true, agentVoiceEnabled: false });
+  assert.equal(both['agentSpeechEnabled'], true);
+  assert.equal('agentVoiceEnabled' in both, false);
+});
+
+test('a pre-rename speech server keeps its container and model volume', () => {
+  const server = (speechServer: Record<string, unknown>) => {
+    const raw = example();
+    const li = ((raw.settings.workflow['llmIntelligence'] ??= {}) as Record<string, unknown>);
+    const audio = ((li['audio'] ??= {}) as Record<string, unknown>);
+    audio['speechServer'] = speechServer;
+    migrateRawConfig(raw);
+    return audio['speechServer'];
+  };
+  assert.deepEqual(server({ manage: 'container' }), {
+    manage: 'container',
+    containerName: 'agentvoice-speech',
+    modelVolume: 'agentvoice-speech-models',
+  });
+  // Names the user chose (or the new defaults, once saved) are left alone.
+  assert.deepEqual(server({ containerName: 'squeakr-speech', modelVolume: 'mine' }), {
+    containerName: 'squeakr-speech',
+    modelVolume: 'mine',
+  });
+});

@@ -21,7 +21,7 @@ complementary mechanisms:
 | --- | --- | --- |
 | **Screen Wake Lock** | Prevents auto-lock while session is active | **PWA only.** Native CallKit skips this so the display can sleep. |
 | **Silent looping audio** | Signals an active media session to the OS | **PWA only.** Helps when display dims on iOS Safari. Native CallKit already holds an audio session. |
-| **Media Session API** | Lock-screen / Control Center metadata | Shows “AgentVoice — listening” |
+| **Media Session API** | Lock-screen / Control Center metadata | Shows “Squeakr — listening” |
 
 On `visibilitychange` (user returns to the app):
 
@@ -35,7 +35,7 @@ On `visibilitychange` (user returns to the app):
 A carrier phone call is handled by the baseband + dedicated audio DSP. The screen
 turns off; the CPU mostly sleeps.
 
-AgentVoice is a **WebView + always-on microphone + on-device wake-word model
+Squeakr is a **WebView + always-on microphone + on-device wake-word model
 (Vosk WASM)**. That keeps the CPU, GPU (orb), radio (WebSocket), and — on Safari
 PWA — the **display** awake. Display is typically the largest iPhone battery
 cost.

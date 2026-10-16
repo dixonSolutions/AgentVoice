@@ -1,10 +1,10 @@
 /**
- * `agentvoice local` — a throwaway bridge for one directory.
+ * `squeakr local` — a throwaway bridge for one directory.
  *
- *   cd ~/code/my-app && agentvoice local --this-dir
- *   agentvoice local ~/code/my-app
+ *   cd ~/code/my-app && squeakr local --this-dir
+ *   squeakr local ~/code/my-app
  *
- * What cloning AgentVoice and running it used to give you, without the clone:
+ * What cloning Squeakr and running it used to give you, without the clone:
  * the backend and the web client on a free loopback port, **this directory as
  * the only project**, and the log stream in your terminal. Ctrl-C stops it.
  *
@@ -62,6 +62,8 @@ const NOT_BORROWED = new Set([
   'DB_PATH',
   'AGENTVOICE_HOME',
   'AGENTVOICE_LOG_DIR',
+  'SQUEAKR_HOME',
+  'SQUEAKR_LOG_DIR',
   'HTTPS_CERT_PATH',
   'HTTPS_KEY_PATH',
   'NODE_ENV',
@@ -185,7 +187,7 @@ export async function localCommand(opts: LocalOptions): Promise<number | null> {
   const example = JSON.parse(readFileSync(join(packageRoot(), 'config.example.json'), 'utf8')) as Json;
   const base: Json = !opts.fresh && real.config ? deepMerge(example, real.config as Json) : example;
 
-  const home = mkdtempSync(join(tmpdir(), 'agentvoice-local-'));
+  const home = mkdtempSync(join(tmpdir(), 'squeakr-local-'));
   const cleanup = (): void => {
     if (!opts.keep) rmSync(home, { recursive: true, force: true });
   };
@@ -221,14 +223,14 @@ export async function localCommand(opts: LocalOptions): Promise<number | null> {
   // another config or database, TLS, a log dir — or NODE_ENV=development,
   // which forces the test profile onto a port the banner never printed.
   for (const key of NOT_BORROWED) delete process.env[key];
-  process.env['AGENTVOICE_HOME'] = home;
+  process.env['SQUEAKR_HOME'] = home;
 
   const url = `http://127.0.0.1:${port}`;
   const client = (((base['settings'] as Json | undefined) ?? {})['agentClient'] as string | undefined) ?? 'cursor';
   const line = dim('─'.repeat(64));
   say('');
   say(line);
-  say(`  ${bold(cyan('AgentVoice — local'))}  ${dim('throwaway instance, nothing is saved')}`);
+  say(`  ${bold(cyan('Squeakr — local'))}  ${dim('throwaway instance, nothing is saved')}`);
   say('');
   say(`  ${dim('project ')} ${bold(project.name)}  ${dim(project.path)}`);
   if (project.description) say(`  ${dim('         ')} ${project.description}`);
@@ -240,7 +242,7 @@ export async function localCommand(opts: LocalOptions): Promise<number | null> {
   say(`           ${dim('paste it when the app asks to pair — it dies with this instance')}`);
   say('');
   say(`  ${dim(`home ${home} — ${opts.keep ? 'kept on exit (--keep)' : 'deleted on exit'}`)}`);
-  say(`  ${yellow('note')}  ${dim(`${client}'s agent-voice MCP entry points here while this runs;`)}`);
+  say(`  ${yellow('note')}  ${dim(`${client}'s squeakr MCP entry points here while this runs;`)}`);
   say(`        ${dim('your main bridge restores it on its next voice turn.')}`);
   say(`  ${dim('Ctrl-C to stop. Logs follow.')}`);
   say(line);
@@ -248,7 +250,7 @@ export async function localCommand(opts: LocalOptions): Promise<number | null> {
 
   if (opts.open) whenHealthy(url, () => openBrowser(url));
 
-  // Same boot path as `agentvoice run`, pointed at the temporary home.
+  // Same boot path as `squeakr run`, pointed at the temporary home.
   const code = await runCommand();
   if (code !== null) cleanup();
   return code;

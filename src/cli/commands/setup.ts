@@ -1,5 +1,5 @@
 /**
- * `agentvoice setup` — the guided first-time setup, the same for every install
+ * `squeakr setup` — the guided first-time setup, the same for every install
  * (npm, .deb/.rpm, or a clone, where scripts/setup.sh builds first and then
  * hands over to this).
  *
@@ -70,7 +70,7 @@ function installedAgent(id: AgentBinId): string | null {
 /**
  * "Set to run" across systemd, launchd and Windows. For launchd, readUnitState
  * reports `installed` when the plist exists but is not bootstrapped — it still
- * starts at login (RunAtLoad), e.g. after `agentvoice stop`.
+ * starts at login (RunAtLoad), e.g. after `squeakr stop`.
  */
 const ENABLED_STATES = new Set(['enabled', 'enabled-runtime', 'linked', 'linked-runtime', 'static', 'loaded', 'installed', 'auto']);
 
@@ -146,14 +146,14 @@ export async function setupCommand(opts: SetupOptions): Promise<number> {
 
   try {
     say('');
-    say(`  ${bold(cyan('AgentVoice setup'))}  ${dim(`${install.mode} install · home ${home}`)}`);
+    say(`  ${bold(cyan('Squeakr setup'))}  ${dim(`${install.mode} install · home ${home}`)}`);
     if (!interactive) say(dim('  Non-interactive: taking the defaults (flags answer individual questions).'));
 
-    // The base: config.json + APP_TOKEN, exactly as a first `agentvoice run` would.
+    // The base: config.json + APP_TOKEN, exactly as a first `squeakr run` would.
     const seeded = seedConfig(home);
     const token = seedEnv(home);
     if (seeded) say(`  ${green('created')} ${join(home, 'config.json')}`);
-    if (token) say(`  ${green('created')} ${envPath(home)} ${dim('(a new APP_TOKEN — `agentvoice token` prints it)')}`);
+    if (token) say(`  ${green('created')} ${envPath(home)} ${dim('(a new APP_TOKEN — `squeakr token` prints it)')}`);
 
     // ── 1. The one up-front question ──────────────────────────────────────
     const serviceSupported = process.platform !== 'linux' || ran(await capture('systemctl', ['--user', '--version']));
@@ -167,8 +167,8 @@ export async function setupCommand(opts: SetupOptions): Promise<number> {
       (serviceSupported
         ? await ask.confirm(
             hasService
-              ? 'Keep AgentVoice running as a background service, and set up hosting for your phone?'
-              : 'Install AgentVoice as a background service (starts at login, reachable from your phone)?',
+              ? 'Keep Squeakr running as a background service, and set up hosting for your phone?'
+              : 'Install Squeakr as a background service (starts at login, reachable from your phone)?',
             hasService,
           )
         : false);
@@ -262,7 +262,7 @@ export async function setupCommand(opts: SetupOptions): Promise<number> {
 
     if (!doService) {
       if ((await findBridge(home, readConfig(home))).answering) {
-        say(`  ${yellow('note')}  a bridge is already running — restart it to load this config (agentvoice restart).`);
+        say(`  ${yellow('note')}  a bridge is already running — restart it to load this config (squeakr restart).`);
       }
       return finish(home, null, false);
     }
@@ -279,7 +279,7 @@ export async function setupCommand(opts: SetupOptions): Promise<number> {
     } else {
       const code = await serviceInstallCommand({ now: true, force: false });
       if (code !== 0) {
-        fail('the service did not install — fix the above, then re-run `agentvoice setup` (it is safe to repeat).');
+        fail('the service did not install — fix the above, then re-run `squeakr setup` (it is safe to repeat).');
         return code;
       }
     }
@@ -297,7 +297,7 @@ export async function setupCommand(opts: SetupOptions): Promise<number> {
     step(3, total, 'Hosting — reaching it from your phone');
     const endpoint = await waitForBridge(home, 30);
     if (!endpoint) {
-      fail('the service started but the bridge is not answering yet — see `agentvoice logs -n 50`, then set up hosting in the app.');
+      fail('the service started but the bridge is not answering yet — see `squeakr logs -n 50`, then set up hosting in the app.');
       return finish(home, null, true);
     }
     const providers = await bridgeApi<{
@@ -325,7 +325,7 @@ export async function setupCommand(opts: SetupOptions): Promise<number> {
     // saved, and re-running setup picks up from it.
     if (err instanceof Error && err.name === 'AbortError') {
       say('');
-      say(dim('  Setup cancelled — anything already saved stays; run `agentvoice setup` again any time.'));
+      say(dim('  Setup cancelled — anything already saved stays; run `squeakr setup` again any time.'));
       return 130;
     }
     throw err;
@@ -340,10 +340,10 @@ function finish(home: string, url: string | null, service: boolean): number {
   say('');
   say(`  ${green(bold('Setup complete'))}`);
   if (url) say(`  ${dim('open  ')} ${bold(url)}`);
-  else if (port) say(`  ${dim('start ')} ${bold('agentvoice run')} ${dim(`→ http://127.0.0.1:${port}`)}`);
-  say(`  ${dim('token ')} agentvoice token ${dim('— paste it when the app asks to pair')}`);
-  say(`  ${dim('check ')} agentvoice doctor${service ? ' · agentvoice status' : ''}`);
-  if (!service) say(`  ${dim('later ')} agentvoice setup ${dim('again to add the background service and hosting')}`);
+  else if (port) say(`  ${dim('start ')} ${bold('squeakr run')} ${dim(`→ http://127.0.0.1:${port}`)}`);
+  say(`  ${dim('token ')} squeakr token ${dim('— paste it when the app asks to pair')}`);
+  say(`  ${dim('check ')} squeakr doctor${service ? ' · squeakr status' : ''}`);
+  if (!service) say(`  ${dim('later ')} squeakr setup ${dim('again to add the background service and hosting')}`);
   say('');
   return 0;
 }

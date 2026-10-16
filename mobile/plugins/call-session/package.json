@@ -1,7 +1,7 @@
 {
-  "name": "@agentvoice/call-session",
+  "name": "@squeakr/call-session",
   "version": "0.1.0",
-  "description": "CallKit (iOS) and foreground call service (Android) for AgentVoice",
+  "description": "CallKit (iOS) and foreground call service (Android) for Squeakr",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": ["dist/", "ios/", "android/"],
