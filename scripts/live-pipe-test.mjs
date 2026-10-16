@@ -89,7 +89,7 @@ try {
   say(`cli: ${BIN.join(' ')}`);
 
   const version = await av.run(['version']);
-  check(version.code === 0 && /agentvoice \d/.test(version.stdout), 'squeakr version', version.stdout + version.stderr);
+  check(version.code === 0 && /squeakr \d/.test(version.stdout), 'squeakr version', version.stdout + version.stderr);
 
   // ── session 1 ─────────────────────────────────────────────────────────
   await av.startBridge();
