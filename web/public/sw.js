@@ -1,5 +1,5 @@
 /**
- * AgentVoice — Service Worker
+ * Squeakr — Service Worker
  *
  * Minimal PWA service worker. Caches the app shell so the UI loads
  * instantly even on a slow Tailscale connection. API calls are always
@@ -16,7 +16,7 @@
  * MODEL_CACHE_NAME when the bundled model assets themselves change.
  */
 
-const CACHE_NAME = 'agentvoice-v6';
+const CACHE_NAME = 'squeakr-v6';
 const VOSK_CACHE_NAME = 'agentvoice-vosk-v2';
 const MODEL_CACHE_NAME = 'agentvoice-models-v1';
 const VOSK_MODEL_PATH = '/vosk/model.tar.gz';
@@ -135,9 +135,9 @@ self.addEventListener('push', (event) => {
     payload = { body: event.data.text() };
   }
   const p = payload;
-  const title = p.title || 'AgentVoice';
+  const title = p.title || 'Squeakr';
   const body = p.body || 'New update from Cursor';
-  const tag = p.tag || 'agentvoice';
+  const tag = p.tag || 'squeakr';
   const url = p.url || '/?tab=voice';
 
   event.waitUntil(

@@ -1,6 +1,6 @@
-# 35 — The `agentvoice` CLI
+# 35 — The `squeakr` CLI
 
-`agentvoice` is the management surface for a self-hosted bridge. It boots the
+`squeakr` is the management surface for a self-hosted bridge. It boots the
 bridge, manages its background service (systemd, launchd, or a Windows service), reports what is installed and whether it is
 healthy, rotates the pairing token, and updates the install the way that
 install was actually made.
@@ -9,10 +9,10 @@ It ships in the npm package (`package.json#bin`) and works the same from a
 clone via `npm run cli -- <command>`.
 
 ```
-agentvoice [command] [options]
+squeakr [command] [options]
 ```
 
-`run` is the default. Bare `agentvoice` boots the bridge exactly as it always
+`run` is the default. Bare `squeakr` boots the bridge exactly as it always
 has — that behaviour is a published contract and nothing may take it back.
 
 ## Commands
@@ -23,7 +23,7 @@ has — that behaviour is a published contract and nothing may take it back.
 | `run` | Boot the bridge in the foreground. Seeds the home on first run. |
 | `local <path>` / `local --this-dir` | Throwaway bridge + web client with only that directory as the project; logs stream in the terminal; nothing saved. See [`local`](#local). |
 | `add <path>` / `add --this-dir` | Register a directory as a project, with name, description and aliases filled in. See [`add`](#add). |
-| `start` / `stop` / `restart` | Manage the background service — `agentvoice.service` (systemd), `com.agentvoice.bridge` (launchd) or `AgentVoice` (Windows). |
+| `start` / `stop` / `restart` | Manage the background service — `agentvoice.service` (systemd), `com.agentvoice.bridge` (launchd) or `AgentVoice` (Windows — the service name predates the rename). |
 | `service install [--now] [--force] [--dry-run]` | Install that service for this install — see [The service](#the-service). |
 | `logs [-n N] [-f]` | `journalctl` for a systemd unit. `-f` follows. Everywhere else (launchd, Windows, no service), the bridge's own session log. |
 | `logs --list` / `--files` / `--transcripts` / `--cat <file\|latest>` | The session log files and voice transcripts under `<home>/logs/` — list, tail (`-f` follows across rollovers), or print (`.gz` included). `--profile test` for the dev folder. See docs/42. |
@@ -40,9 +40,10 @@ has — that behaviour is a published contract and nothing may take it back.
 | `update [--stash] [--dry-run] [--branch <name>]` | Update this install. |
 | `token [--new]` | Print the pairing token, or mint a fresh one. |
 | `migrate <path> [--to DIR] [--with-data] [--force] [--dry-run]` | Carry an existing bridge's `config.json` and `.env` into this install's home. Copies only — starts nothing. See [`migrate`](#migrate). |
+| `upgrade-from-agentvoice [--dry-run] [--keep-old] [--keep-remote]` | Move an AgentVoice install to Squeakr: `~/.agentvoice` → `~/.squeakr` (symlink left behind), service re-pointed, a clone's `origin` switched, `@ratitisrad/agentvoice` removed. Idempotent. See [docs/45](./45-rename-squeakr.md). |
 | `prepare-vosk [--force]` | Fetch the wake-word model now (the bridge also does on first boot). |
 | `version`, `--version` | Package version, plus branch and commit in a clone. |
-| `help`, `--help` | Usage screen. `agentvoice <command> --help` shows just that command and its options. |
+| `help`, `--help` | Usage screen. `squeakr <command> --help` shows just that command and its options. |
 
 Every chat channel runs the agent commands above: a message is parsed into
 these arguments and this CLI runs them (docs/44), so a chat and a terminal
@@ -54,7 +55,7 @@ marks instead of colour, which is what a chat renders.
 | Code | Meaning |
 | --- | --- |
 | `0` | Success. |
-| `1` | Failure. Also what `status` returns when the bridge is not answering, so `agentvoice status >/dev/null` is a liveness probe. |
+| `1` | Failure. Also what `status` returns when the bridge is not answering, so `squeakr status >/dev/null` is a liveness probe. |
 | `2` | Usage error — unknown command, unknown option, bad value. Prints usage. |
 
 ## The bridge home
@@ -62,12 +63,13 @@ marks instead of colour, which is what a chat renders.
 Every command acts on a **home** — the directory holding `config.json`, `.env`
 and `data/state.db`. It is resolved in this order:
 
-1. `$AGENTVOICE_HOME`, if set.
+1. `$SQUEAKR_HOME`, if set (else the pre-rename `$AGENTVOICE_HOME`).
 2. The current directory, if it already holds a `config.json` or `data/state.db`.
 3. The install root, if *that* looks like a home. A git clone is its own home,
-   so `agentvoice status` works from anywhere. An npm install never matches —
+   so `squeakr status` works from anywhere. An npm install never matches —
    nothing seeds a `config.json` under `node_modules`.
-4. `~/.agentvoice`.
+4. `~/.squeakr` — or `~/.agentvoice`, while that is the only one with state in
+   it (an AgentVoice install not yet moved by `squeakr upgrade-from-agentvoice`).
 
 `run` seeds a new home: `config.json` from the packaged `config.example.json`
 (forced to `runMode: "serve"`, because an installed package has no Angular dev
@@ -77,16 +79,16 @@ the packaged `web/dist` and `package.json`.
 ## `status`
 
 ```
-  AgentVoice
+  Squeakr
 
-  install  git  /home/you/AgentVoice
+  install  git  /home/you/Squeakr
            running from a git clone (.git found at the package root)
-  home     /home/you/AgentVoice
+  home     /home/you/Squeakr
   version  0.1.2  main @ 4f19ac1
            vs origin/main · 3 behind (as of the last fetch)
            HEAD: Release 0.1.2 with the composer fix
   config   ok 17 projects
-           /home/you/AgentVoice/config.json
+           /home/you/Squeakr/config.json
   service  active (running)
            agentvoice.service (user unit, enabled)
            since Fri 2026-09-12 18:04:11 CEST · pid 31184
@@ -95,7 +97,7 @@ the packaged `web/dist` and `package.json`.
   healthz  db ok · 17 projects · agent CLI claude-code 2.1.4
            runMode serve · open https://host.tail-scale.ts.net
   token    configured (.env)
-  update   agentvoice update → bash scripts/update.sh
+  update   squeakr update → bash scripts/update.sh
 ```
 
 Notes on what it is telling you:
@@ -129,7 +131,7 @@ Every check comes with a remedy:
 | `data dir` | The directory holding `DB_PATH` is not writable (tested by writing, not by `access()`). |
 | `APP_TOKEN` | Absent (warn) or shorter than the 16 characters the bridge's own schema demands (fail). |
 | `agent CLI` | The CLI named by `settings.agentClient` cannot be found. With no config yet, the one the packaged example selects. |
-| `port` | The configured port is held by something that is not AgentVoice. |
+| `port` | The configured port is held by something that is not Squeakr. |
 | `service` | None installed, or installed but not running (warn). |
 | `linger` | A systemd user unit without `loginctl enable-linger` — it stops at logout (warn). |
 | `agent sign-in` | The running bridge reports the agent CLI is not signed in. |
@@ -163,11 +165,11 @@ shadows the one you are developing, and a rebase is meaningless under
   uses (see [`21-serve-self-hosting.md`](./21-serve-self-hosting.md)). `--stash`,
   `--dry-run`, `--force`, `--no-restart` and `--branch <name>` are forwarded
   verbatim; anything after `--` is forwarded too.
-- **npm** → `npm install -g @ratitisrad/agentvoice@latest`, dropping `-g` (and
+- **npm** → `npm install -g squeakr@latest`, dropping `-g` (and
   running in the depending project) when the install is a local dependency.
   Global vs local is read from where the package sits: a global prefix has no
   `package.json` of its own, a project that depends on us does.
-- **npx** → nothing to update in place; prints `npx @ratitisrad/agentvoice@latest`.
+- **npx** → nothing to update in place; prints `npx squeakr@latest`.
 - **system** (.deb / .rpm) → prints the `apt` / `dnf` command and changes
   nothing — `npm i -g` would install a second copy the service never runs.
 - **unknown** → refuses, says why, and explains how to reinstall into a mode
@@ -198,17 +200,17 @@ questions: `--service` / `--no-service`, `--hosting <tailscale|cloudflare|ngrok|
 `--agent <id>`, `--projects-dir <path[,path]>`:
 
 ```bash
-agentvoice setup --yes --service --hosting tailscale --agent claude-code --projects-dir ~/code
+squeakr setup --yes --service --hosting tailscale --agent claude-code --projects-dir ~/code
 ```
 
 ## `local`
 
-What cloning the repo and running it used to be for — trying AgentVoice on
+What cloning the repo and running it used to be for — trying Squeakr on
 one directory — without the clone and without touching your real bridge:
 
 ```bash
-cd ~/code/my-app && agentvoice local --this-dir     # or: agentvoice local ~/code/my-app
-agentvoice local --this-dir --open                  # and open the web client
+cd ~/code/my-app && squeakr local --this-dir     # or: squeakr local ~/code/my-app
+squeakr local --this-dir --open                  # and open the web client
 ```
 
 It starts the backend and the web client on the first free loopback port from
@@ -235,9 +237,9 @@ own on its next voice turn.
 ## `add`
 
 ```bash
-cd ~/code/my-app && agentvoice add --this-dir
-agentvoice add ~/code/my-app --alias "the app, frontend" --description "Customer web app"
-agentvoice add --this-dir --dry-run      # show what would be registered
+cd ~/code/my-app && squeakr add --this-dir
+squeakr add ~/code/my-app --alias "the app, frontend" --description "Customer web app"
+squeakr add --this-dir --dry-run      # show what would be registered
 ```
 
 Registers a directory as a project, filled in from the directory itself:
@@ -262,14 +264,14 @@ Moves an existing bridge — a clone, a hand-made install, an old home — onto
 this install in one action:
 
 ```bash
-agentvoice migrate ~/Projects/AgentVoice --dry-run   # see what would move
-agentvoice migrate ~/Projects/AgentVoice             # do it
-agentvoice migrate ~/Projects/AgentVoice --with-data # and keep job/session history
+squeakr migrate ~/Projects/Squeakr --dry-run   # see what would move
+squeakr migrate ~/Projects/Squeakr             # do it
+squeakr migrate ~/Projects/Squeakr --with-data # and keep job/session history
 ```
 
 It copies files and stops: no bridge is started, no service installed, and the
 source is never modified. `<path>` is the directory the old bridge ran from (or
-its `config.json`); the target is `$AGENTVOICE_HOME`, else `~/.agentvoice`, or
+its `config.json`); the target is `$SQUEAKR_HOME`, else `~/.squeakr`, or
 `--to <dir>`.
 
 What "safely" means here:
@@ -281,7 +283,7 @@ What "safely" means here:
 - **Nothing is overwritten without `--force`**, and `--force` backs each
   replaced file up first (`.env.bak-<timestamp>`, also 0600).
 - **The copy stands on its own.** Relative paths in `.env` (`HTTPS_CERT_PATH`,
-  `APNS_KEY_PATH`, the `<CLI>_PATH` pins, `AGENTVOICE_LOG_DIR`) become absolute;
+  `APNS_KEY_PATH`, the `<CLI>_PATH` pins, `SQUEAKR_LOG_DIR`) become absolute;
   `CONFIG_PATH`, `DB_PATH` and `settings.serve.repoDir` are left behind, since
   they pointed back into the source — two bridges must never share one
   database. A `test`-mode config is switched to `serve`, because an installed
@@ -296,12 +298,12 @@ What "safely" means here:
 `APP_TOKEN` carries over, so paired phones keep working. Stop the old bridge
 before starting the new one if they share a port, and run the new one from
 outside the old checkout — a directory with its own `config.json` takes
-precedence over `~/.agentvoice`.
+precedence over `~/.squeakr`.
 
 ## `token`
 
 The token goes to stdout on its own line; everything else goes to stderr, so
-`agentvoice token | pbcopy` does the obvious thing.
+`squeakr token | pbcopy` does the obvious thing.
 
 `token --new` rewrites the `APP_TOKEN` line of `<home>/.env` in place at mode
 `0600`, preserving every other line — `.env` also holds AWS keys and provider
@@ -321,14 +323,14 @@ the platform has:
 | macOS | `com.agentvoice.bridge` launchd agent | `~/Library/LaunchAgents/com.agentvoice.bridge.plist` exists. |
 | Windows | `AgentVoice` service (NSSM) | `sc.exe query AgentVoice` — the service `scripts/setup.ps1` has always installed. |
 
-None found: say so, and point at `agentvoice service install` or `agentvoice run`.
+None found: say so, and point at `squeakr service install` or `squeakr run`.
 
 A system unit needs root, so it is driven through `sudo -n` — non-interactive on
 purpose. A CLI that silently blocks on a hidden password prompt is worse than
 one that says "passwordless sudo required". A Windows service needs an elevated
 terminal; that is reported, not worked around.
 
-`agentvoice restart` is deliberately *not* `scripts/restart.sh`: that script
+`squeakr restart` is deliberately *not* `scripts/restart.sh`: that script
 rebuilds first, which is an update concern. This bounces the service and nothing
 else, which is what you want after editing `config.json`.
 
@@ -338,18 +340,18 @@ else, which is what you want after editing `config.json`.
 `postinstall` (`bin/postinstall.mjs`) runs `service install --now` — or
 `restart` on an upgrade, so the new version is the one running — and a
 .deb/.rpm enables the packaged unit for every user. Both skip with
-`AGENTVOICE_NO_SERVICE=1`; npm's hook also skips CI, root, Windows (a service
+`SQUEAKR_NO_SERVICE=1`; npm's hook also skips CI, root, Windows (a service
 there needs an elevated terminal) and a clone's plain `npm install`, and never
 fails the install. If your npm ignores install scripts, run
-`agentvoice service install --now` once.
+`squeakr service install --now` once.
 
-`agentvoice service uninstall` stops the service and removes what `install`
+`squeakr service uninstall` stops the service and removes what `install`
 wrote (a packaged unit is masked for your user instead). npm runs no uninstall
-hooks, so run it before `npm uninstall -g`. `~/.agentvoice` is never touched.
+hooks, so run it before `npm uninstall -g`. `~/.squeakr` is never touched.
 
 Installs a service that runs **as you** — the bridge spawns your agent CLIs with
 your sign-ins and edits your projects — pointing at this install's Node and
-launcher by absolute path, with `AGENTVOICE_HOME` pinned and a `PATH` that
+launcher by absolute path, with `SQUEAKR_HOME` pinned and a `PATH` that
 includes the per-user bin directories agent CLIs install into.
 
 - **Linux** writes a systemd user unit; `--now` enables and starts it and
@@ -383,7 +385,7 @@ src/cli/commands/*.ts  one file per command group (migrate.ts: the one-shot move
 The logic is TypeScript under `src/cli/` rather than JavaScript in `bin/` so it
 is typechecked with the rest of the bridge and can import what the bridge
 already knows. `tsup` builds it to `dist/cli.js` as a second entry with
-`splitting: false` — `agentvoice run` loads `dist/cli.js` and then
+`splitting: false` — `squeakr run` loads `dist/cli.js` and then
 `dist/index.js` in the same process, and a shared chunk would make them share
 module state, so the CLI's silenced logger would silence the bridge's own logs.
 
@@ -405,12 +407,12 @@ fetches it itself on first boot; this command does the same thing ahead of time
 (before going offline) or again (`--force`, to repair a bad download).
 
 ```bash
-agentvoice prepare-vosk           # fetch it now
-agentvoice prepare-vosk --force   # fetch it again
+squeakr prepare-vosk           # fetch it now
+squeakr prepare-vosk --force   # fetch it again
 ```
 
 Both paths run the same code (`src/serve/ensureVoskModel.ts`) and land in
-`<AGENTVOICE_HOME>/vosk` (`~/.agentvoice/vosk`), which no `npm update`, `ng
+`<SQUEAKR_HOME>/vosk` (`~/.squeakr/vosk`), which no `npm update`, `ng
 build` or package upgrade touches. A model already present in any directory
 `/vosk/` is served from — `web/public/vosk` in a clone included — counts, so
 nothing is downloaded twice. A running bridge serves it straight away.

@@ -1,12 +1,12 @@
 /**
  * How was this bridge installed, and therefore how does it update?
  *
- * There are three ways to be running AgentVoice, and they have nothing in
+ * There are three ways to be running Squeakr, and they have nothing in
  * common when it comes to getting a newer one:
  *
  *   git    — a clone. Updating means fetch, rebase, install, build, restart,
  *            and "what version am I" is a branch and a commit.
- *   npm    — `npm i -g @ratitisrad/agentvoice`. No repo to rebase; updating
+ *   npm    — `npm i -g squeakr`. No repo to rebase; updating
  *            means asking the registry and letting npm replace the package.
  *   system — a .deb or .rpm (docs/38). The package manager owns the files, the
  *            bridge cannot write to them, and updating is `apt` or `dnf`. The
@@ -31,15 +31,22 @@ import { childLogger } from '../log.js';
 const log = childLogger('serve:install-mode');
 
 /**
- * Our name on the npm registry. Scoped: the bare `agentvoice` name is not ours,
- * and every `npm view` / `npm install` that used it got a 404. Kept in step
- * with package.json#name by installMode.test.ts.
+ * Our name on the npm registry. Kept in step with package.json#name by
+ * installMode.test.ts.
+ *
+ * Unscoped since the Squeakr rename (docs/45). Releases up to 0.1.5 were
+ * published as LEGACY_PACKAGE_NAME; an install of that package has to be
+ * replaced by hand (`npm i -g squeakr`), because `npm update` never crosses
+ * package names.
  */
-export const PACKAGE_NAME = '@ratitisrad/agentvoice';
+export const PACKAGE_NAME = 'squeakr';
+
+/** The npm package AgentVoice was published as before the rename. */
+export const LEGACY_PACKAGE_NAME = '@ratitisrad/agentvoice';
 
 export type InstallMode = 'git' | 'npm' | 'system' | 'unknown';
 
-/** Prefixes a distro package installs AgentVoice under. */
+/** Prefixes a distro package installs Squeakr under. */
 const SYSTEM_ROOTS = ['/usr/lib/agentvoice', '/usr/share/agentvoice', '/opt/agentvoice'];
 
 /**
@@ -61,7 +68,7 @@ export interface InstallModeInfo {
   /** Globally installed (`npm i -g`) rather than a local dependency. */
   global: boolean;
   /**
-   * Running out of npx's cache (`npx @ratitisrad/agentvoice`). There is nothing
+   * Running out of npx's cache (`npx squeakr`). There is nothing
    * to update in place — the next `npx …@latest` fetches a fresh copy — and a
    * service must not point into a cache npm is free to delete.
    */

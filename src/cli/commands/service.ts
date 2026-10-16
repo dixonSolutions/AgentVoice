@@ -7,7 +7,7 @@
  * one failure it explains badly — "no service at all" — into instructions.
  *
  * A restart here is not scripts/restart.sh: that script rebuilds first, which
- * is an update concern. `agentvoice restart` bounces the service and nothing
+ * is an update concern. `squeakr restart` bounces the service and nothing
  * else, which is what you want when you have just edited config.json.
  */
 
@@ -47,7 +47,7 @@ export async function serviceCommand(verb: ServiceVerb): Promise<number> {
   say(`${green(verb === 'stop' ? 'stopped' : verb === 'start' ? 'started' : 'restarted')}  ${unit.unit} — ${settled}`);
 
   if (verb !== 'stop' && state?.activeState !== 'active') {
-    note(`  Not active. Logs: agentvoice logs -n 50`);
+    note(`  Not active. Logs: squeakr logs -n 50`);
     return 1;
   }
   return 0;
@@ -87,7 +87,7 @@ export async function logsCommand(opts: LogsOptions): Promise<number> {
       return logFilesCommand(fileOpts);
     }
     if (unit.scope !== 'none') {
-      fail('no session logs yet — has the service started? Try: agentvoice status');
+      fail('no session logs yet — has the service started? Try: squeakr status');
       return 1;
     }
     fail(noUnitAdvice(unit, detectInstallMode().root));

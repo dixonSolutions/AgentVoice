@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# AgentVoice — restart script (Linux)
+# Squeakr — restart script (Linux)
 #
 # What this script does:
 #   1. Builds the project (backend + PWA)
@@ -54,7 +54,7 @@ if [[ "$(uname -s)" != "Linux" ]]; then
   err "This script is Linux-only. Use restart.ps1 on Windows."
 fi
 
-echo -e "${CYN}${BLD}AgentVoice — restart${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
+echo -e "${CYN}${BLD}Squeakr — restart${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
 
 # ── Load .env for PORT ────────────────────────────────────────────────────
 ENV_FILE="${PROJECT_DIR}/.env"
@@ -151,7 +151,7 @@ else
   warn "Starting bridge manually in the background..."
   # Raw stdout/stderr, one file per start — the bridge's own session log is in
   # logs/serve/bridge/, and it gzips older console captures too.
-  CONSOLE_DIR="${AGENTVOICE_LOG_DIR:-${PROJECT_DIR}/logs}/serve/console"
+  CONSOLE_DIR="${SQUEAKR_LOG_DIR:-${AGENTVOICE_LOG_DIR:-${PROJECT_DIR}/logs}}/serve/console"
   mkdir -p "$CONSOLE_DIR"
   CONSOLE_LOG="${CONSOLE_DIR}/$(date +%Y-%m-%d_%H-%M-%S).log"
   nohup "$NODE_BIN" "${PROJECT_DIR}/dist/index.js" >> "$CONSOLE_LOG" 2>&1 &

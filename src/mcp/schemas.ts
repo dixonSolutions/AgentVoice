@@ -38,7 +38,7 @@ export const AgentManageProjectsSchema = z.object({
   action: z
     .enum(['describe', 'list', 'add', 'update', 'remove'])
     .describe(
-      'describe = what projects are in AgentVoice; list = filter registry; add/update/remove = mutate config',
+      'describe = what projects are in Squeakr; list = filter registry; add/update/remove = mutate config',
     ),
   query: z.string().optional().describe('For list: filter by name, alias, or description'),
   enabled: z.boolean().optional().describe('For list: filter by enabled flag'),
@@ -267,7 +267,7 @@ export type ToolName = keyof typeof TOOL_SCHEMAS;
 export type ToolArgs<T extends ToolName> = z.infer<(typeof TOOL_SCHEMAS)[T]>;
 
 /**
- * Tool names shipped before the AgentVoice rename.
+ * Tool names shipped before the AgentVoice rename (docs/26).
  *
  * They are accepted by `dispatchTool` (the control-WebSocket / WebSocket
  * relay path) so an in-flight session that still remembers the old vocabulary

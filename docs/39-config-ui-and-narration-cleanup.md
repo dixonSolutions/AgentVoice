@@ -161,7 +161,7 @@ stay raw-JSON only.
 
 ### It duplicates the voice agent
 
-The AgentVoice prompt makes the agent the narrator (speak before spawning, on
+The Squeakr prompt makes the agent the narrator (speak before spawning, on
 file written / command done / phase change / error, summarise the diff at the
 end). The watcher independently speaks `job_started` right after the agent's
 own "starting" line, every `file_write` with the raw path, `job_done` ending in

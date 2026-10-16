@@ -10,7 +10,7 @@
  * A mailbox works with the grain of what actually exists: the agent-voice MCP
  * server is registered for all four CLIs, every worker calls its tools, and a
  * tool result can carry anything. Messages queue here and ride out on the next
- * AgentVoice tool result the target makes — or on an explicit
+ * Squeakr tool result the target makes — or on an explicit
  * `check_messages()` call. Delivery is at the next tool call, which is honest
  * and bounded, rather than "best-effort" and never.
  *

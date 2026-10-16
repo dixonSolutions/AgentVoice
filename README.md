@@ -1,21 +1,21 @@
 <p align="center">
-  <img src="./docs/images/banner.png" alt="AgentVoice — self-hosted voice bridge for your coding agent CLI" width="820">
+  <img src="./docs/images/banner.png" alt="Squeakr — self-hosted voice bridge for your coding agent CLI" width="820">
 </p>
 
-<h1 align="center">AgentVoice</h1>
+<h1 align="center">Squeakr</h1>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@ratitisrad/agentvoice"><img src="https://img.shields.io/npm/v/%40ratitisrad%2Fagentvoice?logo=npm&logoColor=white&label=npm&color=2f2a5e" alt="npm version"></a>
-  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/%40ratitisrad%2Fagentvoice?logo=nodedotjs&logoColor=white&color=2f2a5e" alt="Node version"></a>
+  <a href="https://www.npmjs.com/package/squeakr"><img src="https://img.shields.io/npm/v/squeakr?logo=npm&logoColor=white&label=npm&color=2f2a5e" alt="npm version"></a>
+  <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/squeakr?logo=nodedotjs&logoColor=white&color=2f2a5e" alt="Node version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2f2a5e" alt="MIT license"></a>
 </p>
 
 <p align="center">
-  <em>Formerly "Cursor Voice" — see <a href="./docs/26-rename-agentvoice.md"><code>docs/26-rename-agentvoice.md</code></a>.</em>
+  <em>Formerly <strong>AgentVoice</strong> (and before that "Cursor Voice") — see <a href="./docs/45-rename-squeakr.md"><code>docs/45</code></a> and <a href="./docs/26-rename-agentvoice.md"><code>docs/26</code></a>.</em>
 </p>
 
 <p align="center">
-  <a href="./docs/demo/agentvoice-demo.mp4"><img src="./docs/demo/agentvoice-demo.gif" alt="43-second demo: in the AgentVoice web client, pick a project and model, say &quot;cursor listen&quot; and a question; Whisper transcribes it locally and Claude Code answers by voice" width="820"></a>
+  <a href="./docs/demo/agentvoice-demo.mp4"><img src="./docs/demo/agentvoice-demo.gif" alt="43-second demo: in the Squeakr web client, pick a project and model, say &quot;cursor listen&quot; and a question; Whisper transcribes it locally and Claude Code answers by voice" width="820"></a>
 </p>
 <p align="center">
   <em>One real voice session in the web client — pick the project and model, tap the orb, say “cursor listen” and ask; Claude Code answers by voice.
@@ -68,29 +68,29 @@ Bridge (Node/TS) ── VoiceTurnQueue ── MCP /mcp ──► Cursor voice ag
 
 ## Install
 
-AgentVoice ships as an npm package. The bridge and the built web app come in
+Squeakr ships as an npm package. The bridge and the built web app come in
 the same tarball — no checkout, no build step. Install it **globally**:
 
 ```bash
-npm install -g @ratitisrad/agentvoice
-agentvoice setup      # guided: agent CLI + projects, then hosting such as Tailscale
+npm install -g squeakr
+squeakr setup      # guided: agent CLI + projects, then hosting such as Tailscale
 ```
 
 `-g` makes it a system tool rather than a project dependency: npm installs the
-package into `<prefix>/lib/node_modules/@ratitisrad/agentvoice` and links the
-`agentvoice` command into `<prefix>/bin`, on your `PATH`.
+package into `<prefix>/lib/node_modules/squeakr` and links the
+`squeakr` command into `<prefix>/bin`, on your `PATH`.
 
 **It runs as a background service out of the box.** A global install
 registers and starts a *user* service — systemd on Linux, launchd on macOS —
 so the bridge is up at `http://127.0.0.1:5089` straight away and comes back at
-every login; `npm update -g @ratitisrad/agentvoice` restarts it on the new
+every login; `npm update -g squeakr` restarts it on the new
 version. It listens on this machine only: nothing is exposed until you set up
-hosting. Skip it with `AGENTVOICE_NO_SERVICE=1 npm install -g …`; on Windows,
+hosting. Skip it with `SQUEAKR_NO_SERVICE=1 npm install -g …`; on Windows,
 or if your npm is set to ignore install scripts, run
-`agentvoice service install --now` once. Before uninstalling, stop it with
-`agentvoice service uninstall` (npm runs no uninstall hooks).
+`squeakr service install --now` once. Before uninstalling, stop it with
+`squeakr service uninstall` (npm runs no uninstall hooks).
 
-`agentvoice setup` is the same wizard on every install — npm, a .deb/.rpm, or a
+`squeakr setup` is the same wizard on every install — npm, a .deb/.rpm, or a
 clone (where `scripts/setup.sh` builds first and then runs it). It asks whether
 you want the background service (already there after `npm install -g`), sets up
 the agent CLI and where your repos live, and — with the service — sets up
@@ -99,21 +99,34 @@ can reach it. `--yes` takes every default; `--no-service`,
 `--service --hosting tailscale`, `--agent`, `--projects-dir` answer individual
 questions for scripts.
 
-The bridge keeps everything in a **home directory** — `~/.agentvoice`, or
-`$AGENTVOICE_HOME` — seeded on first start: `config.json` from the packaged
-example and a random `APP_TOKEN` in `~/.agentvoice/.env`. Open
+The bridge keeps everything in a **home directory** — `~/.squeakr`, or
+`$SQUEAKR_HOME` — seeded on first start: `config.json` from the packaged
+example and a random `APP_TOKEN` in `~/.squeakr/.env`. Open
 `http://127.0.0.1:5089` (the PWA is served from the same port) and paste the
-token from `agentvoice token` when it asks you to pair.
+token from `squeakr token` when it asks you to pair.
 
-**Moving from a clone?** `agentvoice migrate ~/Projects/AgentVoice` carries
+**Coming from AgentVoice?** The npm package was `@ratitisrad/agentvoice`.
+Install the new one, then move your home, service and settings over — the
+pairing token comes along, so paired devices keep working:
+
+```bash
+npm install -g squeakr
+squeakr upgrade-from-agentvoice      # --dry-run first if you like
+```
+
+It moves `~/.agentvoice` to `~/.squeakr` (leaving a symlink), points the
+service at Squeakr and removes the old package. Clones, .deb/.rpm installs
+and what was deliberately *not* renamed: [`docs/45`](./docs/45-rename-squeakr.md).
+
+**Moving from a clone?** `squeakr migrate ~/Projects/Squeakr` carries
 its `config.json` and `.env` (keys and pairing token included, written 0600,
-never printed) into `~/.agentvoice` in one step; `--with-data` brings the job
+never printed) into `~/.squeakr` in one step; `--with-data` brings the job
 history too, and `--dry-run` shows what would move. It starts nothing — restart
-the service (`agentvoice restart`) to load what it carried.
+the service (`squeakr restart`) to load what it carried.
 
 Everything the bridge writes — `config.json`, `data/state.db`, logs — stays in
-that home directory, so `npm update -g @ratitisrad/agentvoice` never touches your state.
-Run `agentvoice` from a directory that already has a `config.json` (a repo
+that home directory, so `npm update -g squeakr` never touches your state.
+Run `squeakr` from a directory that already has a `config.json` (a repo
 checkout, say) and it uses that directory instead.
 
 The default configuration is local-only (the `local` hosting provider), uses Codex, and discovers immediate Git repositories under
@@ -144,29 +157,29 @@ sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/rpm/agentvoice.repo 
 sudo dnf install agentvoice
 ```
 
-Both enable AgentVoice as a background user service out of the box; then run
-`agentvoice setup`, and `loginctl enable-linger "$USER"` to keep it running after logout.
+Both enable Squeakr as a background user service out of the box; then run
+`squeakr setup`, and `loginctl enable-linger "$USER"` to keep it running after logout.
 See [docs/43](docs/43-package-repos.md) for details.
 
-## The `agentvoice` command
+## The `squeakr` command
 
 Booting the bridge is only the default. The same command manages the install:
 
 ```bash
-agentvoice status          # install, version, service, port, health, public URL — one screen
-agentvoice doctor          # Node, native binding, config, agent CLI + sign-in, port, service, hosting
-agentvoice service install --now   # (re)install the background service — npm -g and .deb/.rpm already did
-agentvoice service uninstall       # stop and remove it, e.g. before npm uninstall -g
-agentvoice restart         # bounce the service
-agentvoice logs -f         # follow the service journal (or the session log file)
-agentvoice logs --list     # every session log and voice transcript on disk
-agentvoice pipe --mic      # talk to the agent from this terminal, no phone needed
-agentvoice update          # rebase a clone, or npm-install a newer package
-agentvoice token --new     # rotate the pairing token
-agentvoice migrate <path>  # carry a clone's config + keys into this install
-agentvoice add --this-dir   # register the directory you are in as a project
-agentvoice local --this-dir # throwaway bridge + web client for just this directory, logs in the terminal
-agentvoice <command> --help   # just that command's options
+squeakr status          # install, version, service, port, health, public URL — one screen
+squeakr doctor          # Node, native binding, config, agent CLI + sign-in, port, service, hosting
+squeakr service install --now   # (re)install the background service — npm -g and .deb/.rpm already did
+squeakr service uninstall       # stop and remove it, e.g. before npm uninstall -g
+squeakr restart         # bounce the service
+squeakr logs -f         # follow the service journal (or the session log file)
+squeakr logs --list     # every session log and voice transcript on disk
+squeakr pipe --mic      # talk to the agent from this terminal, no phone needed
+squeakr update          # rebase a clone, or npm-install a newer package
+squeakr token --new     # rotate the pairing token
+squeakr migrate <path>  # carry a clone's config + keys into this install
+squeakr add --this-dir   # register the directory you are in as a project
+squeakr local --this-dir # throwaway bridge + web client for just this directory, logs in the terminal
+squeakr <command> --help   # just that command's options
 ```
 
 Speech reaches the agent in **turns** by default — wake phrase, then VAD, then
@@ -177,7 +190,7 @@ each piece to the agent as you talk
 ([`docs/41`](./docs/41-audio-stream-pipe.md)):
 
 ```bash
-arecord -f S16_LE -r 16000 -c 1 -t raw | agentvoice pipe
+arecord -f S16_LE -r 16000 -c 1 -t raw | squeakr pipe
 ```
 
 **Channels** make Discord, Telegram, Slack and WhatsApp a way in too: call the
@@ -194,17 +207,17 @@ Every bridge run writes a date-named session log and every voice session a
 transcript under `<home>/logs/`, gzipped as they pile up
 ([`docs/42`](./docs/42-logging.md)).
 
-`status` is the one to reach for first. It reports how AgentVoice was installed
+`status` is the one to reach for first. It reports how Squeakr was installed
 and therefore how it updates, the version (branch and drift for a clone, the
 registry's `latest` for an npm install), whether the service is running and
 since when, the port it is listening on and where that port came from, what
 `/healthz` says, and whether a pairing token is configured — never the token
 itself. Add `--json` for machine output. It exits `1` when the bridge is not
-answering, so `agentvoice status >/dev/null` works as a liveness probe.
+answering, so `squeakr status >/dev/null` works as a liveness probe.
 
 `update` follows the install rather than guessing: a clone runs
 `scripts/update.sh` (pass `--stash` to carry local changes across the rebase),
-an npm install runs `npm install -g @ratitisrad/agentvoice@latest` (without `-g`
+an npm install runs `npm install -g squeakr@latest` (without `-g`
 for a project dependency), an `npx` run tells you to start it with `@latest`,
 and a .deb / .rpm install prints the `apt` / `dnf` command instead of fighting
 the package manager.
@@ -232,7 +245,7 @@ Prerequisites: [Node.js 20 LTS](https://nodejs.org), [Git](https://git-scm.com),
 ```powershell
 # 1. Clone the repo
 git clone https://github.com/dixonSolutions/AgentVoice.git
-cd AgentVoice
+cd Squeakr
 # Formerly Cursor-Voice — see docs/26-rename-agentvoice.md
 
 # 2. Run setup — installs Tailscale, builds the project, creates .env,
@@ -264,10 +277,10 @@ Prerequisites: Node.js 20 LTS, Git, and one agent CLI on PATH — `cursor-agent`
 ```bash
 # 1. Clone the repo
 git clone https://github.com/dixonSolutions/AgentVoice.git
-cd AgentVoice
+cd Squeakr
 # Formerly Cursor-Voice — see docs/26-rename-agentvoice.md
 
-# 2. Build, then run the setup wizard (`agentvoice setup`): agent CLI and
+# 2. Build, then run the setup wizard (`squeakr setup`): agent CLI and
 #    projects, then — if you want it — a systemd user service and hosting
 #    (e.g. Tailscale). `--local` skips the service; `--hosting=tailscale` picks it.
 bash scripts/setup.sh
@@ -326,14 +339,15 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 | [`24-agent-providers.md`](./docs/24-agent-providers.md) | In-app auth, live model selection (per-model effort / fast from each CLI), generic MCP tools |
 | [`25-hosting-providers.md`](./docs/25-hosting-providers.md) | Tailscale, Cloudflare, ngrok, Dev Tunnels, LAN, manual |
 | [`33-permissions-and-prompt-relay.md`](./docs/33-permissions-and-prompt-relay.md) | Permission modes per CLI, permission prompts and sudo passwords relayed to the phone |
-| [`35-cli.md`](./docs/35-cli.md) | The `agentvoice` management CLI |
+| [`35-cli.md`](./docs/35-cli.md) | The `squeakr` management CLI |
 | [`36-disconnect-and-background-work.md`](./docs/36-disconnect-and-background-work.md) | Design: disconnect policy, unattended work, surviving bridge restarts |
 | [`37-session-directory-and-inject.md`](./docs/37-session-directory-and-inject.md) | Design: list running sessions and inject into them by voice |
 | [`38-system-packages.md`](./docs/38-system-packages.md) | Design: .deb / .rpm packages and a system install mode |
 | [`39-config-ui-and-narration-cleanup.md`](./docs/39-config-ui-and-narration-cleanup.md) | Config screen audit and bridge narration toggles + templates |
 | [`40-prompts-orb-and-permissions.md`](./docs/40-prompts-orb-and-permissions.md) | Design: prompts read aloud, ask tools and tool overlap, orb working state, remembered mic permission |
-| [`41-audio-stream-pipe.md`](./docs/41-audio-stream-pipe.md) | Direct audio stream input — the phone's stream mode and `agentvoice pipe` |
-| [`42-logging.md`](./docs/42-logging.md) | Session log files, voice transcripts, gzip rollover, `agentvoice logs` |
+| [`41-audio-stream-pipe.md`](./docs/41-audio-stream-pipe.md) | Direct audio stream input — the phone's stream mode and `squeakr pipe` |
+| [`42-logging.md`](./docs/42-logging.md) | Session log files, voice transcripts, gzip rollover, `squeakr logs` |
+| [`45-rename-squeakr.md`](./docs/45-rename-squeakr.md) | AgentVoice → Squeakr, and moving an install over |
 | [`26-rename-agentvoice.md`](./docs/26-rename-agentvoice.md) | Cursor Voice → AgentVoice rename notes |
 
 ## Stack

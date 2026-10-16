@@ -9,8 +9,8 @@
  * give the agent whole requests — but this is fully usable, and it is the only
  * way to talk to the agent from something that is not the PWA:
  *
- *   arecord -f S16_LE -r 16000 -c 1 -t raw | agentvoice pipe
- *   agentvoice pipe --mic
+ *   arecord -f S16_LE -r 16000 -c 1 -t raw | squeakr pipe
+ *   squeakr pipe --mic
  *
  * Protocol (all JSON frames are text; audio frames are binary):
  *
@@ -63,7 +63,7 @@ import { deliverStreamTurn } from '../voice/streamTurns.js';
 
 const log = childLogger('api:audio-stream');
 
-/** The one format the pipe accepts; `agentvoice pipe` converts anything else. */
+/** The one format the pipe accepts; `squeakr pipe` converts anything else. */
 export const AUDIO_STREAM_SAMPLE_RATE = 16_000;
 export const AUDIO_STREAM_ENCODING = 'pcm_s16le';
 
@@ -112,7 +112,7 @@ export function registerAudioStreamWebSocket(app: FastifyInstance): void {
         if (sampleRate !== AUDIO_STREAM_SAMPLE_RATE || encoding !== AUDIO_STREAM_ENCODING || channels !== 1) {
           fail(
             `Send ${AUDIO_STREAM_ENCODING} mono at ${AUDIO_STREAM_SAMPLE_RATE} Hz ` +
-              `(got ${encoding}, ${channels} ch, ${sampleRate} Hz) — \`agentvoice pipe\` converts WAV and other rates for you.`,
+              `(got ${encoding}, ${channels} ch, ${sampleRate} Hz) — \`squeakr pipe\` converts WAV and other rates for you.`,
           );
           return;
         }
@@ -138,7 +138,7 @@ export function registerAudioStreamWebSocket(app: FastifyInstance): void {
         if (wantedProject) {
           const resolved = resolveProject(wantedProject);
           if (!resolved) {
-            fail(`Project "${wantedProject}" is not registered — agentvoice add <path>, or pick one of the configured projects.`, 4404);
+            fail(`Project "${wantedProject}" is not registered — squeakr add <path>, or pick one of the configured projects.`, 4404);
             return;
           }
           setActiveProject('default', resolved.name);

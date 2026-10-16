@@ -1,5 +1,5 @@
 /**
- * `agentvoice update` — dispatch on how this install actually got here.
+ * `squeakr update` — dispatch on how this install actually got here.
  *
  * A clone and an npm install have nothing in common when it comes to getting a
  * newer one, and guessing wrong is destructive in both directions: `npm i -g`
@@ -43,7 +43,7 @@ export async function updateCommand(parsed: Parsed): Promise<number> {
   if (install.mode === 'system') {
     say(`Installed from a system package — ${install.reason}.`);
     say(`  Update it with:  ${install.updateCommand}`);
-    note(dim('  Then restart it:  agentvoice restart'));
+    note(dim('  Then restart it:  squeakr restart'));
     return dryRun ? 0 : 1;
   }
 
@@ -81,7 +81,7 @@ export async function updateCommand(parsed: Parsed): Promise<number> {
   const code = await passthrough('npm', args, cwd ? { cwd } : {});
   if (code === 0) {
     note('');
-    note('  Updated. Restart the bridge to pick it up:  agentvoice restart');
+    note('  Updated. Restart the bridge to pick it up:  squeakr restart');
   }
   return code;
 }

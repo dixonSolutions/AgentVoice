@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Install a persistent SSH tunnel (systemd user service) for split-host hosting.
 #
-# Use when AgentVoice runs on a remote host/container but Tailscale Serve runs
+# Use when Squeakr runs on a remote host/container but Tailscale Serve runs
 # on this machine (e.g. eva → debian incus :5671).
 #
 # Usage:
@@ -54,13 +54,13 @@ chmod 600 "$ENV_FILE"
 
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=AgentVoice SSH tunnel (${LOCAL_BIND_PORT} → ${REMOTE_SSH}:${REMOTE_BIND_PORT})
+Description=Squeakr SSH tunnel (${LOCAL_BIND_PORT} → ${REMOTE_SSH}:${REMOTE_BIND_PORT})
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-Environment=AGENTVOICE_TUNNEL_ENV=${ENV_FILE}
+Environment=SQUEAKR_TUNNEL_ENV=${ENV_FILE}
 ExecStart=${TUNNEL_SCRIPT}
 Restart=always
 RestartSec=5

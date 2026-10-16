@@ -1,4 +1,4 @@
-# nfpm recipe for the AgentVoice .deb / .rpm (docs/38, #58).
+# nfpm recipe for the Squeakr .deb / .rpm (docs/38, #58).
 #
 # Three decisions this file encodes, all of them load-bearing:
 #
@@ -23,6 +23,8 @@
 #
 # Populated by .github/workflows/npm-publish.yml, which stages the payload into
 # packaging/root/ before calling nfpm.
+# Still `agentvoice`: renaming the package would stop `apt upgrade` / `dnf
+# upgrade` from moving existing installs forward (docs/45, stage B).
 name: agentvoice
 arch: ${PKG_ARCH}
 platform: linux
@@ -34,7 +36,7 @@ description: |
   Self-hosted voice bridge for Cursor, Codex, Claude Code and Codewhale.
   Talk to your coding agents from your phone — the bridge runs on your own
   machine and the agents run as you.
-vendor: AgentVoice
+vendor: Squeakr
 homepage: https://github.com/dixonSolutions/AgentVoice
 license: MIT
 
@@ -54,6 +56,13 @@ contents:
 
   - src: ./root/usr/bin/agentvoice
     dst: /usr/bin/agentvoice
+    file_info:
+      mode: 0755
+
+  # `squeakr` is the command since the rename (docs/45); the package itself
+  # keeps the name `agentvoice` until stage B, so `apt upgrade` still finds it.
+  - src: ./root/usr/bin/squeakr
+    dst: /usr/bin/squeakr
     file_info:
       mode: 0755
 

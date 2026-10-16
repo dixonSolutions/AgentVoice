@@ -1,7 +1,7 @@
 # README demo video
 
 `agentvoice-demo.mp4` (with sound) and `agentvoice-demo.gif` (silent preview
-embedded in the README) show one real voice session in the AgentVoice web
+embedded in the README) show one real voice session in the Squeakr web
 client: pick the project and model, tap the orb, say the wake word and a
 question, and hear Claude Code answer.
 
@@ -14,7 +14,7 @@ bridge's text-to-speech. These are the lines in the published cut, verbatim.
 | Who | Line |
 | --- | --- |
 | you | Cursor listen. What does this project do? Answer in one sentence. |
-| agent | AgentVoice is a self-hosted voice bridge that lets you drive a coding agent like Claude Code, Cursor, Codex or Codewhale by speaking from your phone. |
+| agent | Squeakr is a self-hosted voice bridge that lets you drive a coding agent like Claude Code, Cursor, Codex or Codewhale by speaking from your phone. |
 
 The bridge's speech-to-text heard the question word for word as "What does
 this project do? Answer in one sentence." (the wake phrase is stripped before

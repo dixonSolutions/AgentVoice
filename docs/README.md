@@ -1,4 +1,4 @@
-# AgentVoice — Documentation
+# Squeakr — Documentation
 
 Voice-controlled coding agent: speak from an iPhone PWA, the active agent CLI
 (Cursor / Codex / Claude Code) reasons with full project context, and a constrained
@@ -38,7 +38,7 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`25-hosting-providers.md`](./25-hosting-providers.md) | `HostingProvider` abstraction: Tailscale, Cloudflare, ngrok, Dev Tunnels, LAN, local, manual | Choosing/switching how the bridge is exposed |
 | [`26-rename-agentvoice.md`](./26-rename-agentvoice.md) | Product rename from Cursor Voice → AgentVoice (what changed / what stayed) | Migrating an existing install after the rename |
 | [`27-touch-controls-and-cancel.md`](./27-touch-controls-and-cancel.md) | On-screen Speak / Cancel, cancel-while-processing, touch-only preset | Mute UX, no wake words, or cancel during Transcribe |
-| [`28-provider-parity-and-branding.md`](./28-provider-parity-and-branding.md) | Normalized agent events, per-provider MCP registration and modes, the AgentVoice interrupt hook, `agent_*` tool names, one branding source | Anything Codex/Claude Code behaves differently from Cursor, or naming/theme questions |
+| [`28-provider-parity-and-branding.md`](./28-provider-parity-and-branding.md) | Normalized agent events, per-provider MCP registration and modes, the Squeakr interrupt hook, `agent_*` tool names, one branding source | Anything Codex/Claude Code behaves differently from Cursor, or naming/theme questions |
 | [`29-speech-to-text-providers.md`](./29-speech-to-text-providers.md) | Speech-to-text providers: self-hosted Whisper (Docker/Podman), Groq, OpenAI, Deepgram, Gemini, ElevenLabs, OpenRouter, Amazon Transcribe | Choosing a transcription engine, adding API keys from the app, or running STT locally |
 | [`30-speech-output-providers.md`](./30-speech-output-providers.md) | Text-to-speech providers, per-vendor scopes, and language-aware fallback across device and cloud voices | The agent has to speak a language the device has no voice for, or you want a different voice |
 | [`31-service-orchestrator-converter.md`](./31-service-orchestrator-converter.md) | The Service / Orchestrator / Converter / Specializer layering shared by speech in, speech out, and (pending) the agent CLIs | Adding a provider or a selection policy, or working out where vendor knowledge belongs |
@@ -49,10 +49,11 @@ MCP tool layer drives worker agents on projects hosted on a home machine.
 | [`38-system-packages.md`](./38-system-packages.md) | Design: .deb / .rpm packaging, a `system` install mode, and the npm fixes it depends on | Packaging, install modes, or the update path |
 | [`39-config-ui-and-narration-cleanup.md`](./39-config-ui-and-narration-cleanup.md) | Audit of the settings screen and every hardcoded bridge narration line, with the toggles + templates design | Editing the config tab or anything the bridge speaks on its own |
 | [`40-prompts-orb-and-permissions.md`](./40-prompts-orb-and-permissions.md) | Reading question and plan cards aloud, why the ask tools stay (and which of the 37 tools overlap), a working state on the orb, and remembering mic / audio permissions | Touching the approval panel, the MCP tool surface, the orb, or microphone capture |
-| [`41-audio-stream-pipe.md`](./41-audio-stream-pipe.md) | Direct audio stream input: the phone's stream mode, `agentvoice pipe`, segmentation, the `/ws/audio-stream` protocol | Hands-free input, talking to the agent from a terminal, or why turns are still recommended |
-| [`42-logging.md`](./42-logging.md) | Date-named session logs, voice transcripts, gzip rollover and retention, `agentvoice logs` | Finding what the bridge did or what was said, log disk use, crash forensics |
+| [`41-audio-stream-pipe.md`](./41-audio-stream-pipe.md) | Direct audio stream input: the phone's stream mode, `squeakr pipe`, segmentation, the `/ws/audio-stream` protocol | Hands-free input, talking to the agent from a terminal, or why turns are still recommended |
+| [`42-logging.md`](./42-logging.md) | Date-named session logs, voice transcripts, gzip rollover and retention, `squeakr logs` | Finding what the bridge did or what was said, log disk use, crash forensics |
 | [`43-package-repos.md`](./43-package-repos.md) | Signed apt/dnf repositories on GitHub Pages: setup, signing key, rotation, user install | Package repos, signing key, release publishing |
 | [`44-channels.md`](./44-channels.md) | Discord / Telegram / Slack / WhatsApp as remote access: Discord voice calls, voice messages, the `@AgentVoice` command line, default sessions per conversation, platform research, Bedrock S2S answer | Channels, #93 |
+| [`45-rename-squeakr.md`](./45-rename-squeakr.md) | AgentVoice → Squeakr: what was renamed, what was kept (stage B), `squeakr upgrade-from-agentvoice`, the final 0.1.6 hand-over release | Upgrading an AgentVoice install, releasing the rename |
 
 ## One-paragraph summary
 

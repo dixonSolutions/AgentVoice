@@ -16,7 +16,7 @@
 # What is deliberately NOT in here: the ~41 MB Vosk wake-word model. It would
 # more than double the package for every install, including the many that never
 # turn wake words on, and it cannot live under /usr/lib anyway — the bridge
-# serves it from ~/.agentvoice/vosk after `agentvoice prepare-vosk`.
+# serves it from ~/.squeakr/vosk after `squeakr prepare-vosk`.
 #
 # Usage: packaging/stage.sh <node-tarball-dir>
 #   where <node-tarball-dir> holds an extracted node-vNN-linux-<arch> tree.
@@ -49,7 +49,7 @@ mkdir -p "${prefix}" "${staging}/usr/bin" "${staging}/usr/lib/systemd/user"
 
 cp -r "${repo_root}/dist" "${prefix}/dist"
 cp -r "${repo_root}/bin" "${prefix}/bin"
-# The AgentVoice system prompt and MCP instructions. Without these the MCP
+# The Squeakr system prompt and MCP instructions. Without these the MCP
 # server answers 500 on every `initialize` and no agent can connect at all.
 cp -r "${repo_root}/prompts" "${prefix}/prompts"
 cp -r "${repo_root}/web" "${prefix}/web"
@@ -105,6 +105,10 @@ rm -rf "${prefix}/node/lib/node_modules/npm/docs" "${prefix}/node/lib/node_modul
 
 cp "${repo_root}/packaging/agentvoice.launcher.sh" "${staging}/usr/bin/agentvoice"
 chmod 0755 "${staging}/usr/bin/agentvoice"
+# The command is `squeakr` since the rename (docs/45); /usr/bin/agentvoice stays
+# so scripts and muscle memory from before it keep working.
+cp "${repo_root}/packaging/agentvoice.launcher.sh" "${staging}/usr/bin/squeakr"
+chmod 0755 "${staging}/usr/bin/squeakr"
 cp "${repo_root}/packaging/agentvoice.user.service" \
    "${staging}/usr/lib/systemd/user/agentvoice.service"
 

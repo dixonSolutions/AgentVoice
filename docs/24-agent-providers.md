@@ -47,7 +47,7 @@ the full interface.
 | `token-paste` | — | — | ✅ (paste an existing setup token) | — |
 | `api-key`     | ✅ (Cursor Dashboard key) | ✅ (OpenAI key) | ✅ (Anthropic key) | ✅ (key for the *active* Codewhale provider) |
 
-Codewhale's `api-key` flow is the one that does not write to AgentVoice's
+Codewhale's `api-key` flow is the one that does not write to Squeakr's
 `.env`. Codewhale keys are per-provider and live in its own config plus the OS
 keyring, so the pasted value is handed to
 `codewhale auth set --provider <active> --api-key-stdin` instead — right scope,
@@ -281,7 +281,7 @@ provider reads `~/.codewhale/sessions/*.json` (each carrying
 
 This is a heuristic and is documented as one: two concurrent runs in the same
 workspace could race, and the loser would resume the winner's thread. It is
-bounded by AgentVoice running one voice session per project, and
+bounded by Squeakr running one voice session per project, and
 `executor/resumeGuard.ts` still recovers at runtime. The alternative — no
 resume at all — means every turn starts a cold thread, which is worse.
 

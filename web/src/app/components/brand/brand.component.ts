@@ -4,8 +4,8 @@ import { APP_ICON_SRC, APP_NAME } from '../../branding';
 /**
  * The app's identity: mark, and optionally the wordmark beside it.
  *
- * One component so "AgentVoice" is rendered from `branding.ts` in every place
- * it appears. It replaces the old brand-logo + separate `<p-tag value="AgentVoice">`
+ * One component so "Squeakr" is rendered from `branding.ts` in every place
+ * it appears. It replaces the old brand-logo + separate `<p-tag value="Squeakr">`
  * pairing, which drew the name twice in the top bar and again in the token
  * dialog from three different string literals.
  */

@@ -422,7 +422,7 @@ function ensureCursorVoiceRule(ctx: McpRegistrationContext): void {
   const label = formatPathForLog(rulePath);
   const content = `---
 description: >
-  AgentVoice — use only during an active phone/PWA voice session.
+  Squeakr — use only during an active phone/PWA voice session.
   When a voice session is connected, all communication MUST go through ${ctx.serverName} MCP tools:
   speak() to talk, done() to re-arm the mic, next_voice_turn() to receive requests.
   If speak() returns NO_VOICE_SESSION, respond with normal IDE text instead.

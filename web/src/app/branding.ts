@@ -3,7 +3,7 @@
  *
  * Two distinct identities used to be muddled together across the UI:
  *
- *   - THIS APP — "AgentVoice". Its name and mark belong in exactly one place
+ *   - THIS APP — "Squeakr". Its name and mark belong in exactly one place
  *     on screen (the top bar), rendered by <cv-brand>. It was previously
  *     spelled out again in the token dialog, in a separate <p-tag> beside the
  *     logo, and in scattered string literals, so a rename meant hunting.
@@ -19,7 +19,7 @@
  * switched CLI.
  */
 
-export const APP_NAME = 'AgentVoice';
+export const APP_NAME = 'Squeakr';
 
 /** PWA icon in /public — also the favicon and the mark in <cv-brand>. */
 export const APP_ICON_SRC = '/icon.svg';

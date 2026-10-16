@@ -36,6 +36,6 @@ test('renderPlist escapes paths and carries the home and PATH', () => {
     log: '/Users/a/.agentvoice/logs/launchd.log',
   });
   assert.match(plist, /<string>\/Users\/a &amp; b\/agentvoice\.mjs<\/string>/);
-  assert.match(plist, /<key>AGENTVOICE_HOME<\/key>\s*<string>\/Users\/a\/\.agentvoice<\/string>/);
+  assert.match(plist, /<key>SQUEAKR_HOME<\/key>\s*<string>\/Users\/a\/\.agentvoice<\/string>/);
   assert.match(plist, /<key>Label<\/key>\s*<string>com\.agentvoice\.bridge<\/string>/);
 });

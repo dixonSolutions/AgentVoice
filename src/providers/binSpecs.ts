@@ -1,6 +1,6 @@
 /**
  * Where each agent CLI lives — the one table the providers and
- * `agentvoice doctor` both read.
+ * `squeakr doctor` both read.
  *
  * Its own module, with no imports beyond binResolve, because the management
  * CLI must not load the provider registry (that drags in the whole executor

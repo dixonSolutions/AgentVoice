@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# AgentVoice — doctor (Linux)
+# Squeakr — doctor (Linux)
 #
 # Standalone health check of an install: pure bash, no build needed, changes
 # nothing. Prints green/yellow/red per check and exits 1 if anything is red.
@@ -8,7 +8,7 @@
 # Checks:
 #   toolchain   node >= 20, npm
 #   install     node_modules, dist/index.js, dist/cli.js, web/dist/
-#   vosk        $AGENTVOICE_HOME/vosk/model.tar.gz present, gzip, ~40 MB, and
+#   vosk        $SQUEAKR_HOME/vosk/model.tar.gz present, gzip, ~40 MB, and
 #               served by the bridge as application/gzip (text/html here is
 #               THE classic failure: the PWA hangs at "unpacking")
 #   .env        APP_TOKEN present (never printed); provider keys set (names only)
@@ -20,7 +20,7 @@
 # Usage: bash scripts/doctor.sh [--quiet]
 #
 # Environment overrides:
-#   AGENTVOICE_CONFIG, AGENTVOICE_ENV_FILE, AGENTVOICE_HOME (see prepare.sh)
+#   SQUEAKR_CONFIG, SQUEAKR_ENV_FILE, SQUEAKR_HOME (see prepare.sh)
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -44,12 +44,14 @@ case "${1:-}" in
   *) echo "Unknown option: $1" >&2; exit 2;;
 esac
 
-CONFIG_FILE="${AGENTVOICE_CONFIG:-${PROJECT_DIR}/config.json}"
-ENV_FILE="${AGENTVOICE_ENV_FILE:-${PROJECT_DIR}/.env}"
-AV_HOME="${AGENTVOICE_HOME:-${HOME}/.agentvoice}"
+CONFIG_FILE="${SQUEAKR_CONFIG:-${AGENTVOICE_CONFIG:-${PROJECT_DIR}/config.json}}"
+ENV_FILE="${SQUEAKR_ENV_FILE:-${AGENTVOICE_ENV_FILE:-${PROJECT_DIR}/.env}}"
+# ~/.squeakr, unless only a not-yet-upgraded ~/.agentvoice exists (docs/45).
+if [[ -e "${HOME}/.squeakr" || ! -e "${HOME}/.agentvoice" ]]; then DEFAULT_HOME="${HOME}/.squeakr"; else DEFAULT_HOME="${HOME}/.agentvoice"; fi
+AV_HOME="${SQUEAKR_HOME:-${AGENTVOICE_HOME:-${DEFAULT_HOME}}}"
 VOSK_MODEL="${AV_HOME}/vosk/model.tar.gz"
 
-echo -e "${BLD}AgentVoice — doctor${NC}   ${PROJECT_DIR}"
+echo -e "${BLD}Squeakr — doctor${NC}   ${PROJECT_DIR}"
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 env_get() {
@@ -114,7 +116,7 @@ else
 fi
 if [[ -f dist/index.js ]]; then pass "dist/index.js ($(date -r dist/index.js '+%Y-%m-%d %H:%M' 2>/dev/null))"
 else fail "dist/index.js missing — run: npm run build"; fi
-if [[ -f dist/cli.js ]]; then pass "dist/cli.js (agentvoice CLI)"
+if [[ -f dist/cli.js ]]; then pass "dist/cli.js (squeakr CLI)"
 else warn "dist/cli.js missing — 'node bin/agentvoice.mjs' will not work until: npm run build"; fi
 if [[ -f web/dist/index.html ]]; then pass "web/dist/ (PWA) built"
 else fail "web/dist/index.html missing — run: npm run build"; fi

@@ -1,7 +1,7 @@
-# AgentVoice — rules for agents working in this repo
+# Squeakr — rules for agents working in this repo
 
 Several agents (Claude Code sessions, worktrees under `.claude/worktrees/`, the
-AgentVoice bridge's own workers) edit this repository at the same time. The
+Squeakr bridge's own workers) edit this repository at the same time. The
 `agent-locks` MCP server is the coordination point — use it, every time.
 
 ## Work-claiming (mandatory)

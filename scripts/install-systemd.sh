@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install agentvoice as a systemd user service (survives logout/reboot with linger).
+# Install squeakr as a systemd user service (survives logout/reboot with linger).
 #
 # Usage:
 #   bash scripts/install-systemd.sh
@@ -57,7 +57,7 @@ SERVICE_FILE="${SYSTEMD_DIR}/agentvoice.service"
 info "Writing ${SERVICE_FILE}..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=AgentVoice Bridge
+Description=Squeakr Bridge
 After=network-online.target tailscaled.service
 Wants=network-online.target
 
@@ -82,7 +82,7 @@ PATH_FILE="${SYSTEMD_DIR}/agentvoice-watch.path"
 info "Writing ${PATH_FILE}..."
 cat > "$PATH_FILE" <<EOF
 [Unit]
-Description=Watch AgentVoice build output for changes
+Description=Watch Squeakr build output for changes
 
 [Path]
 PathModified=${PROJECT_DIR}/dist/index.js

@@ -87,7 +87,7 @@ sensitivity, so secrets and settings never mix:
 
 Rationale: keys rotate independently and must stay out of version control; the
 config file is the operator's control surface (settings + which directories
-AgentVoice may touch). Both are loaded and **schema-validated (zod)** at bridge
+Squeakr may touch). Both are loaded and **schema-validated (zod)** at bridge
 startup; invalid config fails fast with a clear error.
 
 > The DB (`state.db`) is **runtime state** (sessions, jobs, audit, resume ids),
@@ -101,7 +101,7 @@ startup; invalid config fails fast with a clear error.
   `settings.projectDiscovery`. Discovery is disabled by default for existing
   installs. When enabled, every immediate Git repository under a configured
   `hotPaths` directory becomes a persisted `discovered: true` entry in
-  `config.json`; AgentVoice watches those folders in its own process and also
+  `config.json`; Squeakr watches those folders in its own process and also
   periodically rescans them. It never needs a separate daemon.
 - A hot path is a container, never a project. Add a nested container as another
   hot path to discover its immediate children. Dot-directories and symlinks are
@@ -168,7 +168,7 @@ different ports and can run **side by side** — no `EADDRINUSE` collision.
 
 **Host service control** (independent of `npm run dev`):
 
-- `npm run stop` — stops the `agentvoice` systemd service **and** its rebuild watcher
+- `npm run stop` — stops the `squeakr` systemd service **and** its rebuild watcher
   (`agentvoice-watch.path`), then frees the host port (`8787`). Windows: `scripts\stop.ps1`.
 - `npm run start:service` — starts the host service back up, health-checked. Windows: `scripts\start.ps1`.
 
@@ -269,7 +269,7 @@ sudo tailscale serve --bg 443 http://127.0.0.1:PORT
 
 ```ini
 [Unit]
-Description=AgentVoice Bridge
+Description=Squeakr Bridge
 After=network-online.target tailscaled.service
 Wants=network-online.target
 

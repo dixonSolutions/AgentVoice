@@ -6,7 +6,7 @@ import { after, test } from 'node:test';
 import type BetterSqlite3 from 'better-sqlite3';
 import { migrateCommand, transformConfig, transformEnv } from './migrate.js';
 
-const scratch = mkdtempSync(join(tmpdir(), 'agentvoice-migrate-'));
+const scratch = mkdtempSync(join(tmpdir(), 'squeakr-migrate-'));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 const SECRET = 'sk-test-DO-NOT-PRINT-4f9a';

@@ -65,8 +65,8 @@ file checks both the repository metadata (`repo_gpgcheck=1`) and every package
 (`gpgcheck=1`):
 
 ```ini
-[agentvoice]
-name=AgentVoice
+[squeakr]
+name=Squeakr
 baseurl=https://dixonsolutions.github.io/AgentVoice/rpm
 enabled=1
 gpgcheck=1
@@ -79,14 +79,14 @@ metadata_expire=6h
 
 Upgrades then come with everything else:
 `sudo apt update && sudo apt upgrade`, or `sudo dnf upgrade`. These are also
-the commands the Serve page and `agentvoice update` show on a package install
+the commands the Serve page and `squeakr update` show on a package install
 (`src/serve/installMode.ts`), which only work once the repository is
 configured. A .deb / .rpm installed by hand from a GitHub Release upgrades from
 the repository as soon as it is added — it is the same package name.
 
 ## How publishing works
 
-The Pages site is shared: the AgentVoice landing page (`site/` in the repo) is
+The Pages site is shared: the Squeakr landing page (`site/` in the repo) is
 served at `/`, the repositories at `/apt`, `/rpm`, `/agentvoice.asc` and
 `/packages.html`. A deploy replaces the whole site, so every run builds both —
 on a release, on a push to `main` that touches `site/` (or this workflow), and
@@ -121,7 +121,7 @@ not contain anything at those repository paths — the run checks.
      (detached), SHA-512;
    - dnf: `createrepo_c` (gzip metadata, so EL8 can read it; no sqlite), and
      `repomd.xml` is signed as `repomd.xml.asc`;
-   - writes `agentvoice.asc`, `agentvoice.repo`, `agentvoice.sources`,
+   - writes `agentvoice.asc`, `agentvoice.repo`, `squeakr.sources`,
      `manifest.txt` and `packages.html` (the site root is the landing page in `site/`, laid over the repositories by the same workflow).
 5. **Verify with only the public key**: `gpgv` on `InRelease`, `Release.gpg`
    and `repomd.xml.asc`; `rpmkeys --checksig` in a scratch rpmdb on every RPM,
@@ -176,13 +176,13 @@ everyday one:
 
 ```bash
 export GNUPGHOME="$(mktemp -d)"
-gpg --quick-generate-key "AgentVoice Packages <REPLACE-WITH-MAINTAINER-EMAIL>" rsa4096 sign 3y
+gpg --quick-generate-key "Squeakr Packages <REPLACE-WITH-MAINTAINER-EMAIL>" rsa4096 sign 3y
 fpr="$(gpg --list-secret-keys --with-colons | awk -F: '$1=="fpr"{print $10; exit}')"
 echo "$fpr"
 
-gpg --armor --export-secret-keys "$fpr" > agentvoice-signing.key.asc   # private
+gpg --armor --export-secret-keys "$fpr" > squeakr-signing.key.asc   # private
 gpg --armor --export "$fpr" > agentvoice.asc                           # public
-cp "$GNUPGHOME/openpgp-revocs.d/$fpr.rev" agentvoice-signing.rev        # revocation certificate
+cp "$GNUPGHOME/openpgp-revocs.d/$fpr.rev" squeakr-signing.rev        # revocation certificate
 ```
 
 RSA-4096 rather than Ed25519: every apt, rpm and crypto policy still in
@@ -194,16 +194,16 @@ none.
 ### 2. Store it as repository secrets
 
 ```bash
-gh secret set PACKAGE_SIGNING_KEY --repo dixonSolutions/AgentVoice < agentvoice-signing.key.asc
+gh secret set PACKAGE_SIGNING_KEY --repo dixonSolutions/AgentVoice < squeakr-signing.key.asc
 gh secret set PACKAGE_SIGNING_PASSPHRASE --repo dixonSolutions/AgentVoice   # prompts; skip if no passphrase
 ```
 
-Then move `agentvoice-signing.key.asc` and `agentvoice-signing.rev` to offline
+Then move `squeakr-signing.key.asc` and `squeakr-signing.rev` to offline
 storage (a password manager or an encrypted USB stick), and remove the working
 copies:
 
 ```bash
-shred -u agentvoice-signing.key.asc agentvoice-signing.rev
+shred -u agentvoice-signing.key.asc squeakr-signing.rev
 gpgconf --kill gpg-agent && rm -rf "$GNUPGHOME"; unset GNUPGHOME
 ```
 
@@ -242,7 +242,7 @@ From then on every release publishes itself.
 step, so nothing publishes):
 
 ```bash
-gpg --import agentvoice-signing.key.asc          # into a throwaway GNUPGHOME, as above
+gpg --import squeakr-signing.key.asc          # into a throwaway GNUPGHOME, as above
 gpg --quick-set-expire "$fpr" 3y
 gpg --armor --export-secret-keys "$fpr" | gh secret set PACKAGE_SIGNING_KEY --repo dixonSolutions/AgentVoice
 ```

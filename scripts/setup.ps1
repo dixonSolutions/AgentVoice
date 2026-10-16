@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    AgentVoice — host setup for Windows
+    Squeakr — host setup for Windows
 
 .DESCRIPTION
     What this script does:
@@ -167,7 +167,7 @@ if (-not (Test-Path $EnvFile)) {
     $AppToken = $AppToken.Substring(0, [Math]::Min(43, $AppToken.Length))
 
     $envContent = @"
-# AgentVoice — secrets + machine-specific paths
+# Squeakr — secrets + machine-specific paths
 # Keep this file private and never commit it.
 
 APP_TOKEN=$AppToken
@@ -288,7 +288,7 @@ if ($existingService) {
 Info "Installing '$ServiceName' as a Windows service..."
 & $NssmPath install $ServiceName $NodeExe "$ProjectDir\dist\index.js"
 & $NssmPath set $ServiceName AppDirectory $ProjectDir
-& $NssmPath set $ServiceName Description 'AgentVoice Bridge — voice-controlled coding assistant'
+& $NssmPath set $ServiceName Description 'Squeakr Bridge — voice-controlled coding assistant'
 & $NssmPath set $ServiceName Start SERVICE_AUTO_START
 & $NssmPath set $ServiceName AppRestartDelay 3000
 
@@ -319,7 +319,7 @@ Get-Service -Name $ServiceName | Select-Object Name, Status, StartType
 # ── 7. File watcher scheduled task (auto-restart on new builds) ───────────
 Section "Build watcher (auto-restart)"
 
-$WatcherTaskName   = 'AgentVoice-BuildWatcher'
+$WatcherTaskName   = 'Squeakr-BuildWatcher'
 $WatcherScriptPath = Join-Path $ProjectDir 'scripts\_watcher.ps1'
 
 # Write the watcher helper script
@@ -375,7 +375,7 @@ Register-ScheduledTask `
     -Trigger $trigger `
     -Settings $settings `
     -Principal $principal `
-    -Description 'Monitors dist\index.js and restarts AgentVoice service on new builds' `
+    -Description 'Monitors dist\index.js and restarts Squeakr service on new builds' `
     -Force | Out-Null
 
 Start-ScheduledTask -TaskName $WatcherTaskName

@@ -79,7 +79,7 @@ server for this purpose. It reuses the approval registry
    user's words in the message so the model treats them as the new request;
 4. timeout → deny with "nobody answered … do not retry".
 
-AgentVoice's own MCP tools stay on `--allowedTools` in every mode, so the
+Squeakr's own MCP tools stay on `--allowedTools` in every mode, so the
 voice loop (`speak`, `next_voice_turn`, …) never trips a prompt. The model
 is told in the tool description not to call `approve_permission` itself.
 
@@ -102,8 +102,8 @@ agent's `PATH` does not matter) and adds to every agent child process:
 ```
 SUDO_ASKPASS / GIT_ASKPASS / SSH_ASKPASS = <data>/askpass.sh
 SSH_ASKPASS_REQUIRE = force
-AGENTVOICE_BRIDGE_URL   = loopback bridge URL
-AGENTVOICE_ASKPASS_TOKEN = APP_TOKEN
+SQUEAKR_BRIDGE_URL   = loopback bridge URL
+SQUEAKR_ASKPASS_TOKEN = APP_TOKEN
 ```
 
 The helper POSTs the prompt text to `POST /api/askpass`

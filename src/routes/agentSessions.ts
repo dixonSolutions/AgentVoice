@@ -91,7 +91,7 @@ export async function registerAgentSessionRoutes(app: FastifyInstance): Promise<
   /**
    * GET /api/sessions — the full session directory (docs/37 §1).
    *
-   * Distinct from `/api/agent-sessions`, which only ever saw rows AgentVoice
+   * Distinct from `/api/agent-sessions`, which only ever saw rows Squeakr
    * itself wrote. This one also covers the voice agent, the worktree pool,
    * each CLI's own past conversations, and live sessions the user started in a
    * terminal — every kind the phone's sessions list groups.

@@ -196,13 +196,13 @@ done
 
 release_tmp="$(mktemp)"
 (cd "${dists}" && apt-ftparchive \
-  -o APT::FTPArchive::Release::Origin=AgentVoice \
-  -o APT::FTPArchive::Release::Label=AgentVoice \
+  -o APT::FTPArchive::Release::Origin=Squeakr \
+  -o APT::FTPArchive::Release::Label=Squeakr \
   -o APT::FTPArchive::Release::Suite="${suite}" \
   -o APT::FTPArchive::Release::Codename="${suite}" \
   -o APT::FTPArchive::Release::Architectures="${deb_arches[*]}" \
   -o APT::FTPArchive::Release::Components="${component}" \
-  -o APT::FTPArchive::Release::Description="AgentVoice packages" \
+  -o APT::FTPArchive::Release::Description="Squeakr packages" \
   release .) > "${release_tmp}"
 mv "${release_tmp}" "${dists}/Release"
 chmod 644 "${dists}/Release"
@@ -225,7 +225,7 @@ gpg --batch --armor --export "${keys[@]}" > "${site}/agentvoice.asc"
 
 cat > "${site}/rpm/${package}.repo" <<REPO
 [${package}]
-name=AgentVoice
+name=Squeakr
 baseurl=${base_url}/rpm
 enabled=1
 gpgcheck=1
@@ -245,7 +245,7 @@ SOURCES
 
 newest="${versions[${#versions[@]}-1]}"
 fingerprints="$(printf '%s<br>\n' "${keys[@]}")"
-# packages.html, not index.html: the site root is the AgentVoice landing page
+# packages.html, not index.html: the site root is the Squeakr landing page
 # (site/ in the repo), which the workflow lays over this directory afterwards.
 cat > "${site}/packages.html" <<HTML
 <!doctype html>
@@ -253,7 +253,7 @@ cat > "${site}/packages.html" <<HTML
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AgentVoice package repositories</title>
+<title>Squeakr package repositories</title>
 <style>
   body { font: 16px/1.5 system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; padding: 0 1rem; color: #1b1b1b; }
   pre { background: #f3f3f3; padding: .75rem 1rem; overflow-x: auto; border-radius: 6px; }
@@ -262,9 +262,9 @@ cat > "${site}/packages.html" <<HTML
 </style>
 </head>
 <body>
-<h1>AgentVoice package repositories</h1>
+<h1>Squeakr package repositories</h1>
 <p>Signed apt and dnf repositories for
-<a href="./">AgentVoice</a>, amd64 and arm64 (<a href="https://github.com/dixonSolutions/AgentVoice">source</a>).
+<a href="./">Squeakr</a>, amd64 and arm64 (<a href="https://github.com/dixonSolutions/AgentVoice">source</a>).
 Newest version: <strong>${newest}</strong>. Published versions: ${versions[*]}.</p>
 
 <h2>Debian / Ubuntu (apt)</h2>
@@ -281,8 +281,8 @@ sudo dnf install agentvoice</code></pre>
 <p>Upgrades then arrive with <code>sudo dnf upgrade</code>. dnf asks you to confirm the key on first use.</p>
 
 <h2>After installing</h2>
-<p>The package enables AgentVoice as a user service out of the box. Then:</p>
-<pre><code>agentvoice setup      # agent CLI, projects, and hosting such as Tailscale
+<p>The package enables Squeakr as a user service out of the box. Then:</p>
+<pre><code>squeakr setup      # agent CLI, projects, and hosting such as Tailscale
 loginctl enable-linger "\$USER"   # keep it running after you log out</code></pre>
 
 <h2>Signing key</h2>

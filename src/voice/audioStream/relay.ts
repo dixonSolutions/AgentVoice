@@ -7,7 +7,7 @@
  * write are synchronous) and none of it changes what was said, so the phone
  * shows the words without waiting for it. The `segment` frame that follows
  * carries the same text plus how it was delivered, so a client that only
- * knows `segment` (an older PWA or `agentvoice pipe`) still works.
+ * knows `segment` (an older PWA or `squeakr pipe`) still works.
  *
  * Transport-free: the route passes its socket send and delivery function;
  * tests pass fakes.

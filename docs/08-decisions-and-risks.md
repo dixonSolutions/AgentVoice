@@ -274,7 +274,7 @@ CallKit (iOS) or the call-category foreground service (Android) is up. Orb FFT /
 canvas pause while `document.hidden`. Vosk wake-word spotting stays running.
 
 **Rationale:** A cellular call turns the display off and uses dedicated DSP.
-AgentVoice was draining more than Phone.app mainly because Wake Lock kept the
+Squeakr was draining more than Phone.app mainly because Wake Lock kept the
 **screen on for the whole session** — on top of WebView + Vosk WASM. CallKit
 already keeps the audio session alive with the screen locked.
 

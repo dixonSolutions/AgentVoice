@@ -56,7 +56,7 @@ CLI store layouts are undocumented: treat parsing as best-effort with
 | Mechanism | Session kinds | Mid-run | Providers | Role |
 | --- | --- | --- | --- | --- |
 | Voice turn queue (`submitAgentNativeTurn`) | A | yes | all | exists |
-| **MCP mailbox** — per-session queue, new `check_messages()` tool, messages also piggyback on any agent-voice tool result | B, D (opt-in) | at the next AgentVoice tool call | all (agent-voice MCP is registered for every CLI) | **baseline** |
+| **MCP mailbox** — per-session queue, new `check_messages()` tool, messages also piggyback on any agent-voice tool result | B, D (opt-in) | at the next Squeakr tool call | all (agent-voice MCP is registered for every CLI) | **baseline** |
 | **Resume with a new turn** — queue, then respawn `--resume <job session id>` when the run ends or after a confirmed stop | B, C | between turns | all | **guaranteed fallback** |
 | **Fork** — Claude `--fork-session`, Codewhale `fork`, others declare | C, D | no (new branch of the conversation) | per provider | safe way into an external session's context |
 | Native live input — Claude stream-json stdin, Codex / Codewhale `app-server`, Cursor ACP | A, B | yes | optional `liveInput` capability | upgrade |
@@ -149,7 +149,7 @@ Shipped:
 - `GET /api/sessions` and `POST /api/sessions/send`.
 - Security as designed: sessions outside a registered project are hidden rather
   than read-only, the scan never leaves the current uid, and writing into a
-  session AgentVoice did not start is off unless the project opts in.
+  session Squeakr did not start is off unless the project opts in.
 
 Known limitations:
 

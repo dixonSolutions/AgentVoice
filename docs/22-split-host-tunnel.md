@@ -1,6 +1,6 @@
 # Split-host: container bridge + Tailscale front door
 
-**AgentVoice runs in the incus container** (`dev` on the debian host) — bridge,
+**Squeakr runs in the incus container** (`dev` on the debian host) — bridge,
 nginx, and AWS calls all live there. Your laptop or home PC is **not** the host;
 it only runs the SSH tunnel and Tailscale Serve when you want a stable public URL
 on that machine's MagicDNS name.
@@ -14,7 +14,7 @@ Phone / browser
   → ssh -L … borys@debian:5671
   → incus proxy host:5671 → container:5671
   → nginx :5671 in container           (PWA + /api /ws /mcp proxy)
-  → agentvoice :1234 in container    (bridge API, Amazon Transcribe/Polly)
+  → squeakr :1234 in container    (bridge API, Amazon Transcribe/Polly)
 ```
 
 The bridge `publicBaseUrl` is the Tailscale HTTPS URL. All services (bridge,
@@ -22,11 +22,11 @@ nginx, `cursor-agent`, MCP, SQLite) run **inside the container**.
 
 ---
 
-## Container setup (where AgentVoice is hosted)
+## Container setup (where Squeakr is hosted)
 
 Run these **inside the incus container**, e.g. `incus exec dev -- bash`:
 
-1. **Clone / pull** the repo (e.g. `/root/Projects/AgentVoice`).
+1. **Clone / pull** the repo (e.g. `/root/Projects/Squeakr`).
 
 2. **Fix DNS** — required for Amazon Transcribe/Polly/Bedrock in LXC/incus:
 
@@ -46,7 +46,7 @@ Run these **inside the incus container**, e.g. `incus exec dev -- bash`:
    systemctl enable --now agentvoice nginx
    ```
 
-   See [`scripts/nginx-agentvoice.conf.example`](../scripts/nginx-agentvoice.conf.example)
+   See [`scripts/nginx-squeakr.conf.example`](../scripts/nginx-squeakr.conf.example)
    and incus proxy `host:5671 → container:5671`. Nginx must set
    `client_max_body_size 12m` (default `1m` returns **413** on longer Amazon
    Transcribe uploads).
@@ -75,14 +75,14 @@ systemctl restart agentvoice
 
 Only needed when Tailscale Serve runs on a **different** machine than the
 container (e.g. eva → debian incus). **Do not** install `fix-dns` or
-`agentvoice` here — only the SSH tunnel.
+`squeakr` here — only the SSH tunnel.
 
 1. **SSH key auth** to the debian host (`ssh borys@100.118.238.2`).
 
 2. **Install the tunnel service** on the tunnel machine:
 
    ```bash
-   cd /path/to/AgentVoice
+   cd /path/to/Squeakr
    bash scripts/install-remote-tunnel.sh \
      --remote borys@100.118.238.2 \
      --remote-port 5671 \

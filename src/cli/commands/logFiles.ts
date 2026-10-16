@@ -1,5 +1,5 @@
 /**
- * `agentvoice logs --files | --transcripts | --list | --cat` — the bridge's own
+ * `squeakr logs --files | --transcripts | --list | --cat` — the bridge's own
  * log files (docs/42-logging.md), for every install: journald only exists for a
  * systemd unit, but the session logs and transcripts are written however the
  * bridge was started.
@@ -41,7 +41,7 @@ export interface LogLocations {
   console: string;
 }
 
-/** Where this home's bridge writes its files, honouring settings.logging.dir and $AGENTVOICE_LOG_DIR. */
+/** Where this home's bridge writes its files, honouring settings.logging.dir and $SQUEAKR_LOG_DIR (or legacy $AGENTVOICE_LOG_DIR). */
 export function logLocations(profileOverride?: string): LogLocations {
   const home = resolveHome();
   const settings = readConfig(home).config?.settings as
@@ -51,7 +51,7 @@ export function logLocations(profileOverride?: string): LogLocations {
   if (profile !== 'serve' && profile !== 'test') {
     throw new UsageError(`--profile must be serve or test (got "${profile}")`);
   }
-  const envDir = envValue(home, 'AGENTVOICE_LOG_DIR');
+  const envDir = envValue(home, 'SQUEAKR_LOG_DIR') ?? envValue(home, 'AGENTVOICE_LOG_DIR');
   const opts = { home, ...(settings?.logging?.dir ? { dir: settings.logging.dir } : {}), ...(envDir ? { envDir } : {}) };
   const at = (folder: LogFolder): string => logFolderPath(opts, profile, folder);
   return { home, profile, bridge: at('bridge'), transcripts: at('transcripts'), console: at('console') };
@@ -110,7 +110,7 @@ export async function logFilesCommand(opts: LogFileOptions): Promise<number> {
     const target =
       opts.cat === 'latest' ? files[0] : files.find((f) => f.name === opts.cat || f.path === opts.cat);
     if (!target) {
-      fail(`no ${opts.cat === 'latest' ? 'files' : `"${opts.cat}"`} in ${dir} — see: agentvoice logs --list`);
+      fail(`no ${opts.cat === 'latest' ? 'files' : `"${opts.cat}"`} in ${dir} — see: squeakr logs --list`);
       return 1;
     }
     await catFile(target.path);

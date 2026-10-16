@@ -8,7 +8,7 @@ export default defineConfig({
   target: 'node20',
   clean: true,
   sourcemap: true,
-  // No shared chunks. `agentvoice run` loads dist/cli.js and then dist/index.js
+  // No shared chunks. `squeakr run` loads dist/cli.js and then dist/index.js
   // in the same process; if they shared a chunk they would share module state,
   // and the CLI's silenced pino logger would silence the bridge's own logs too.
   splitting: false,

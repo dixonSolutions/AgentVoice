@@ -10,7 +10,7 @@ See also: [`13-voice-providers.md`](./13-voice-providers.md),
 
 ## Why default is `when_muted`
 
-AgentVoice is designed for eyes-free use. Showing Speak / Cancel **always**
+Squeakr is designed for eyes-free use. Showing Speak / Cancel **always**
 clutters the live orb stage and pulls attention to the screen. **Touch-only**
 as a default would disable wake words for everyone.
 

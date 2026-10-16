@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# AgentVoice — hosting setup (Linux)
+# Squeakr — hosting setup (Linux)
 #
 # Chooses how the bridge (127.0.0.1:PORT) is exposed and records the choice in
 # config.json (settings.hosting.provider, settings.runModes.serve.publicBaseUrl).
@@ -26,10 +26,10 @@
 #   -h, --help                This screen
 #
 # Environment overrides (for testing against a scratch copy):
-#   AGENTVOICE_CONFIG        config.json path      (default ./config.json)
-#   AGENTVOICE_ENV_FILE      .env path             (default ./.env)
-#   AGENTVOICE_TLS_DIR       cert/Caddyfile dir    (default ~/.config/agentvoice-tls)
-#   AGENTVOICE_SYSTEMD_DIR   user unit dir         (default ~/.config/systemd/user)
+#   SQUEAKR_CONFIG        config.json path      (default ./config.json)
+#   SQUEAKR_ENV_FILE      .env path             (default ./.env)
+#   SQUEAKR_TLS_DIR       cert/Caddyfile dir    (default ~/.config/agentvoice-tls)
+#   SQUEAKR_SYSTEMD_DIR   user unit dir         (default ~/.config/systemd/user)
 #
 # Re-running is safe.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -79,10 +79,10 @@ fi
 
 [[ "$(uname -s)" == "Linux" ]] || err "Linux only."
 
-CONFIG_FILE="${AGENTVOICE_CONFIG:-${PROJECT_DIR}/config.json}"
-ENV_FILE="${AGENTVOICE_ENV_FILE:-${PROJECT_DIR}/.env}"
-TLS_DIR="${AGENTVOICE_TLS_DIR:-${HOME}/.config/agentvoice-tls}"
-SYSTEMD_DIR="${AGENTVOICE_SYSTEMD_DIR:-${HOME}/.config/systemd/user}"
+CONFIG_FILE="${SQUEAKR_CONFIG:-${AGENTVOICE_CONFIG:-${PROJECT_DIR}/config.json}}"
+ENV_FILE="${SQUEAKR_ENV_FILE:-${AGENTVOICE_ENV_FILE:-${PROJECT_DIR}/.env}}"
+TLS_DIR="${SQUEAKR_TLS_DIR:-${AGENTVOICE_TLS_DIR:-${HOME}/.config/agentvoice-tls}}"
+SYSTEMD_DIR="${SQUEAKR_SYSTEMD_DIR:-${AGENTVOICE_SYSTEMD_DIR:-${HOME}/.config/systemd/user}}"
 
 [[ -f "$CONFIG_FILE" ]] || err "${CONFIG_FILE} not found — run: bash scripts/prepare.sh"
 command -v node >/dev/null 2>&1 || err "node not found on PATH (needed to edit config.json)"
@@ -276,7 +276,7 @@ setup_caddy() {
 	auto_https off
 }
 
-# AgentVoice bridge — TLS terminator in front of the loopback-only bridge.
+# Squeakr bridge — TLS terminator in front of the loopback-only bridge.
 # WAN :443 (router forward) -> this host :${TLS_PORT} -> 127.0.0.1:${PORT}
 :${TLS_PORT} {
 	tls ${cert} ${key}
@@ -307,7 +307,7 @@ EOF
   unit="${SYSTEMD_DIR}/agentvoice-caddy.service"
   cat > "$unit" <<EOF
 [Unit]
-Description=Caddy TLS front for AgentVoice bridge (:${TLS_PORT} -> 127.0.0.1:${PORT})
+Description=Caddy TLS front for Squeakr bridge (:${TLS_PORT} -> 127.0.0.1:${PORT})
 After=network-online.target agentvoice.service
 
 [Service]

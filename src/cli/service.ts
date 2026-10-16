@@ -5,7 +5,7 @@
  *   Linux    a systemd unit, `agentvoice.service` (user unit first, then system)
  *   macOS    a launchd agent, `com.agentvoice.bridge`
  *   Windows  a Windows service, `AgentVoice` (NSSM-wrapped, as scripts/setup.ps1
- *            and `agentvoice service install` create it)
+ *            and `squeakr service install` create it)
  *
  * systemd detection mirrors scripts/update.sh and src/serve/index.ts exactly,
  * and that order is load-bearing: `systemctl --user cat` first, then the system
@@ -24,7 +24,11 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { capture, passthrough, ran } from './exec.js';
 
-/** Fixed unit name — never interpolated from user input. */
+/**
+ * Fixed unit name — never interpolated from user input. These three service
+ * names keep their pre-rename spelling: renaming a unit under a running install
+ * would orphan it (docs/45, stage B).
+ */
 export const SERVICE_UNIT = 'agentvoice.service';
 /** launchd label for the per-user agent on macOS. */
 export const LAUNCHD_LABEL = 'com.agentvoice.bridge';
@@ -308,7 +312,7 @@ export function noUnitAdvice(info: UnitInfo, installRoot: string): string {
   if (info.noSystemd) {
     return (
       'no service manager is available on this host, so there is no service to manage.\n' +
-      '  Run the bridge in the foreground instead:  agentvoice run'
+      '  Run the bridge in the foreground instead:  squeakr run'
     );
   }
 
@@ -320,7 +324,7 @@ export function noUnitAdvice(info: UnitInfo, installRoot: string): string {
         : `${info.unit} (neither a user nor a system unit)`;
 
   /**
-   * `agentvoice service install` works from whatever install is running, so it
+   * `squeakr service install` works from whatever install is running, so it
    * is the answer for everyone. The shell scripts only exist in a clone, and
    * pointing an npm or .deb user at a path that is not there was worse than
    * saying nothing (docs/38).
@@ -337,9 +341,9 @@ export function noUnitAdvice(info: UnitInfo, installRoot: string): string {
 
   return (
     `no ${kind} is installed.\n` +
-    '  Install one:  agentvoice service install --now' +
+    '  Install one:  squeakr service install --now' +
     `${extra}\n` +
-    '  Or run the bridge in the foreground:  agentvoice run'
+    '  Or run the bridge in the foreground:  squeakr run'
   );
 }
 

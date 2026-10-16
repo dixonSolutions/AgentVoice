@@ -1,5 +1,5 @@
 /**
- * Terminal prompts for `agentvoice setup`.
+ * Terminal prompts for `squeakr setup`.
  *
  * Every question has a default, and a non-interactive run (no TTY, or --yes)
  * takes it without asking — so the same wizard works from a shell script, a
