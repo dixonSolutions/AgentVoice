@@ -16,8 +16,8 @@
  * Step 2 runs from the *new* package on purpose: a command cannot cleanly
  * uninstall the package it is running from.
  *
- * Clones and .deb/.rpm installs do not need this — see the Squeakr repo's
- * docs/44-rename-squeakr.md.
+ * A clone or a .deb/.rpm install is pointed at the migration script instead —
+ * scripts/migrate-to-squeakr.sh in the Squeakr repo, docs/45-rename-squeakr.md.
  */
 
 import { existsSync } from 'node:fs';
@@ -27,6 +27,10 @@ import { capture, passthrough } from '../exec.js';
 import { bold, dim, fail, green, note, say } from '../out.js';
 
 export const NEW_PACKAGE = 'squeakr';
+
+/** The one-command migration for any install (Squeakr repo, docs/45). */
+const MIGRATE_SCRIPT =
+  'curl -fsSL https://raw.githubusercontent.com/dixonSolutions/Squeakr/main/scripts/migrate-to-squeakr.sh | bash';
 
 export interface MigrateToSqueakrOptions {
   dryRun?: boolean;
@@ -39,15 +43,15 @@ export async function migrateToSqueakrCommand(opts: MigrateToSqueakrOptions = {}
   say('');
 
   if (install.mode === 'git') {
-    note('  This is a clone. Pull the latest main instead — it is Squeakr — then run:');
-    note('    node bin/agentvoice.mjs upgrade-from-agentvoice');
-    note(dim('  (that moves ~/.agentvoice and switches origin to dixonSolutions/Squeakr)'));
+    note('  This is a clone. From inside it, run:');
+    note(`    ${MIGRATE_SCRIPT}`);
+    note(dim('  (switches origin to dixonSolutions/Squeakr, pulls, builds, then moves ~/.agentvoice and the service)'));
     return 0;
   }
   if (install.mode === 'system') {
-    note('  This is a .deb / .rpm install. Upgrade it with your package manager — the');
-    note('  next release is Squeakr, and it carries your settings over by itself:');
-    note('    sudo apt update && sudo apt install --only-upgrade agentvoice   # or: sudo dnf upgrade agentvoice');
+    note('  This is a .deb / .rpm install. The package is `squeakr` now, served from a new');
+    note('  apt / dnf address — this moves the source, the package, your home and the service:');
+    note(`    ${MIGRATE_SCRIPT}`);
     return 0;
   }
 
@@ -68,7 +72,7 @@ export async function migrateToSqueakrCommand(opts: MigrateToSqueakrOptions = {}
   }
 
   const root = await capture('npm', ['root', '-g'], { timeoutMs: 60_000 });
-  const shim = join(root.stdout.trim(), NEW_PACKAGE, 'bin', 'agentvoice.mjs');
+  const shim = join(root.stdout.trim(), NEW_PACKAGE, 'bin', 'squeakr.mjs');
   if (root.code !== 0 || !existsSync(shim)) {
     fail(`installed ${NEW_PACKAGE}, but could not find it to finish the move. Run:  squeakr upgrade-from-agentvoice`);
     return 1;
