@@ -20,7 +20,7 @@
  *   System       — agent_provider_info
  *   MCP inspect  — agent_mcp_list, agent_mcp_tools
  *   Away policy  — agent_away_policy
- *   User display — show_images
+ *   User display — show_images, send_files
  *   User interact — request_user_input, submit_plan_for_approval
  *
  * Deprecated aliases kept for one release (docs/40 §2): agent_submit →
@@ -72,6 +72,7 @@ import {
   handleInject,
 } from './sessionToolHandlers.js';
 import { handleShowImages } from './imageToolHandlers.js';
+import { handleSendFiles } from './fileToolHandlers.js';
 import { voiceTurnQueue } from './turnQueue.js';
 import {
   approvalPolicy,
@@ -1004,6 +1005,42 @@ function buildMcpServer(sessionKey: string): McpServer {
         });
       }
       const result = handleShowImages(args);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    },
+  );
+
+  server.tool(
+    'send_files',
+    'Send the user files — a recording, a video, a screenshot, a log, a document. ' +
+      'They arrive wherever the user is: as attachments in their chat (Discord, Telegram…), and images also on the phone. ' +
+      'Each item needs exactly one of path (local file under a project or temp), url, or data (base64). ' +
+      'Non-blocking. Say a short line like "I\'ve sent you the recording." with it.',
+    {
+      files: z
+        .array(
+          z
+            .object({
+              path: z.string().min(1).optional().describe('Local file path under a project or temp'),
+              url: z.string().min(1).optional().describe('http(s) URL'),
+              data: z.string().min(1).optional().describe('Base64 or data-URI payload'),
+              mime: z.string().optional().describe('MIME type when not clear from the name'),
+              name: z.string().max(200).optional().describe('File name shown to the user'),
+              caption: z.string().max(500).optional().describe('Per-file caption'),
+            })
+            .refine((item) => [item.path, item.url, item.data].filter((v) => v != null && v !== '').length === 1, {
+              message: 'Each file must have exactly one of path, url, or data',
+            }),
+        )
+        .min(1)
+        .max(10)
+        .describe('Files to send'),
+      caption: z.string().max(300).optional().describe('Optional line sent with them'),
+    },
+    async (args) => {
+      if (!hasActiveVoiceSession()) {
+        return voiceToolResponse({ ok: false, error: 'NO_VOICE_SESSION', message: NO_VOICE_SESSION_ERROR });
+      }
+      const result = handleSendFiles(args);
       return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     },
   );

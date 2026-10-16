@@ -32,6 +32,7 @@ import { handleCursorDiff, handleCursorRevert } from './tools/gitTools.js';
 import { handleCursorAgentInfo, handleCursorAgentStatus } from './tools/system.js';
 import { handleMcpList, handleMcpTools } from './tools/mcpInspect.js';
 import { handleShowImages } from './server/imageToolHandlers.js';
+import { handleSendFiles } from './server/fileToolHandlers.js';
 
 const log = childLogger('handlers');
 
@@ -152,6 +153,8 @@ async function route(
       return handleMcpTools(a);
     case 'show_images':
       return handleShowImages(a);
+    case 'send_files':
+      return handleSendFiles(a);
     default: {
       const _exhaustive: never = name;
       throw new Error(`Unhandled tool: ${_exhaustive}`);

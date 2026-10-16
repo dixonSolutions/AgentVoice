@@ -28,6 +28,13 @@ has — that behaviour is a published contract and nothing may take it back.
 | `logs [-n N] [-f]` | `journalctl` for a systemd unit. `-f` follows. Everywhere else (launchd, Windows, no service), the bridge's own session log. |
 | `logs --list` / `--files` / `--transcripts` / `--cat <file\|latest>` | The session log files and voice transcripts under `<home>/logs/` — list, tail (`-f` follows across rollovers), or print (`.gz` included). `--profile test` for the dev folder. See docs/42. |
 | `pipe [--mic \| --file F]` | Stream audio (stdin by default) to the voice agent and print its replies. `--project`, `--json`, `--no-listen`, `--url`, `--token`, `--silence`, `--threshold`. See docs/41. |
+| `agent [status\|stop]` | What the voice agent is doing, the active project, who is listening; stop it. Needs the bridge running, like every command in this group. |
+| `projects` / `project [name]` | List projects; show or switch the active one. |
+| `sessions [project]` / `use <n\|name\|id>` / `new [project]` | Numbered agent sessions; continue one on the next turn; start fresh. |
+| `say <text>` | Send a turn as text (replies go to whoever is listening). |
+| `config [key] [value]` | The settings a chat may change — agent, model, permissions, workflow, input, stt, tts, wake, vad, silence, phrases, away. |
+| `default [<n\|name\|project>\|none]` | A chat conversation's pinned session (`--channel` with `--conversation`, or `--user` for a person's calls). |
+| `channel [allow\|set\|enable\|disable …]` | Chat channels — see docs/44. `channel set <ch> messageChannel\|voiceChannel <id\|none>`, or `logs`, `voice`, `autoJoin`, `welcomeDm`, `voiceNotes`, `requireMention` on/off. |
 | `status [--json]` | Install, version, service, port, health, token — one screen. |
 | `doctor [--json]` | Check Node, the native binding, config, data dir, agent CLI, port. |
 | `update [--stash] [--dry-run] [--branch <name>]` | Update this install. |
@@ -36,6 +43,11 @@ has — that behaviour is a published contract and nothing may take it back.
 | `prepare-vosk [--force]` | Fetch the wake-word model now (the bridge also does on first boot). |
 | `version`, `--version` | Package version, plus branch and commit in a clone. |
 | `help`, `--help` | Usage screen. `agentvoice <command> --help` shows just that command and its options. |
+
+Every chat channel runs the agent commands above: a message is parsed into
+these arguments and this CLI runs them (docs/44), so a chat and a terminal
+read the same answers. `AGENTVOICE_MARKDOWN=1` writes **bold** / `code`
+marks instead of colour, which is what a chat renders.
 
 ### Exit codes
 

@@ -161,7 +161,28 @@ export function registerVoiceSession(send: SendFn, client = 'phone'): () => void
   };
 }
 
+const taps = new Set<SendFn>();
+
+/**
+ * See everything voice clients are sent — session logs, tool activity, the
+ * agent's lines — without being one: a tap is not a listener, so nobody
+ * counts as present because of it (channels pour it into a chat).
+ */
+export function tapVoiceBroadcasts(fn: SendFn): () => void {
+  taps.add(fn);
+  return () => {
+    taps.delete(fn);
+  };
+}
+
 export function broadcastToVoiceSessions(payload: unknown): void {
+  for (const tap of taps) {
+    try {
+      tap(payload);
+    } catch (err) {
+      log.warn({ err }, 'voice broadcast tap failed');
+    }
+  }
   for (const send of activeSessions) {
     try {
       send(payload);

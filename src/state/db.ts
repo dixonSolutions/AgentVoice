@@ -140,6 +140,19 @@ const MIGRATION_SQL = `
   );
   CREATE INDEX IF NOT EXISTS idx_turn_project_at ON turn(project, id);
 
+  -- Channels (docs/44): the session a Discord / Telegram / Slack / WhatsApp
+  -- conversation picks up when someone calls or talks to the bot there.
+  CREATE TABLE IF NOT EXISTS channel_binding (
+    channel      TEXT NOT NULL,
+    conversation TEXT NOT NULL,
+    project      TEXT NOT NULL,
+    provider     TEXT,
+    session_id   TEXT,
+    label        TEXT,
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (channel, conversation)
+  );
+
   -- Serve self-hosting run log (rebase / restart / health steps).
   CREATE TABLE IF NOT EXISTS serve_event (
     id      INTEGER PRIMARY KEY AUTOINCREMENT,

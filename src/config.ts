@@ -78,6 +78,24 @@ const EnvSchema = z.object({
    */
   HTTPS_CERT_PATH: z.string().optional(),
   HTTPS_KEY_PATH: z.string().optional(),
+  /**
+   * Channel credentials (docs/44-channels.md) — bot tokens grant control of the
+   * bridge to whoever the bot obeys, so they live here, never in config.json.
+   */
+  DISCORD_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  /** A self-hosted Telegram Bot API server (or a test stand-in). */
+  TELEGRAM_API_BASE: z.string().url().optional(),
+  SLACK_BOT_TOKEN: z.string().optional(),
+  SLACK_APP_TOKEN: z.string().optional(),
+  /** Slack Web API base (tests point it at a stand-in). */
+  SLACK_API_BASE: z.string().url().optional(),
+  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
+  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
+  WHATSAPP_VERIFY_TOKEN: z.string().optional(),
+  WHATSAPP_APP_SECRET: z.string().optional(),
+  /** Graph API base (tests point it at a stand-in). */
+  WHATSAPP_API_BASE: z.string().url().optional(),
 });
 
 // ── Voice settings (config.json) ─────────────────────────────────────────────
@@ -640,6 +658,58 @@ const ProjectDiscoverySettingsSchema = z
   })
   .default({});
 
+// ── Channels (docs/44-channels.md) ───────────────────────────────────────────
+
+export const ChannelCommonSchema = z.object({
+  enabled: z.boolean().default(false),
+  /**
+   * Platform user ids allowed to command the bridge. Empty = nobody: a bot
+   * token is control of your machine, so strangers are told their id and
+   * ignored until it is added here (`agentvoice channel allow …`).
+   */
+  allowUsers: z.array(z.string().min(1)).default([]),
+  /** In group chats, react only when @-mentioned (or to the command prefix). DMs always count. */
+  requireMention: z.boolean().default(true),
+  /**
+   * The conversation that is AgentVoice's own (a Discord text channel, a
+   * Telegram group, a Slack channel): untagged messages there count as for
+   * the bot — commands, or text the agent takes as a turn — and calls and
+   * session logs are posted there. null = DMs and mentions only.
+   */
+  messageChannel: z.string().min(1).nullable().default(null),
+  /** Where calls happen, on platforms with voice rooms (a Discord voice channel id). */
+  voiceChannel: z.string().min(1).nullable().default(null),
+  /** Post every session log line (speech, tools, agent status) to the message channel. */
+  logs: z.boolean().default(true),
+  /** Take voice calls, where the platform has them (its capabilities say). */
+  voice: z.boolean().default(true),
+  /**
+   * Join an allowlisted member automatically when they enter a voice room —
+   * "calling" the bot. Their own private room and `voiceChannel` always ring.
+   */
+  autoJoin: z.boolean().default(false),
+  /** Open a DM with each allowlisted member when the bot first comes online, so it is in their DM list. */
+  welcomeDm: z.boolean().default(true),
+  /** Transcribe voice messages as turns and answer with a voice message, where the platform has them. */
+  voiceNotes: z.boolean().default(true),
+});
+
+export const ChannelsSettingsSchema = z
+  .object({
+    /** Text prefix that addresses the bot without a mention, e.g. `!av sessions`. */
+    commandPrefix: z.string().min(1).max(8).default('!av'),
+    // One schema for every channel: what a platform cannot do, its adapter
+    // declares in its capabilities — adding a platform adds a key here.
+    discord: ChannelCommonSchema.default({}),
+    telegram: ChannelCommonSchema.default({}),
+    slack: ChannelCommonSchema.default({}),
+    whatsapp: ChannelCommonSchema.default({}),
+  })
+  .default({});
+
+export type ChannelsSettings = z.infer<typeof ChannelsSettingsSchema>;
+export type ChannelSettings = z.infer<typeof ChannelCommonSchema>;
+
 const SettingsSchema = z.object({
   /** `test` = localhost dev (backend + ng serve). `serve` = production / Tailscale. */
   runMode: z.enum(RUN_MODES).default('test'),
@@ -696,6 +766,8 @@ const SettingsSchema = z.object({
    * See docs/23-multi-agent-client.md for installation and flag details.
    */
   agentClient: z.enum(AGENT_CLIENTS).default('cursor'),
+  /** Discord / Telegram / Slack / WhatsApp as remote access. See docs/44-channels.md. */
+  channels: ChannelsSettingsSchema,
 });
 
 const ProjectConfigSchema = z.object({
