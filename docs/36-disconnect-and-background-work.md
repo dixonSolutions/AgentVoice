@@ -7,7 +7,7 @@
 > [`33-permissions-and-prompt-relay.md`](./33-permissions-and-prompt-relay.md).
 
 The idea: a setting decides whether sessions are killed or keep running when
-AgentVoice loses the phone; the agent is *told* about the disconnect and acts
+Squeakr loses the phone; the agent is *told* about the disconnect and acts
 on that setting; a bridge restart no longer kills work; and a task that can run
 unattended keeps going on its own.
 
@@ -93,7 +93,7 @@ session: z.object({
 
 ## 3. The hook — how agents learn the phone is gone
 
-MCP is pull-only, so the signal rides on AgentVoice tool results. That works
+MCP is pull-only, so the signal rides on Squeakr tool results. That works
 identically for Cursor, Codex, Claude Code and Codewhale.
 
 1. **Presence block on every agent-voice result**, like `pendingTurnNotice()`:

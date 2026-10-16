@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# AgentVoice — stop script (Linux)
+# Squeakr — stop script (Linux)
 #
-# Stops the production HOST bridge (the long-running agentvoice service).
+# Stops the production HOST bridge (the long-running squeakr service).
 #   1. Stops the systemd watch unit (so it won't auto-restart the service)
 #   2. Stops the agentvoice.service systemd unit
 #   3. Falls back to killing the manual nohup process (data/.bridge.pid)
@@ -57,7 +57,7 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 PORT="${PORT:-8787}"   # production host (serve) bridge port
 
-$QUIET || echo -e "${CYN}${BLD}AgentVoice — stop host${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
+$QUIET || echo -e "${CYN}${BLD}Squeakr — stop host${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
 
 # ── 1 + 2. Stop systemd units (user, then system) ───────────────────────────
 stopped_via_systemd=false
@@ -126,4 +126,4 @@ free_port() {
 section "Freeing host port"
 free_port "$PORT" "host bridge"
 
-$QUIET || { echo ""; ok "AgentVoice host stopped. Start it again with: npm run start:service"; echo ""; }
+$QUIET || { echo ""; ok "Squeakr host stopped. Start it again with: npm run start:service"; echo ""; }

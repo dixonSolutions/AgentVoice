@@ -554,7 +554,7 @@ export async function registerSpeechProviderRoutes(app: FastifyInstance): Promis
         const spoken = await synthesizeWith(
           vendor.id,
           body.data?.text?.trim() ||
-            'This is the AgentVoice preview. Speaking a file path: src slash providers slash speech.',
+            'This is the Squeakr preview. Speaking a file path: src slash providers slash speech.',
           { model, voice },
         );
         return reply

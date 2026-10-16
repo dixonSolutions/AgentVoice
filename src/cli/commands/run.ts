@@ -1,7 +1,7 @@
 /**
- * `agentvoice run` — boot the bridge in the foreground.
+ * `squeakr run` — boot the bridge in the foreground.
  *
- * This is what bare `agentvoice` has always done, and the seeding order below
+ * This is what bare `squeakr` has always done, and the seeding order below
  * is the contract a first-time install depends on: home, config, token, links,
  * chdir, native pre-flight, boot. Nothing here may become lazy — the bridge
  * resolves config.json and data/state.db relative to the cwd this sets.
@@ -41,7 +41,7 @@ export async function runCommand(): Promise<number | null> {
 
   if (seededConfig || newToken) {
     const line = '─'.repeat(62);
-    say(`\n${line}\n AgentVoice first run — bridge home: ${home}`);
+    say(`\n${line}\n Squeakr first run — bridge home: ${home}`);
     if (seededConfig) {
       say(' Created config.json from config.example.json. Git repos under');
       say(' ~/Projects are picked up automatically — change where it looks with');

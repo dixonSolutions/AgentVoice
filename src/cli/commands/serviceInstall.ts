@@ -1,10 +1,10 @@
 /**
- * `agentvoice service install` — install a background service for this install,
+ * `squeakr service install` — install a background service for this install,
  * with whatever service manager the platform has:
  *
  *   Linux    a systemd **user** unit      ~/.config/systemd/user/agentvoice.service
  *   macOS    a launchd agent              ~/Library/LaunchAgents/com.agentvoice.bridge.plist
- *   Windows  an NSSM-wrapped service      AgentVoice
+ *   Windows  an NSSM-wrapped service      AgentVoice (pre-rename name, kept — docs/44)
  *
  * `noUnitAdvice()` used to point at `scripts/install-systemd.sh`, which only
  * exists in a git clone. An npm install — and a .deb, which ships no scripts
@@ -55,7 +55,7 @@ export async function serviceInstallCommand(opts: ServiceInstallOptions = {}): P
     fail(
       'this is running from the npx cache, which npm is free to delete — a service\n' +
         '  pointing into it would break without warning. Install it first:\n' +
-        `    npm install -g ${PACKAGE_NAME} && agentvoice service install --now`,
+        `    npm install -g ${PACKAGE_NAME} && squeakr service install --now`,
     );
     return 1;
   }
@@ -95,13 +95,13 @@ function servicePath(): string {
 
 /**
  * What the service should run: this Node and this install's launcher, by
- * absolute path, so it works whether or not `agentvoice` is on the service's
+ * absolute path, so it works whether or not `squeakr` is on the service's
  * PATH. Falls back to the bare command when there is no shim (never expected).
  */
 function launchCommand(): string[] {
   const shim = join(detectInstallMode().root, 'bin', 'agentvoice.mjs');
   if (existsSync(shim)) return [process.execPath, shim, 'run'];
-  return ['agentvoice', 'run'];
+  return ['squeakr', 'run'];
 }
 
 /**
@@ -139,7 +139,7 @@ function userUnitPath(): string {
 
 function renderUnit(opts: { exec: string; home: string }): string {
   return `[Unit]
-Description=AgentVoice Bridge
+Description=Squeakr Bridge
 Documentation=https://github.com/dixonSolutions/AgentVoice
 After=network-online.target
 Wants=network-online.target
@@ -153,7 +153,7 @@ RestartSec=3
 # Agent CLIs live in per-user bin directories a user unit would not see.
 Environment=PATH=${servicePath()}
 Environment=NODE_ENV=production
-Environment=AGENTVOICE_HOME=${opts.home}
+Environment=SQUEAKR_HOME=${opts.home}
 
 [Install]
 WantedBy=default.target
@@ -165,7 +165,7 @@ async function installSystemd(home: string, opts: ServiceInstallOptions): Promis
   if (!ran(probe)) {
     fail(
       'systemd user services are not available on this host.\n' +
-        '  Run the bridge in the foreground instead:  agentvoice run',
+        '  Run the bridge in the foreground instead:  squeakr run',
     );
     return 1;
   }
@@ -263,12 +263,12 @@ ${strings(opts.args)}
     <string>${xmlEscape(opts.path)}</string>
     <key>NODE_ENV</key>
     <string>production</string>
-    <key>AGENTVOICE_HOME</key>
+    <key>SQUEAKR_HOME</key>
     <string>${xmlEscape(opts.home)}</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
-  <!-- Restart after a crash, but let \`agentvoice stop\` stay stopped. -->
+  <!-- Restart after a crash, but let \`squeakr stop\` stay stopped. -->
   <key>KeepAlive</key>
   <dict>
     <key>SuccessfulExit</key>
@@ -316,7 +316,7 @@ async function installLaunchd(home: string, opts: ServiceInstallOptions): Promis
 
   note('');
   note(`  ${bold('Start it (and at every login from now on):')}`);
-  note('    agentvoice start');
+  note('    squeakr start');
   return 0;
 }
 
@@ -336,12 +336,12 @@ async function installWindows(home: string, opts: ServiceInstallOptions): Promis
   const steps: string[][] = [
     ['install', WINDOWS_SERVICE, program!, ...args],
     ['set', WINDOWS_SERVICE, 'AppDirectory', home],
-    ['set', WINDOWS_SERVICE, 'Description', 'AgentVoice Bridge'],
+    ['set', WINDOWS_SERVICE, 'Description', 'Squeakr Bridge'],
     ['set', WINDOWS_SERVICE, 'Start', 'SERVICE_AUTO_START'],
     ['set', WINDOWS_SERVICE, 'AppRestartDelay', '3000'],
     ['set', WINDOWS_SERVICE, 'AppStdout', log],
     ['set', WINDOWS_SERVICE, 'AppStderr', log],
-    ['set', WINDOWS_SERVICE, 'AppEnvironmentExtra', 'NODE_ENV=production', `AGENTVOICE_HOME=${home}`],
+    ['set', WINDOWS_SERVICE, 'AppEnvironmentExtra', 'NODE_ENV=production', `SQUEAKR_HOME=${home}`],
   ];
 
   if (opts.dryRun || !nssm) {
@@ -395,7 +395,7 @@ async function installWindows(home: string, opts: ServiceInstallOptions): Promis
     say(`${green('started')}  ${WINDOWS_SERVICE}`);
   } else {
     note('');
-    note(`  ${bold('Start it:')}  agentvoice start`);
+    note(`  ${bold('Start it:')}  squeakr start`);
   }
   return 0;
 }
@@ -415,9 +415,9 @@ function safeRead(path: string): string | null {
 // ── Uninstall ─────────────────────────────────────────────────────────────
 
 /**
- * `agentvoice service uninstall` — stop the service and remove what `service
+ * `squeakr service uninstall` — stop the service and remove what `service
  * install` wrote. npm (v7+) runs no uninstall scripts, so this is the step
- * before `npm uninstall -g`. The bridge home (~/.agentvoice: config, database,
+ * before `npm uninstall -g`. The bridge home (~/.squeakr: config, database,
  * token) is never touched.
  */
 export async function serviceUninstallCommand(opts: { dryRun?: boolean } = {}): Promise<number> {
@@ -488,6 +488,6 @@ export async function serviceUninstallCommand(opts: { dryRun?: boolean } = {}): 
     await capture('systemctl', ['--user', 'mask', SERVICE_UNIT]);
     say(`${green('disabled')}  ${SERVICE_UNIT} ${dim('(packaged unit, masked for this user — `systemctl --user unmask agentvoice` undoes it)')}`);
   }
-  say(dim('  Your bridge home (~/.agentvoice) is left as it was.'));
+  say(dim('  Your bridge home (~/.squeakr) is left as it was.'));
   return 0;
 }

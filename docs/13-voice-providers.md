@@ -1,6 +1,6 @@
 # 13 — Voice Settings & AWS Audio
 
-How AgentVoice configures wake words, turn submit timing, and AWS services for
+How Squeakr configures wake words, turn submit timing, and AWS services for
 STT/TTS fallback and the `llm_intelligence` orchestrator.
 
 ## config.json — voice settings

@@ -1,10 +1,10 @@
 {
-  "name": "@ratitisrad/agentvoice",
+  "name": "squeakr",
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.1.5",
-  "description": "Self-hosted voice bridge for Cursor, Codex, and Claude Code CLIs",
+  "version": "0.2.0",
+  "description": "Squeakr — talk to your coding agent. Self-hosted voice bridge for Cursor, Codex, Claude Code and Codewhale CLIs",
   "keywords": [
     "voice",
     "agent",
@@ -31,7 +31,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "agentvoice": "bin/agentvoice.mjs"
+    "squeakr": "bin/agentvoice.mjs"
   },
   "files": [
     "bin/",

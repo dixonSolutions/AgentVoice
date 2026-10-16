@@ -75,7 +75,7 @@ export function passthrough(
   return new Promise((settle) => {
     const child = spawn(command, args, { cwd: opts.cwd, stdio: 'inherit', shell: needsShell(command) });
     child.on('error', (err) => {
-      process.stderr.write(`agentvoice: cannot run ${command} — ${err.message}\n`);
+      process.stderr.write(`squeakr: cannot run ${command} — ${err.message}\n`);
       settle(127);
     });
     // Ctrl-C reaches the child through the shared terminal; wait for it to go

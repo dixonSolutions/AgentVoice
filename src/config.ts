@@ -222,7 +222,7 @@ export const VoiceSettingsSchema = z.object({
   workerPollTimeoutMs: z.number().int().min(5_000).max(60_000).default(25_000),
   /** `turns` (recommended) or `stream` — see VOICE_INPUT_MODES. */
   inputMode: z.enum(VOICE_INPUT_MODES).default('turns'),
-  /** Segmentation for `stream` mode and for `agentvoice pipe`. */
+  /** Segmentation for `stream` mode and for `squeakr pipe`. */
   stream: AudioStreamSettingsSchema.default({}),
 });
 
@@ -592,7 +592,7 @@ export const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error'] as const;
  */
 export const LoggingSettingsSchema = z
   .object({
-    /** Relative paths resolve against the working directory. `AGENTVOICE_LOG_DIR` overrides. */
+    /** Relative paths resolve against the working directory. `SQUEAKR_LOG_DIR` (legacy `AGENTVOICE_LOG_DIR`) overrides. */
     dir: z.string().min(1).default('logs'),
     /** Write a text .log file per bridge session (terminal / journald output is unchanged). */
     files: z.boolean().default(true),
@@ -617,7 +617,7 @@ export const AGENT_CLIENTS = ['cursor', 'codex', 'claude-code', 'codewhale'] as 
 export type AgentClient = (typeof AGENT_CLIENTS)[number];
 
 /**
- * Folders AgentVoice owns as sources for automatic project registration.
+ * Folders Squeakr owns as sources for automatic project registration.
  *
  * A hot path is a container, never a project itself. Its immediate Git
  * subdirectories become allowlisted projects; add a nested container as a
@@ -723,7 +723,7 @@ const ProjectConfigSchema = z.object({
   /**
    * Tell sessions in this project to poll `check_messages()`.
    *
-   * A session AgentVoice did not start only receives mailbox messages if its
+   * A session Squeakr did not start only receives mailbox messages if its
    * agent-voice rule tells it to look, which is why this is opt-in per project
    * rather than a global switch.
    */

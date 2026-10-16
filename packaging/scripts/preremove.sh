@@ -1,7 +1,7 @@
 #!/bin/sh
 # Undo what postinstall did, on removal only (not on upgrade): disable the
 # user unit globally and stop it for the user running the removal through
-# sudo. ~/.agentvoice is left alone — the config, the database and the pairing
+# sudo. ~/.squeakr is left alone — the config, the database and the pairing
 # token are the user's, not the package's. Never fails the package operation.
 set -u
 
@@ -25,12 +25,12 @@ if $removing && command -v systemctl >/dev/null 2>&1; then
   fi
   cat <<'MSG'
 
-Removing AgentVoice. The service is disabled for every user; if another user
+Removing Squeakr. The service is disabled for every user; if another user
 still has it running, it stops at their next logout — or now, as that user:
 
     systemctl --user disable --now agentvoice
 
-Your bridge home (~/.agentvoice) is left untouched — it holds your config,
+Your bridge home (~/.squeakr) is left untouched — it holds your config,
 your database and your pairing token.
 
 MSG

@@ -3,7 +3,7 @@
 #   https://dixonsolutions.github.io/AgentVoice/apt   deb  …/apt stable main
 #   https://dixonsolutions.github.io/AgentVoice/rpm   /etc/yum.repos.d/agentvoice.repo
 #
-# One Pages site holds both the AgentVoice landing page (site/ in this repo,
+# One Pages site holds both the Squeakr landing page (site/ in this repo,
 # served at /) and the repositories (/apt, /rpm, /agentvoice.asc,
 # /packages.html). Every deploy replaces the whole site, so every run builds
 # both.

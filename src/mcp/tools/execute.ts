@@ -7,7 +7,7 @@
  * Both resolve the project from the registry. The model controls the
  * prompt/question text only — workspace path comes from the registry.
  *
- * `agent_ask` can block for minutes, so it runs under AgentVoice's interrupt
+ * `agent_ask` can block for minutes, so it runs under Squeakr's interrupt
  * hook: if the user speaks mid-research the work is NOT cancelled — the
  * utterance rides back on this tool's own result.
  */

@@ -235,7 +235,7 @@ Everything above describes a **git clone**: `scripts/update.sh` fetches, rebases
 onto `origin/<branch>`, installs, builds and restarts, and the page identifies
 the running code by branch and commit.
 
-An **npm install** (`npm i -g @ratitisrad/agentvoice`) has none of that. There is no repo to
+An **npm install** (`npm i -g squeakr`) has none of that. There is no repo to
 rebase, no working tree to stash, and no commit to show. Updating means asking
 the registry whether something newer is published and letting npm replace the
 package; the version is one semver string.
@@ -249,14 +249,14 @@ between machines, but this has to describe the install that is actually running.
 | | git clone | npm install |
 | --- | --- | --- |
 | Identity | branch, commit, ahead/behind | installed version vs registry `latest` |
-| Update | `scripts/update.sh` (`--stash` for a dirty tree) | `npm install [-g] @ratitisrad/agentvoice@latest` |
+| Update | `scripts/update.sh` (`--stash` for a dirty tree) | `npm install [-g] squeakr@latest` |
 | Buttons | "Rebase & update" / "Stash, rebase & update" | one — "Update to *x.y.z*" |
 | Restart | `scripts/restart.sh` — rebuilds, then restarts the unit | `systemctl restart` directly; there is nothing to build |
 
 `GET /api/admin/serve` carries `status.install` (mode, root, reason, the update
 command) plus exactly one of `status.git` or `status.npm` — never both, so a
 surface cannot accidentally show a branch that has nothing to do with the code
-running. The Serve page switches on it; so does `agentvoice update`
+running. The Serve page switches on it; so does `squeakr update`
 (see [docs/35](./35-cli.md)).
 
 Anything that is neither — an extracted tarball, a container image — reports

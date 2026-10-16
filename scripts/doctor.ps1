@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    AgentVoice — connectivity doctor (Windows)
+    Squeakr — connectivity doctor (Windows)
 
 .DESCRIPTION
     Diagnoses why https://<machine>.ts.net might not be reachable.
@@ -29,7 +29,7 @@ function Info ($msg) { Write-Host "    -->   $msg" -ForegroundColor Cyan }
 function Section ($msg) { Write-Host "`n  -- $msg --" -ForegroundColor Magenta }
 
 Write-Host ""
-Write-Host "  AgentVoice -- connectivity doctor (Windows)" -ForegroundColor White
+Write-Host "  Squeakr -- connectivity doctor (Windows)" -ForegroundColor White
 Write-Host ""
 
 # ── Read .env for PORT ────────────────────────────────────────────────────────

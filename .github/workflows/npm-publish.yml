@@ -203,6 +203,10 @@ jobs:
       #   404 Not Found - PUT https://registry.npmjs.org/@ratitisrad%2fagentvoice
       # for exactly that reason.
       #
+      # The Squeakr rename (docs/44) is a new package name, so the first
+      # `squeakr` release is in the same position: it needs NPM_TOKEN again,
+      # and Trusted Publishing has to be configured on `squeakr` afterwards.
+      #
       # It cannot be bootstrapped by hand either. Publishing from a shell hits
       # the account's 2FA, and npm answers with a browser URL whose id it
       # redacts to `***` whenever stdout is not a TTY — so the OTP flow is
@@ -265,7 +269,7 @@ jobs:
           version="${{ steps.v.outputs.version }}"
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git tag -a "v${version}" -m "AgentVoice v${version}"
+          git tag -a "v${version}" -m "Squeakr v${version}"
           git push origin "v${version}"
 
       - name: Pack for the GitHub Release
@@ -277,13 +281,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.v.outputs.version }}
-          name: AgentVoice v${{ steps.v.outputs.version }}
+          name: Squeakr v${{ steps.v.outputs.version }}
           body: |
-            AgentVoice v${{ steps.v.outputs.version }} is on npm.
+            Squeakr v${{ steps.v.outputs.version }} is on npm.
 
             ```bash
-            npm install -g @ratitisrad/agentvoice     # starts as a background service
-            agentvoice setup                          # agent CLI, projects, hosting
+            npm install -g squeakr                 # starts as a background service
+            squeakr setup                          # agent CLI, projects, hosting
             ```
 
             Or install the .deb / .rpm attached below — they bundle Node, so
@@ -294,12 +298,12 @@ jobs:
             sudo dnf install ./agentvoice-${{ steps.v.outputs.version }}.x86_64.rpm
             ```
 
-            Both enable AgentVoice as a background user service out of the box.
+            Both enable Squeakr as a background user service out of the box.
 
             For upgrades through `apt upgrade` / `dnf upgrade`, add the
             signed repository instead: https://dixonsolutions.github.io/AgentVoice/
 
-            The wake-word model is not bundled — run `agentvoice prepare-vosk`
+            The wake-word model is not bundled — run `squeakr prepare-vosk`
             if you want wake words.
           files: '*.tgz'
 
@@ -419,13 +423,13 @@ jobs:
         run: |
           set -eu
           sudo apt-get install -y ./agentvoice_*_${{ matrix.arch }}.deb
-          agentvoice --version
+          squeakr --version
           # The install mode has to come back as `system`, or the Serve page
           # would offer an npm update for a package-manager install, and
-          # `agentvoice update` would install a second copy the service does
+          # `squeakr update` would install a second copy the service does
           # not run (docs/38). Parsed rather than grepped: the output is
           # pretty-printed JSON.
-          mode="$(agentvoice status --json | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).install.mode')"
+          mode="$(squeakr status --json | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).install.mode')"
           echo "install mode: ${mode}"
           [ "${mode}" = system ]
           sudo apt-get remove -y agentvoice

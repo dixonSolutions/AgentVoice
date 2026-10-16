@@ -1,5 +1,5 @@
 [Unit]
-Description=AgentVoice Bridge
+Description=Squeakr Bridge
 After=network-online.target fix-dns.service tailscaled.service
 Wants=network-online.target fix-dns.service
 

@@ -17,7 +17,7 @@ Tracked in [#63](https://github.com/dixonSolutions/AgentVoice/issues/63) (prompt
 | Question | Position |
 | --- | --- |
 | Should prompts on screen be read aloud? | **Yes, and configurable** |
-| With permissions bridged, do we still need AgentVoice's own ask tools? | **Keep `request_user_input` and `submit_plan_for_approval`; consolidate duplicate tools** |
+| With permissions bridged, do we still need Squeakr's own ask tools? | **Keep `request_user_input` and `submit_plan_for_approval`; consolidate duplicate tools** |
 | Show when an agent is running? | **Yes — a working ring on the orb** |
 | Persist microphone and audio permissions? | **Yes — they are required for the app to work** |
 

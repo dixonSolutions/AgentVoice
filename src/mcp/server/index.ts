@@ -1,5 +1,5 @@
 /**
- * MCP Streamable HTTP server — exposes every AgentVoice tool to the coding CLI.
+ * MCP Streamable HTTP server — exposes every Squeakr tool to the coding CLI.
  *
  * Each provider registers this bridge as an MCP server named `agent-voice` in
  * its own config (see providers/agents/<client>.ts). Once connected, the

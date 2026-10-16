@@ -2,7 +2,7 @@
  * Conversational voice agent — the auto-spawned agent loop for `agent_native`.
  *
  * When a voice turn is enqueued and no agent is running, the bridge spawns the
- * active coding CLI in headless mode with the AgentVoice system prompt, wired
+ * active coding CLI in headless mode with the Squeakr system prompt, wired
  * to the agent-voice MCP server so it can call next_voice_turn / speak / done.
  * Every CLI-specific flag lives in providers/agents/<client>.ts.
  *
@@ -69,7 +69,7 @@ function isOwnMcpTool(name: string): boolean {
 }
 
 const VOICE_BOOT_SUFFIX =
-  `\n\n---\nThe ${MCP_SERVER_NAME} MCP server (AgentVoice) is connected. ` +
+  `\n\n---\nThe ${MCP_SERVER_NAME} MCP server (Squeakr) is connected. ` +
   'Speak one sentence to greet or acknowledge the user first, then call next_voice_turn() to receive their request. ' +
   'Never start a session in silent tool mode.';
 
@@ -83,11 +83,11 @@ const VOICE_AWAY_SUFFIX =
   '\n\nNobody is listening right now. Do not greet anyone and do not wait on ' +
   'next_voice_turn() for an answer: work the task through, and use speak() to ' +
   'record what you are doing — those lines become the catch-up summary the user ' +
-  'hears when they come back. The `listener` block on every AgentVoice tool ' +
+  'hears when they come back. The `listener` block on every Squeakr tool ' +
   'result tells you the current policy.';
 
 const VOICE_RESUME_SUFFIX =
-  `\n\n---\nThe ${MCP_SERVER_NAME} MCP server (AgentVoice) is connected. ` +
+  `\n\n---\nThe ${MCP_SERVER_NAME} MCP server (Squeakr) is connected. ` +
   'Speak one sentence to acknowledge the user first, then call next_voice_turn() immediately. ' +
   'If a worker is running, narrate its live progress via get_agent_status() — do not go silent.';
 
@@ -95,7 +95,7 @@ const VOICE_RESUME_SUFFIX =
  * Trimmed reminder of the voice contract for resumed threads.
  *
  * Only Cursor persists our rules via a `.mdc` file, so a resumed Codex or
- * Claude Code thread would otherwise carry NO AgentVoice instructions at all —
+ * Claude Code thread would otherwise carry NO Squeakr instructions at all —
  * the agent replies as text and the user hears silence. Cursor keeps the short
  * form (its rule file already holds the full prompt); everyone else gets the
  * full system prompt again.

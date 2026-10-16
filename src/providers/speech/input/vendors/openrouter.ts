@@ -114,7 +114,7 @@ export const openrouterSpeechInput: SpeechInputVendor = {
           'Content-Type': 'application/json',
           // OpenRouter attributes usage with these; harmless if the app is unlisted.
           'HTTP-Referer': 'https://github.com/dixonSolutions/AgentVoice',
-          'X-Title': 'AgentVoice',
+          'X-Title': 'Squeakr',
         },
         body: JSON.stringify({
           model: call.model,

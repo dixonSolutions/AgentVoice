@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * `agentvoice` — the published package's `bin`, and nothing more than a shim.
+ * `squeakr` — the published package's `bin`, and nothing more than a shim.
  *
  * Everything the CLI does lives in src/cli/, built to dist/cli.js, so it is
  * typechecked alongside the bridge and can import what the bridge already
@@ -26,9 +26,9 @@ try {
 } catch (err) {
   if (err?.code === 'ERR_MODULE_NOT_FOUND') {
     console.error(
-      `agentvoice: ${entry} is missing — this install is incomplete.\n` +
+      `squeakr: ${entry} is missing — this install is incomplete.\n` +
         '  From a clone:  npm run build\n' +
-        '  Otherwise:     npm install -g @ratitisrad/agentvoice',
+        '  Otherwise:     npm install -g squeakr',
     );
     process.exit(1);
   }

@@ -1154,7 +1154,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     return this.serveInstallMode === 'npm' && !this.serveIsNpxRun;
   }
 
-  /** `npx @ratitisrad/agentvoice` — a cache copy, so the next npx run is the update. */
+  /** `npx squeakr` — a cache copy, so the next npx run is the update. */
   protected get serveIsNpxRun(): boolean {
     return this.serveInstallMode === 'npm' && this.serveStatus?.install?.npx === true;
   }

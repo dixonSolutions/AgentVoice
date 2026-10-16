@@ -4,7 +4,7 @@
 > for the in-app auth, live model selection, and generic MCP tools built on
 > top of this.
 
-AgentVoice supports four AI coding agent clients that can be used interchangeably
+Squeakr supports four AI coding agent clients that can be used interchangeably
 for both voice agent sessions and worker jobs. Each registers the shared
 `agent-voice` MCP server through its own provider
 (`src/providers/agents/<client>.ts`). The server key was `cursor-voice` before
@@ -230,10 +230,10 @@ Codewhale is the one client whose id does not come from its own stream. It is
 read from `~/.codewhale/sessions/*.json` by matching the unredacted
 `metadata.workspace` and taking the most recently updated match. That is a
 heuristic — two concurrent runs in one workspace could race and the loser would
-resume the winner's thread — bounded by AgentVoice already running one voice
+resume the winner's thread — bounded by Squeakr already running one voice
 session per project, and backstopped at runtime by `executor/resumeGuard.ts`.
 
-Only Cursor persists AgentVoice's rules in a file the CLI reloads. On a resumed
+Only Cursor persists Squeakr's rules in a file the CLI reloads. On a resumed
 thread, Codex and Claude Code are therefore re-sent the full system prompt —
 otherwise a resumed session carries no voice instructions at all and the agent
 answers as text the user never hears.

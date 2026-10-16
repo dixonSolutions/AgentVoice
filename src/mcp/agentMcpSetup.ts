@@ -1,5 +1,5 @@
 /**
- * Register the AgentVoice MCP server with whichever coding CLI is active.
+ * Register the Squeakr MCP server with whichever coding CLI is active.
  *
  * This module owns only the *policy*: which server name, which URL, which
  * version, and the legacy-entry cleanup that has to happen for every CLI.
@@ -89,7 +89,7 @@ function buildContext(log: McpRegistrationContext['log']): McpRegistrationContex
 }
 
 /**
- * Ensure the AgentVoice MCP server is registered for `client`.
+ * Ensure the Squeakr MCP server is registered for `client`.
  * Delegates to the provider; this wrapper only supplies shared context and
  * shapes the result the PWA's prepare stream expects.
  */
@@ -134,7 +134,7 @@ export async function ensureClientMcpSetup(
 }
 
 /**
- * Remove AgentVoice entries from a project-level `.cursor/mcp.json`.
+ * Remove Squeakr entries from a project-level `.cursor/mcp.json`.
  *
  * The global config is the single source of truth and always points at the
  * live bridge port. A leftover project-level entry (e.g. from an older install

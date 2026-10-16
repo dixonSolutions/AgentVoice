@@ -1,8 +1,8 @@
 /**
- * `agentvoice add` — register a directory as a project.
+ * `squeakr add` — register a directory as a project.
  *
- *   cd ~/code/my-app && agentvoice add --this-dir
- *   agentvoice add ~/code/my-app
+ *   cd ~/code/my-app && squeakr add --this-dir
+ *   squeakr add ~/code/my-app
  *
  * The entry is filled in from the directory itself (see ../projectDetails.ts):
  * a slug name, a description from the manifest or README, and spoken aliases
@@ -176,6 +176,6 @@ export async function addCommand(opts: AddOptions): Promise<number> {
   writeFileSync(fresh.path, `${JSON.stringify(fresh.config, null, 2)}\n`);
 
   say(`  ${green('added')}  to ${fresh.path}`);
-  note(dim('  The bridge is not running — it is picked up on the next start (agentvoice start / run).'));
+  note(dim('  The bridge is not running — it is picked up on the next start (squeakr start / run).'));
   return 0;
 }

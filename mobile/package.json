@@ -2,7 +2,7 @@
   "name": "agentvoice-mobile",
   "version": "0.1.0",
   "private": true,
-  "description": "Capacitor native shell for AgentVoice (CallKit + push)",
+  "description": "Capacitor native shell for Squeakr (CallKit + push)",
   "scripts": {
     "sync": "cap sync",
     "ios": "cap open ios",

@@ -1,6 +1,6 @@
 /**
  * Work out a project entry — name, description, spoken aliases — from the
- * directory itself, so `agentvoice add` and `agentvoice local` register a
+ * directory itself, so `squeakr add` and `squeakr local` register a
  * project with more than a folder name.
  *
  * Read, never run: manifests are parsed as text (package.json, Cargo.toml,
@@ -167,7 +167,7 @@ function readme(dir: string): string | null {
   return null;
 }
 
-/** Is `dir` a repo root, and its name from `git remote get-url origin` ("AgentVoice"). */
+/** Is `dir` a repo root, and its name from `git remote get-url origin` ("Squeakr"). */
 async function gitInfo(dir: string): Promise<{ git: boolean; repo: string | null }> {
   const top = await capture('git', ['rev-parse', '--show-toplevel'], { cwd: dir, timeoutMs: 3000 });
   if (top.code !== 0) return { git: false, repo: null };

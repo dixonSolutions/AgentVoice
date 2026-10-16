@@ -2,7 +2,7 @@
  * MCP inspect tools — agent_mcp_list, agent_mcp_tools
  *
  * Informational tools for debugging what MCP servers the *coding CLI* has
- * configured. These are NOT about AgentVoice's own MCP server.
+ * configured. These are NOT about Squeakr's own MCP server.
  *
  * These used to shell out to `cursor-agent` whatever client was active, so the
  * answer described a CLI that was not running the work; the fix at the time

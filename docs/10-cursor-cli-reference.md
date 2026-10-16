@@ -1,4 +1,4 @@
-# 10 — Cursor CLI Reference (useful surface for AgentVoice)
+# 10 — Cursor CLI Reference (useful surface for Squeakr)
 
 Live-verified against `cursor-agent 2026.06.04-5fd875e` (June 2026, Ultra account).
 The CLI is **beta** — flags and output may change between releases.
@@ -59,7 +59,7 @@ Commands:
 
 ---
 
-## Commands used by AgentVoice
+## Commands used by Squeakr
 
 ### `cursor-agent models`
 
@@ -97,9 +97,9 @@ Tip: use --model <id> (or /model <id> in interactive mode) to switch.
 cursor-agent -p [flags] "prompt"
 ```
 
-All AgentVoice executor calls use this path.
+All Squeakr executor calls use this path.
 
-| Flag | AgentVoice use |
+| Flag | Squeakr use |
 | --- | --- |
 | `-p, --print` | Always required for headless. |
 | `--output-format stream-json` | **Preferred** — NDJSON, events during run. |
@@ -289,6 +289,6 @@ Special: `auto` = Cursor chooses (safe default for `session_state.active_model`)
 | `cursor-agent resume` (interactive) | TTY only; bridge uses `--resume` flag instead. |
 | `cursor-agent login` / `logout` | Operator-only setup via SSH. |
 | `cursor-agent update` | Never auto-update the service — manual only. |
-| `cursor-agent worker` | Cloud worker mode; AgentVoice uses local `cursor-agent -p`. |
+| `cursor-agent worker` | Cloud worker mode; Squeakr uses local `cursor-agent -p`. |
 | `cursor-agent generate-rule` | Interactive TTY only. |
 | `cursor-agent acp` | Evaluated and rejected (ADR-017 in `08`); `--print` is simpler. |

@@ -220,7 +220,7 @@ even if the pipe existed. Every call returned `delivered: false` while the tool
 description invited the agent to try.
 
 **Resolution adopted (docs/37):** a per-session mailbox that rides out on the
-next AgentVoice tool result — a channel that demonstrably exists, because every
+next Squeakr tool result — a channel that demonstrably exists, because every
 worker calls those tools — plus `check_messages()` for an explicit collect.
 Delivery is at the next tool call: later than "live", but real, and reported
 honestly as `mailbox_pending` rather than "sent". `inject` is kept as a

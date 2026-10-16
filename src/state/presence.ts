@@ -25,7 +25,7 @@
  * everything and it suppresses push notifications (the user is clearly at a
  * screen), but the away policies in docs/36 act on *phone* presence only.
  *
- * An `audio_pipe` (`agentvoice pipe`, docs/41) that listens for replies IS a
+ * An `audio_pipe` (`squeakr pipe`, docs/41) that listens for replies IS a
  * listener: someone is speaking into it and hearing the agent back, exactly
  * like the phone, just from a terminal.
  *

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# AgentVoice — THE update script.
+# Squeakr — THE update script.
 #
 # This is the single, centralized update path. The Serve config page calls it
 # for both of its buttons; run it by hand and you get exactly the same thing.
@@ -271,7 +271,7 @@ fi
 STASHED=false
 if [[ "$STASH_MODE" == true && "$DIRTY" == true ]]; then
   if git -C "$PROJECT_DIR" stash push --include-untracked \
-       -m "agentvoice update ${RUN_ID}" >/dev/null 2>&1; then
+       -m "squeakr update ${RUN_ID}" >/dev/null 2>&1; then
     STASHED=true
     emit git_stash ok "stashed ${LOCAL_COUNT} local change(s)"
   else

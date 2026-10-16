@@ -1,5 +1,5 @@
 /**
- * Audio sources for `agentvoice pipe`, normalised to what /ws/audio-stream
+ * Audio sources for `squeakr pipe`, normalised to what /ws/audio-stream
  * takes: PCM16LE, mono, 16 kHz.
  *
  *   stdin  — raw PCM (rate/channels from flags) or a WAV stream, auto-detected
@@ -287,7 +287,7 @@ export function spawnMicRecorder(): SpawnedSource {
   }
   throw new Error(
     'No microphone recorder found — install one of: pw-record (PipeWire), parec (PulseAudio), ' +
-      'arecord (ALSA), sox, or ffmpeg. Or pipe audio in: arecord -f S16_LE -r 16000 -c 1 -t raw | agentvoice pipe',
+      'arecord (ALSA), sox, or ffmpeg. Or pipe audio in: arecord -f S16_LE -r 16000 -c 1 -t raw | squeakr pipe',
   );
 }
 

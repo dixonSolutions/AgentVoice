@@ -1,5 +1,5 @@
 /**
- * Shared plumbing for registering the AgentVoice MCP server with a coding CLI.
+ * Shared plumbing for registering the Squeakr MCP server with a coding CLI.
  *
  * Each CLI stores MCP servers somewhere different, in a different format:
  *
@@ -56,7 +56,7 @@ export interface McpRegistrationContext {
   /** APP_TOKEN, sent as `Authorization: Bearer …`. */
   token: string;
   /**
-   * The AgentVoice system prompt, for CLIs that persist rules in a file
+   * The Squeakr system prompt, for CLIs that persist rules in a file
    * (Cursor's `.mdc`). Passed in rather than imported, because the prompt
    * loader itself resolves the *active provider* for `{{AGENT_DISPLAY_NAME}}` —
    * a provider importing it directly creates an import cycle through the
@@ -103,7 +103,7 @@ export interface JsonMcpEntry {
   transport?: string;
   url: string;
   headers?: Record<string, string>;
-  /** AgentVoice bookkeeping so we know when to rewrite the entry. */
+  /** Squeakr bookkeeping so we know when to rewrite the entry. */
   agentVoice?: { version: string; enabled: boolean };
   disabled?: boolean;
   [key: string]: unknown;
@@ -131,7 +131,7 @@ export function writeJsonConfig(path: string, data: unknown): void {
 }
 
 /**
- * Merge the AgentVoice entry into a JSON `mcpServers` map, dropping legacy keys.
+ * Merge the Squeakr entry into a JSON `mcpServers` map, dropping legacy keys.
  * Returns the merged file plus the action that describes what changed, so the
  * caller can skip the write when nothing moved.
  */

@@ -5,11 +5,11 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { classifyNpmRoot, npmProjectDir, PACKAGE_NAME } from './installMode.js';
 
-const scratch = mkdtempSync(join(tmpdir(), 'agentvoice-installmode-'));
+const scratch = mkdtempSync(join(tmpdir(), 'squeakr-installmode-'));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 function pkgUnder(prefix: string): string {
-  const root = join(prefix, 'node_modules', '@ratitisrad', 'agentvoice');
+  const root = join(prefix, 'node_modules', 'squeakr');
   mkdirSync(root, { recursive: true });
   return root;
 }
@@ -39,4 +39,10 @@ test('the npx cache is npx, even though it has a package.json', () => {
   const root = pkgUnder(cache);
   writeFileSync(join(cache, 'package.json'), '{}');
   assert.deepEqual(classifyNpmRoot(root), { global: false, npx: true });
+});
+
+test('the pre-rename scoped package still classifies as a global install', () => {
+  const root = join(scratch, 'legacy', 'lib', 'node_modules', '@ratitisrad', 'agentvoice');
+  mkdirSync(root, { recursive: true });
+  assert.deepEqual(classifyNpmRoot(root), { global: true, npx: false });
 });

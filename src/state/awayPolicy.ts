@@ -3,7 +3,7 @@
  * the phone, and how it tells the agent.
  *
  * MCP is pull-only: the bridge cannot push "the user left" into a running CLI.
- * So the signal rides on AgentVoice tool results, exactly like the pending-turn
+ * So the signal rides on Squeakr tool results, exactly like the pending-turn
  * notice already does. Every agent-voice tool result carries a `listener`
  * block, and the voice tools answer differently while away instead of a bare
  * `NO_VOICE_SESSION` whose message told the agent to "use normal text" — which

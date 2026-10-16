@@ -1,8 +1,8 @@
 /**
- * AgentVoice's own interrupt hook.
+ * Squeakr's own interrupt hook.
  *
  * The problem: MCP is a pull protocol. While the agent is inside *any*
- * long-running AgentVoice tool it is not calling `next_voice_turn()`, so a
+ * long-running Squeakr tool it is not calling `next_voice_turn()`, so a
  * user who speaks mid-work is invisible until the agent happens to poll again.
  *
  * The old fix reached into the approval registry specifically and hijacked
@@ -10,7 +10,7 @@
  * be pending. That only covered two tools, and it conflated "the user answered
  * your question" with "the user said something new".
  *
- * This module is the single hook instead. Every AgentVoice tool that can block
+ * This module is the single hook instead. Every Squeakr tool that can block
  * registers here, and one incoming user turn is delivered through whichever of
  * OUR tools the agent is currently sitting in. Two policies:
  *
@@ -126,7 +126,7 @@ export function releaseWait(id: string): VoiceTurnAnnotation | null {
 }
 
 /**
- * Run a long-running AgentVoice tool under `annotate` policy.
+ * Run a long-running Squeakr tool under `annotate` policy.
  *
  * The work always completes. If the user spoke while it ran, the annotation is
  * merged into the result so the agent sees the new request in the very same
@@ -159,7 +159,7 @@ export async function withVoiceInterrupt<T extends object>(
 }
 
 /**
- * Deliver a user turn through whichever AgentVoice tool is currently blocking.
+ * Deliver a user turn through whichever Squeakr tool is currently blocking.
  * Returns the resolve-policy waits that were cut short (empty when the turn was
  * only annotated onto in-flight work, or when nothing was pending).
  */

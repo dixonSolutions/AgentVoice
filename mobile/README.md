@@ -1,4 +1,4 @@
-# AgentVoice — Native mobile shell
+# Squeakr — Native mobile shell
 
 Capacitor wrapper for **CallKit** (iOS) and foreground call notification (Android).
 

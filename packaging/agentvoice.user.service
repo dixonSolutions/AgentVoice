@@ -10,14 +10,14 @@
 # directory, so without this the bridge starts and then cannot find a single
 # agent to run.
 [Unit]
-Description=AgentVoice Bridge
+Description=Squeakr Bridge
 Documentation=https://github.com/dixonSolutions/AgentVoice
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/agentvoice run
+ExecStart=/usr/bin/squeakr run
 Restart=on-failure
 RestartSec=3
 Environment=NODE_ENV=production

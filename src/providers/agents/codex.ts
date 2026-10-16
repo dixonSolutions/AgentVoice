@@ -416,7 +416,7 @@ const RMCP_FLAG = 'experimental_use_rmcp_client';
 function buildCodexTomlEntry(ctx: McpRegistrationContext): string {
   return [
     '',
-    `# AgentVoice MCP registration — version ${ctx.version} (managed by AgentVoice, safe to delete)`,
+    `# Squeakr MCP registration — version ${ctx.version} (managed by Squeakr, safe to delete)`,
     `[mcp_servers."${ctx.serverName}"]`,
     `url = "${ctx.url}"`,
     `bearer_token_env_var = "${CODEX_TOKEN_ENV_VAR}"`,
@@ -452,7 +452,7 @@ async function ensureCodexMcpRegistration(
   ctx.log('check', 'info', `Checking Codex MCP config (${label})…`);
 
   let content = existsSync(configPath) ? readFileSync(configPath, 'utf-8') : '';
-  const versionMatch = content.match(/# AgentVoice MCP registration — version ([\d.]+)/);
+  const versionMatch = content.match(/# Squeakr MCP registration — version ([\d.]+)/);
   const installedVersion = versionMatch?.[1] ?? null;
   const registered = content.includes(`[mcp_servers."${ctx.serverName}"]`);
 
@@ -470,7 +470,7 @@ async function ensureCodexMcpRegistration(
 
   if (action !== 'unchanged') {
     content = stripTomlServer(content, ctx.serverName)
-      .replace(/^# AgentVoice MCP registration.*$/gm, '')
+      .replace(/^# Squeakr MCP registration.*$/gm, '')
       .trimEnd();
     try {
       mkdirSync(dirname(configPath), { recursive: true });

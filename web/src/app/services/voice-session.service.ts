@@ -347,8 +347,8 @@ export class VoiceSessionService {
       const startMsg =
         workflow === 'agent_native'
           ? wakeOff
-            ? `AgentVoice session started on ${agent} — tap Speak (wake words off)`
-            : `AgentVoice session started on ${agent} — say the wake phrase to talk to it`
+            ? `Squeakr session started on ${agent} — tap Speak (wake words off)`
+            : `Squeakr session started on ${agent} — say the wake phrase to talk to it`
           : wakeOff
             ? 'Intelligence session started — tap Speak (wake words off)'
             : 'Intelligence session started — say wake phrase to activate';
@@ -611,7 +611,7 @@ export class VoiceSessionService {
           this.startMeterPoll();
           this.syncAppState();
           void this.keepalive.start({
-            title: 'AgentVoice',
+            title: 'Squeakr',
             artist: 'Voice session active',
             // CallKit / Android FGS keep audio alive with the screen off.
             // Holding a screen wake lock is the largest iPhone battery cost.
@@ -673,7 +673,7 @@ export class VoiceSessionService {
         this.agentStatus.set({ ...event, at: Date.now() });
         const sid = event.sessionId ? `${event.sessionId.slice(0, 8)}…` : 'pending';
         // Name the CLI that is actually running. "Voice agent starting" read as
-        // if AgentVoice were narrating its own internals, and the old hardcoded
+        // if Squeakr were narrating its own internals, and the old hardcoded
         // "Cursor agent" was outright wrong under Codex / Claude Code.
         const agent = event.providerName ?? this.agentProviders.activeProviderName();
         const label =

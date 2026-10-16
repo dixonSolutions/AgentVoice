@@ -12,7 +12,7 @@
  * answer: "can the CLI make a model call right now?".
  *
  * Two quirks drove the shape of this file. Both are Codewhale behaviours, not
- * AgentVoice ones, and both are covered in docs/24-agent-providers.md:
+ * Squeakr ones, and both are covered in docs/24-agent-providers.md:
  *
  *  1. The session id in stream-json is REDACTED. `session_capture.content` and
  *     `metadata.session_id` are both FNV fingerprints (`<redacted:…>`), so the
@@ -385,7 +385,7 @@ function safeMtime(path: string): number {
  *
  * This is the recovery path for the redacted stream id. It is a heuristic: two
  * concurrent runs in the same workspace could race, and the loser would resume
- * the winner's thread. That is bounded by how AgentVoice already works — one
+ * the winner's thread. That is bounded by how Squeakr already works — one
  * voice session per project — and the alternative (no resume at all) is worse,
  * because every turn would start a cold thread. executor/resumeGuard.ts still
  * recovers at runtime if the id turns out to be wrong.
@@ -550,7 +550,7 @@ export const codewhaleProvider: AgentProvider = {
         id: 'api-key',
         label: 'Use a provider API key',
         description:
-          'Paste the API key for whichever provider Codewhale is routed to (DeepSeek, OpenAI, Anthropic, OpenRouter…). It is stored by Codewhale itself, not in AgentVoice.',
+          'Paste the API key for whichever provider Codewhale is routed to (DeepSeek, OpenAI, Anthropic, OpenRouter…). It is stored by Codewhale itself, not in Squeakr.',
         pasteLabel: 'Provider API key',
         pastePlaceholder: 'sk-…',
       },
@@ -571,7 +571,7 @@ export const codewhaleProvider: AgentProvider = {
         );
       }
 
-      // Hand the key to Codewhale rather than writing it into AgentVoice's
+      // Hand the key to Codewhale rather than writing it into Squeakr's
       // .env: Codewhale keys are per-provider and live in its own config +
       // keyring, so .env would be both the wrong shape and the wrong scope.
       // --api-key-stdin keeps the value out of argv and shell history.

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# AgentVoice — start script (Linux)
+# Squeakr — start script (Linux)
 #
 # Starts the production HOST bridge back up after `npm run stop`.
 # Counterpart to scripts/stop.sh. (The local dev server `npm run dev` runs on a
@@ -48,7 +48,7 @@ if [[ "$(uname -s)" != "Linux" ]]; then
   err "This script is Linux-only. Use start.ps1 on Windows."
 fi
 
-echo -e "${CYN}${BLD}AgentVoice — start${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
+echo -e "${CYN}${BLD}Squeakr — start${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
 
 # ── Load .env for PORT ──────────────────────────────────────────────────────
 ENV_FILE="${PROJECT_DIR}/.env"
@@ -93,7 +93,7 @@ else
   # The bridge writes its own session log (logs/serve/bridge/); this captures
   # raw stdout/stderr too — crashes before the logger starts land only here.
   # One file per start, named by date; the bridge gzips older ones.
-  CONSOLE_DIR="${AGENTVOICE_LOG_DIR:-${PROJECT_DIR}/logs}/serve/console"
+  CONSOLE_DIR="${SQUEAKR_LOG_DIR:-${AGENTVOICE_LOG_DIR:-${PROJECT_DIR}/logs}}/serve/console"
   mkdir -p "$CONSOLE_DIR"
   CONSOLE_LOG="${CONSOLE_DIR}/$(date +%Y-%m-%d_%H-%M-%S).log"
   NODE_BIN="$(command -v node || echo node)"

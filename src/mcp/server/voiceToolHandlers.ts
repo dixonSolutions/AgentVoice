@@ -1,5 +1,5 @@
 /**
- * Voice I/O tool handlers for the AgentVoice MCP server.
+ * Voice I/O tool handlers for the Squeakr MCP server.
  *
  * The voice agent calls these tools to interact with the user over voice:
  *   speak(text)         — push text to TTS, forward audio to PWA
@@ -76,7 +76,7 @@ voiceTurnQueue.setToolsInterruptedHandler((delivery, turn) => {
   });
   log.info(
     { tools, aborted: delivery.aborted.length, annotated: delivery.annotated.length },
-    'user turn delivered through in-flight AgentVoice tool(s)',
+    'user turn delivered through in-flight Squeakr tool(s)',
   );
 });
 
@@ -206,7 +206,7 @@ export interface VoiceAgentStatusPayload {
  * The coding agent behind this run, sent with every status broadcast.
  *
  * The PWA used to hardcode "Cursor agent starting…" in its session log, which
- * was simply wrong for Codex and Claude Code — and read as if AgentVoice were
+ * was simply wrong for Codex and Claude Code — and read as if Squeakr were
  * announcing its own internals. Shipping the provider identity with the event
  * means the log always names the CLI that is actually running.
  */
@@ -274,7 +274,7 @@ export interface SpeakResult {
  *
  * The interrupt hook (pendingWaits.ts) covers turns that arrive while the agent
  * is inside one of OUR tools. It cannot cover the common case: the agent doing
- * its own research with its own Read/Grep/Bash tools, where no AgentVoice tool
+ * its own research with its own Read/Grep/Bash tools, where no Squeakr tool
  * is in flight and the turn simply lands in the buffer. Live testing showed the
  * agent then finishes its previous answer and calls done() — the user's
  * interruption is heard nowhere until the following turn.
