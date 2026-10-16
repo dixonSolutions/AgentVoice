@@ -38,6 +38,13 @@ function skip(reason) {
 
 if (env.AGENTVOICE_NO_SERVICE) skip('AGENTVOICE_NO_SERVICE is set');
 if (env.npm_config_global !== 'true') skip('not a global install');
+
+// 0.1.6 is the final AgentVoice release — the project is Squeakr now.
+console.log(
+  '\nAgentVoice is now Squeakr, published as the `squeakr` package. This is the last\n' +
+    'AgentVoice release. Move over (settings, token and history come with you):\n\n' +
+    '  agentvoice migrate-to-squeakr\n',
+);
 if (!root.split(sep).includes('node_modules')) skip('not installed under node_modules');
 if (env.CI) skip('CI');
 if (process.platform === 'win32') {

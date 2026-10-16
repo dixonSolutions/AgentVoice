@@ -18,6 +18,7 @@ import { detectInstallMode, npmProjectDir, PACKAGE_NAME } from '../../serve/inst
 import type { Parsed } from '../args.js';
 import { passthrough } from '../exec.js';
 import { dim, fail, note, say, yellow } from '../out.js';
+import { migrateToSqueakrCommand } from './migrateToSqueakr.js';
 
 /** Flags scripts/update.sh understands that we forward verbatim. */
 const GIT_SWITCHES = ['stash', 'dry-run', 'force', 'no-restart'] as const;
@@ -64,6 +65,13 @@ export async function updateCommand(parsed: Parsed): Promise<number> {
     const args = [script, ...forwardedGitFlags(parsed), ...parsed.rest];
     say(dim(`$ bash ${args.join(' ')}`));
     return passthrough('bash', args, { cwd: install.root });
+  }
+
+  // The final AgentVoice release: a global npm install updates by moving to
+  // the `squeakr` package, which is what migrate-to-squeakr does end to end.
+  if (install.global) {
+    say(dim('AgentVoice is now Squeakr — updating means moving to the squeakr package.'));
+    return migrateToSqueakrCommand({ dryRun });
   }
 
   // npm: the registry replaces the package wholesale. `global` decides whether

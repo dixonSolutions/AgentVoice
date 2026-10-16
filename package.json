@@ -3,8 +3,8 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "0.1.5",
-  "description": "Self-hosted voice bridge for Cursor, Codex, and Claude Code CLIs",
+  "version": "0.1.6",
+  "description": "Renamed: this package is now `squeakr` — run `agentvoice migrate-to-squeakr`. Self-hosted voice bridge for Cursor, Codex, and Claude Code CLIs",
   "keywords": [
     "voice",
     "agent",

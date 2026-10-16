@@ -37,6 +37,13 @@ const log = childLogger('serve:install-mode');
  */
 export const PACKAGE_NAME = '@ratitisrad/agentvoice';
 
+/**
+ * AgentVoice was renamed Squeakr. This is the final release of this package;
+ * every update from here on installs the `squeakr` package instead
+ * (`agentvoice migrate-to-squeakr`).
+ */
+export const SUCCESSOR_PACKAGE = 'squeakr';
+
 export type InstallMode = 'git' | 'npm' | 'system' | 'unknown';
 
 /** Prefixes a distro package installs AgentVoice under. */
@@ -156,8 +163,10 @@ export function detectInstallMode(opts: { refresh?: boolean } = {}): InstallMode
       global,
       npx,
       updateCommand: npx
-        ? `npx ${PACKAGE_NAME}@latest`
-        : `npm install ${global ? '-g ' : ''}${PACKAGE_NAME}@latest`,
+        ? `npx ${SUCCESSOR_PACKAGE}@latest`
+        : global
+          ? 'agentvoice migrate-to-squeakr'
+          : `npm install ${SUCCESSOR_PACKAGE}@latest`,
     };
   } else {
     // An extracted tarball, a container image, a copied directory. We can still

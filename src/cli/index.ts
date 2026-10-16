@@ -26,6 +26,7 @@ import { doctorCommand } from './commands/doctor.js';
 import { runCommand } from './commands/run.js';
 import { logsCommand, serviceCommand } from './commands/service.js';
 import { migrateCommand } from './commands/migrate.js';
+import { migrateToSqueakrCommand, renameNotice } from './commands/migrateToSqueakr.js';
 import { addCommand } from './commands/add.js';
 import { localCommand } from './commands/local.js';
 import { setupCommand } from './commands/setup.js';
@@ -73,6 +74,9 @@ const USAGE = `
     update [--stash]       Update this install the way it was installed
     migrate <path>         Carry an existing bridge's config.json + .env into
                            this install's home (copies only; starts nothing)
+    migrate-to-squeakr     AgentVoice is now Squeakr: install the squeakr package,
+                           move this install's home, service and settings to it,
+                           and remove this package
     token [--new]          Print the pairing token, or mint a fresh one
     prepare-vosk [--force] Fetch the wake-word model now (the bridge also does on boot)
     version                Package version (plus the commit, in a clone)
@@ -103,7 +107,8 @@ const USAGE = `
                            replace a registered project's details (add)
     --stash                Stash local changes across a git update (update)
     --dry-run              Report what would happen, change nothing
-                           (update, service install, migrate, add)
+                           (update, service install, migrate, add,
+                           migrate-to-squeakr)
     --branch <name>        Rebase onto origin/<name> (update, git installs)
     --to <dir>             Home to migrate into (migrate; default ~/.agentvoice)
     --yes                  Take every default without asking (setup)
@@ -194,6 +199,10 @@ async function dispatch(argv: string[]): Promise<void> {
 
   const command = first.startsWith('-') ? 'run' : first || 'run';
   const args = first.startsWith('-') ? argv : rest;
+
+  // The final AgentVoice release: every command but the move itself says so.
+  // stderr, so `status --json` and `token` output stay clean.
+  if (command !== 'migrate-to-squeakr') note(`\n  ${renameNotice()}\n`);
 
   // `agentvoice logs --help` — anywhere before a bare `--`.
   const flagArgs = args.includes('--') ? args.slice(0, args.indexOf('--')) : args;
@@ -358,6 +367,13 @@ async function dispatch(argv: string[]): Promise<void> {
         force: parsed.switches.has('force'),
         withData: parsed.switches.has('with-data'),
       });
+      return;
+    }
+
+    case 'migrate-to-squeakr': {
+      const parsed = parseArgs(args);
+      rejectUnknown(parsed, ['dry-run']);
+      process.exitCode = await migrateToSqueakrCommand({ dryRun: parsed.switches.has('dry-run') });
       return;
     }
 

@@ -4,6 +4,17 @@
 
 <h1 align="center">AgentVoice</h1>
 
+> [!IMPORTANT]
+> **AgentVoice is now [Squeakr](https://github.com/dixonSolutions/Squeakr)**, published on npm as
+> [`squeakr`](https://www.npmjs.com/package/squeakr). `@ratitisrad/agentvoice@0.1.6` is the final
+> release of this package. Move an existing install over — config, keys, pairing token, history and
+> the background service come with you:
+>
+> ```bash
+> agentvoice migrate-to-squeakr
+> ```
+
+
 <p align="center">
   <a href="https://www.npmjs.com/package/@ratitisrad/agentvoice"><img src="https://img.shields.io/npm/v/%40ratitisrad%2Fagentvoice?logo=npm&logoColor=white&label=npm&color=2f2a5e" alt="npm version"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/%40ratitisrad%2Fagentvoice?logo=nodedotjs&logoColor=white&color=2f2a5e" alt="Node version"></a>

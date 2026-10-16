@@ -35,6 +35,7 @@ import {
   canSelfUpdate,
   npmProjectDir,
   PACKAGE_NAME,
+  SUCCESSOR_PACKAGE,
   detectInstallMode,
   type InstallModeInfo,
 } from './installMode.js';
@@ -797,7 +798,7 @@ export async function refreshNpmSnapshot(): Promise<ServeNpmSnapshot> {
   try {
     const { stdout } = await execFileAsync(
       'npm',
-      ['view', PACKAGE_NAME, 'version', '--registry=https://registry.npmjs.org/'],
+      ['view', SUCCESSOR_PACKAGE, 'version', '--registry=https://registry.npmjs.org/'],
       { timeout: REGISTRY_TIMEOUT_MS },
     );
     const latest = stdout.trim();
@@ -942,7 +943,11 @@ async function serveNpmUpdate(install: InstallModeInfo): Promise<ServeActionResu
       return { runId, outcome: 'no_changes' as const, detail };
     }
 
-    const args = ['install', ...(install.global ? ['-g'] : []), `${PACKAGE_NAME}@latest`];
+    // The final AgentVoice release (0.1.6): the next version is the `squeakr`
+    // package. Its postinstall points the background service at itself, so the
+    // restart below comes back as Squeakr; `squeakr upgrade-from-agentvoice`
+    // then tidies up the home directory and removes this package.
+    const args = ['install', ...(install.global ? ['-g'] : []), `${SUCCESSOR_PACKAGE}@latest`];
     try {
       await execFileAsync('npm', [...args, '--no-audit', '--no-fund'], {
         // A local install has to run in the project that depends on us, or npm
