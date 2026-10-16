@@ -15,10 +15,10 @@
 </p>
 
 <p align="center">
-  <a href="./docs/demo/squeakr-demo.mp4"><img src="./docs/demo/squeakr-demo.gif" alt="44-second demo: in the Squeakr web client, pick a project and model, say &quot;cursor listen&quot; and a question; Whisper transcribes it locally and Claude Code answers by voice" width="820"></a>
+  <a href="./docs/demo/squeakr-demo.mp4"><img src="./docs/demo/squeakr-demo.gif" alt="44-second demo: in the Squeakr web client, pick a project and model, say the wake phrase and a question; Whisper transcribes it locally and Claude Code answers by voice" width="820"></a>
 </p>
 <p align="center">
-  <em>One real voice session in the web client — pick the project and model, tap the orb, say “cursor listen” and ask; Claude Code answers by voice.
+  <em>One real voice session in the web client — pick the project and model, tap the orb, say the wake phrase and ask; Claude Code answers by voice.
   <a href="./docs/demo/squeakr-demo.mp4">▶ Watch with sound (MP4)</a> · <a href="./docs/demo/README.md">transcript &amp; how it was made</a></em>
 </p>
 

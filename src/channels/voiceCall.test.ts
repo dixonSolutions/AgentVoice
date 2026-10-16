@@ -63,7 +63,7 @@ function harness() {
       registerPresence: () => ({ release() {} }),
       prepare: async () => undefined,
       segmentSettings: () => ({ segmentSilenceMs: 700, maxSegmentMs: 15_000, minSpeechMs: 300, speechThreshold: 0.012, preRollMs: 300 }),
-      turnSettings: () => ({ inputMode: 'turns', wakeWordsEnabled: false, wakeWords: { start: 'cursor listen' }, turnSubmit: { silenceMs: 700, vadEnabled: true } }),
+      turnSettings: () => ({ inputMode: 'turns', wakeWordsEnabled: false, wakeWords: { start: 'hey squeaker' }, turnSubmit: { silenceMs: 700, vadEnabled: true } }),
     },
   });
   return {
@@ -161,7 +161,7 @@ describe('VoiceCall — like the phone', () => {
       },
       onActivity: (l) => activity.push(l),
       deps: {
-        transcribe: async () => ({ text: wake ? 'cursor listen run the tests' : 'run the tests' }),
+        transcribe: async () => ({ text: wake ? 'hey squeaker run the tests' : 'run the tests' }),
         deliver: (text) => {
           delivered.push(text);
           return { ok: true, delivery: 'spawn' };
@@ -181,7 +181,7 @@ describe('VoiceCall — like the phone', () => {
         turnSettings: () => ({
           inputMode: 'turns',
           wakeWordsEnabled: wake,
-          wakeWords: { start: 'cursor listen', end: 'cursor send', cancel: 'cancel' },
+          wakeWords: { start: 'hey squeaker', end: 'send', cancel: 'cancel' },
           turnSubmit: { silenceMs: 700, vadEnabled: true },
         }),
         mirror: (frame) => mirrored.push(frame),

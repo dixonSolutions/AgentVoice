@@ -111,7 +111,7 @@ function makeCall(allowed: string[]) {
       registerPresence: () => ({ release() {} }),
       prepare: async () => undefined,
       segmentSettings: () => ({ segmentSilenceMs: 700, maxSegmentMs: 15_000, minSpeechMs: 300, speechThreshold: 0.012, preRollMs: 300 }),
-      turnSettings: () => ({ inputMode: 'turns', wakeWordsEnabled: false, wakeWords: { start: 'cursor listen' }, turnSubmit: { silenceMs: 700, vadEnabled: true } }),
+      turnSettings: () => ({ inputMode: 'turns', wakeWordsEnabled: false, wakeWords: { start: 'hey squeaker' }, turnSubmit: { silenceMs: 700, vadEnabled: true } }),
     },
   });
   return { v, call, heard, delivered, speak: (text: string) => send?.({ type: 'speak', text }) };

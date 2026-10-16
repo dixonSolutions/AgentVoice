@@ -10,7 +10,7 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
   "settings": {
     "voice": {
       "wakeWords": {
-        "start": "cursor listen",
+        "start": "hey squeaker",
         "end": "cursor send",
         "cancel": "cancel",
         "wakeConfidenceThreshold": 0.45

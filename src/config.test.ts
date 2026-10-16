@@ -52,3 +52,17 @@ test('a pre-rename speech server keeps its container and model volume', () => {
     modelVolume: 'mine',
   });
 });
+
+test('the untouched "cursor listen" default moves to "hey squeaker"; a chosen phrase stays', () => {
+  const start = (phrase: string) => {
+    const raw = JSON.parse(readFileSync(new URL('../config.example.json', import.meta.url), 'utf8')) as {
+      settings: { voice: { wakeWords: { start: string } } };
+    };
+    raw.settings.voice.wakeWords.start = phrase;
+    migrateRawConfig(raw);
+    return raw.settings.voice.wakeWords.start;
+  };
+  assert.equal(start('cursor listen'), 'hey squeaker');
+  assert.equal(start('Cursor Listen '), 'hey squeaker');
+  assert.equal(start('computer listen'), 'computer listen');
+});

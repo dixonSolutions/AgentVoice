@@ -322,7 +322,7 @@ agent speak() ─▶ synthesize(stream: true) (docs/30) ─▶ PCM chunks
   from chat), read when the call starts (`src/channels/callTurns.ts`):
   - `input: stream` — every segment is a request; wake words do not apply.
   - `input: turns` with wake words on — the start phrase opens a request
-    ("cursor listen, run the tests", or the phrase, a pause, then the
+    ("hey squeaker, run the tests", or the phrase, a pause, then the
     request); anything else is room talk and is not sent. With VAD on, the
     pause ends it; with VAD off, the end phrase does. The cancel phrase drops it.
   - wake words off — every utterance is a request (VAD off: the silence timer
