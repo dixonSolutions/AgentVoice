@@ -213,6 +213,26 @@ export const ShowImagesSchema = z.object({
     .max(300)
     .optional()
     .describe('Optional title shown above the carousel'),
+  /** Internal: send_files already published these as agent_files. */
+  publish: z.boolean().optional(),
+});
+
+const fileItemSchema = z
+  .object({
+    path: z.string().min(1).optional().describe('Local file path (under a project or the temp directory)'),
+    url: z.string().min(1).optional().describe('http(s) URL'),
+    data: z.string().min(1).optional().describe('Base64 or data-URI payload'),
+    mime: z.string().optional().describe('MIME type (from the name when omitted)'),
+    name: z.string().max(200).optional().describe('File name shown to the user'),
+    caption: z.string().max(500).optional().describe('Short label for this file'),
+  })
+  .refine((item) => [item.path, item.url, item.data].filter((v) => v != null && v !== '').length === 1, {
+    message: 'Each file must have exactly one of path, url, or data',
+  });
+
+export const SendFilesSchema = z.object({
+  files: z.array(fileItemSchema).min(1).max(10).describe('Files to send — recordings, videos, images, documents'),
+  caption: z.string().max(300).optional().describe('Optional line sent with them'),
 });
 
 // ── Schema registry ───────────────────────────────────────────────────────
@@ -238,6 +258,7 @@ export const TOOL_SCHEMAS = {
   agent_mcp_list: AgentMcpListSchema,
   agent_mcp_tools: AgentMcpToolsSchema,
   show_images: ShowImagesSchema,
+  send_files: SendFilesSchema,
 } as const;
 
 export type ToolName = keyof typeof TOOL_SCHEMAS;
@@ -246,7 +267,7 @@ export type ToolName = keyof typeof TOOL_SCHEMAS;
 export type ToolArgs<T extends ToolName> = z.infer<(typeof TOOL_SCHEMAS)[T]>;
 
 /**
- * Tool names shipped before the AgentVoice rename (docs/26).
+ * Tool names shipped before the Cursor Voice → AgentVoice rename (docs/26).
  *
  * They are accepted by `dispatchTool` (the control-WebSocket / WebSocket
  * relay path) so an in-flight session that still remembers the old vocabulary

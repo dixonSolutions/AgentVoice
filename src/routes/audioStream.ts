@@ -52,17 +52,14 @@ import {
   primaryServerSpeechInputId,
   transcribe,
 } from '../providers/speech/input/service.js';
-import { submitAgentNativeTurn, TurnError, type TurnDelivery } from '../executor/agentTurns.js';
-import {
-  broadcastToVoiceSessions,
-  registerVoiceSession,
-} from '../mcp/server/voiceToolHandlers.js';
+import { registerVoiceSession } from '../mcp/server/voiceToolHandlers.js';
 import { recordTranscriptEvent } from '../logging/transcripts.js';
 import { ensureClientMcpSetup } from '../mcp/agentMcpSetup.js';
 import { getPresence, type PresenceClient } from '../state/presence.js';
 import { getSessionState, resolveProject, setActiveProject } from '../state/registry.js';
 import { AudioStreamPipe } from '../voice/audioStream/pipe.js';
 import { relayStreamTranscript } from '../voice/audioStream/relay.js';
+import { deliverStreamTurn } from '../voice/streamTurns.js';
 
 const log = childLogger('api:audio-stream');
 
@@ -81,34 +78,6 @@ function sttLabel(): string {
   const id = primaryServerSpeechInputId();
   if (!id) return 'none';
   return getSpeechInputSpecializer(id)?.displayName ?? id;
-}
-
-type StreamTurnOutcome =
-  | { ok: true; delivery: TurnDelivery['delivery'] }
-  | { ok: false; reason: TurnError['code'] | 'ERROR'; message: string };
-
-/**
- * Hand one streamed segment to the voice agent — spawn it or queue for it —
- * through the same path as a phone turn, and tell every voice client what
- * happened the way the phone socket does.
- */
-function deliverStreamTurn(text: string): StreamTurnOutcome {
-  broadcastToVoiceSessions({ type: 'thinking', value: true });
-  try {
-    return { ok: true, delivery: submitAgentNativeTurn(text, { source: 'stream' }).delivery };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    const reason = err instanceof TurnError ? err.code : 'ERROR';
-    broadcastToVoiceSessions({
-      type: 'speak',
-      text: reason === 'NO_PROJECT' ? 'No project is selected. Choose a project in the voice tab first.' : message,
-    });
-    if (reason !== 'NO_PROJECT') broadcastToVoiceSessions({ type: 'error', message });
-    broadcastToVoiceSessions({ type: 'thinking', value: false });
-    broadcastToVoiceSessions({ type: 'turn_complete' });
-    log.warn({ reason, message }, 'streamed segment not delivered');
-    return { ok: false, reason, message };
-  }
 }
 
 export function registerAudioStreamWebSocket(app: FastifyInstance): void {
@@ -226,7 +195,7 @@ export function registerAudioStreamWebSocket(app: FastifyInstance): void {
           },
           onTranscript: (t) => {
             // The text reaches the client before the agent is spawned or queued.
-            const outcome = relayStreamTranscript(t, sendJson, deliverStreamTurn);
+            const outcome = relayStreamTranscript(t, sendJson, (text) => deliverStreamTurn(text));
             log.info(
               {
                 client: clientName,

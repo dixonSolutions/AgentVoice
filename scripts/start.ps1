@@ -7,7 +7,7 @@
     Starts the production HOST bridge back up after stop.ps1.
     Counterpart to scripts\stop.ps1. (The local dev server `npm run dev` runs on a
     separate port — default 5089 — and is managed independently.)
-      1. Starts the Squeakr Windows service (named AgentVoice) (if installed)
+      1. Starts the Squeakr Windows service (if installed)
       2. Falls back to a manual background process when no service exists
       3. Runs a /healthz check to confirm startup
 
@@ -41,7 +41,7 @@ function Test-Admin {
         [Security.Principal.WindowsBuiltinRole]::Administrator)
 }
 
-$ServiceName = 'AgentVoice'
+$ServiceName = 'Squeakr'
 $EnvFile     = Join-Path $ProjectDir '.env'
 $LogFile     = Join-Path $ProjectDir 'logs\bridge.log'
 

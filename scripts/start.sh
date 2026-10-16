@@ -5,8 +5,8 @@
 # Starts the production HOST bridge back up after `npm run stop`.
 # Counterpart to scripts/stop.sh. (The local dev server `npm run dev` runs on a
 # separate port — default 5089 — and is managed independently.)
-#   1. Starts the agentvoice.service systemd unit
-#   2. Starts the agentvoice-watch.path unit (auto-restart on rebuilds)
+#   1. Starts the squeakr.service systemd unit
+#   2. Starts the squeakr-watch.path unit (auto-restart on rebuilds)
 #   3. Falls back to a manual nohup process when no systemd unit exists
 #   4. Runs a /healthz check to confirm startup
 #
@@ -65,26 +65,26 @@ fi
 DIST_FILE="${PROJECT_DIR}/dist/index.js"
 
 # ── Start systemd units (user, then system), else manual nohup ──────────────
-if systemctl --user cat agentvoice.service &>/dev/null; then
+if systemctl --user cat squeakr.service &>/dev/null; then
   section "Starting systemd user units"
-  systemctl --user start agentvoice.service
-  systemctl --user start agentvoice-watch.path 2>/dev/null || \
-    warn "agentvoice-watch.path not started (auto-restart on rebuild disabled)."
+  systemctl --user start squeakr.service
+  systemctl --user start squeakr-watch.path 2>/dev/null || \
+    warn "squeakr-watch.path not started (auto-restart on rebuild disabled)."
   sleep 1
-  if systemctl --user is-active --quiet agentvoice.service; then
-    ok "agentvoice.service started."
+  if systemctl --user is-active --quiet squeakr.service; then
+    ok "squeakr.service started."
   else
-    warn "Service may have failed. Check: journalctl --user -u agentvoice -n 30"
-    systemctl --user status agentvoice.service --no-pager -l | tail -15
+    warn "Service may have failed. Check: journalctl --user -u squeakr -n 30"
+    systemctl --user status squeakr.service --no-pager -l | tail -15
   fi
 
-elif systemctl cat agentvoice.service &>/dev/null 2>&1; then
+elif systemctl cat squeakr.service &>/dev/null 2>&1; then
   section "Starting systemd system unit"
-  sudo systemctl start agentvoice.service
-  sudo systemctl start agentvoice-watch.path 2>/dev/null || true
+  sudo systemctl start squeakr.service
+  sudo systemctl start squeakr-watch.path 2>/dev/null || true
   sleep 1
-  systemctl status agentvoice.service --no-pager -l | head -12
-  ok "system agentvoice.service started."
+  systemctl status squeakr.service --no-pager -l | head -12
+  ok "system squeakr.service started."
 
 else
   section "Starting bridge manually (no systemd unit)"
@@ -123,11 +123,11 @@ fi
 if $TAIL_LOGS; then
   echo ""
   info "Tailing logs (Ctrl-C to stop)..."
-  journalctl --user -u agentvoice -f --no-pager
+  journalctl --user -u squeakr -f --no-pager
 fi
 
 echo ""
 ok "Done."
-echo -e "  ${BLU}Logs:${NC} journalctl --user -u agentvoice -f"
+echo -e "  ${BLU}Logs:${NC} journalctl --user -u squeakr -f"
 echo -e "  ${BLU}Files:${NC} logs/serve/bridge/ (session logs) · logs/serve/transcripts/ — npm run cli -- logs --list"
 echo ""

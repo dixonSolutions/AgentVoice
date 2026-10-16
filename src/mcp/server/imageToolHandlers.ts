@@ -5,7 +5,8 @@
 import { childLogger } from '../../log.js';
 import { notifyPhone } from '../../push/notifyPhone.js';
 import { ShowImagesSchema } from '../schemas.js';
-import { setImages, DEFAULT_BATCH_TTL_MS } from './imageRegistry.js';
+import { setImages, DEFAULT_BATCH_TTL_MS, resolveAllowedImagePath } from './imageRegistry.js';
+import { publishAgentFiles } from './fileToolHandlers.js';
 
 const log = childLogger('mcp:server:imageTools');
 
@@ -24,7 +25,7 @@ export function handleShowImages(args: unknown): ShowImagesResult {
     return { ok: false, count: 0, delivered: false, error: message };
   }
 
-  const { images, duration_ms, caption } = parsed.data;
+  const { images, duration_ms, caption, publish } = parsed.data;
   const durationMs = duration_ms ?? 8000;
 
   try {
@@ -44,6 +45,14 @@ export function handleShowImages(args: unknown): ShowImagesResult {
         'show_images pushed',
       );
     });
+
+    // Chat channels post them as attachments (channels/hub.ts).
+    if (publish !== false) {
+      publishAgentFiles(
+        images.map((img) => (img.path ? { ...img, path: resolveAllowedImagePath(img.path) ?? img.path } : img)),
+        caption ?? null,
+      );
+    }
 
     return {
       ok: true,

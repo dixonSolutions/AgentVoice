@@ -88,7 +88,7 @@ jobs:
 
       - uses: actions/upload-artifact@v5
         with:
-          name: agentvoice-npm-tarball
+          name: squeakr-npm-tarball
           path: '*.tgz'
           if-no-files-found: error
 
@@ -106,10 +106,13 @@ jobs:
       # the tarball to this workflow run and this commit.
       id-token: write
     # The packages job builds from the tag this job pushes, and only when it
-    # pushed one.
+    # pushed one — or when a `v*` tag was pushed by hand: that is the way to
+    # build the .deb / .rpm and the repositories for a version that reached
+    # npm some other way (a first publish from a maintainer's shell, which a
+    # brand-new package name needs).
     outputs:
       version: ${{ steps.v.outputs.version }}
-      published: ${{ steps.shipped.outputs.already == 'false' }}
+      published: ${{ steps.shipped.outputs.already == 'false' || github.ref_type == 'tag' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -203,7 +206,7 @@ jobs:
       #   404 Not Found - PUT https://registry.npmjs.org/@ratitisrad%2fagentvoice
       # for exactly that reason.
       #
-      # The Squeakr rename (docs/44) is a new package name, so the first
+      # The Squeakr rename (docs/45) is a new package name, so the first
       # `squeakr` release is in the same position: it needs NPM_TOKEN again,
       # and Trusted Publishing has to be configured on `squeakr` afterwards.
       #
@@ -294,17 +297,24 @@ jobs:
             they work on distros that still ship Node 18.
 
             ```bash
-            sudo apt install ./agentvoice_${{ steps.v.outputs.version }}_amd64.deb
-            sudo dnf install ./agentvoice-${{ steps.v.outputs.version }}.x86_64.rpm
+            sudo apt install ./squeakr_${{ steps.v.outputs.version }}_amd64.deb
+            sudo dnf install ./squeakr-${{ steps.v.outputs.version }}.x86_64.rpm
             ```
 
             Both enable Squeakr as a background user service out of the box.
 
             For upgrades through `apt upgrade` / `dnf upgrade`, add the
-            signed repository instead: https://dixonsolutions.github.io/AgentVoice/
+            signed repository instead: https://dixonsolutions.github.io/Squeakr/
 
             The wake-word model is not bundled — run `squeakr prepare-vosk`
             if you want wake words.
+
+            Coming from AgentVoice? One command moves everything over —
+            config, keys, pairing token, history, service, apt/dnf source:
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/dixonSolutions/Squeakr/main/scripts/migrate-to-squeakr.sh | bash
+            ```
           files: '*.tgz'
 
   # ── System packages (docs/38, #58) ─────────────────────────────────────────
@@ -388,7 +398,7 @@ jobs:
       - name: Assert the wake-word model is not packaged
         run: |
           set -eu
-          if [ -f packaging/root/usr/lib/agentvoice/web/dist/vosk/model.tar.gz ]; then
+          if [ -f packaging/root/usr/lib/squeakr/web/dist/vosk/model.tar.gz ]; then
             echo "::error::the wake-word model is in the staging tree — packaging/stage.sh should have removed it"
             exit 1
           fi
@@ -422,7 +432,7 @@ jobs:
       - name: Install it and run the CLI
         run: |
           set -eu
-          sudo apt-get install -y ./agentvoice_*_${{ matrix.arch }}.deb
+          sudo apt-get install -y ./squeakr_*_${{ matrix.arch }}.deb
           squeakr --version
           # The install mode has to come back as `system`, or the Serve page
           # would offer an npm update for a package-manager install, and
@@ -432,11 +442,11 @@ jobs:
           mode="$(squeakr status --json | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).install.mode')"
           echo "install mode: ${mode}"
           [ "${mode}" = system ]
-          sudo apt-get remove -y agentvoice
+          sudo apt-get remove -y squeakr
 
       - uses: actions/upload-artifact@v5
         with:
-          name: agentvoice-packages-${{ matrix.arch }}
+          name: squeakr-packages-${{ matrix.arch }}
           path: |
             *.deb
             *.rpm

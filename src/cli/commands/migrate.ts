@@ -47,8 +47,8 @@ const PATH_KEYS = new Set([
   'CODEX_PATH',
   'CLAUDE_CODE_PATH',
   'CODEWHALE_PATH',
-  'SQUEAKR_LOG_DIR',
   'AGENTVOICE_LOG_DIR',
+  'SQUEAKR_LOG_DIR',
 ]);
 
 /**

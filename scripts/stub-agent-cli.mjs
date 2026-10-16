@@ -201,7 +201,7 @@ function resolveMcpEndpoint() {
   const idx = argv.indexOf('--mcp-config');
   if (idx !== -1 && argv[idx + 1] && existsSync(argv[idx + 1])) {
     const cfg = JSON.parse(readFileSync(argv[idx + 1], 'utf-8'));
-    const entry = cfg.mcpServers?.['agent-voice'];
+    const entry = cfg.mcpServers?.['squeakr'];
     if (entry?.url) return { url: entry.url, token: entry.headers?.Authorization ?? '', from: argv[idx + 1] };
   }
   // Codex reads its own TOML, and takes the token from the env var the
@@ -209,7 +209,7 @@ function resolveMcpEndpoint() {
   const codexCfg = join(homedir(), '.codex', 'config.toml');
   if (dialect === 'codex' && existsSync(codexCfg)) {
     const toml = readFileSync(codexCfg, 'utf-8');
-    const block = toml.split('[mcp_servers."agent-voice"]')[1] ?? '';
+    const block = toml.split('[mcp_servers."squeakr"]')[1] ?? '';
     const url = block.match(/url\s*=\s*"([^"]+)"/)?.[1];
     const envVar = block.match(/bearer_token_env_var\s*=\s*"([^"]+)"/)?.[1];
     const tok = envVar ? process.env[envVar] : undefined;
@@ -226,7 +226,7 @@ function resolveMcpEndpoint() {
       join(process.env.CODEWHALE_HOME?.trim() || join(homedir(), '.codewhale'), 'mcp.json');
     if (existsSync(cwCfg)) {
       const cfg = JSON.parse(readFileSync(cwCfg, 'utf-8'));
-      const entry = (cfg.servers ?? cfg.mcpServers ?? {})['agent-voice'];
+      const entry = (cfg.servers ?? cfg.mcpServers ?? {})['squeakr'];
       const envVar = entry?.bearer_token_env_var;
       const tok = envVar ? process.env[envVar] : undefined;
       if (entry?.url && tok) {
@@ -240,10 +240,10 @@ function resolveMcpEndpoint() {
   const cursorCfg = join(homedir(), '.cursor', 'mcp.json');
   if (existsSync(cursorCfg)) {
     const cfg = JSON.parse(readFileSync(cursorCfg, 'utf-8'));
-    const entry = cfg.mcpServers?.['agent-voice'];
+    const entry = cfg.mcpServers?.['squeakr'];
     if (entry?.url) return { url: entry.url, token: entry.headers?.Authorization ?? '', from: cursorCfg };
   }
-  throw new Error('no agent-voice MCP registration found — provider did not write one');
+  throw new Error('no squeakr MCP registration found — provider did not write one');
 }
 
 async function callTool(client, name, args = {}) {

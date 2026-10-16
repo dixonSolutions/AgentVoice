@@ -5,15 +5,15 @@
 > that each release attaches are also served from signed apt and dnf
 > repositories, so `apt upgrade` / `dnf upgrade` pick up new releases.
 
-Site: **https://dixonsolutions.github.io/AgentVoice/**
+Site: **https://dixonsolutions.github.io/Squeakr/**
 
 | URL | What |
 | --- | --- |
 | `/apt` | apt repository — suite `stable`, component `main`, `amd64` + `arm64` |
-| `/apt/agentvoice.sources` | ready-made deb822 source for `/etc/apt/sources.list.d/` |
+| `/apt/squeakr.sources` | ready-made deb822 source for `/etc/apt/sources.list.d/` |
 | `/rpm` | dnf repository — `x86_64` + `aarch64` |
-| `/rpm/agentvoice.repo` | ready-made repo file for `/etc/yum.repos.d/` |
-| `/agentvoice.asc` | the public signing key |
+| `/rpm/squeakr.repo` | ready-made repo file for `/etc/yum.repos.d/` |
+| `/squeakr.asc` | the public signing key |
 | `/manifest.txt` | sha256 + path of every published package (read back by the next publish) |
 | `/` | a short page with the install commands below |
 
@@ -23,30 +23,30 @@ Site: **https://dixonsolutions.github.io/AgentVoice/**
 
 ```bash
 sudo install -d -m 0755 /etc/apt/keyrings
-sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/agentvoice.asc \
-  -o /etc/apt/keyrings/agentvoice.asc
-sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/apt/agentvoice.sources \
-  -o /etc/apt/sources.list.d/agentvoice.sources
+sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/squeakr.asc \
+  -o /etc/apt/keyrings/squeakr.asc
+sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/apt/squeakr.sources \
+  -o /etc/apt/sources.list.d/squeakr.sources
 sudo apt update
-sudo apt install agentvoice
+sudo apt install squeakr
 ```
 
 The `.sources` file is:
 
 ```
 Types: deb
-URIs: https://dixonsolutions.github.io/AgentVoice/apt
+URIs: https://dixonsolutions.github.io/Squeakr/apt
 Suites: stable
 Components: main
 Architectures: amd64 arm64
-Signed-By: /etc/apt/keyrings/agentvoice.asc
+Signed-By: /etc/apt/keyrings/squeakr.asc
 ```
 
 The one-line equivalent, for older apt or if you prefer `.list` files:
 
 ```bash
-echo "deb [signed-by=/etc/apt/keyrings/agentvoice.asc] https://dixonsolutions.github.io/AgentVoice/apt stable main" \
-  | sudo tee /etc/apt/sources.list.d/agentvoice.list
+echo "deb [signed-by=/etc/apt/keyrings/squeakr.asc] https://dixonsolutions.github.io/Squeakr/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/squeakr.list
 ```
 
 The key is only trusted for this one repository (`signed-by`), never
@@ -55,9 +55,9 @@ system-wide — no `apt-key`, nothing in `trusted.gpg.d`.
 ### Fedora / RHEL
 
 ```bash
-sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/rpm/agentvoice.repo \
-  -o /etc/yum.repos.d/agentvoice.repo
-sudo dnf install agentvoice
+sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/rpm/squeakr.repo \
+  -o /etc/yum.repos.d/squeakr.repo
+sudo dnf install squeakr
 ```
 
 dnf shows the key's fingerprint and asks to import it on first use. The repo
@@ -67,11 +67,11 @@ file checks both the repository metadata (`repo_gpgcheck=1`) and every package
 ```ini
 [squeakr]
 name=Squeakr
-baseurl=https://dixonsolutions.github.io/AgentVoice/rpm
+baseurl=https://dixonsolutions.github.io/Squeakr/rpm
 enabled=1
 gpgcheck=1
 repo_gpgcheck=1
-gpgkey=https://dixonsolutions.github.io/AgentVoice/agentvoice.asc
+gpgkey=https://dixonsolutions.github.io/Squeakr/squeakr.asc
 metadata_expire=6h
 ```
 
@@ -87,7 +87,7 @@ the repository as soon as it is added — it is the same package name.
 ## How publishing works
 
 The Pages site is shared: the Squeakr landing page (`site/` in the repo) is
-served at `/`, the repositories at `/apt`, `/rpm`, `/agentvoice.asc` and
+served at `/`, the repositories at `/apt`, `/rpm`, `/squeakr.asc` and
 `/packages.html`. A deploy replaces the whole site, so every run builds both —
 on a release, on a push to `main` that touches `site/` (or this workflow), and
 by hand. A push or manual run with no `PACKAGE_SIGNING_KEY` deploys the landing
@@ -121,7 +121,7 @@ not contain anything at those repository paths — the run checks.
      (detached), SHA-512;
    - dnf: `createrepo_c` (gzip metadata, so EL8 can read it; no sqlite), and
      `repomd.xml` is signed as `repomd.xml.asc`;
-   - writes `agentvoice.asc`, `agentvoice.repo`, `squeakr.sources`,
+   - writes `squeakr.asc`, `squeakr.repo`, `squeakr.sources`,
      `manifest.txt` and `packages.html` (the site root is the landing page in `site/`, laid over the repositories by the same workflow).
 5. **Verify with only the public key**: `gpgv` on `InRelease`, `Release.gpg`
    and `repomd.xml.asc`; `rpmkeys --checksig` in a scratch rpmdb on every RPM,
@@ -181,7 +181,7 @@ fpr="$(gpg --list-secret-keys --with-colons | awk -F: '$1=="fpr"{print $10; exit
 echo "$fpr"
 
 gpg --armor --export-secret-keys "$fpr" > squeakr-signing.key.asc   # private
-gpg --armor --export "$fpr" > agentvoice.asc                           # public
+gpg --armor --export "$fpr" > squeakr.asc                           # public
 cp "$GNUPGHOME/openpgp-revocs.d/$fpr.rev" squeakr-signing.rev        # revocation certificate
 ```
 
@@ -194,8 +194,8 @@ none.
 ### 2. Store it as repository secrets
 
 ```bash
-gh secret set PACKAGE_SIGNING_KEY --repo dixonSolutions/AgentVoice < squeakr-signing.key.asc
-gh secret set PACKAGE_SIGNING_PASSPHRASE --repo dixonSolutions/AgentVoice   # prompts; skip if no passphrase
+gh secret set PACKAGE_SIGNING_KEY --repo dixonSolutions/Squeakr < squeakr-signing.key.asc
+gh secret set PACKAGE_SIGNING_PASSPHRASE --repo dixonSolutions/Squeakr   # prompts; skip if no passphrase
 ```
 
 Then move `squeakr-signing.key.asc` and `squeakr-signing.rev` to offline
@@ -203,7 +203,7 @@ storage (a password manager or an encrypted USB stick), and remove the working
 copies:
 
 ```bash
-shred -u agentvoice-signing.key.asc squeakr-signing.rev
+shred -u squeakr-signing.key.asc squeakr-signing.rev
 gpgconf --kill gpg-agent && rm -rf "$GNUPGHOME"; unset GNUPGHOME
 ```
 
@@ -212,7 +212,7 @@ gpgconf --kill gpg-agent && rm -rf "$GNUPGHOME"; unset GNUPGHOME
 Settings → Pages → Build and deployment → Source: **GitHub Actions**. Or:
 
 ```bash
-gh api -X POST repos/dixonSolutions/AgentVoice/pages -f build_type=workflow
+gh api -X POST repos/dixonSolutions/Squeakr/pages -f build_type=workflow
 ```
 
 This creates the `github-pages` environment, which by default only deploys
@@ -221,7 +221,7 @@ are fine. Releases cut by pushing a `v*` tag run on the tag ref and would be
 refused; to allow them too:
 
 ```bash
-gh api -X POST repos/dixonSolutions/AgentVoice/environments/github-pages/deployment-branch-policies \
+gh api -X POST repos/dixonSolutions/Squeakr/environments/github-pages/deployment-branch-policies \
   -f name='v*' -f type=tag
 ```
 
@@ -244,15 +244,15 @@ step, so nothing publishes):
 ```bash
 gpg --import squeakr-signing.key.asc          # into a throwaway GNUPGHOME, as above
 gpg --quick-set-expire "$fpr" 3y
-gpg --armor --export-secret-keys "$fpr" | gh secret set PACKAGE_SIGNING_KEY --repo dixonSolutions/AgentVoice
+gpg --armor --export-secret-keys "$fpr" | gh secret set PACKAGE_SIGNING_KEY --repo dixonSolutions/Squeakr
 ```
 
-The next publish serves the updated `agentvoice.asc`. Users hold a copy of the
+The next publish serves the updated `squeakr.asc`. Users hold a copy of the
 old one, and apt refuses an expired key, so they refresh it once:
 
 ```bash
-sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/agentvoice.asc -o /etc/apt/keyrings/agentvoice.asc
-sudo rpm --import https://dixonsolutions.github.io/AgentVoice/agentvoice.asc   # dnf
+sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/squeakr.asc -o /etc/apt/keyrings/squeakr.asc
+sudo rpm --import https://dixonsolutions.github.io/Squeakr/squeakr.asc   # dnf
 ```
 
 Announce it in the release notes before the old expiry date.
@@ -261,12 +261,12 @@ Announce it in the release notes before the old expiry date.
 key as in step 1, then set the secret to *both* private keys, **new first**:
 
 ```bash
-cat new.key.asc old.key.asc | gh secret set PACKAGE_SIGNING_KEY --repo dixonSolutions/AgentVoice
+cat new.key.asc old.key.asc | gh secret set PACKAGE_SIGNING_KEY --repo dixonSolutions/Squeakr
 ```
 
 With several keys in the secret, the apt `Release` files and `repomd.xml` are
 signed by all of them (clients accept any signature from a key they trust),
-new RPMs are signed with the first, and `agentvoice.asc` carries every public
+new RPMs are signed with the first, and `squeakr.asc` carries every public
 key. Existing users keep working on the old key while they pick up the new
 file; after a release or two, set the secret to the new key alone. On
 **compromise**, skip the overlap: publish the new key alone, publish the

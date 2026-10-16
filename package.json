@@ -19,24 +19,25 @@
     "mcp",
     "pwa"
   ],
-  "homepage": "https://github.com/dixonSolutions/AgentVoice#readme",
+  "homepage": "https://github.com/dixonSolutions/Squeakr#readme",
   "bugs": {
-    "url": "https://github.com/dixonSolutions/AgentVoice/issues"
+    "url": "https://github.com/dixonSolutions/Squeakr/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dixonSolutions/AgentVoice.git"
+    "url": "git+https://github.com/dixonSolutions/Squeakr.git"
   },
   "author": "dixonSolutions",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "squeakr": "bin/agentvoice.mjs"
+    "squeakr": "bin/squeakr.mjs"
   },
   "files": [
     "bin/",
     "dist/",
     "prompts/",
+    "scripts/migrate-to-squeakr.sh",
     "web/dist/",
     "!web/dist/vosk/model.tar.gz",
     "config.example.json",
@@ -50,10 +51,10 @@
   "scripts": {
     "build": "npm run build:backend && npm run build:web",
     "build:backend": "tsup",
-    "build:web": "ng build agentvoice-web --configuration production",
-    "cli": "node bin/agentvoice.mjs",
+    "build:web": "ng build squeakr-web --configuration production",
+    "cli": "node bin/squeakr.mjs",
     "dev": "bash scripts/dev.sh",
-    "dev:web": "ng serve agentvoice-web",
+    "dev:web": "ng serve squeakr-web",
     "gen-icons": "node scripts/gen-icons.mjs",
     "gen-vapid-keys": "bash scripts/gen-vapid-keys.sh",
     "mobile:sync": "npm run build:web && cd mobile && npm install --legacy-peer-deps && npx cap sync",
@@ -127,5 +128,10 @@
     "esbuild@0.27.7": true,
     "esbuild@0.28.1": true,
     "esbuild@0.21.5": true
+  },
+  "optionalDependencies": {
+    "@discordjs/voice": "^0.19.2",
+    "discord.js": "^14.27.0",
+    "opusscript": "^0.1.1"
   }
 }

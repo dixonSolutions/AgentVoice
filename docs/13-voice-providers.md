@@ -20,7 +20,7 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
         "vadEnabled": true
       },
       "tts": {
-        "agentVoiceEnabled": true,
+        "agentSpeechEnabled": true,
         "errorSoundEnabled": true,
         "errorSpeakEnabled": true,
         "webkit": {
@@ -47,7 +47,7 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
 | `wakeWords.wakeConfidenceThreshold` | Minimum mean Vosk word confidence (0–1) to accept the wake phrase; below 0.55 also enables partial recognition |
 | `turnSubmit.silenceMs` | Silence before auto-submit (500–30000 ms) |
 | `turnSubmit.vadEnabled` | Use Silero VAD for speech-end detection |
-| `tts.agentVoiceEnabled` | Play MCP `speak()` lines aloud |
+| `tts.agentSpeechEnabled` | Play MCP `speak()` lines aloud |
 | `tts.errorSoundEnabled` | Play error earcon on voice pipeline failures |
 | `tts.errorSpeakEnabled` | Speak error messages aloud |
 | `tts.webkit.*` | Default browser TTS rate/pitch/volume/lang |
@@ -60,7 +60,7 @@ Managed via Config tab or API:
 
 - `GET /api/voice/providers` — returns `{ wakeWords, turnSubmit, tts, touchControls, wakeWordsEnabled, defaultMicMuted, userName? }`
 - `PATCH /api/voice/wake-words` — update wake words and turn submit
-- `PATCH /api/voice/tts` — update cursor voice on/off, error feedback, WebKit defaults
+- `PATCH /api/voice/tts` — update agent speech on/off, error feedback, WebKit defaults
 - `PATCH /api/voice/ui` — update `touchControls` / `wakeWordsEnabled` / `defaultMicMuted` / `touchOnlyPreset`
 - `PATCH /api/voice/user-name` — optional name the agent uses for the user
 

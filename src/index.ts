@@ -13,6 +13,7 @@
  *   8. Register graceful shutdown handlers
  */
 
+import { getChannelManager } from './channels/manager.js';
 import 'dotenv/config';
 
 import { loadConfig } from './config.js';
@@ -124,6 +125,12 @@ async function main(): Promise<void> {
       );
   }
 
+  // Discord / Telegram / Slack / WhatsApp (docs/44) — after the port is bound,
+  // and never fatal: a channel that cannot connect reports it in its status.
+  void getChannelManager()
+    ?.startAll()
+    .catch((err: unknown) => log.warn({ err }, 'starting channels failed'));
+
   log.info(
     {
       projects: config.projects.filter((p) => p.enabled).length,
@@ -149,6 +156,7 @@ async function main(): Promise<void> {
     killActiveAgent('bridge shutdown');
     killVoiceAgent('bridge shutdown');
     stopProjectDiscovery();
+    await getChannelManager()?.stopAll().catch(() => undefined);
     try {
       await app.close();
       closeDb();

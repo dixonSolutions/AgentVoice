@@ -44,7 +44,7 @@ UPSTREAM_PORT="${SERVE_BACKEND_PORT:-$PORT}"
 # Unified hosting (default): bridge serves PWA + API + WS on backendPort with COOP/COEP.
 # Only use nginx webPort when explicitly enabled — nginx often serves stale web/dist
 # while proxying API/WS to the live bridge, which breaks the PWA.
-USE_NGINX_FRONT="${CURSOR_VOICE_NGINX_FRONT:-}"
+USE_NGINX_FRONT="${SQUEAKR_NGINX_FRONT:-}"
 if [[ -z "$USE_NGINX_FRONT" && -f "${PROJECT_DIR}/config.json" ]]; then
   USE_NGINX_FRONT="$(python3 - <<'PY' "${PROJECT_DIR}/config.json"
 import json, sys

@@ -5,7 +5,7 @@
 
 .DESCRIPTION
     Stops the production HOST bridge (the long-running Squeakr service).
-      1. Stops the Squeakr Windows service (named AgentVoice) (if installed)
+      1. Stops the Squeakr Windows service (if installed)
       2. Falls back to killing the manual process (data\.bridge.pid)
       3. Frees the host bridge port (PORT, default 8787) as a safety net
 
@@ -42,7 +42,7 @@ function Test-Admin {
         [Security.Principal.WindowsBuiltinRole]::Administrator)
 }
 
-$ServiceName = 'AgentVoice'
+$ServiceName = 'Squeakr'
 $EnvFile     = Join-Path $ProjectDir '.env'
 
 # ── Load .env for PORT ──────────────────────────────────────────────────────

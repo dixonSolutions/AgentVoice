@@ -1,6 +1,6 @@
 # 16 — MCP Server: Cursor as Brain
 
-> **Design document:** `cursor_voice_mcp_design.docx` (dixonSolutions, June 2026)
+> **Design document:** `squeakr_mcp_design.docx` (dixonSolutions, June 2026)
 >
 > This document records the proposed architecture, an honest evaluation of its
 > strengths and weaknesses, the solutions adopted, and the implementation roadmap.
@@ -25,13 +25,13 @@ Cursor's native context window, model, and reasoning do the work.
 ## 2 — How Cursor Discovers the MCP Server
 
 The bridge exposes an **MCP HTTP server** at `/mcp`. On voice session start the
-bridge ensures **global** `~/.cursor/mcp.json` registers `agent-voice` so
+bridge ensures **global** `~/.cursor/mcp.json` registers `squeakr` so
 Cursor loads it in **every workspace** (not per-project):
 
 ```json
 {
   "mcpServers": {
-    "agent-voice": {
+    "squeakr": {
       "url": "https://<tailscale-hostname>:8787/mcp",
       "transport": "http",
       "headers": { "Authorization": "Bearer <app-token>" }
@@ -42,7 +42,7 @@ Cursor loads it in **every workspace** (not per-project):
 
 Restart Cursor after the first global install. The bridge exposes the tool
 manifest over HTTP. From that point Cursor's conversational agent has the full
-`agent-voice` tool surface.
+`squeakr` tool surface.
 
 ---
 
@@ -125,12 +125,12 @@ every running agent session and makes it queryable via `get_agent_status()`.
 
 ## 6 — System Prompt & Boot Lifecycle
 
-Voice agent prompts live in `prompts/agentvoice/system.md` (loaded by
-`src/mcp/agentVoicePrompt.ts`). A matching Cursor rule exists at
-`.cursor/rules/agent-voice.mdc` for `@agent-voice` injection — the prompt
-directory moved to `agentvoice/` in the rename (see
+Voice agent prompts live in `prompts/squeakr/system.md` (loaded by
+`src/mcp/squeakrPrompt.ts`). A matching Cursor rule exists at
+`.cursor/rules/squeakr.mdc` for `@squeakr` injection — the prompt
+directory moved to `squeakr/` in the rename (see
 [`docs/26-rename-agentvoice.md`](./26-rename-agentvoice.md)), but the MCP
-registration key and rule filename stay `agent-voice` for compatibility with
+registration key and rule filename stay `squeakr` for compatibility with
 already-configured `~/.cursor/mcp.json`/`~/.cursor/rules/` on existing installs.
 
 ### First spawn (new session)
@@ -139,10 +139,10 @@ When no `resumeId` exists for the project, `spawnVoiceAgent()` passes the **full
 system prompt plus boot suffix to `cursor-agent -p`:
 
 ```
-<prompts/agentvoice/system.md body>
+<prompts/squeakr/system.md body>
 
 ---
-The agent-voice MCP server is connected. Start the voice loop now — call next_voice_turn() immediately.
+The squeakr MCP server is connected. Start the voice loop now — call next_voice_turn() immediately.
 ```
 
 ### Resume (existing session)
@@ -150,19 +150,19 @@ The agent-voice MCP server is connected. Start the voice loop now — call next_
 When the project has a persisted `resumeId`, only a **short** prompt is sent:
 
 ```
-@agent-voice
+@squeakr
 
-The agent-voice MCP server is connected. Resume the voice loop — call next_voice_turn() immediately.
+The squeakr MCP server is connected. Resume the voice loop — call next_voice_turn() immediately.
 ```
 
-The `@agent-voice` mention causes Cursor to inject the rule file. Conversation
+The `@squeakr` mention causes Cursor to inject the rule file. Conversation
 history comes from `--resume <session_id>`; the full system prompt is **not** resent.
 
 Implementation: `src/executor/voiceAgent.ts` — `buildVoiceBootPrompt(project)`.
 
 ### MCP server instructions
 
-Separate from the agent boot prompt: `prompts/agentvoice/mcp-instructions.md` is
+Separate from the agent boot prompt: `prompts/squeakr/mcp-instructions.md` is
 returned as MCP server instructions when Cursor connects to `/mcp`.
 
 ---
@@ -283,7 +283,7 @@ GET request. Cursor supports custom headers in `mcp.json`:
 ```json
 {
   "mcpServers": {
-    "agent-voice": {
+    "squeakr": {
       "url": "https://host:3000/mcp/sse",
       "transport": "sse",
       "headers": { "Authorization": "Bearer <token>" }
@@ -326,7 +326,7 @@ See [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) and
 | `src/mcp/server/modeToolHandlers.ts` | `set_mode`, `execute_plan`, `agent_diff`, `agent_revert` |
 | `src/mcp/server/index.ts` | MCP `Server` using `@modelcontextprotocol/sdk`; tool dispatch |
 | `src/routes/mcpSse.ts` | Fastify SSE route (`GET /mcp/sse`) + post handler (`POST /mcp`) |
-| `prompts/agentvoice/system.md` | System prompt for Cursor voice mode |
+| `prompts/squeakr/system.md` | System prompt for voice mode |
 | `.cursor/mcp.json.example` | Example MCP registration file |
 
 ### Phase 2 — `agent_native` Workflow ✅
@@ -344,15 +344,15 @@ See [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) and
 
 - Voice agent spawns automatically on first `user_turn` when none is running.
 - MCP session bound on first `/mcp` connect (`bindVoiceAgentMcpSession`).
-- Boot prompt: full system prompt on first spawn; `@agent-voice` on resume.
+- Boot prompt: full system prompt on first spawn; `@squeakr` on resume.
 
 ### Voice session MCP prepare (implemented)
 
 Before the mic opens, the bridge runs `ensureGlobalMcpSetup()` — **not** per-project:
 
-1. Check **global** `~/.cursor/mcp.json` for `agent-voice` entry
+1. Check **global** `~/.cursor/mcp.json` for `squeakr` entry
    (Windows: `%USERPROFILE%\.cursor\mcp.json`)
-2. Install if missing; update if `cursorVoice.version` is older than bridge
+2. Install if missing; update if `squeakr.version` (in the MCP entry) is older than bridge
 3. Set `enabled: true` and write bridge URL + Bearer token
 4. User root for metadata: `~/Projects` when that folder exists, else `~`
 

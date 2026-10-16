@@ -103,8 +103,9 @@ const UserNameBodySchema = z.object({
 });
 
 const VoiceTtsBodySchema = z.object({
+  agentSpeechEnabled: z.boolean().optional(),
+  /** @deprecated pre-rename names — accepted so a cached PWA build still works. */
   agentVoiceEnabled: z.boolean().optional(),
-  /** @deprecated pre-rename name — accepted so a cached PWA build still works. */
   cursorVoiceEnabled: z.boolean().optional(),
   errorSoundEnabled: z.boolean().optional(),
   errorSpeakEnabled: z.boolean().optional(),
@@ -185,7 +186,7 @@ export function setVoiceTts(raw: unknown): VoiceSettingsResponse {
 
   persistVoiceUpdate((voice) => {
     const current = voice.tts ?? {
-      agentVoiceEnabled: true,
+      agentSpeechEnabled: true,
       errorSoundEnabled: true,
       errorSpeakEnabled: true,
       readAloud: 'replies' as const,
@@ -193,8 +194,11 @@ export function setVoiceTts(raw: unknown): VoiceSettingsResponse {
       webkit: { rate: 1.02, pitch: 1, volume: 1, lang: 'en-US' },
     };
     voice.tts = {
-      agentVoiceEnabled:
-        parsed.data.agentVoiceEnabled ?? parsed.data.cursorVoiceEnabled ?? current.agentVoiceEnabled,
+      agentSpeechEnabled:
+        parsed.data.agentSpeechEnabled ??
+        parsed.data.agentVoiceEnabled ??
+        parsed.data.cursorVoiceEnabled ??
+        current.agentSpeechEnabled,
       errorSoundEnabled: parsed.data.errorSoundEnabled ?? current.errorSoundEnabled ?? true,
       errorSpeakEnabled: parsed.data.errorSpeakEnabled ?? current.errorSpeakEnabled ?? true,
       readAloud: parsed.data.readAloud ?? current.readAloud ?? 'replies',

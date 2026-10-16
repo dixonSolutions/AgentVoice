@@ -156,7 +156,7 @@ fi
 
 # Prefer the Node the service actually runs, so the build matches the runtime.
 SERVICE_NODE=""
-for unit in "${HOME}/.config/systemd/user/agentvoice.service" /etc/systemd/system/agentvoice.service; do
+for unit in "${HOME}/.config/systemd/user/squeakr.service" /etc/systemd/system/squeakr.service; do
   [[ -f "$unit" ]] || continue
   SERVICE_NODE="$(grep -oP '(?<=ExecStart=)\S+node' "$unit" 2>/dev/null || true)"
   [[ -n "$SERVICE_NODE" ]] && break
@@ -261,7 +261,7 @@ if [[ "$DRY_RUN" == true ]]; then
   [[ "$STASH_MODE" == true && "$DIRTY" == true ]] && emit git_stash skip "dry run — would stash ${LOCAL_COUNT} local change(s)"
   emit deps skip "dry run — would run npm ci"
   emit build skip "dry run — would run npm run build"
-  emit restart skip "dry run — would restart agentvoice.service"
+  emit restart skip "dry run — would restart squeakr.service"
   emit finish ok "Dry run complete — ${BEHIND} commit(s) behind ${UPSTREAM_REF}"
   trap - EXIT
   exit 0
@@ -329,7 +329,7 @@ fi
 if [[ "$DO_RESTART" != true ]]; then
   emit restart skip "--no-restart"
 else
-  UNIT='agentvoice.service'
+  UNIT='squeakr.service'
   if systemctl --user cat "$UNIT" >/dev/null 2>&1; then
     systemctl --user restart "$UNIT" || fail restart "systemctl --user restart ${UNIT} failed"
     sleep 1
@@ -400,5 +400,5 @@ NEW_SUBJECT="$(git -C "$PROJECT_DIR" log -1 --pretty=%s)"
 emit finish ok "Updated to ${UPSTREAM_REF} @ ${NEW_SHA:0:8} — ${NEW_SUBJECT}"
 trap - EXIT
 
-echo -e "\n${GRN}${BLD}Update complete.${NC}  ${BLU}Logs:${NC} journalctl --user -u agentvoice -f"
+echo -e "\n${GRN}${BLD}Update complete.${NC}  ${BLU}Logs:${NC} journalctl --user -u squeakr -f"
 exit 0

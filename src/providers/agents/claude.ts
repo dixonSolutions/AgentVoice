@@ -78,7 +78,7 @@ function resolveMcpConfigPath(): string {
  *
  * The list covers every MCP server the user has registered, not just ours.
  * People add servers (gdr, playwright, …) precisely so the agent can use them,
- * and an allowlist denies anything omitted — so hardcoding only `agent-voice`
+ * and an allowlist denies anything omitted — so hardcoding only `squeakr`
  * silently made the voice agent the *least* capable way to run Claude Code,
  * even though the same servers work fine in an interactive session.
  */
@@ -135,7 +135,7 @@ function baseArgs(oneShot: boolean): string[] {
  * End option parsing before the prompt.
  *
  * `--allowedTools` and `--disallowedTools` are variadic: given
- * `--allowedTools mcp__agent-voice "the prompt"` the CLI swallows the prompt as
+ * `--allowedTools mcp__squeakr "the prompt"` the CLI swallows the prompt as
  * a second tool pattern and then dies with "Input must be provided either
  * through stdin or as a prompt argument". Today the prompt survives only
  * because a single-value flag happens to sit last; `--` makes that ordering

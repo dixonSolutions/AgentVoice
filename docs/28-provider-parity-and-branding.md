@@ -55,13 +55,13 @@ config path any more.
 | ----------- | ------------------------------------------------------- | --- |
 | Claude Code | MCP written to `~/.claude/settings.json`, which does not define MCP servers → **bridge never connected, every session mute** | `~/.claude.json` + a generated `--mcp-config` on every spawn |
 | Claude Code | `--output-format stream-json` with no `--verbose` → **CLI refuses to start** | `--verbose` always passed in print mode |
-| Claude Code | no permission flags → MCP tools denied silently in print mode | `--allowedTools mcp__agent-voice`, `--permission-mode` |
+| Claude Code | no permission flags → MCP tools denied silently in print mode | `--allowedTools mcp__squeakr`, `--permission-mode` |
 | Claude Code | `supportsModelSelection: false` while listing models | `--model <alias>` passed; picker live |
 | Codex       | `session_id` never captured → resume dead                | nested id parsed |
 | Codex       | `-m/--model` never passed                                | passed when not `auto` |
 | Codex/Claude| `mode: 'ask'` ignored → `agent_ask` could **write files** | read-only enforced, or the mode is refused |
 | Codex/Claude| `worktree` ignored → parallel workers hit the main tree   | worktree becomes the spawn cwd |
-| Codex/Claude| resumed threads got Cursor's `@cursor-voice` mention and no system prompt | full prompt re-sent on resume |
+| Codex/Claude| resumed threads got Cursor's `@squeakr` mention and no system prompt | full prompt re-sent on resume |
 | all         | `/healthz` always probed `cursor-agent`                  | probes the active provider |
 | all         | `agent_mcp_list` shelled out to `cursor-agent` regardless | refuses unless Cursor is active |
 
@@ -161,12 +161,12 @@ one of ~30 animation frames per second.
 
 | Before                                | After                        | Migration |
 | ------------------------------------- | ---------------------------- | --------- |
-| MCP server `cursor-voice`             | `agent-voice`                | stale entry stripped on every session prepare |
+| MCP server `squeakr`             | `squeakr`                | stale entry stripped on every session prepare |
 | tools `cursor_*`                      | `agent_*`                    | old names still accepted by `dispatchTool`; see `LEGACY_TOOL_ALIASES` |
-| `settings.voice.tts.cursorVoiceEnabled` | `agentVoiceEnabled`        | rewritten on config load |
+| `settings.voice.tts.cursorVoiceEnabled` | `agentVoiceEnabled`, then `agentSpeechEnabled` (Squeakr) | rewritten on config load |
 | `workflow.default: cursor_native`     | `agent_native`               | rewritten on config load; API also accepts the old value |
 | `/api/cursor-sessions/*`              | `/api/agent-sessions/*`      | old paths still served |
-| `~/.cursor/rules/cursor-voice.mdc`    | `agent-voice.mdc`            | legacy rule body blanked so it cannot re-inject old tool names |
+| `~/.cursor/rules/cursor-voice.mdc`, `agent-voice.mdc` | `squeakr.mdc` | legacy rule body blanked so it cannot re-inject old tool names |
 
 `cursor_*` tool names are deliberately **not** advertised on the MCP server. The
 tool list is read by the model on every turn, and 18 duplicate deprecated

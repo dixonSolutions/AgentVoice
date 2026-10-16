@@ -7,7 +7,7 @@
  * the provider's run-everything entry, which is what Squeakr always did.
  *
  * Modes whose `prompts` is `phone` rely on the `approve_permission` MCP tool:
- * Claude Code is launched with `--permission-prompt-tool mcp__agent-voice__approve_permission`
+ * Claude Code is launched with `--permission-prompt-tool mcp__squeakr__approve_permission`
  * and calls it for every action its permission mode would ask about — the
  * bridge relays that to the phone (see mcp/server/index.ts).
  */

@@ -43,7 +43,7 @@ Run these **inside the incus container**, e.g. `incus exec dev -- bash`:
 
    ```bash
    npm run build
-   systemctl enable --now agentvoice nginx
+   systemctl enable --now squeakr nginx
    ```
 
    See [`scripts/nginx-squeakr.conf.example`](../scripts/nginx-squeakr.conf.example)
@@ -66,7 +66,7 @@ cause — not the phone or the tunnel machine:
 
 ```bash
 sudo bash scripts/install-fix-dns.sh   # inside container
-systemctl restart agentvoice
+systemctl restart squeakr
 ```
 
 ---
@@ -89,8 +89,8 @@ container (e.g. eva → debian incus). **Do not** install `fix-dns` or
      --local-port 15671
    ```
 
-   Writes `~/.config/agentvoice/tunnel.env` and enables
-   `agentvoice-tunnel.service` (systemd user, `Restart=always`).
+   Writes `~/.config/squeakr/tunnel.env` and enables
+   `squeakr-tunnel.service` (systemd user, `Restart=always`).
 
 3. **Point Tailscale Serve** at the local tunnel port:
 
@@ -109,14 +109,14 @@ container (e.g. eva → debian incus). **Do not** install `fix-dns` or
 
 | Where | Task | Command |
 |-------|------|---------|
-| Container | Bridge status | `systemctl status agentvoice nginx fix-dns` |
-| Container | Bridge logs | `journalctl -u agentvoice -f` |
-| Container | Redeploy | `git pull && npm run build && systemctl restart agentvoice nginx` |
-| Tunnel machine | Tunnel status | `systemctl --user status agentvoice-tunnel` |
-| Tunnel machine | Tunnel logs | `journalctl --user -u agentvoice-tunnel -f` |
-| Tunnel machine | Restart tunnel | `systemctl --user restart agentvoice-tunnel` |
+| Container | Bridge status | `systemctl status squeakr nginx fix-dns` |
+| Container | Bridge logs | `journalctl -u squeakr -f` |
+| Container | Redeploy | `git pull && npm run build && systemctl restart squeakr nginx` |
+| Tunnel machine | Tunnel status | `systemctl --user status squeakr-tunnel` |
+| Tunnel machine | Tunnel logs | `journalctl --user -u squeakr-tunnel -f` |
+| Tunnel machine | Restart tunnel | `systemctl --user restart squeakr-tunnel` |
 
-Tunnel config: `~/.config/agentvoice/tunnel.env` on the **tunnel machine** (see
+Tunnel config: `~/.config/squeakr/tunnel.env` on the **tunnel machine** (see
 [`scripts/remote-tunnel.env.example`](../scripts/remote-tunnel.env.example)).
 
 ## Why the tunnel dies

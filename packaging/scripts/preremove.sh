@@ -14,21 +14,21 @@ esac
 if $removing; then
   # Tells postinstall that a later install is a reinstall, not an upgrade, so
   # the service is enabled again (dpkg reports both as "configure <old>").
-  mkdir -p /var/lib/agentvoice 2>/dev/null && : > /var/lib/agentvoice/reenable-service 2>/dev/null || true
+  mkdir -p /var/lib/squeakr 2>/dev/null && : > /var/lib/squeakr/reenable-service 2>/dev/null || true
 fi
 
 if $removing && command -v systemctl >/dev/null 2>&1; then
-  systemctl --global disable agentvoice.service >/dev/null 2>&1 || true
+  systemctl --global disable squeakr.service >/dev/null 2>&1 || true
   user="${SUDO_USER:-}"
   if [ -n "$user" ] && [ "$user" != "root" ]; then
-    systemctl --user --machine="${user}@" disable --now agentvoice.service >/dev/null 2>&1 || true
+    systemctl --user --machine="${user}@" disable --now squeakr.service >/dev/null 2>&1 || true
   fi
   cat <<'MSG'
 
 Removing Squeakr. The service is disabled for every user; if another user
 still has it running, it stops at their next logout — or now, as that user:
 
-    systemctl --user disable --now agentvoice
+    systemctl --user disable --now squeakr
 
 Your bridge home (~/.squeakr) is left untouched — it holds your config,
 your database and your pairing token.

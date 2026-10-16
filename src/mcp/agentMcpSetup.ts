@@ -30,7 +30,7 @@ import {
   type McpSetupPhase,
 } from '../providers/agents/mcpRegistration.js';
 import { childLogger } from '../log.js';
-import { agentVoiceRuleBody } from './agentVoicePrompt.js';
+import { squeakrRuleBody } from './squeakrPrompt.js';
 import {
   detectHostOs,
   formatPathForLog,
@@ -83,7 +83,7 @@ function buildContext(log: McpRegistrationContext['log']): McpRegistrationContex
     version: MCP_ENTRY_VERSION,
     url: resolveMcpBridgeUrl(),
     token: env.APP_TOKEN,
-    ruleBody: agentVoiceRuleBody,
+    ruleBody: squeakrRuleBody,
     log,
   };
 }

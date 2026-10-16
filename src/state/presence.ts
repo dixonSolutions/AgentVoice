@@ -36,7 +36,7 @@ import { childLogger } from '../log.js';
 
 const log = childLogger('presence');
 
-export type ClientKind = 'phone_control' | 'phone_intelligence' | 'desk' | 'audio_pipe';
+export type ClientKind = 'phone_control' | 'phone_intelligence' | 'desk' | 'audio_pipe' | 'channel_call';
 
 export type ListenerState = 'connected' | 'grace' | 'away' | 'hung_up';
 
@@ -76,7 +76,7 @@ export const HEARTBEAT_INTERVAL_MS = 15_000;
 const MISSED_PONGS_BEFORE_CLOSE = 2;
 
 /** Kinds that mean someone is listening. The name predates the audio pipe. */
-const PHONE_KINDS: ReadonlySet<ClientKind> = new Set(['phone_control', 'phone_intelligence', 'audio_pipe']);
+const PHONE_KINDS: ReadonlySet<ClientKind> = new Set(['phone_control', 'phone_intelligence', 'audio_pipe', 'channel_call']);
 
 interface TrackedClient {
   id: string;
@@ -249,6 +249,7 @@ export class PresenceTracker {
       phone_intelligence: 0,
       desk: 0,
       audio_pipe: 0,
+      channel_call: 0,
     };
     for (const c of this.clients.values()) clients[c.kind]++;
     const awayMs = this.awaySince === null ? 0 : Math.max(0, this.now() - this.awaySince);

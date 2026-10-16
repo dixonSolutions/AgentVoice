@@ -74,7 +74,7 @@ const log = childLogger('provider:codewhale');
  * Codewhale's own docs warn that a literal `headers` value "lives in plain text
  * in ~/.codewhale/mcp.json", and users paste that file into issues.
  */
-export const CODEWHALE_TOKEN_ENV_VAR = 'AGENTVOICE_MCP_TOKEN';
+export const CODEWHALE_TOKEN_ENV_VAR = 'SQUEAKR_MCP_TOKEN';
 
 const resolver = createBinResolver(AGENT_BIN_SPECS.codewhale);
 
@@ -439,7 +439,7 @@ function buildCodewhaleMcpEntry(ctx: McpRegistrationContext): JsonMcpEntry {
     bearer_token_env_var: CODEWHALE_TOKEN_ENV_VAR,
     enabled: true,
     disabled: false,
-    agentVoice: { version: ctx.version, enabled: true },
+    squeakr: { version: ctx.version, enabled: true },
   };
 }
 
@@ -469,7 +469,7 @@ async function ensureCodewhaleMcpRegistration(
   let action: McpRegistrationAction;
   if (!current) {
     action = 'installed';
-  } else if (isOlderVersion(current.agentVoice?.version, ctx.version) || current.url !== entry.url) {
+  } else if (isOlderVersion((current.squeakr ?? current.agentVoice)?.version, ctx.version) || current.url !== entry.url) {
     action = 'updated';
   } else if (current.disabled === true || current['enabled'] === false) {
     action = 'enabled';

@@ -16,7 +16,7 @@
 #                      in GNUPGHOME, in keyring order. All of them sign the apt
 #                      Release and repomd.xml; the first one signs the RPMs.
 #   BASE_URL           public URL of the site
-#                      (default https://dixonsolutions.github.io/AgentVoice)
+#                      (default https://dixonsolutions.github.io/Squeakr)
 #   KEEP_VERSIONS      newest versions to keep (default 3)
 #   SITE_BUDGET_MB     GitHub Pages refuses sites over 1 GB, and each version is
 #                      four ~70 MB packages; after KEEP_VERSIONS, the oldest
@@ -26,12 +26,12 @@
 # Layout produced:
 #   apt/dists/stable/{Release,InRelease,Release.gpg}
 #   apt/dists/stable/main/binary-{amd64,arm64}/Packages{,.gz}
-#   apt/pool/main/a/agentvoice/*.deb
-#   apt/agentvoice.sources          deb822 source for /etc/apt/sources.list.d/
+#   apt/pool/main/s/squeakr/*.deb
+#   apt/squeakr.sources          deb822 source for /etc/apt/sources.list.d/
 #   rpm/packages/*.rpm              (signed)
 #   rpm/repodata/…, repomd.xml.asc
-#   rpm/agentvoice.repo             for /etc/yum.repos.d/
-#   agentvoice.asc                  the public key(s)
+#   rpm/squeakr.repo             for /etc/yum.repos.d/
+#   squeakr.asc                  the public key(s)
 #   manifest.txt                    sha256 + path of every package, read back
 #                                   by fetch-published.sh on the next run
 #   packages.html      (the site root is the landing page, laid on top by the workflow)
@@ -40,11 +40,14 @@ set -euo pipefail
 
 site="${1:?usage: build-repos.sh <site-dir> <incoming-dir>}"
 incoming="${2:?usage: build-repos.sh <site-dir> <incoming-dir>}"
-base_url="${BASE_URL:-https://dixonsolutions.github.io/AgentVoice}"
+base_url="${BASE_URL:-https://dixonsolutions.github.io/Squeakr}"
 base_url="${base_url%/}"
 keep="${KEEP_VERSIONS:-3}"
 budget_mb="${SITE_BUDGET_MB:-900}"
-package=agentvoice
+package=squeakr
+# The .deb packages a repository may carry. A list, and one pool directory per
+# package, so a second package needs no change below.
+allowed_debs=(squeakr)
 suite=stable
 component=main
 deb_arches=(amd64 arm64)
@@ -69,9 +72,10 @@ for k in "${keys[@]}"; do signer_args+=(--local-user "${k}"); done
 mkdir -p "${site}"
 site="$(cd "${site}" && pwd)"
 incoming="$(cd "${incoming}" && pwd)"
-pool="${site}/apt/pool/${component}/${package:0:1}/${package}"
+pools="${site}/apt/pool/${component}"
+pool_for() { echo "${pools}/${1:0:1}/${1}"; }
 rpms="${site}/rpm/packages"
-mkdir -p "${pool}" "${rpms}"
+mkdir -p "${pools}" "${rpms}"
 
 # Scratch space for the signature checks in steps 3 and 7: throwaway keyrings
 # that must not end up in GNUPGHOME or on the site.
@@ -84,9 +88,10 @@ added=0
 for deb in "${incoming}"/*.deb; do
   name="$(dpkg-deb -f "${deb}" Package)"
   arch="$(dpkg-deb -f "${deb}" Architecture)"
-  [[ "${name}" == "${package}" ]] || fail "$(basename "${deb}"): package is '${name}', expected '${package}'"
+  [[ " ${allowed_debs[*]} " == *" ${name} "* ]] || fail "$(basename "${deb}"): package is '${name}', expected one of: ${allowed_debs[*]}"
   [[ " ${deb_arches[*]} " == *" ${arch} "* ]] || fail "$(basename "${deb}"): unsupported architecture '${arch}'"
-  cp -f "${deb}" "${pool}/"
+  mkdir -p "$(pool_for "${name}")"
+  cp -f "${deb}" "$(pool_for "${name}")/"
   echo "added $(basename "${deb}")"
   added=$((added + 1))
 done
@@ -117,7 +122,7 @@ deb_version() { dpkg-deb -f "$1" Version | sed 's/-[^-]*$//'; }
 rpm_version() { rpm -qp --qf '%{VERSION}' "$1" 2>/dev/null; }
 
 declare -A version_of=()
-for f in "${pool}"/*.deb; do version_of["${f}"]="$(deb_version "${f}")"; done
+for f in "${pools}"/*/*/*.deb; do version_of["${f}"]="$(deb_version "${f}")"; done
 for f in "${rpms}"/*.rpm; do version_of["${f}"]="$(rpm_version "${f}")"; done
 [[ ${#version_of[@]} -gt 0 ]] || fail "no packages at all — nothing to publish"
 
@@ -221,7 +226,7 @@ gpg --batch --yes --digest-algo SHA512 "${signer_args[@]}" \
   --armor --detach-sign --output "${site}/rpm/repodata/repomd.xml.asc" "${site}/rpm/repodata/repomd.xml"
 
 # ── 6. Key, client config, landing page ───────────────────────────────────────
-gpg --batch --armor --export "${keys[@]}" > "${site}/agentvoice.asc"
+gpg --batch --armor --export "${keys[@]}" > "${site}/squeakr.asc"
 
 cat > "${site}/rpm/${package}.repo" <<REPO
 [${package}]
@@ -230,7 +235,7 @@ baseurl=${base_url}/rpm
 enabled=1
 gpgcheck=1
 repo_gpgcheck=1
-gpgkey=${base_url}/agentvoice.asc
+gpgkey=${base_url}/squeakr.asc
 metadata_expire=6h
 REPO
 
@@ -264,20 +269,20 @@ cat > "${site}/packages.html" <<HTML
 <body>
 <h1>Squeakr package repositories</h1>
 <p>Signed apt and dnf repositories for
-<a href="./">Squeakr</a>, amd64 and arm64 (<a href="https://github.com/dixonSolutions/AgentVoice">source</a>).
+<a href="./">Squeakr</a>, amd64 and arm64 (<a href="https://github.com/dixonSolutions/Squeakr">source</a>).
 Newest version: <strong>${newest}</strong>. Published versions: ${versions[*]}.</p>
 
 <h2>Debian / Ubuntu (apt)</h2>
 <pre><code>sudo install -d -m 0755 /etc/apt/keyrings
-sudo curl -fsSL ${base_url}/agentvoice.asc -o /etc/apt/keyrings/agentvoice.asc
-sudo curl -fsSL ${base_url}/apt/agentvoice.sources -o /etc/apt/sources.list.d/agentvoice.sources
+sudo curl -fsSL ${base_url}/squeakr.asc -o /etc/apt/keyrings/squeakr.asc
+sudo curl -fsSL ${base_url}/apt/squeakr.sources -o /etc/apt/sources.list.d/squeakr.sources
 sudo apt update
-sudo apt install agentvoice</code></pre>
+sudo apt install squeakr</code></pre>
 <p>Upgrades then arrive with <code>sudo apt update &amp;&amp; sudo apt upgrade</code>.</p>
 
 <h2>Fedora / RHEL (dnf)</h2>
-<pre><code>sudo curl -fsSL ${base_url}/rpm/agentvoice.repo -o /etc/yum.repos.d/agentvoice.repo
-sudo dnf install agentvoice</code></pre>
+<pre><code>sudo curl -fsSL ${base_url}/rpm/squeakr.repo -o /etc/yum.repos.d/squeakr.repo
+sudo dnf install squeakr</code></pre>
 <p>Upgrades then arrive with <code>sudo dnf upgrade</code>. dnf asks you to confirm the key on first use.</p>
 
 <h2>After installing</h2>
@@ -286,7 +291,7 @@ sudo dnf install agentvoice</code></pre>
 loginctl enable-linger "\$USER"   # keep it running after you log out</code></pre>
 
 <h2>Signing key</h2>
-<p><a href="agentvoice.asc">agentvoice.asc</a> — fingerprint(s):<br>
+<p><a href="squeakr.asc">squeakr.asc</a> — fingerprint(s):<br>
 <code>${fingerprints}</code></p>
 </body>
 </html>
@@ -297,17 +302,17 @@ HTML
   | sort | xargs -r sha256sum) > "${site}/manifest.txt"
 
 # ── 7. Verify what is about to be published, with only the public key ────────
-gpg --batch --quiet --dearmor --output "${scratch}/keyring.gpg" < "${site}/agentvoice.asc"
+gpg --batch --quiet --dearmor --output "${scratch}/keyring.gpg" < "${site}/squeakr.asc"
 gpgv --quiet --keyring "${scratch}/keyring.gpg" "${dists}/InRelease" 2>/dev/null \
-  || fail "InRelease does not verify against agentvoice.asc"
+  || fail "InRelease does not verify against squeakr.asc"
 gpgv --quiet --keyring "${scratch}/keyring.gpg" "${dists}/Release.gpg" "${dists}/Release" 2>/dev/null \
-  || fail "Release.gpg does not verify against agentvoice.asc"
+  || fail "Release.gpg does not verify against squeakr.asc"
 gpgv --quiet --keyring "${scratch}/keyring.gpg" \
   "${site}/rpm/repodata/repomd.xml.asc" "${site}/rpm/repodata/repomd.xml" 2>/dev/null \
-  || fail "repomd.xml.asc does not verify against agentvoice.asc"
+  || fail "repomd.xml.asc does not verify against squeakr.asc"
 
 rpmkeys --dbpath "${scratch}/rpmdb" --initdb 2>/dev/null || true
-rpmkeys --dbpath "${scratch}/rpmdb" --import "${site}/agentvoice.asc"
+rpmkeys --dbpath "${scratch}/rpmdb" --import "${site}/squeakr.asc"
 for f in "${rpms}"/*.rpm; do
   out="$(rpmkeys --dbpath "${scratch}/rpmdb" --checksig "${f}" 2>&1)" || fail "$(basename "${f}"): ${out}"
   [[ "${out}" == *"signatures OK"* ]] || fail "$(basename "${f}") is not signed by the published key: ${out}"

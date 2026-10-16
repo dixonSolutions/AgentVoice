@@ -255,7 +255,7 @@ the default.
 
 **Decision:** Config → Serve has no scheduler. Heartbeat / interval auto-pull /
 auto-build / auto-restart are stripped on load. The hub is health check, live
-`journalctl` for `agentvoice.service`, restart via `scripts/restart.sh`, and
+`journalctl` for `squeakr.service`, restart via `scripts/restart.sh`, and
 rebase onto `origin/<branch>` (saved branch, else origin default, else `main`).
 Origin is trusted (`git fetch` + `git rebase -X ours origin/<branch>`).
 

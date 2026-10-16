@@ -92,13 +92,13 @@ fi
 
 # Detect the Node binary used by the service (if installed)
 SERVICE_NODE=""
-SERVICE_FILE="${HOME}/.config/systemd/user/agentvoice.service"
+SERVICE_FILE="${HOME}/.config/systemd/user/squeakr.service"
 if [[ -f "$SERVICE_FILE" ]]; then
   SERVICE_NODE=$(grep -oP '(?<=ExecStart=)\S+node' "$SERVICE_FILE" || true)
 fi
 # Also check system-wide service
-if [[ -z "$SERVICE_NODE" && -f /etc/systemd/system/agentvoice.service ]]; then
-  SERVICE_NODE=$(grep -oP '(?<=ExecStart=)\S+node' /etc/systemd/system/agentvoice.service || true)
+if [[ -z "$SERVICE_NODE" && -f /etc/systemd/system/squeakr.service ]]; then
+  SERVICE_NODE=$(grep -oP '(?<=ExecStart=)\S+node' /etc/systemd/system/squeakr.service || true)
 fi
 NODE_BIN="${SERVICE_NODE:-node}"
 NPM_BIN="$(dirname "$NODE_BIN")/npm"
@@ -125,25 +125,25 @@ fi
 # ── 2. Restart service ────────────────────────────────────────────────────
 section "Restarting service"
 
-if systemctl --user is-enabled agentvoice.service &>/dev/null; then
+if systemctl --user is-enabled squeakr.service &>/dev/null; then
   # Normal path: systemd user unit installed by setup.sh
-  # Note: if agentvoice-watch.path is running, a build alone would already
+  # Note: if squeakr-watch.path is running, a build alone would already
   # trigger a restart. --no-build is the fast path for config-only changes.
-  systemctl --user restart agentvoice.service
+  systemctl --user restart squeakr.service
   sleep 1
-  if systemctl --user is-active --quiet agentvoice.service; then
-    ok "agentvoice.service restarted."
+  if systemctl --user is-active --quiet squeakr.service; then
+    ok "squeakr.service restarted."
   else
-    warn "Service may have failed. Check: journalctl --user -u agentvoice -n 30"
-    systemctl --user status agentvoice.service --no-pager -l | tail -15
+    warn "Service may have failed. Check: journalctl --user -u squeakr -n 30"
+    systemctl --user status squeakr.service --no-pager -l | tail -15
   fi
 
-elif systemctl is-enabled agentvoice.service &>/dev/null 2>&1; then
+elif systemctl is-enabled squeakr.service &>/dev/null 2>&1; then
   # System-wide service (e.g. installed as root)
-  sudo systemctl restart agentvoice.service
+  sudo systemctl restart squeakr.service
   sleep 1
-  systemctl status agentvoice.service --no-pager -l | head -12
-  ok "System agentvoice.service restarted."
+  systemctl status squeakr.service --no-pager -l | head -12
+  ok "System squeakr.service restarted."
 
 else
   # No service found — fallback to manual background process
@@ -186,11 +186,11 @@ fi
 if $TAIL_LOGS; then
   echo ""
   info "Tailing logs (Ctrl-C to stop)..."
-  journalctl --user -u agentvoice -f --no-pager
+  journalctl --user -u squeakr -f --no-pager
 fi
 
 echo ""
 ok "Done."
-echo -e "  ${BLU}Logs:${NC} journalctl --user -u agentvoice -f"
+echo -e "  ${BLU}Logs:${NC} journalctl --user -u squeakr -f"
 echo -e "  ${BLU}Files:${NC} logs/serve/bridge/ (session logs) · logs/serve/transcripts/ — npm run cli -- logs --list"
 echo ""

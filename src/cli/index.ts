@@ -1,7 +1,7 @@
 /**
  * `squeakr` — the management CLI.
  *
- * bin/agentvoice.mjs is a shim over this file. The logic lives in TypeScript so
+ * bin/squeakr.mjs is a shim over this file. The logic lives in TypeScript so
  * it is typechecked with the rest of the bridge and can import from src/ rather
  * than re-deriving things the bridge already knows — install mode, run-mode
  * ports, the systemd unit layout.
@@ -28,6 +28,7 @@ import { logsCommand, serviceCommand } from './commands/service.js';
 import { migrateCommand } from './commands/migrate.js';
 import { upgradeFromAgentvoiceCommand } from './commands/upgradeFromAgentvoice.js';
 import { addCommand } from './commands/add.js';
+import { channelCommand } from './commands/channel.js';
 import { localCommand } from './commands/local.js';
 import { setupCommand } from './commands/setup.js';
 import { pipeCommand, pipeOptions, PIPE_SWITCHES, PIPE_VALUE_FLAGS } from './commands/pipe.js';
@@ -38,6 +39,8 @@ import { updateCommand, UPDATE_FLAGS } from './commands/update.js';
 import { bold, cyan, dim, fail, note, say } from './out.js';
 import { packageVersion, gitVersion } from './versions.js';
 import { prepareVoskCommand } from './commands/vosk.js';
+import { CONTROL_VALUE_FLAGS, controlCommand } from './commands/control.js';
+import type { ControlCommand } from '../control/types.js';
 
 const USAGE = `
   ${bold(cyan('squeakr'))} — self-hosted voice bridge for agent CLIs
@@ -68,6 +71,31 @@ const USAGE = `
     add <path>|--this-dir  Register a directory as a project (name, description
                            and aliases filled in from package.json / README / git)
 
+  ${bold('The voice agent')} (on the running bridge — every chat channel runs these too)
+    agent [status|stop]    What the agent is doing, project, who is listening; stop it
+    projects               Registered projects (▶ is active)
+    project [name]         Show or switch the active project
+    sessions [project]     Running and recent agent sessions, numbered
+    use <n|name|id>        Continue that session on the next turn
+    new [project]          Start a fresh session
+    say <text>             Send a turn as text
+    config [key] [value]   Settings a chat may change: agent, model, permissions,
+                           workflow, input, stt, tts, wake, vad, silence, phrases …
+    default [<n|name|project>|none]
+                           The session a chat conversation continues (with
+                           --channel and --conversation, or --user for calls)
+
+  ${bold('Channels')} (Discord, Telegram, Slack, WhatsApp — docs/44)
+    channel                Status of every channel
+    channel allow <channel> <user id>
+                           Let that person command the bridge from the channel
+    channel enable|disable <channel>
+                           Turn a channel on or off (tokens live in .env)
+    channel set <channel> <key> <value>
+                           messageChannel / voiceChannel <id|none> (the bot's own
+                           text channel and call room), or logs, voice, autoJoin,
+                           welcomeDm, voiceNotes, requireMention on|off
+
   ${bold('Looking after it')}
     status [--json]        Install, version, service, port and health at a glance
     doctor [--json]        Check Node, the native binding, config, CLI and port
@@ -76,7 +104,7 @@ const USAGE = `
                            this install's home (copies only; starts nothing)
     upgrade-from-agentvoice
                            Move an AgentVoice install to Squeakr: home, service,
-                           git remote, and remove @ratitisrad/agentvoice (docs/44)
+                           git remote, and remove @ratitisrad/agentvoice (docs/45)
     token [--new]          Print the pairing token, or mint a fresh one
     prepare-vosk [--force] Fetch the wake-word model now (the bridge also does on boot)
     version                Package version (plus the commit, in a clone)
@@ -128,6 +156,8 @@ const USAGE = `
     --name, --description  Override what was detected (add)
     --alias "a, b"         Extra spoken aliases, comma-separated (add)
     --with-data            Also copy data/state.db as a consistent snapshot (migrate)
+    --channel, --conversation, --user <id>
+                           The chat a command came from (sessions, new, say, default, agent)
 
   ${bold('Environment')}
     SQUEAKR_HOME           Bridge home. Defaults to the current directory when
@@ -219,6 +249,23 @@ async function dispatch(argv: string[]): Promise<void> {
       // null means the bridge is now running in this process — leave exitCode
       // alone or the process would exit as soon as the event loop settles.
       if (code !== null) process.exitCode = code;
+      return;
+    }
+
+    case 'agent':
+    case 'projects':
+    case 'project':
+    case 'sessions':
+    case 'use':
+    case 'new':
+    case 'say':
+    case 'config':
+    case 'default': {
+      const parsed = parseArgs(args, { valueFlags: CONTROL_VALUE_FLAGS });
+      rejectUnknown(parsed, CONTROL_VALUE_FLAGS);
+      // Text after `--` is taken as it is (`say -- -1 is wrong`).
+      parsed.positionals.push(...parsed.rest);
+      process.exitCode = await controlCommand(command as ControlCommand, parsed);
       return;
     }
 
@@ -368,14 +415,24 @@ async function dispatch(argv: string[]): Promise<void> {
       return;
     }
 
+    case 'channel':
+    case 'channels': {
+      const parsed = parseArgs(args);
+      rejectUnknown(parsed, []);
+      // After `--` too: ids such as a Telegram group's (-100…) look like flags.
+      process.exitCode = await channelCommand([...parsed.positionals, ...parsed.rest]);
+      return;
+    }
+
     case 'upgrade-from-agentvoice': {
       const parsed = parseArgs(args);
-      rejectUnknown(parsed, ['dry-run', 'keep-old', 'keep-remote']);
+      rejectUnknown(parsed, ['dry-run', 'keep-old', 'keep-remote', 'skip-system']);
       if (parsed.positionals.length) throw new UsageError('upgrade-from-agentvoice takes no arguments');
       process.exitCode = await upgradeFromAgentvoiceCommand({
         dryRun: parsed.switches.has('dry-run'),
         keepOld: parsed.switches.has('keep-old'),
         keepRemote: parsed.switches.has('keep-remote'),
+        skipSystem: parsed.switches.has('skip-system'),
       });
       return;
     }
@@ -449,7 +506,7 @@ function help(): void {
 
 // `node dist/cli.js status` should work as well as `squeakr status` — handy
 // in a clone, and what the bin shim would do anyway. argv[1] tells the two
-// apart so being imported by bin/agentvoice.mjs does not run main twice.
+// apart so being imported by bin/squeakr.mjs does not run main twice.
 const argv1 = process.argv[1];
 if (argv1 && import.meta.url === pathToFileURL(argv1).href) {
   void main(process.argv.slice(2));

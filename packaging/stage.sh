@@ -25,7 +25,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 staging="${repo_root}/packaging/root"
-prefix="${staging}/usr/lib/agentvoice"
+prefix="${staging}/usr/lib/squeakr"
 node_src="${1:-}"
 
 if [[ -z "${node_src}" || ! -x "${node_src}/bin/node" ]]; then
@@ -36,7 +36,7 @@ fi
 for required in \
   "${repo_root}/dist/index.js" \
   "${repo_root}/web/dist/index.html" \
-  "${repo_root}/prompts/agentvoice/system.md"
+  "${repo_root}/prompts/squeakr/system.md"
 do
   if [[ ! -f "${required}" ]]; then
     echo "missing ${required} — run 'npm run build' first" >&2
@@ -103,14 +103,14 @@ mkdir -p "${prefix}/node"
 cp -r "${node_src}/bin" "${node_src}/lib" "${prefix}/node/"
 rm -rf "${prefix}/node/lib/node_modules/npm/docs" "${prefix}/node/lib/node_modules/npm/man"
 
-cp "${repo_root}/packaging/agentvoice.launcher.sh" "${staging}/usr/bin/agentvoice"
-chmod 0755 "${staging}/usr/bin/agentvoice"
-# The command is `squeakr` since the rename (docs/44); /usr/bin/agentvoice stays
-# so scripts and muscle memory from before it keep working.
-cp "${repo_root}/packaging/agentvoice.launcher.sh" "${staging}/usr/bin/squeakr"
+cp "${repo_root}/packaging/squeakr.launcher.sh" "${staging}/usr/bin/squeakr"
 chmod 0755 "${staging}/usr/bin/squeakr"
-cp "${repo_root}/packaging/agentvoice.user.service" \
-   "${staging}/usr/lib/systemd/user/agentvoice.service"
+# Run by postinstall to move an AgentVoice apt / dnf source over (docs/45).
+mkdir -p "${prefix}/scripts"
+cp "${repo_root}/scripts/migrate-to-squeakr.sh" "${prefix}/scripts/migrate-to-squeakr.sh"
+chmod 0755 "${prefix}/scripts/migrate-to-squeakr.sh"
+cp "${repo_root}/packaging/squeakr.user.service" \
+   "${staging}/usr/lib/systemd/user/squeakr.service"
 
 # Read by src/serve/installMode.ts. Authoritative: a path check alone would
 # also claim a hand-extracted tarball in /opt.

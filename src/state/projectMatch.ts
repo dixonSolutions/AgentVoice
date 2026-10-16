@@ -15,6 +15,8 @@ const STT_WORD_FIXES: Array<[RegExp, string]> = [
   [/\bcursor\s+voice\b/gi, 'cursorvoice'],
   [/\bagent\s+voice\b/gi, 'agentvoice'],
   [/\bagentvoice\b/gi, 'agentvoice'],
+  // Squeakr is said "squeaker"; STT spells it that way, or as two words.
+  [/\bsqueak(?:er|a|\s+her|\s+are)\b/gi, 'squeakr'],
 ];
 
 /** Collapse to lowercase alphanumeric for comparison. */

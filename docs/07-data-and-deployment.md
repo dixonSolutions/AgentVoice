@@ -169,7 +169,7 @@ different ports and can run **side by side** — no `EADDRINUSE` collision.
 **Host service control** (independent of `npm run dev`):
 
 - `npm run stop` — stops the `squeakr` systemd service **and** its rebuild watcher
-  (`agentvoice-watch.path`), then frees the host port (`8787`). Windows: `scripts\stop.ps1`.
+  (`squeakr-watch.path`), then frees the host port (`8787`). Windows: `scripts\stop.ps1`.
 - `npm run start:service` — starts the host service back up, health-checked. Windows: `scripts\start.ps1`.
 
 **Serve** (manual self-hosting maintenance): Config tab → **Serve** — health
@@ -208,9 +208,9 @@ See [`21-serve-self-hosting.md`](./21-serve-self-hosting.md).
   },
   "projects": [
     {
-      "name": "cursorvoice",
-      "path": "/home/eva/Projects/SideProjects/CursorVoice",
-      "aliases": ["cursor voice", "the voice project"],
+      "name": "squeakr",
+      "path": "/home/eva/Projects/SideProjects/Squeakr",
+      "aliases": ["squeakr", "the voice project"],
       "description": "This project — the voice bridge",
       "enabled": true
     },
@@ -275,16 +275,16 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=agentvoice            # dedicated least-privileged user
-WorkingDirectory=/opt/agentvoice
-EnvironmentFile=/opt/agentvoice/.env
-ExecStart=/usr/bin/node /opt/agentvoice/dist/index.js
+User=squeakr            # dedicated least-privileged user
+WorkingDirectory=/opt/squeakr
+EnvironmentFile=/opt/squeakr/.env
+ExecStart=/usr/bin/node /opt/squeakr/dist/index.js
 Restart=on-failure
 RestartSec=3
 # hardening
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/opt/agentvoice /path/to/allowlisted/projects
+ReadWritePaths=/opt/squeakr /path/to/allowlisted/projects
 PrivateTmp=true
 
 [Install]
@@ -313,8 +313,8 @@ OPENAI_API_KEY=                 # speech provider key (separate from Cursor)
 
 # Bootstrap paths / bind (non-secret but machine-specific)
 PORT=8787
-CONFIG_PATH=/opt/agentvoice/config/config.json
-DB_PATH=/opt/agentvoice/data/state.db
+CONFIG_PATH=/opt/squeakr/config/config.json
+DB_PATH=/opt/squeakr/data/state.db
 ```
 
 > Precedence: `.env` > `config.json` > built-in defaults. Anything non-secret

@@ -2,9 +2,12 @@
  * `squeakr service install` — install a background service for this install,
  * with whatever service manager the platform has:
  *
- *   Linux    a systemd **user** unit      ~/.config/systemd/user/agentvoice.service
- *   macOS    a launchd agent              ~/Library/LaunchAgents/com.agentvoice.bridge.plist
- *   Windows  an NSSM-wrapped service      AgentVoice (pre-rename name, kept — docs/44)
+ *   Linux    a systemd **user** unit      ~/.config/systemd/user/squeakr.service
+ *   macOS    a launchd agent              ~/Library/LaunchAgents/com.squeakr.bridge.plist
+ *   Windows  an NSSM-wrapped service      Squeakr
+ *
+ * An AgentVoice-era service (agentvoice.service, com.agentvoice.bridge, the
+ * AgentVoice Windows service) is retired first — cli/legacyService.ts.
  *
  * `noUnitAdvice()` used to point at `scripts/install-systemd.sh`, which only
  * exists in a git clone. An npm install — and a .deb, which ships no scripts
@@ -15,7 +18,7 @@
  * A *user* service, deliberately. The bridge has to run as the developer: it
  * spawns `claude`, `cursor-agent` and `codex` with their credentials, writes
  * `~/.cursor/mcp.json`, `~/.codex/config.toml` and `~/.claude.json`, and edits
- * the user's own projects. The repo's system unit (`User=agentvoice`,
+ * the user's own projects. The repo's system unit (`User=squeakr`,
  * `ProtectSystem=strict`) only suits a dedicated server and would leave every
  * one of those inaccessible. Windows has no per-user services, so there the
  * command says how to run the service under your own account.
@@ -39,6 +42,7 @@ import { resolveHome } from '../home.js';
 import { capture, passthrough, ran } from '../exec.js';
 import { LAUNCHD_LABEL, SERVICE_UNIT, WINDOWS_SERVICE, launchdPlistPath } from '../service.js';
 import { bold, dim, fail, green, note, say, yellow } from '../out.js';
+import { findLegacyService, retireLegacyService } from '../legacyService.js';
 
 export interface ServiceInstallOptions {
   /** Print the unit and what would happen, without writing anything. */
@@ -59,6 +63,10 @@ export async function serviceInstallCommand(opts: ServiceInstallOptions = {}): P
     );
     return 1;
   }
+
+  // The AgentVoice-era service (docs/45) would fight this one for the port.
+  const legacy = await findLegacyService();
+  if (legacy) await retireLegacyService(legacy, { dryRun: opts.dryRun });
 
   const home = resolveHome();
   if (process.platform === 'darwin') return installLaunchd(home, opts);
@@ -99,7 +107,7 @@ function servicePath(): string {
  * PATH. Falls back to the bare command when there is no shim (never expected).
  */
 function launchCommand(): string[] {
-  const shim = join(detectInstallMode().root, 'bin', 'agentvoice.mjs');
+  const shim = join(detectInstallMode().root, 'bin', 'squeakr.mjs');
   if (existsSync(shim)) return [process.execPath, shim, 'run'];
   return ['squeakr', 'run'];
 }
@@ -129,8 +137,8 @@ function writeIfChanged(path: string, content: string, force: boolean | undefine
 
 // ── Linux: systemd user unit ───────────────────────────────────────────────
 
-/** The user unit a .deb / .rpm installs (packaging/agentvoice.user.service). */
-const PACKAGED_USER_UNIT = '/usr/lib/systemd/user/agentvoice.service';
+/** The user unit a .deb / .rpm installs (packaging/squeakr.user.service). */
+const PACKAGED_USER_UNIT = '/usr/lib/systemd/user/squeakr.service';
 
 function userUnitPath(): string {
   const base = process.env['XDG_CONFIG_HOME']?.trim() || join(homedir(), '.config');
@@ -140,7 +148,7 @@ function userUnitPath(): string {
 function renderUnit(opts: { exec: string; home: string }): string {
   return `[Unit]
 Description=Squeakr Bridge
-Documentation=https://github.com/dixonSolutions/AgentVoice
+Documentation=https://github.com/dixonSolutions/Squeakr
 After=network-online.target
 Wants=network-online.target
 
@@ -486,7 +494,7 @@ export async function serviceUninstallCommand(opts: { dryRun?: boolean } = {}): 
     // The package's unit stays on disk (the package owns it) and may be
     // enabled for every user; mask it so it stays off for this one.
     await capture('systemctl', ['--user', 'mask', SERVICE_UNIT]);
-    say(`${green('disabled')}  ${SERVICE_UNIT} ${dim('(packaged unit, masked for this user — `systemctl --user unmask agentvoice` undoes it)')}`);
+    say(`${green('disabled')}  ${SERVICE_UNIT} ${dim('(packaged unit, masked for this user — `systemctl --user unmask squeakr` undoes it)')}`);
   }
   say(dim('  Your bridge home (~/.squeakr) is left as it was.'));
   return 0;

@@ -5,11 +5,11 @@ Wants=network-online.target fix-dns.service
 
 [Service]
 Type=simple
-User=agentvoice
-WorkingDirectory=/opt/agentvoice
-Environment=HOME=/home/agentvoice
-EnvironmentFile=/opt/agentvoice/.env
-ExecStart=/usr/bin/node /opt/agentvoice/dist/index.js
+User=squeakr
+WorkingDirectory=/opt/squeakr
+Environment=HOME=/home/squeakr
+EnvironmentFile=/opt/squeakr/.env
+ExecStart=/usr/bin/node /opt/squeakr/dist/index.js
 Restart=on-failure
 RestartSec=3
 
@@ -19,7 +19,7 @@ ProtectSystem=strict
 # Adjust ReadWritePaths to include every allowlisted project workspace.
 # The bridge data dir, its log dir (session logs + transcripts, see
 # docs/33-logging.md) and the project workspaces are the only writable locations.
-ReadWritePaths=/opt/agentvoice/data /opt/agentvoice/logs /home/projects
+ReadWritePaths=/opt/squeakr/data /opt/squeakr/logs /home/projects
 PrivateTmp=true
 
 [Install]

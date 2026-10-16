@@ -60,10 +60,10 @@ const NOT_BORROWED = new Set([
   'PORT',
   'CONFIG_PATH',
   'DB_PATH',
-  'SQUEAKR_HOME',
-  'SQUEAKR_LOG_DIR',
   'AGENTVOICE_HOME',
   'AGENTVOICE_LOG_DIR',
+  'SQUEAKR_HOME',
+  'SQUEAKR_LOG_DIR',
   'HTTPS_CERT_PATH',
   'HTTPS_KEY_PATH',
   'NODE_ENV',
@@ -242,7 +242,7 @@ export async function localCommand(opts: LocalOptions): Promise<number | null> {
   say(`           ${dim('paste it when the app asks to pair — it dies with this instance')}`);
   say('');
   say(`  ${dim(`home ${home} — ${opts.keep ? 'kept on exit (--keep)' : 'deleted on exit'}`)}`);
-  say(`  ${yellow('note')}  ${dim(`${client}'s agent-voice MCP entry points here while this runs;`)}`);
+  say(`  ${yellow('note')}  ${dim(`${client}'s squeakr MCP entry points here while this runs;`)}`);
   say(`        ${dim('your main bridge restores it on its next voice turn.')}`);
   say(`  ${dim('Ctrl-C to stop. Logs follow.')}`);
   say(line);

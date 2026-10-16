@@ -170,6 +170,10 @@ export class AppComponent implements OnInit, OnDestroy {
     );
 
     this._subs.add(
+      this.bridge.channelCall$.subscribe((event) => this.voiceSession.mirrorChannelCall(event)),
+    );
+
+    this._subs.add(
       this.bridge.narration$.subscribe((event) => {
         // The event always arrives; `speak` decides whether it is heard. That
         // separation is why turning narration off no longer also kills the

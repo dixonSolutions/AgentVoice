@@ -34,7 +34,7 @@ const log = childLogger('serve:install-mode');
  * Our name on the npm registry. Kept in step with package.json#name by
  * installMode.test.ts.
  *
- * Unscoped since the Squeakr rename (docs/44). Releases up to 0.1.5 were
+ * Unscoped since the Squeakr rename (docs/45). Releases up to 0.1.5 were
  * published as LEGACY_PACKAGE_NAME; an install of that package has to be
  * replaced by hand (`npm i -g squeakr`), because `npm update` never crosses
  * package names.
@@ -47,7 +47,7 @@ export const LEGACY_PACKAGE_NAME = '@ratitisrad/agentvoice';
 export type InstallMode = 'git' | 'npm' | 'system' | 'unknown';
 
 /** Prefixes a distro package installs Squeakr under. */
-const SYSTEM_ROOTS = ['/usr/lib/agentvoice', '/usr/share/agentvoice', '/opt/agentvoice'];
+const SYSTEM_ROOTS = ['/usr/lib/squeakr', '/usr/share/squeakr', '/opt/squeakr'];
 
 /**
  * Marker the .deb / .rpm ships so the bridge can name the right update
@@ -196,7 +196,7 @@ function realpathOrSelf(path: string): string {
  * Is this a distro package?
  *
  * Checked *before* the node_modules test: a .deb ships a pruned node_modules
- * inside /usr/lib/agentvoice, so the npm heuristic would otherwise claim it
+ * inside /usr/lib/squeakr, so the npm heuristic would otherwise claim it
  * and offer `npm i -g`, which would install a second copy the service does not
  * run.
  */
@@ -243,9 +243,9 @@ function osPackageFamily(): 'deb' | 'rpm' | null {
 }
 
 function systemUpdateCommand(family: 'deb' | 'rpm' | null): string {
-  if (family === 'deb') return 'sudo apt update && sudo apt install --only-upgrade agentvoice';
-  if (family === 'rpm') return 'sudo dnf upgrade agentvoice';
-  return 'Use your package manager to upgrade the agentvoice package';
+  if (family === 'deb') return 'sudo apt update && sudo apt install --only-upgrade squeakr';
+  if (family === 'rpm') return 'sudo dnf upgrade squeakr';
+  return 'Use your package manager to upgrade the squeakr package';
 }
 
 /**

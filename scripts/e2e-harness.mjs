@@ -57,9 +57,10 @@ async function freePort() {
  * @param {string[]} opts.canned    transcripts the fake Whisper returns, in order
  * @param {(config: any) => void} [opts.configure]  last-minute config.json edits
  * @param {number} [opts.ttsChunkDelayMs]  gap between the stand-in voice's audio pieces
+ * @param {Record<string, string>} [opts.extraEnv]  more lines for the home's .env
  */
-export async function createInstance({ bin, canned, configure, ttsChunkDelayMs = 0 }) {
-  const tmp = mkdtempSync(join(tmpdir(), 'agentvoice-e2e-'));
+export async function createInstance({ bin, canned, configure, ttsChunkDelayMs = 0, extraEnv = {} }) {
+  const tmp = mkdtempSync(join(tmpdir(), 'squeakr-e2e-'));
   const instance = join(tmp, 'instance');
   const project = join(tmp, 'project');
   const home = join(tmp, 'home');
@@ -174,7 +175,8 @@ export async function createInstance({ bin, canned, configure, ttsChunkDelayMs =
   config.projects = [{ name: 'e2e', path: project, aliases: [], enabled: true }];
   configure?.(config);
   writeFileSync(join(instance, 'config.json'), JSON.stringify(config, null, 2));
-  writeFileSync(join(instance, '.env'), `APP_TOKEN=${token}\nCLAUDE_CODE_PATH=${STUB}\n`, { mode: 0o600 });
+  const extra = Object.entries(extraEnv).map(([k, v]) => `${k}=${v}\n`).join('');
+  writeFileSync(join(instance, '.env'), `APP_TOKEN=${token}\nCLAUDE_CODE_PATH=${STUB}\n${extra}`, { mode: 0o600 });
 
   // The bridge fetches the 41 MB wake-word model on first boot of a home.
   // Nothing here uses wake words, so give it a stand-in that passes its

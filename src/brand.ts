@@ -1,13 +1,12 @@
 /**
- * Product naming — the one place the public name lives (docs/44).
+ * Product naming — the one place the public name lives (docs/45).
  *
- * The project was renamed AgentVoice → Squeakr in October 2026. Stage A of
- * that rename changed what people *see and type*: the display name, the npm
- * package, the CLI command, the environment variables and the default home
- * (moved by `squeakr upgrade-from-agentvoice`). The names a running install is
- * *built on* — the service units, the distro package, the MCP server key —
- * are unchanged for now, so an upgrade never strands a running bridge.
- * docs/44-rename-squeakr.md lists both sides.
+ * The project was renamed AgentVoice → Squeakr in October 2026: the display
+ * name, the npm and distro packages, the CLI command, the environment
+ * variables, the default home, the service units and the MCP server key. What
+ * an AgentVoice install left behind is still read — `AGENTVOICE_*` variables,
+ * a not-yet-moved `~/.agentvoice` — until `squeakr upgrade-from-agentvoice`
+ * moves it. docs/45-rename-squeakr.md has the whole list.
  */
 
 import { existsSync } from 'node:fs';

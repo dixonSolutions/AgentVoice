@@ -2,9 +2,9 @@
  * The background service behind `start`, `stop`, `restart`, `status` and `logs`
  * — whichever service manager this platform has:
  *
- *   Linux    a systemd unit, `agentvoice.service` (user unit first, then system)
- *   macOS    a launchd agent, `com.agentvoice.bridge`
- *   Windows  a Windows service, `AgentVoice` (NSSM-wrapped, as scripts/setup.ps1
+ *   Linux    a systemd unit, `squeakr.service` (user unit first, then system)
+ *   macOS    a launchd agent, `com.squeakr.bridge`
+ *   Windows  a Windows service, `Squeakr` (NSSM-wrapped, as scripts/setup.ps1
  *            and `squeakr service install` create it)
  *
  * systemd detection mirrors scripts/update.sh and src/serve/index.ts exactly,
@@ -25,15 +25,15 @@ import { join } from 'node:path';
 import { capture, passthrough, ran } from './exec.js';
 
 /**
- * Fixed unit name — never interpolated from user input. These three service
- * names keep their pre-rename spelling: renaming a unit under a running install
- * would orphan it (docs/44, stage B).
+ * Fixed unit name — never interpolated from user input. Before the Squeakr
+ * rename these were agentvoice.service, com.agentvoice.bridge and AgentVoice;
+ * `service install` retires those (cli/legacyService.ts, docs/45).
  */
-export const SERVICE_UNIT = 'agentvoice.service';
+export const SERVICE_UNIT = 'squeakr.service';
 /** launchd label for the per-user agent on macOS. */
-export const LAUNCHD_LABEL = 'com.agentvoice.bridge';
+export const LAUNCHD_LABEL = 'com.squeakr.bridge';
 /** Windows service name — the one scripts/setup.ps1 has always installed. */
-export const WINDOWS_SERVICE = 'AgentVoice';
+export const WINDOWS_SERVICE = 'Squeakr';
 
 export type UnitScope = 'user' | 'system' | 'launchd' | 'windows' | 'none';
 
@@ -48,7 +48,7 @@ export interface UnitInfo {
   noSystemd: boolean;
 }
 
-/** `~/Library/LaunchAgents/com.agentvoice.bridge.plist`. */
+/** `~/Library/LaunchAgents/com.squeakr.bridge.plist`. */
 export function launchdPlistPath(): string {
   return join(homedir(), 'Library', 'LaunchAgents', `${LAUNCHD_LABEL}.plist`);
 }

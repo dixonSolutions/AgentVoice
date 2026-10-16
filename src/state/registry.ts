@@ -173,7 +173,7 @@ export function listProjectsWithPaths(): Project[] {
  *   1. Exact name match (case-insensitive).
  *   2. Exact alias match (case-insensitive).
  *   3. Fuzzy/contains fallback on name + aliases (returns null on multiple matches).
- *   4. STT-normalized fold (e.g. "casa voice" → cursorvoice).
+ *   4. STT-normalized fold (e.g. "casa voice" → squeakr).
  */
 export function resolveProject(input: string): Project | null {
   const db = getDb();
@@ -192,7 +192,7 @@ export function resolveProject(input: string): Project | null {
   const byAlias = projects.find((p) => p.aliases.some((a) => a.toLowerCase() === norm));
   if (byAlias) return byAlias;
 
-  // Pass 3: STT-normalized fold (casa voice → cursorvoice)
+  // Pass 3: STT-normalized fold (casa voice → squeakr)
   const byFold = projects.filter((p) => foldedProjectMatch(norm, p.name, p.aliases));
   if (byFold.length === 1) return byFold[0] ?? null;
 

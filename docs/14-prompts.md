@@ -6,7 +6,7 @@ Agent instructions are **editable markdown files**, not long strings in `config.
 
 ```
 prompts/
-└── agentvoice/
+└── squeakr/
     ├── system.md              # Voice agent system prompt (agent_native)
     └── mcp-instructions.md    # MCP server instructions for Cursor
 ```
@@ -15,13 +15,13 @@ prompts/
 
 | File | Loaded by | When |
 | --- | --- | --- |
-| `prompts/agentvoice/system.md` | `cursorVoiceRuleBody()` | First `cursor-agent` spawn only |
-| `prompts/agentvoice/mcp-instructions.md` | `cursorVoiceMcpInstructions()` | MCP `/mcp` server instructions |
-| `.cursor/rules/agent-voice.mdc` | Cursor rule injection | Resume spawns via `@agent-voice` |
+| `prompts/squeakr/system.md` | `squeakrRuleBody()` | First `cursor-agent` spawn only |
+| `prompts/squeakr/mcp-instructions.md` | `squeakrMcpInstructions()` | MCP `/mcp` server instructions |
+| `.cursor/rules/squeakr.mdc` | Cursor rule injection | Resume spawns via `@squeakr` |
 
 Boot prompt lifecycle: see [`16-mcp-server-agent-as-brain.md`](./16-mcp-server-agent-as-brain.md) §6.
 
-Loader: `src/mcp/agentVoicePrompt.ts`.
+Loader: `src/mcp/squeakrPrompt.ts`.
 
 ## Browser / UI snapshots
 

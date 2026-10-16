@@ -1,4 +1,4 @@
-package com.cursorvoice.callsession;
+package com.squeakr.callsession;
 
 import android.app.Notification;
 import android.app.NotificationChannel;
@@ -16,7 +16,7 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 @CapacitorPlugin(name = "CallSession")
 public class CallSessionPlugin extends Plugin {
-    private static final String CHANNEL_ID = "cursor_voice_call";
+    private static final String CHANNEL_ID = "squeakr_call";
     private static final int NOTIFICATION_ID = 1001;
     private boolean callActive = false;
 

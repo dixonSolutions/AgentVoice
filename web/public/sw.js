@@ -17,10 +17,33 @@
  */
 
 const CACHE_NAME = 'squeakr-v6';
-const VOSK_CACHE_NAME = 'agentvoice-vosk-v2';
-const MODEL_CACHE_NAME = 'agentvoice-models-v1';
+const VOSK_CACHE_NAME = 'squeakr-vosk-v2';
+const MODEL_CACHE_NAME = 'squeakr-models-v1';
 const VOSK_MODEL_PATH = '/vosk/model.tar.gz';
 const SILERO_ASSET_PREFIX = '/silero-vad/';
+
+/**
+ * Model caches under their AgentVoice names (docs/45). Their contents are
+ * carried into the new caches before the cleanup below deletes them, so the
+ * rename does not re-download the 41 MB wake-word model on every device.
+ */
+const PRE_RENAME_MODEL_CACHES = [
+  ['agentvoice-vosk-v2', VOSK_CACHE_NAME],
+  ['agentvoice-models-v1', MODEL_CACHE_NAME],
+];
+
+async function carryOverPreRenameCaches() {
+  for (const [from, to] of PRE_RENAME_MODEL_CACHES) {
+    if (!(await caches.has(from))) continue;
+    const source = await caches.open(from);
+    const target = await caches.open(to);
+    for (const request of await source.keys()) {
+      if (await target.match(request)) continue;
+      const response = await source.match(request);
+      if (response) await target.put(request, response);
+    }
+  }
+}
 
 const APP_SHELL = [
   '/',
@@ -44,8 +67,9 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches
-      .keys()
+    carryOverPreRenameCaches()
+      .catch(() => undefined)
+      .then(() => caches.keys())
       .then((keys) =>
         Promise.all(
           keys

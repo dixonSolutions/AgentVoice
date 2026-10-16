@@ -4,7 +4,7 @@
 #
 # Stops the production HOST bridge (the long-running squeakr service).
 #   1. Stops the systemd watch unit (so it won't auto-restart the service)
-#   2. Stops the agentvoice.service systemd unit
+#   2. Stops the squeakr.service systemd unit
 #   3. Falls back to killing the manual nohup process (data/.bridge.pid)
 #   4. Frees the host bridge port (PORT, default 8787) as a safety net
 #
@@ -62,28 +62,28 @@ $QUIET || echo -e "${CYN}${BLD}Squeakr — stop host${NC}  |  Project: ${BLD}${P
 # ── 1 + 2. Stop systemd units (user, then system) ───────────────────────────
 stopped_via_systemd=false
 
-if systemctl --user list-unit-files agentvoice.service &>/dev/null && \
-   systemctl --user cat agentvoice.service &>/dev/null; then
+if systemctl --user list-unit-files squeakr.service &>/dev/null && \
+   systemctl --user cat squeakr.service &>/dev/null; then
   section "Stopping systemd user units"
   # Stop the watch path first so it can't re-trigger the service.
-  if systemctl --user is-active --quiet agentvoice-watch.path; then
-    systemctl --user stop agentvoice-watch.path || warn "Could not stop agentvoice-watch.path"
-    ok "agentvoice-watch.path stopped."
+  if systemctl --user is-active --quiet squeakr-watch.path; then
+    systemctl --user stop squeakr-watch.path || warn "Could not stop squeakr-watch.path"
+    ok "squeakr-watch.path stopped."
   else
-    info "agentvoice-watch.path already inactive."
+    info "squeakr-watch.path already inactive."
   fi
-  if systemctl --user is-active --quiet agentvoice.service; then
-    systemctl --user stop agentvoice.service || warn "Could not stop agentvoice.service"
-    ok "agentvoice.service stopped."
+  if systemctl --user is-active --quiet squeakr.service; then
+    systemctl --user stop squeakr.service || warn "Could not stop squeakr.service"
+    ok "squeakr.service stopped."
   else
-    info "agentvoice.service already inactive."
+    info "squeakr.service already inactive."
   fi
   stopped_via_systemd=true
-elif systemctl cat agentvoice.service &>/dev/null 2>&1; then
+elif systemctl cat squeakr.service &>/dev/null 2>&1; then
   section "Stopping systemd system unit"
-  sudo systemctl stop agentvoice-watch.path 2>/dev/null || true
-  sudo systemctl stop agentvoice.service || warn "Could not stop system agentvoice.service"
-  ok "system agentvoice.service stopped."
+  sudo systemctl stop squeakr-watch.path 2>/dev/null || true
+  sudo systemctl stop squeakr.service || warn "Could not stop system squeakr.service"
+  ok "system squeakr.service stopped."
   stopped_via_systemd=true
 fi
 

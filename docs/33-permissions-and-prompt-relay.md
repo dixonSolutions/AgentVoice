@@ -24,7 +24,7 @@ enforcement regardless of the mode.
 | CLI | Mode id | Flags | When the CLI would ask |
 | --- | --- | --- | --- |
 | **Claude Code** | `bypass` (default) | `--permission-mode bypassPermissions` | never asks |
-| | `auto` | `--permission-mode auto --permission-prompt-tool mcp__agent-voice__approve_permission` | classifier decides; leftovers → **phone** |
+| | `auto` | `--permission-mode auto --permission-prompt-tool mcp__squeakr__approve_permission` | classifier decides; leftovers → **phone** |
 | | `acceptEdits` | `--permission-mode acceptEdits --permission-prompt-tool …` | edits free; other commands → **phone** |
 | | `manual` | `--permission-mode manual --permission-prompt-tool …` | everything non-read-only → **phone** |
 | | `dontAsk` | `--permission-mode dontAsk` | refused |
@@ -66,7 +66,7 @@ with `{ tool_name, input, tool_use_id }` and expects the tool's text to be
 the JSON decision — `{"behavior":"allow","updatedInput":…}` or
 `{"behavior":"deny","message":"…"}` (the CLI validates exactly that shape).
 
-`mcp/server/index.ts` registers `approve_permission` on the `agent-voice`
+`mcp/server/index.ts` registers `approve_permission` on the `squeakr`
 server for this purpose. It reuses the approval registry
 (`mcp/server/approvalRegistry.ts`, kind `permission`):
 

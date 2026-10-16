@@ -25,7 +25,7 @@ export function resolveUserHome(): string {
 }
 
 /**
- * Preferred root for cursor-voice user files on this machine.
+ * Preferred root for squeakr user files on this machine.
  * Uses ~/Projects when present, otherwise the user home directory.
  */
 export function resolveUserProjectsRoot(): string {

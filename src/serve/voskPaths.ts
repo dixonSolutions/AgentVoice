@@ -3,7 +3,7 @@
  *
  * `squeakr prepare-vosk` used to write the ~41 MB model into
  * `<root>/web/dist/vosk`, which is fine for a clone or an npm install and
- * impossible for a distro package: `/usr/lib/agentvoice` belongs to root and
+ * impossible for a distro package: `/usr/lib/squeakr` belongs to root and
  * to the package manager, so the command would fail for every .deb user and
  * wake words would simply never work for them.
  *
@@ -34,7 +34,7 @@ export interface VoskPaths {
 }
 
 /** `~/.squeakr` (or a not-yet-migrated `~/.agentvoice`), or `SQUEAKR_HOME` (legacy `AGENTVOICE_HOME`) when the user pointed it elsewhere. */
-export function agentVoiceHome(): string {
+export function squeakrHome(): string {
   const fromEnv = brandEnv('HOME');
   return fromEnv ? fromEnv : defaultHomeDir();
 }
@@ -45,7 +45,7 @@ export function voskPaths(
   const install = detectInstallMode();
   const root = opts.root ?? install.root;
   const mode = opts.mode ?? install.mode;
-  const home = opts.home ?? agentVoiceHome();
+  const home = opts.home ?? squeakrHome();
 
   const userDir = join(home, 'vosk');
   const distDir = join(root, 'web', 'dist', 'vosk');
