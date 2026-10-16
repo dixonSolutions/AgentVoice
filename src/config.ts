@@ -107,6 +107,11 @@ export const LEGACY_WAKE_SENSITIVITY_THRESHOLD = {
   strict: 0.8,
 } as const;
 
+/** Default wake phrase. Agent-agnostic, and every word is in the Vosk model's vocabulary. */
+export const DEFAULT_WAKE_START = 'hey squeaker';
+/** The default before the Squeakr rename; an untouched config is moved off it. */
+export const LEGACY_WAKE_START = 'cursor listen';
+
 export const WakeWordsSchema = z
   .object({
     start: z.string().min(1).max(100),
@@ -976,6 +981,14 @@ export function migrateRawConfig(raw: unknown): unknown {
       delete ww['stop'];
       if (typeof ww['end'] !== 'string' || !String(ww['end']).trim()) {
         ww['end'] = 'send';
+      }
+      // The default wake phrase was "cursor listen" — from when this only
+      // drove Cursor. It is "hey squeaker" now, whichever agent CLI is in use
+      // ("squeakr" itself is not in the wake-word model's vocabulary). A
+      // phrase someone chose is left alone; only the untouched default moves.
+      if (typeof ww['start'] === 'string' && ww['start'].trim().toLowerCase() === LEGACY_WAKE_START) {
+        ww['start'] = DEFAULT_WAKE_START;
+        log.info({ from: LEGACY_WAKE_START, to: DEFAULT_WAKE_START }, 'Migrated config — default wake phrase');
       }
     }
     if (!voice['turnSubmit'] || typeof voice['turnSubmit'] !== 'object') {

@@ -49,7 +49,7 @@ iPhone PWA (WebKit STT/TTS or Amazon fallback)
       }
     },
     "voice": {
-      "wakeWords": { "start": "cursor listen", "end": "cursor send" },
+      "wakeWords": { "start": "hey squeaker", "end": "send" },
       "turnSubmit": { "silenceMs": 1500, "vadEnabled": true }
     }
   }

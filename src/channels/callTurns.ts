@@ -7,8 +7,8 @@
  *                       (the phone's direct stream ignores them too).
  *   inputMode `turns`   wakeWordsEnabled:
  *                         the start phrase opens a capture; anything else is
- *                         room talk and is not sent. "cursor listen, run the
- *                         tests" is a request; "cursor listen" alone opens the
+ *                         room talk and is not sent. "hey squeaker, run the
+ *                         tests" is a request; "hey squeaker" alone opens the
  *                         capture for what is said next.
  *                       wake words off: every utterance is a request (the
  *                         phone waits for a tap on Speak; a call has no screen).
