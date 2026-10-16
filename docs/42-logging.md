@@ -22,7 +22,7 @@ however it was started:
 ```
 
 Terminal and journald output is unchanged, and `squeakr logs` /
-`journalctl --user -u agentvoice` still read the journal for a systemd install.
+`journalctl --user -u squeakr` still read the journal for a systemd install.
 
 ## Bridge session logs
 
@@ -35,8 +35,8 @@ nothing is lost in a buffer on `process.exit`).
 # Squeakr bridge log
 # opened 2026-09-23 20:23:10.759 (UTC+10:00) — session start
 # session started 2026-09-23 20:23:10.758
-# version=0.1.0 (4386b85) · node=v26.9.0 · pid=544294 · runMode=serve · agent=claude-code · workflow=agent_native · cwd=/opt/agentvoice
-2026-09-23 20:23:10.757 INFO  [config] config loaded configPath=/opt/agentvoice/config.json projectCount=1 runMode=serve
+# version=0.1.0 (4386b85) · node=v26.9.0 · pid=544294 · runMode=serve · agent=claude-code · workflow=agent_native · cwd=/opt/squeakr
+2026-09-23 20:23:10.757 INFO  [config] config loaded configPath=/opt/squeakr/config.json projectCount=1 runMode=serve
 2026-09-23 20:23:11.404 INFO  [api:audio-stream] audio stream started client="e2e pipe" listen=true stt="Self-hosted Whisper"
 2026-09-23 20:23:13.361 INFO  [api:audio-stream] stream segment transcribed index=1 audioMs=1600 latencyMs=97 provider=local_whisper
 …
@@ -151,9 +151,9 @@ Environment: `SQUEAKR_LOG_DIR` overrides `dir`; `LOG_LEVEL` overrides
 
 - **systemd user unit** (`scripts/install-systemd.sh`): `WorkingDirectory` is
   the checkout, so files land in `<checkout>/logs/serve/`. Nothing to configure.
-- **system unit** (`agentvoice.service`): `ProtectSystem=strict` makes the
+- **system unit** (`squeakr.service`): `ProtectSystem=strict` makes the
   filesystem read-only except `ReadWritePaths`, which now includes
-  `/opt/agentvoice/logs`.
+  `/opt/squeakr/logs`.
 - **manual start** (`scripts/start.sh` / `restart.sh` without systemd): stdout
   goes to `logs/serve/console/<date>.log` instead of one ever-growing
   `logs/bridge.log`, and those captures are compressed like everything else.

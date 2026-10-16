@@ -159,7 +159,7 @@ function checkDataDir(home: string): Check {
     mkdirSync(dir, { recursive: true });
     // accessSync(W_OK) lies on some mounts (and on every container running as
     // root); an actual write is the only answer worth reporting.
-    const probe = join(dir, `.agentvoice-doctor-${process.pid}`);
+    const probe = join(dir, `.squeakr-doctor-${process.pid}`);
     writeFileSync(probe, 'ok');
     rmSync(probe, { force: true });
   } catch (err) {

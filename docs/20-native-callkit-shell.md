@@ -93,13 +93,13 @@ Requires **macOS + Xcode** and Apple Developer account ($99/yr).
 4. In Xcode → Signing & Capabilities, add:
    - **Background Modes**: Audio, Voice over IP
    - **Push Notifications**
-5. Set bundle ID `com.cursorvoice.app` (unchanged by the rename — kept for APNs device-token continuity; match `APNS_BUNDLE_ID`).
+5. Set bundle ID `com.squeakr.app` (unchanged by the rename — kept for APNs device-token continuity; match `APNS_BUNDLE_ID`).
 6. Create APNs Auth Key (.p8) in Apple Developer → Keys; add to `.env`:
    ```
    APNS_KEY_ID=...
    APNS_TEAM_ID=...
    APNS_KEY_PATH=./AuthKey_XXXX.p8
-   APNS_BUNDLE_ID=com.cursorvoice.app
+   APNS_BUNDLE_ID=com.squeakr.app
    APNS_PRODUCTION=false
    ```
 7. Archive → TestFlight → install on dad's iPhone.

@@ -245,18 +245,18 @@
         </p-fieldset>
 
         <!--
-          docs/39 A10: agent voice moved to "What gets spoken", where the
+          docs/39 A10: agent speech moved to "What gets spoken", where the
           read-aloud level and the bridge's own narration already live. Left
           here as a pointer rather than a second copy of the same switches.
         -->
-        <p-fieldset legend="Agent voice (TTS)">
+        <p-fieldset legend="Agent speech (TTS)">
           <p-message severity="secondary" variant="simple"
             text="Whether the agent's replies are played aloud. This and the rest of what you hear live together under What gets spoken." />
 
           <div class="cv-cfg-toggle-row">
-            <p-toggleSwitch id="cfg-agent-voice" [(ngModel)]="agentVoiceEnabled"
+            <p-toggleSwitch id="cfg-agent-speech" [(ngModel)]="agentSpeechEnabled"
               [disabled]="!isBridgeConnected()" />
-            <label for="cfg-agent-voice">Play agent voice aloud</label>
+            <label for="cfg-agent-speech">Play the agent's replies aloud</label>
           </div>
 
           <p-message severity="secondary" variant="simple"
@@ -265,7 +265,7 @@
           <p-iftalabel>
             <p-select id="cfg-read-aloud" [(ngModel)]="readAloud"
               [options]="readAloudOptions" optionLabel="label" optionValue="value"
-              [disabled]="!isBridgeConnected() || !agentVoiceEnabled" />
+              [disabled]="!isBridgeConnected() || !agentSpeechEnabled" />
             <label for="cfg-read-aloud">Read the agent's work aloud</label>
           </p-iftalabel>
           <p-message severity="secondary" variant="simple"
@@ -622,7 +622,7 @@
               means the copy is wrong the day a fifth arrives, so it does not.
             -->
             <p-message severity="secondary" variant="simple"
-              text="The coding agent the bridge spawns for voice and worker jobs. Every client registers the same agent-voice MCP server." />
+              text="The coding agent the bridge spawns for voice and worker jobs. Every client registers the same squeakr MCP server." />
             <div class="cv-client-list">
               @for (client of agentClientData.clients; track client.id) {
                 <button
@@ -887,7 +887,7 @@
                   <p-iftalabel>
                     <input pInputText id="cfg-serve-repo"
                       [(ngModel)]="serveRepoDir"
-                      placeholder="/path/to/agentvoice"
+                      placeholder="/path/to/squeakr"
                       [disabled]="!canUseApi()" />
                     <label for="cfg-serve-repo">Repository directory (optional)</label>
                   </p-iftalabel>
@@ -971,7 +971,7 @@
                       severity="secondary" [outlined]="true"
                       (onClick)="copyUpdateCommand()" />
                     <p-message severity="secondary" variant="simple"
-                      text="After upgrading, restart it as yourself: systemctl --user restart agentvoice" />
+                      text="After upgrading, restart it as yourself: systemctl --user restart squeakr" />
                   } @else {
                     <p-message severity="warn" variant="simple"
                       [text]="'Cannot update automatically — ' + serveInstallReason + '. Reinstall it the way you want to maintain it: npm, a system package, or a git clone.'" />
@@ -1188,7 +1188,7 @@
                     <span class="cv-cfg-muted">{{ journalUnit }}</span>
                   </div>
                   <p-message severity="secondary" variant="simple"
-                    text="Follows journalctl -u agentvoice.service (user unit first, then system). Argv is fixed — no shell input." />
+                    text="Follows journalctl -u squeakr.service (user unit first, then system). Argv is fixed — no shell input." />
                   @if (journalError) {
                     <p-message severity="warn" variant="simple" [text]="journalError" />
                   }
@@ -1320,12 +1320,12 @@
           <p-message severity="secondary" variant="simple"
             text="One place decides what you hear. The agent's own replies come first; everything below is the bridge speaking on top of them." />
 
-          <p-fieldset legend="Agent voice">
+          <p-fieldset legend="Agent speech">
             <div class="cv-cfg-toggle-row">
-              <p-toggleSwitch id="cfg-agent-voice-enabled"
-                [(ngModel)]="agentVoiceEnabled"
+              <p-toggleSwitch id="cfg-agent-speech-enabled"
+                [(ngModel)]="agentSpeechEnabled"
                 [disabled]="!canUseApi()" />
-              <label for="cfg-agent-voice-enabled">Play the agent's replies aloud</label>
+              <label for="cfg-agent-speech-enabled">Play the agent's replies aloud</label>
             </div>
             <p-iftalabel>
               <p-select id="cfg-read-aloud"

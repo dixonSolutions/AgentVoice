@@ -8,7 +8,7 @@
 #   tailscale  tailscale serve --bg PORT  → https://<machine>.<tailnet>.ts.net
 #              (needs a one-time `sudo tailscale set --operator=$USER`)
 #   caddy      mkcert cert + Caddy TLS terminator on :8443 → 127.0.0.1:PORT,
-#              installed as the agentvoice-caddy.service systemd --user unit.
+#              installed as the squeakr-caddy.service systemd --user unit.
 #              Recorded as hosting.provider=manual.
 #   lan        hosting.provider=lan (plain LAN access; no TLS is set up here)
 #   local      hosting.provider=local — loopback only, nothing exposed
@@ -28,7 +28,7 @@
 # Environment overrides (for testing against a scratch copy):
 #   SQUEAKR_CONFIG        config.json path      (default ./config.json)
 #   SQUEAKR_ENV_FILE      .env path             (default ./.env)
-#   SQUEAKR_TLS_DIR       cert/Caddyfile dir    (default ~/.config/agentvoice-tls)
+#   SQUEAKR_TLS_DIR       cert/Caddyfile dir    (default ~/.config/squeakr-tls)
 #   SQUEAKR_SYSTEMD_DIR   user unit dir         (default ~/.config/systemd/user)
 #
 # Re-running is safe.
@@ -81,7 +81,9 @@ fi
 
 CONFIG_FILE="${SQUEAKR_CONFIG:-${AGENTVOICE_CONFIG:-${PROJECT_DIR}/config.json}}"
 ENV_FILE="${SQUEAKR_ENV_FILE:-${AGENTVOICE_ENV_FILE:-${PROJECT_DIR}/.env}}"
-TLS_DIR="${SQUEAKR_TLS_DIR:-${AGENTVOICE_TLS_DIR:-${HOME}/.config/agentvoice-tls}}"
+# ~/.config/squeakr-tls, unless only the pre-rename agentvoice-tls exists (docs/45).
+if [[ -d "${HOME}/.config/squeakr-tls" || ! -d "${HOME}/.config/agentvoice-tls" ]]; then DEFAULT_TLS_DIR="${HOME}/.config/squeakr-tls"; else DEFAULT_TLS_DIR="${HOME}/.config/agentvoice-tls"; fi
+TLS_DIR="${SQUEAKR_TLS_DIR:-${AGENTVOICE_TLS_DIR:-${DEFAULT_TLS_DIR}}}"
 SYSTEMD_DIR="${SQUEAKR_SYSTEMD_DIR:-${AGENTVOICE_SYSTEMD_DIR:-${HOME}/.config/systemd/user}}"
 
 [[ -f "$CONFIG_FILE" ]] || err "${CONFIG_FILE} not found — run: bash scripts/prepare.sh"
@@ -304,11 +306,11 @@ EOF
     && ok "Caddyfile validates." || warn "caddy validate reported a problem — check ${caddyfile}"
 
   mkdir -p "$SYSTEMD_DIR"
-  unit="${SYSTEMD_DIR}/agentvoice-caddy.service"
+  unit="${SYSTEMD_DIR}/squeakr-caddy.service"
   cat > "$unit" <<EOF
 [Unit]
 Description=Caddy TLS front for Squeakr bridge (:${TLS_PORT} -> 127.0.0.1:${PORT})
-After=network-online.target agentvoice.service
+After=network-online.target squeakr.service
 
 [Service]
 Type=simple
@@ -329,7 +331,7 @@ EOF
   fi
 
   if ! $START_SERVICES; then
-    warn "--no-start: not enabling agentvoice-caddy.service. Start later: systemctl --user enable --now agentvoice-caddy"
+    warn "--no-start: not enabling squeakr-caddy.service. Start later: systemctl --user enable --now squeakr-caddy"
     return
   fi
   if [[ "$SYSTEMD_DIR" != "${HOME}/.config/systemd/user" ]]; then
@@ -337,12 +339,12 @@ EOF
     return
   fi
   systemctl --user daemon-reload
-  systemctl --user enable --now agentvoice-caddy.service
+  systemctl --user enable --now squeakr-caddy.service
   sleep 2
-  if systemctl --user is-active --quiet agentvoice-caddy.service; then
-    ok "agentvoice-caddy.service is active."
+  if systemctl --user is-active --quiet squeakr-caddy.service; then
+    ok "squeakr-caddy.service is active."
   else
-    warn "agentvoice-caddy.service failed — journalctl --user -u agentvoice-caddy -n 30"
+    warn "squeakr-caddy.service failed — journalctl --user -u squeakr-caddy -n 30"
   fi
   local code
   code="$(http_code "https://127.0.0.1:${TLS_PORT}/healthz" 8)"
@@ -381,5 +383,5 @@ esac
 
 section "Hosting setup complete"
 echo -e "  provider: ${BLD}${PROVIDER}${NC}   config: ${CONFIG_FILE}"
-echo -e "  Restart the bridge to apply: ${BLD}systemctl --user restart agentvoice${NC}   Verify: ${BLD}bash scripts/doctor.sh${NC}"
+echo -e "  Restart the bridge to apply: ${BLD}systemctl --user restart squeakr${NC}   Verify: ${BLD}bash scripts/doctor.sh${NC}"
 echo ""

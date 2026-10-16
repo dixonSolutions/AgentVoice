@@ -72,7 +72,7 @@ import {
 export type ReadAloudMode = 'replies' | 'titles' | 'summary' | 'everything';
 
 export interface VoiceTtsSettings {
-  agentVoiceEnabled: boolean;
+  agentSpeechEnabled: boolean;
   errorSoundEnabled: boolean;
   errorSpeakEnabled: boolean;
   readAloud?: ReadAloudMode;
@@ -120,7 +120,7 @@ export class LlmIntelligenceSession {
   private inputMode: VoiceInputMode = 'turns';
   private streamPipe: AudioStreamPipeClient | null = null;
   private ttsSettings: VoiceTtsSettings = {
-    agentVoiceEnabled: true,
+    agentSpeechEnabled: true,
     errorSoundEnabled: true,
     errorSpeakEnabled: true,
     webkit: { rate: 1.02, pitch: 1, volume: 1, lang: 'en-US' },
@@ -1318,7 +1318,7 @@ export class LlmIntelligenceSession {
 
       case 'speak': {
         const text = typeof msg['text'] === 'string' ? msg['text'] : '';
-        if (text && this.ttsSettings.agentVoiceEnabled) {
+        if (text && this.ttsSettings.agentSpeechEnabled) {
           cancelTtsFallback();
           if (!this.ttsPile.isActive()) {
             this.ttsPile.resetHeard();
@@ -1474,7 +1474,7 @@ export class LlmIntelligenceSession {
   ): void {
     const mode = this.ttsSettings.readAloud ?? 'replies';
     if (mode === 'replies') return;
-    if (!this.ttsSettings.agentVoiceEnabled) return;
+    if (!this.ttsSettings.agentSpeechEnabled) return;
 
     const body = detail?.trim() ?? '';
 
@@ -1503,7 +1503,7 @@ export class LlmIntelligenceSession {
   }
 
   private enqueueSpeak(text: string): void {
-    if (!this.ttsSettings.agentVoiceEnabled) return;
+    if (!this.ttsSettings.agentSpeechEnabled) return;
     this.ttsPile.enqueue(text);
   }
 
@@ -1513,7 +1513,7 @@ export class LlmIntelligenceSession {
     this.ttsPile.setBaseVolume(this.resolvedWebkitTts.volume);
   }
 
-  /** Error earcon + optional spoken alert (independent of agentVoiceEnabled). */
+  /** Error earcon + optional spoken alert (independent of agentSpeechEnabled). */
   notifyError(message: string): void {
     const trimmed = message.trim();
     if (!trimmed) return;

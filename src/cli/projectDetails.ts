@@ -35,7 +35,7 @@ export function slugify(value: string): string {
   return slug || 'project';
 }
 
-/** "agent-voice_web" → "agent voice web"; null when it would say nothing new. */
+/** "squeakr_web" → "squeakr web"; null when it would say nothing new. */
 function spoken(value: string): string | null {
   const words = value
     .replace(/^@[^/]+\//, '')

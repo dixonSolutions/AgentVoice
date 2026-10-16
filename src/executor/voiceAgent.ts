@@ -3,7 +3,7 @@
  *
  * When a voice turn is enqueued and no agent is running, the bridge spawns the
  * active coding CLI in headless mode with the Squeakr system prompt, wired
- * to the agent-voice MCP server so it can call next_voice_turn / speak / done.
+ * to the squeakr MCP server so it can call next_voice_turn / speak / done.
  * Every CLI-specific flag lives in providers/agents/<client>.ts.
  *
  * See docs/16-mcp-server-agent-as-brain.md § Phase 3.
@@ -18,7 +18,7 @@ import { guardResumeId, handleStaleSessionExit } from './resumeGuard.js';
 import { getActiveProvider } from '../providers/agents/registry.js';
 import { notifyAuthRequired } from '../providers/agents/authNotify.js';
 import { childLogger } from '../log.js';
-import { agentVoiceRuleBody } from '../mcp/agentVoicePrompt.js';
+import { squeakrRuleBody } from '../mcp/squeakrPrompt.js';
 import { MCP_SERVER_NAME } from '../providers/agents/mcpRegistration.js';
 import {
   broadcastToVoiceSessions,
@@ -57,11 +57,11 @@ const log = childLogger('voice-agent');
  *
  * speak/done/next_voice_turn show up in the CLI's stream like any other tool
  * call, so announcing tool activity would prefix every spoken reply with
- * "Running mcp__agent-voice__speak". The bridge already knows about these —
+ * "Running mcp__squeakr__speak". The bridge already knows about these —
  * they are how it is being talked to — so they are never news.
  *
- * Name shapes across the CLIs: `mcp__agent-voice__speak` (Claude Code),
- * `agent-voice.speak`, `agent-voice/speak`.
+ * Name shapes across the CLIs: `mcp__squeakr__speak` (Claude Code),
+ * `squeakr.speak`, `squeakr/speak`.
  */
 function isOwnMcpTool(name: string): boolean {
   const normalized = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
@@ -101,7 +101,7 @@ const VOICE_RESUME_SUFFIX =
  * full system prompt again.
  */
 function resumeSystemBlock(): string {
-  return getActiveProvider().id === 'cursor' ? '' : `\n\n${agentVoiceRuleBody()}`;
+  return getActiveProvider().id === 'cursor' ? '' : `\n\n${squeakrRuleBody()}`;
 }
 
 export interface VoiceAgentEvent {
@@ -177,7 +177,7 @@ function buildVoiceBootPrompt(project: Project, pendingTurn?: string): string {
   // "\n\n" keeps the prompt from being treated as a CLI flag.
   return isResume
     ? `${resumeSystemBlock()}${VOICE_RESUME_SUFFIX}${awayBlock}${turnBlock}`
-    : `${agentVoiceRuleBody()}${VOICE_BOOT_SUFFIX}${awayBlock}${turnBlock}`;
+    : `${squeakrRuleBody()}${VOICE_BOOT_SUFFIX}${awayBlock}${turnBlock}`;
 }
 
 /**

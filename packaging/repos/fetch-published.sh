@@ -51,7 +51,7 @@ while read -r sum path; do
   # Only package paths the build itself writes: the manifest is fetched over
   # the network and must not be able to write anywhere else.
   if [[ ! "${sum}" =~ ^[0-9a-f]{64}$ ]] \
-     || [[ ! "${path}" =~ ^(apt/pool/main/a/agentvoice/[A-Za-z0-9._+~-]+\.deb|rpm/packages/[A-Za-z0-9._+~-]+\.rpm)$ ]]; then
+     || [[ ! "${path}" =~ ^(apt/pool/main/s/squeakr/[A-Za-z0-9._+~-]+\.deb|rpm/packages/[A-Za-z0-9._+~-]+\.rpm)$ ]]; then
     fail "unexpected manifest line: ${sum} ${path}"
   fi
   mkdir -p "${site}/$(dirname "${path}")"

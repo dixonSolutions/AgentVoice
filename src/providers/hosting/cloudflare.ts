@@ -177,7 +177,16 @@ async function setup(
     }
 
     report('Named tunnel requested — checking for an existing Cloudflare login...');
-    const tunnelName = `agent-voice-${hostname.replace(/[^a-z0-9-]/gi, '-')}`;
+    const slug = hostname.replace(/[^a-z0-9-]/gi, '-');
+    // A tunnel created before the Squeakr rename keeps its name: the DNS route
+    // for this hostname points at it, and a second tunnel could not take it.
+    const preRename = `agent-voice-${slug}`;
+    const tunnelName = (await execFileAsync(resolver.resolve(), ['tunnel', 'info', preRename], { timeout: 30_000 }).then(
+      () => true,
+      () => false,
+    ))
+      ? preRename
+      : `squeakr-${slug}`;
     await execFileAsync(resolver.resolve(), ['tunnel', 'create', tunnelName], { timeout: 30_000 }).catch(
       (err) => log.debug({ err: String(err) }, 'tunnel create (may already exist)'),
     );

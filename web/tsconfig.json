@@ -21,7 +21,7 @@
       "dom"
     ],
     "paths": {
-      "@agentvoice/client": [
+      "@squeakr/client": [
         "../packages/client/src/index.ts"
       ]
     },

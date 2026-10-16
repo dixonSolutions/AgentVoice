@@ -3,7 +3,9 @@
 # Long-running — intended for systemd user service (Restart=always).
 set -euo pipefail
 
-CONFIG="${SQUEAKR_TUNNEL_ENV:-${AGENTVOICE_TUNNEL_ENV:-${CURSOR_VOICE_TUNNEL_ENV:-${HOME}/.config/agentvoice/tunnel.env}}}"
+DEFAULT_TUNNEL_ENV="${HOME}/.config/squeakr/tunnel.env"
+[[ ! -f "${DEFAULT_TUNNEL_ENV}" && -f "${HOME}/.config/agentvoice/tunnel.env" ]] && DEFAULT_TUNNEL_ENV="${HOME}/.config/agentvoice/tunnel.env"
+CONFIG="${SQUEAKR_TUNNEL_ENV:-${AGENTVOICE_TUNNEL_ENV:-${CURSOR_VOICE_TUNNEL_ENV:-${DEFAULT_TUNNEL_ENV}}}}"
 
 if [[ ! -f "$CONFIG" ]]; then
   echo "squeakr tunnel: missing config ${CONFIG}" >&2

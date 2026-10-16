@@ -45,7 +45,7 @@ if (Test-Path $EnvFile) {
 # ── 1. Windows Service ────────────────────────────────────────────────────────
 Section "Windows Service"
 
-$ServiceName = 'AgentVoice'
+$ServiceName = 'Squeakr'
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -eq 'Running') {
     Pass "Windows service '$ServiceName' is running"

@@ -2,12 +2,17 @@
  * `squeakr upgrade-from-agentvoice` — move an AgentVoice install over to
  * Squeakr in one step (docs/45).
  *
+ *   0. A .deb / .rpm install: move the apt / dnf source to the new URL and
+ *      swap the `agentvoice` package for `squeakr` — through
+ *      scripts/migrate-to-squeakr.sh --system-only, which uses sudo.
  *   1. Stop the background service, so nothing writes to the home mid-move.
  *   2. Move the home: ~/.agentvoice → ~/.squeakr, everything in it — config,
  *      .env (keys and pairing token), data/state.db, logs, transcripts, the
  *      Vosk model — and leave ~/.agentvoice behind as a symlink to it, so a
  *      path anything else remembered keeps resolving.
- *   3. Point the service at this install and this home, then start it.
+ *   3. Replace the AgentVoice service (agentvoice.service and its companions,
+ *      com.agentvoice.bridge, the AgentVoice Windows service) with Squeakr's,
+ *      for this install and this home, and start it.
  *   4. A clone: switch `origin` from dixonSolutions/AgentVoice to
  *      dixonSolutions/Squeakr, once the new URL answers.
  *   5. Remove the old npm package, @ratitisrad/agentvoice.
@@ -15,9 +20,8 @@
  * Every step is idempotent: run it twice and the second run reports "already
  * done" for each. `--dry-run` prints the plan and changes nothing.
  *
- * What it deliberately leaves alone: the service *names* (agentvoice.service,
- * com.agentvoice.bridge, the AgentVoice Windows service), the .deb/.rpm
- * package name and the MCP server key — stage B of the rename, docs/45.
+ * The MCP server key moves by itself: the bridge registers `squeakr` with
+ * every agent CLI at startup and strips the old `agent-voice` entry.
  */
 
 import { existsSync, lstatSync, readlinkSync, renameSync, symlinkSync } from 'node:fs';
@@ -28,6 +32,7 @@ import { detectInstallMode, LEGACY_PACKAGE_NAME } from '../../serve/installMode.
 import { capture, passthrough, ran } from '../exec.js';
 import { resolveHome } from '../home.js';
 import { bold, dim, fail, green, note, say, yellow } from '../out.js';
+import { findLegacyService, stopLegacyService } from '../legacyService.js';
 import { detectUnit, readUnitState } from '../service.js';
 import { serviceCommand } from './service.js';
 import { serviceInstallCommand } from './serviceInstall.js';
@@ -38,6 +43,8 @@ export interface UpgradeOptions {
   keepOld?: boolean;
   /** Leave a clone's `origin` remote as it is. */
   keepRemote?: boolean;
+  /** Skip the .deb / .rpm step (the migration script already did it). */
+  skipSystem?: boolean;
   /** For tests: the user's home directory. */
   userHome?: string;
 }
@@ -118,11 +125,25 @@ export async function upgradeFromAgentvoiceCommand(opts: UpgradeOptions = {}): P
   say(`  ${bold(dry ? 'squeakr upgrade-from-agentvoice — dry run, nothing will change' : 'squeakr upgrade-from-agentvoice')}`);
   say('');
 
+  // ── 0: a .deb / .rpm install ─────────────────────────────────────────────
+  if (!opts.skipSystem && process.platform === 'linux' && (await hasLegacySystemInstall())) {
+    const script = join(install.root, 'scripts', 'migrate-to-squeakr.sh');
+    if (!existsSync(script)) {
+      problems++;
+      note(`  ${yellow('note')}  the agentvoice system package is installed, but ${script} is missing. Run:`);
+      note('          curl -fsSL https://raw.githubusercontent.com/dixonSolutions/Squeakr/main/scripts/migrate-to-squeakr.sh | bash');
+    } else {
+      const code = await passthrough('bash', [script, '--system-only', ...(dry ? ['--dry-run'] : [])]);
+      if (code !== 0) problems++;
+    }
+  }
+
   // ── 1 + 2: the home ──────────────────────────────────────────────────────
   const move = planHomeMove(userHome);
   const unit = await detectUnit();
   const state = unit.scope === 'none' ? null : await readUnitState(unit);
-  const wasActive = state?.activeState === 'active';
+  const legacy = await findLegacyService();
+  const wasActive = state?.activeState === 'active' || Boolean(legacy?.active);
 
   if (move.kind === 'conflict') {
     fail(
@@ -135,16 +156,17 @@ export async function upgradeFromAgentvoiceCommand(opts: UpgradeOptions = {}): P
 
   if (move.kind === 'move') {
     if (dry) {
-      if (wasActive) say(`  ${yellow('would')}  stop ${unit.unit}`);
+      if (wasActive) say(`  ${yellow('would')}  stop ${legacy?.active ? legacy.unit : unit.unit}`);
       say(`  ${yellow('would')}  move ${move.from} → ${move.to} (config, .env, data, logs, vosk)`);
       say(`  ${yellow('would')}  leave ${move.from} as a symlink to ${move.to}`);
     } else {
-      if (wasActive) {
-        const stopped = await serviceCommand('stop');
-        if (stopped !== 0) {
-          fail(`could not stop ${unit.unit} — not moving a home a running bridge is writing to.`);
-          return 1;
-        }
+      if (legacy?.active && (await stopLegacyService(legacy)) !== 0) {
+        fail(`could not stop ${legacy.unit} — not moving a home a running bridge is writing to.`);
+        return 1;
+      }
+      if (state?.activeState === 'active' && (await serviceCommand('stop')) !== 0) {
+        fail(`could not stop ${unit.unit} — not moving a home a running bridge is writing to.`);
+        return 1;
       }
       try {
         renameSync(move.from, move.to);
@@ -177,13 +199,14 @@ export async function upgradeFromAgentvoiceCommand(opts: UpgradeOptions = {}): P
   }
 
   // ── 3: the service ───────────────────────────────────────────────────────
-  if (unit.scope === 'none') {
+  if (unit.scope === 'none' && !legacy) {
     say(`  ${dim('skip')}  no background service installed ${dim('(squeakr service install --now adds one)')}`);
   } else if (dry) {
-    say(`  ${yellow('would')}  rewrite ${unit.unit} to run this install (${install.root}) and start it`);
+    if (legacy) say(`  ${yellow('would')}  replace ${legacy.unit} with ${unit.unit}`);
+    say(`  ${yellow('would')}  write ${unit.unit} to run this install (${install.root}) and start it`);
   } else {
-    // --force: the AgentVoice unit differs (old launcher path, old home); --now
-    // reloads it (launchd boots the old definition out first).
+    // --force: an existing unit may differ (old launcher path, old home);
+    // --now reloads it. Retires the AgentVoice service on the way.
     const written = await serviceInstallCommand({ force: true, now: true });
     if (written !== 0) {
       problems++;
@@ -282,4 +305,14 @@ async function removeLegacyPackage(root: string, dry: boolean): Promise<number> 
   }
   say(`  ${green('removed')}  ${LEGACY_PACKAGE_NAME}`);
   return 0;
+}
+
+/** The agentvoice .deb / .rpm, or an apt / dnf source still on the old URL. */
+async function hasLegacySystemInstall(): Promise<boolean> {
+  const deb = await capture('dpkg-query', ['-W', '-f=${Status}', 'agentvoice']);
+  if (ran(deb) && deb.stdout.includes('install ok installed')) return true;
+  const rpm = await capture('rpm', ['-q', 'agentvoice']);
+  if (ran(rpm) && rpm.code === 0) return true;
+  const grep = await capture('grep', ['-rlsF', 'dixonsolutions.github.io/AgentVoice', '/etc/apt/sources.list.d', '/etc/yum.repos.d']);
+  return ran(grep) && grep.stdout.trim() !== '';
 }

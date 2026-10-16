@@ -33,7 +33,7 @@ export async function updateCommand(parsed: Parsed): Promise<number> {
         `  Root: ${install.root}\n` +
         '  Reinstall it the way you want to maintain it:\n' +
         `    npm install -g ${PACKAGE_NAME}  # managed by npm\n` +
-        '    git clone https://github.com/dixonSolutions/AgentVoice.git\n',
+        '    git clone https://github.com/dixonSolutions/Squeakr.git\n',
     );
     return 1;
   }

@@ -4,10 +4,10 @@
 # COOP/COEP headers are required for Vosk wake-word detection (SharedArrayBuffer).
 #
 # Install:
-#   cp scripts/nginx-squeakr.conf.example /etc/nginx/sites-available/agentvoice
-#   sed -i "s|/root/Projects/Squeakr|$(pwd)|g" /etc/nginx/sites-available/agentvoice
-#   sed -i 's/listen 5671/listen YOUR_WEB_PORT/' /etc/nginx/sites-available/agentvoice
-#   ln -sf /etc/nginx/sites-available/agentvoice /etc/nginx/sites-enabled/agentvoice
+#   cp scripts/nginx-squeakr.conf.example /etc/nginx/sites-available/squeakr
+#   sed -i "s|/root/Projects/Squeakr|$(pwd)|g" /etc/nginx/sites-available/squeakr
+#   sed -i 's/listen 5671/listen YOUR_WEB_PORT/' /etc/nginx/sites-available/squeakr
+#   ln -sf /etc/nginx/sites-available/squeakr /etc/nginx/sites-enabled/squeakr
 #   nginx -t && systemctl reload nginx
 
 server {

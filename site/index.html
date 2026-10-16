@@ -8,7 +8,7 @@
 <title>Squeakr: talk to your coding agent from your phone</title>
 <meta name="description" content="Squeakr is a self-hosted voice bridge. Drive Cursor, Codex, Claude Code or Codewhale by speech from your phone, with pluggable speech and networking. MIT licensed.">
 <meta name="theme-color" content="#15142a">
-<link rel="canonical" href="https://dixonsolutions.github.io/AgentVoice/">
+<link rel="canonical" href="https://dixonsolutions.github.io/Squeakr/">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="icon" href="assets/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="assets/icon-192.png">
@@ -19,15 +19,15 @@
 <meta property="og:site_name" content="Squeakr">
 <meta property="og:title" content="Squeakr: talk to your coding agent from your phone">
 <meta property="og:description" content="Self-hosted voice bridge for Cursor, Codex, Claude Code and Codewhale. Pluggable speech in and out, pluggable networking, MIT licensed.">
-<meta property="og:url" content="https://dixonsolutions.github.io/AgentVoice/">
-<meta property="og:image" content="https://dixonsolutions.github.io/AgentVoice/assets/banner.png">
+<meta property="og:url" content="https://dixonsolutions.github.io/Squeakr/">
+<meta property="og:image" content="https://dixonsolutions.github.io/Squeakr/assets/banner.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="360">
 <meta property="og:image:alt" content="Squeakr: self-hosted voice bridge for your coding agent CLI">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Squeakr: talk to your coding agent from your phone">
 <meta name="twitter:description" content="Self-hosted voice bridge for Cursor, Codex, Claude Code and Codewhale. Pluggable speech in and out, pluggable networking, MIT licensed.">
-<meta name="twitter:image" content="https://dixonsolutions.github.io/AgentVoice/assets/banner.png">
+<meta name="twitter:image" content="https://dixonsolutions.github.io/Squeakr/assets/banner.png">
 <meta name="twitter:image:alt" content="Squeakr: self-hosted voice bridge for your coding agent CLI">
 </head>
 <body>
@@ -45,7 +45,7 @@
         <li class="nav-opt"><a href="#features">Features</a></li>
         <li><a href="#install">Install</a></li>
         <li class="nav-opt"><a href="#cli">CLI</a></li>
-        <li><a class="nav-gh" href="https://github.com/dixonSolutions/AgentVoice">GitHub</a></li>
+        <li><a class="nav-gh" href="https://github.com/dixonSolutions/Squeakr">GitHub</a></li>
       </ul>
     </nav>
   </div>
@@ -63,7 +63,7 @@
         agent on your own machine does the work in your repos.</p>
       <div class="cta-row">
         <a class="btn btn-primary" href="#install">Get started</a>
-        <a class="btn btn-ghost" href="https://github.com/dixonSolutions/AgentVoice">View source on GitHub</a>
+        <a class="btn btn-ghost" href="https://github.com/dixonSolutions/Squeakr">View source on GitHub</a>
       </div>
       <div class="hero-install">
         <div class="code code-inline">
@@ -82,7 +82,7 @@
     <div class="wrap">
       <h2 id="how-title">How it works</h2>
       <p class="section-lede">The bridge runs on your machine. Your agent CLI does the thinking.
-        It connects to the bridge through an MCP server called <code>agent-voice</code>, which gives it tools to
+        It connects to the bridge through an MCP server called <code>squeakr</code>, which gives it tools to
         wait for your next request (<code>next_voice_turn</code>), answer out loud (<code>speak</code>) and finish a turn
         (<code>done</code>). Coding work goes to worker agents started with <code>spawn_agent</code>.</p>
 
@@ -96,7 +96,7 @@
         <li class="flow-node flow-node-accent">
           <span class="flow-kicker">2 &middot; Your machine</span>
           <strong>Squeakr bridge</strong>
-          <span>Speech in and out, pairing token, MCP server <code>agent-voice</code></span>
+          <span>Speech in and out, pairing token, MCP server <code>squeakr</code></span>
         </li>
         <li class="flow-link" aria-hidden="true"><span>MCP tools</span></li>
         <li class="flow-node">
@@ -230,14 +230,14 @@
           <p>Signed amd64 and arm64 packages come from this site. After that, updates arrive with the rest of your
             system through <code>apt upgrade</code>.</p>
           <div class="code"><pre><code>sudo install -d -m 0755 /etc/apt/keyrings
-sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/agentvoice.asc -o /etc/apt/keyrings/agentvoice.asc
-sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/apt/agentvoice.sources -o /etc/apt/sources.list.d/agentvoice.sources
-sudo apt update &amp;&amp; sudo apt install agentvoice</code></pre></div>
+sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/squeakr.asc -o /etc/apt/keyrings/squeakr.asc
+sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/apt/squeakr.sources -o /etc/apt/sources.list.d/squeakr.sources
+sudo apt update &amp;&amp; sudo apt install squeakr</code></pre></div>
           <p>The package enables the background user service automatically. Next, run the wizard and get your pairing token:</p>
           <div class="code"><pre><code>squeakr setup
 squeakr token</code></pre></div>
           <p class="note">The signing key is trusted only for this repository (<code>signed-by</code>) and is never added
-            system-wide. <a href="agentvoice.asc">Public key</a> &middot; <a href="apt/agentvoice.sources">apt source file</a> &middot;
+            system-wide. <a href="squeakr.asc">Public key</a> &middot; <a href="apt/squeakr.sources">apt source file</a> &middot;
             <a href="packages.html">published versions</a>.
             To keep the bridge running after you log out, run <code>loginctl enable-linger "$USER"</code>.</p>
         </section>
@@ -246,12 +246,12 @@ squeakr token</code></pre></div>
           <h3 id="tab-dnf-title" class="tab-title">Fedora / RHEL <span class="tab-sub">dnf</span></h3>
           <p>Signed x86_64 and aarch64 packages. dnf checks both the repository metadata and every package, and asks you
             to confirm the key's fingerprint the first time.</p>
-          <div class="code"><pre><code>sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/rpm/agentvoice.repo -o /etc/yum.repos.d/agentvoice.repo
-sudo dnf install agentvoice</code></pre></div>
+          <div class="code"><pre><code>sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/rpm/squeakr.repo -o /etc/yum.repos.d/squeakr.repo
+sudo dnf install squeakr</code></pre></div>
           <p>The package enables the background user service automatically. Next, run the wizard and get your pairing token:</p>
           <div class="code"><pre><code>squeakr setup
 squeakr token</code></pre></div>
-          <p class="note"><a href="rpm/agentvoice.repo">Repo file</a> &middot; <a href="agentvoice.asc">public key</a> &middot;
+          <p class="note"><a href="rpm/squeakr.repo">Repo file</a> &middot; <a href="squeakr.asc">public key</a> &middot;
             <a href="packages.html">published versions</a>.
             Updates come with <code>sudo dnf upgrade</code>. To keep the bridge running after you log out, run
             <code>loginctl enable-linger "$USER"</code>.</p>
@@ -261,7 +261,7 @@ squeakr token</code></pre></div>
           <h3 id="tab-source-title" class="tab-title">From source <span class="tab-sub">git clone</span></h3>
           <p>For hacking on Squeakr itself. <code>scripts/setup.sh</code> installs dependencies, builds, and then
             runs the same <code>squeakr setup</code> wizard.</p>
-          <div class="code"><pre><code>git clone https://github.com/dixonSolutions/AgentVoice.git
+          <div class="code"><pre><code>git clone https://github.com/dixonSolutions/Squeakr.git
 cd Squeakr
 bash scripts/setup.sh</code></pre></div>
           <p class="note">On Windows, run <code>.\scripts\setup.ps1</code> in an elevated PowerShell instead.
@@ -299,7 +299,7 @@ bash scripts/setup.sh</code></pre></div>
           </tbody>
         </table>
       </div>
-      <p class="more">Full reference: <a href="https://github.com/dixonSolutions/AgentVoice/blob/main/docs/35-cli.md">docs/35: the squeakr CLI</a>.</p>
+      <p class="more">Full reference: <a href="https://github.com/dixonSolutions/Squeakr/blob/main/docs/35-cli.md">docs/35: the squeakr CLI</a>.</p>
     </div>
   </section>
 
@@ -308,11 +308,11 @@ bash scripts/setup.sh</code></pre></div>
     <div class="wrap">
       <h2 id="links-title">Resources</h2>
       <ul class="link-cards" role="list">
-        <li><a class="link-card" href="https://github.com/dixonSolutions/AgentVoice"><strong>GitHub</strong><span>Source, releases and discussion</span></a></li>
+        <li><a class="link-card" href="https://github.com/dixonSolutions/Squeakr"><strong>GitHub</strong><span>Source, releases and discussion</span></a></li>
         <li><a class="link-card" href="https://www.npmjs.com/package/squeakr"><strong>npm</strong><span>squeakr</span></a></li>
-        <li><a class="link-card" href="https://github.com/dixonSolutions/AgentVoice/tree/main/docs"><strong>Documentation</strong><span>Architecture, providers, hosting and the CLI</span></a></li>
-        <li><a class="link-card" href="https://github.com/dixonSolutions/AgentVoice/issues"><strong>Issues</strong><span>Report a bug or request a feature</span></a></li>
-        <li><a class="link-card" href="https://github.com/dixonSolutions/AgentVoice/blob/main/LICENSE"><strong>License</strong><span>MIT</span></a></li>
+        <li><a class="link-card" href="https://github.com/dixonSolutions/Squeakr/tree/main/docs"><strong>Documentation</strong><span>Architecture, providers, hosting and the CLI</span></a></li>
+        <li><a class="link-card" href="https://github.com/dixonSolutions/Squeakr/issues"><strong>Issues</strong><span>Report a bug or request a feature</span></a></li>
+        <li><a class="link-card" href="https://github.com/dixonSolutions/Squeakr/blob/main/LICENSE"><strong>License</strong><span>MIT</span></a></li>
       </ul>
     </div>
   </section>
@@ -324,10 +324,10 @@ bash scripts/setup.sh</code></pre></div>
     <p>MIT licensed. This page uses no cookies or trackers.</p>
     <nav aria-label="Footer">
       <ul class="footer-links">
-        <li><a href="https://github.com/dixonSolutions/AgentVoice">GitHub</a></li>
+        <li><a href="https://github.com/dixonSolutions/Squeakr">GitHub</a></li>
         <li><a href="https://www.npmjs.com/package/squeakr">npm</a></li>
-        <li><a href="https://github.com/dixonSolutions/AgentVoice/tree/main/docs">Docs</a></li>
-        <li><a href="https://github.com/dixonSolutions/AgentVoice/blob/main/LICENSE">License</a></li>
+        <li><a href="https://github.com/dixonSolutions/Squeakr/tree/main/docs">Docs</a></li>
+        <li><a href="https://github.com/dixonSolutions/Squeakr/blob/main/LICENSE">License</a></li>
       </ul>
     </nav>
   </div>

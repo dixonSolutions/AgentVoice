@@ -29,13 +29,13 @@ read_backend_port() {
 
 BRIDGE_PORT="$(read_backend_port)"
 
-if systemctl --user is-active --quiet agentvoice.service 2>/dev/null; then
-  warn "agentvoice.service is running (serve mode)."
+if systemctl --user is-active --quiet squeakr.service 2>/dev/null; then
+  warn "squeakr.service is running (serve mode)."
   warn "Stopping it so npm run dev can use test ports (:${BRIDGE_PORT} bridge, :4200 Angular)."
-  systemctl --user stop agentvoice.service
+  systemctl --user stop squeakr.service
 fi
 
 info "Dev: open http://localhost:4200 — API/WS proxy to bridge on :${BRIDGE_PORT}"
 exec env NODE_ENV=development npx concurrently -n web,server -c cyan,magenta \
-  "ng serve agentvoice-web" \
+  "ng serve squeakr-web" \
   "nodemon"

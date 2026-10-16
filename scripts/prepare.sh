@@ -276,10 +276,10 @@ else
 
     if [[ -z "$SRC_MODEL" ]]; then
       [[ -f dist/cli.js ]] || err "dist/cli.js missing — cannot run prepare-vosk (build first, or drop --skip-build)."
-      info "Downloading the model (~41 MB) via: node bin/agentvoice.mjs prepare-vosk"
+      info "Downloading the model (~41 MB) via: node bin/squeakr.mjs prepare-vosk"
       # The CLI honours SQUEAKR_HOME itself for packaged installs; in a clone
       # it writes web/public/vosk, which is why we copy below.
-      SQUEAKR_HOME="$AV_HOME" node bin/agentvoice.mjs prepare-vosk
+      SQUEAKR_HOME="$AV_HOME" node bin/squeakr.mjs prepare-vosk
       for cand in web/public/vosk/model.tar.gz web/dist/vosk/model.tar.gz "$USER_MODEL"; do
         if [[ -f "$cand" ]] && [[ "$(file_size "$cand")" -ge "$MIN_MODEL_BYTES" ]]; then SRC_MODEL="$cand"; break; fi
       done
@@ -300,7 +300,7 @@ else
   if [[ "$MAGIC" == "1f8b" ]]; then
     ok "model.tar.gz has a gzip header."
   else
-    warn "model.tar.gz does not look like gzip (header ${MAGIC:-none}) — re-run with: node bin/agentvoice.mjs prepare-vosk --force"
+    warn "model.tar.gz does not look like gzip (header ${MAGIC:-none}) — re-run with: node bin/squeakr.mjs prepare-vosk --force"
   fi
 
   # If a bridge is up, verify it actually serves the model as application/gzip.
@@ -312,7 +312,7 @@ else
         ok "Bridge on :${LIVE_PORT} serves /vosk/model.tar.gz as ${CT}";;
       *)
         warn "Bridge on :${LIVE_PORT} serves /vosk/model.tar.gz as '${CT:-no response}' (expected application/gzip)."
-        warn "The bridge registers ${VOSK_DIR} at startup — restart it: systemctl --user restart agentvoice";;
+        warn "The bridge registers ${VOSK_DIR} at startup — restart it: systemctl --user restart squeakr";;
     esac
   else
     info "No bridge on 127.0.0.1:${LIVE_PORT} — skipping the served content-type check (doctor.sh checks it later)."
@@ -356,7 +356,7 @@ fi
 
 if [[ -z "$(env_get APP_TOKEN)" ]]; then
   env_set APP_TOKEN "$(gen_token)"
-  ok "APP_TOKEN generated (view later with: node bin/agentvoice.mjs token)."
+  ok "APP_TOKEN generated (view later with: node bin/squeakr.mjs token)."
 else
   ok "APP_TOKEN already set."
 fi

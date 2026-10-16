@@ -1,6 +1,6 @@
 # README demo video
 
-`agentvoice-demo.mp4` (with sound) and `agentvoice-demo.gif` (silent preview
+`squeakr-demo.mp4` (with sound) and `squeakr-demo.gif` (silent preview
 embedded in the README) show one real voice session in the Squeakr web
 client: pick the project and model, tap the orb, say the wake word and a
 question, and hear Claude Code answer.

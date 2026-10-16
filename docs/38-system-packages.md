@@ -11,7 +11,7 @@ npm package and git clone?
 
 ## Decision (2026-09-15)
 
-Tracked in [#58](https://github.com/dixonSolutions/AgentVoice/issues/58); the `http-proxy` bug is [#59](https://github.com/dixonSolutions/AgentVoice/issues/59).
+Tracked in [#58](https://github.com/dixonSolutions/Squeakr/issues/58); the `http-proxy` bug is [#59](https://github.com/dixonSolutions/Squeakr/issues/59).
 
 **Build .deb and .rpm packages now.** (The brainstorm recommended an
 `install.sh` one-liner first and packages later; the maintainer chose
@@ -41,7 +41,7 @@ packages now. The npm fixes below are prerequisites either way.)
 | Bridge + CLI | `dist/index.js`, `dist/cli.js` | trivial |
 | PWA | `web/dist/` (~85 MB, mostly Silero VAD / onnxruntime wasm) | architecture-independent |
 | Native module | `better-sqlite3` | ABI-bound → one package per arch (amd64, arm64) |
-| Node runtime | bundled in `/usr/lib/agentvoice/node` (~100 MB) | Debian 12 / Ubuntu 24.04 ship Node 18; `engines` needs ≥ 20 |
+| Node runtime | bundled in `/usr/lib/squeakr/node` (~100 MB) | Debian 12 / Ubuntu 24.04 ship Node 18; `engines` needs ≥ 20 |
 | Vosk wake model (~41 MB) | `squeakr prepare-vosk` | today writes into `<root>/web/dist/vosk` — read-only under `/usr/lib`; move to `~/.squeakr/vosk` |
 | Speech server | Docker / Podman image | not packaged; `Suggests: podman` |
 
@@ -53,11 +53,11 @@ matches its runtime, at the cost of owning Node security updates.
 The bridge must run **as the developer**: it spawns `claude`, `cursor-agent`,
 `codex` with their credentials, writes `~/.cursor/mcp.json`,
 `~/.codex/config.toml`, `~/.claude.json`, and edits the user's projects. The
-repo's system unit (`agentvoice.service`, `User=agentvoice`) only suits a
+repo's system unit (`squeakr.service`, `User=squeakr`) only suits a
 dedicated server.
 
-- Ship a **user** unit at `/usr/lib/systemd/user/agentvoice.service`
-  (`ExecStart=/usr/bin/agentvoice run`), **enabled out of the box**: on a fresh
+- Ship a **user** unit at `/usr/lib/systemd/user/squeakr.service`
+  (`ExecStart=/usr/bin/squeakr run`), **enabled out of the box**: on a fresh
   install (not upgrades) post-install runs `systemctl --global enable`, so it
   starts at every user's login, and starts it at once for the `SUDO_USER`
   when their user manager is running. It listens on 127.0.0.1 only.
@@ -71,11 +71,11 @@ dedicated server.
 ## A third install mode: `system`
 
 - `src/serve/installMode.ts`: `InstallMode = 'git' | 'npm' | 'system' |
-  'unknown'`. Detect by root under `/usr/lib/agentvoice` / `/opt/agentvoice` or
+  'unknown'`. Detect by root under `/usr/lib/squeakr` / `/opt/squeakr` or
   a shipped marker file (`<root>/.install-source` = `deb` | `rpm`), checked
   **before** the `node_modules` test.
 - `updateCommand` from `/etc/os-release`:
-  `sudo apt install --only-upgrade agentvoice` or `sudo dnf upgrade agentvoice`.
+  `sudo apt install --only-upgrade squeakr` or `sudo dnf upgrade squeakr`.
 - `canSelfUpdate()` is false; the Serve UI shows a copyable command instead of
   an update button (today's "Reinstall with npm" message must change);
   `squeakr update` prints the command or runs it via `sudo -n`.
@@ -117,7 +117,7 @@ dedicated server.
 
 Plan steps 1–4 shipped:
 
-1. **`http-proxy`** ([#59](https://github.com/dixonSolutions/AgentVoice/issues/59))
+1. **`http-proxy`** ([#59](https://github.com/dixonSolutions/Squeakr/issues/59))
    is loaded lazily inside the dev-only proxy path, so a production install no
    longer crashes at boot. Angular, Capacitor, `vosk-browser`, `vad-web`,
    `primeicons` and `zone.js` moved out of runtime `dependencies`; what is left
@@ -135,7 +135,7 @@ Plan steps 1–4 shipped:
 3. **nfpm .deb and .rpm** with a bundled Node, amd64 and arm64, built and
    attached to each GitHub Release by `.github/workflows/npm-publish.yml`.
 4. **Signed apt and dnf repositories** — self-hosted on GitHub Pages at
-   https://dixonsolutions.github.io/AgentVoice/, rebuilt and signed by
+   https://dixonsolutions.github.io/Squeakr/, rebuilt and signed by
    `.github/workflows/package-repos.yml` on every release, so the
    `apt` / `dnf` upgrade commands the Serve page shows actually work. Setup,
    the signing key and rotation: [`43-package-repos.md`](./43-package-repos.md).
@@ -144,7 +144,7 @@ Plan steps 1–4 shipped:
 
 One more prerequisite turned up while testing the package, and it was worse
 than the `http-proxy` one: **`prompts/` was neither published nor resolvable
-outside a clone**, so `readAgentVoicePrompt` looked only next to `config.json`
+outside a clone**, so `readSqueakrPrompt` looked only next to `config.json`
 and every MCP `initialize` on an npm or package install answered 500. No agent
 could connect at all. Prompts are now published, staged into the package, and
 resolved from the bridge home first and the install root second.

@@ -186,10 +186,10 @@ export const WebkitTtsDefaultsSchema = z.object({
 
 export const VoiceTtsSchema = z.object({
   /** When false, MCP speak() lines are shown in UI but not played aloud. */
-  agentVoiceEnabled: z.boolean().default(true),
+  agentSpeechEnabled: z.boolean().default(true),
   /** Play error earcon on TTS failures, disconnects, and other voice pipeline errors. */
   errorSoundEnabled: z.boolean().default(true),
-  /** Speak error messages aloud via TTS (independent of agentVoiceEnabled). */
+  /** Speak error messages aloud via TTS (independent of agentSpeechEnabled). */
   errorSpeakEnabled: z.boolean().default(true),
   /**
    * How much of the agent's work gets read aloud, beyond its actual replies.
@@ -340,7 +340,7 @@ export const SpeechServerSchema = z.object({
   manage: z.enum(['container', 'external']).default('container'),
   runtime: z.enum(['auto', 'docker', 'podman']).default('auto'),
   image: z.string().min(1).default('ghcr.io/speaches-ai/speaches:latest-cpu'),
-  containerName: z.string().min(1).max(64).default('agentvoice-speech'),
+  containerName: z.string().min(1).max(64).default('squeakr-speech'),
   /** Host port bound to 127.0.0.1 — never exposed beyond loopback. */
   port: z.number().int().min(1024).max(65535).default(8770),
   /** Port the server listens on inside the container. */
@@ -352,7 +352,7 @@ export const SpeechServerSchema = z.object({
   /** Pass the GPU through (docker --gpus all / podman --device nvidia.com/gpu=all). */
   gpu: z.boolean().default(false),
   /** Named volume for the weights cache, so re-pulling the image keeps models. */
-  modelVolume: z.string().min(1).max(64).default('agentvoice-speech-models'),
+  modelVolume: z.string().min(1).max(64).default('squeakr-speech-models'),
   modelCachePath: z.string().min(1).default('/home/ubuntu/.cache/huggingface/hub'),
 });
 
@@ -665,13 +665,13 @@ export const ChannelCommonSchema = z.object({
   /**
    * Platform user ids allowed to command the bridge. Empty = nobody: a bot
    * token is control of your machine, so strangers are told their id and
-   * ignored until it is added here (`agentvoice channel allow …`).
+   * ignored until it is added here (`squeakr channel allow …`).
    */
   allowUsers: z.array(z.string().min(1)).default([]),
   /** In group chats, react only when @-mentioned (or to the command prefix). DMs always count. */
   requireMention: z.boolean().default(true),
   /**
-   * The conversation that is AgentVoice's own (a Discord text channel, a
+   * The conversation that is Squeakr's own (a Discord text channel, a
    * Telegram group, a Slack channel): untagged messages there count as for
    * the bot — commands, or text the agent takes as a turn — and calls and
    * session logs are posted there. null = DMs and mentions only.
@@ -762,7 +762,7 @@ const SettingsSchema = z.object({
   userName: z.string().min(1).max(64).optional(),
   /**
    * Active agent client for worker and voice agent spawning.
-   * Each client registers the agent-voice MCP server through its own provider.
+   * Each client registers the squeakr MCP server through its own provider.
    * See docs/23-multi-agent-client.md for installation and flag details.
    */
   agentClient: z.enum(AGENT_CLIENTS).default('cursor'),
@@ -796,7 +796,7 @@ const ProjectConfigSchema = z.object({
    * Tell sessions in this project to poll `check_messages()`.
    *
    * A session Squeakr did not start only receives mailbox messages if its
-   * agent-voice rule tells it to look, which is why this is opt-in per project
+   * squeakr rule tells it to look, which is why this is opt-in per project
    * rather than a global switch.
    */
   externalMailbox: z.boolean().default(false),
@@ -946,6 +946,21 @@ function migrateAudioSettings(audio: Record<string, unknown>): void {
   );
 }
 
+/**
+ * A speech server set up before the Squeakr rename runs as the container
+ * `agentvoice-speech` with its models in the volume `agentvoice-speech-models`.
+ * The defaults are now `squeakr-*`; a config that configured the server but
+ * left the names to the defaults is pinned to the old ones, so the upgrade
+ * does not start a second container and download every model again.
+ */
+function pinPreRenameSpeechServerNames(audio: Record<string, unknown>): void {
+  const server = audio['speechServer'];
+  if (typeof server !== 'object' || server === null) return;
+  const s = server as Record<string, unknown>;
+  if (s['containerName'] === undefined) s['containerName'] = 'agentvoice-speech';
+  if (s['modelVolume'] === undefined) s['modelVolume'] = 'agentvoice-speech-models';
+}
+
 export function migrateRawConfig(raw: unknown): unknown {
   if (typeof raw !== 'object' || raw === null) return raw;
   const obj = raw as Record<string, unknown>;
@@ -983,7 +998,7 @@ export function migrateRawConfig(raw: unknown): unknown {
     }
     if (!voice['tts'] || typeof voice['tts'] !== 'object') {
       voice['tts'] = {
-        agentVoiceEnabled: true,
+        agentSpeechEnabled: true,
         errorSoundEnabled: true,
         errorSpeakEnabled: true,
         readAloud: 'replies',
@@ -992,13 +1007,14 @@ export function migrateRawConfig(raw: unknown): unknown {
       log.info('Migrated config — added default settings.voice.tts');
     } else {
       const tts = voice['tts'] as Record<string, unknown>;
-      // AgentVoice rename — the flag was never Cursor-specific.
-      if ('cursorVoiceEnabled' in tts) {
-        if (tts['agentVoiceEnabled'] === undefined) {
-          tts['agentVoiceEnabled'] = tts['cursorVoiceEnabled'];
-        }
-        delete tts['cursorVoiceEnabled'];
-        log.info('Migrated config — settings.voice.tts.cursorVoiceEnabled → agentVoiceEnabled');
+      // The "play the agent's replies aloud" flag, under its two earlier
+      // names: cursorVoiceEnabled (Cursor Voice), then agentVoiceEnabled
+      // (AgentVoice). The newest name present wins.
+      for (const old of ['agentVoiceEnabled', 'cursorVoiceEnabled']) {
+        if (!(old in tts)) continue;
+        if (tts['agentSpeechEnabled'] === undefined) tts['agentSpeechEnabled'] = tts[old];
+        delete tts[old];
+        log.info({ from: old }, 'Migrated config — settings.voice.tts → agentSpeechEnabled');
       }
       if (tts['errorSoundEnabled'] === undefined) tts['errorSoundEnabled'] = true;
       if (tts['errorSpeakEnabled'] === undefined) tts['errorSpeakEnabled'] = true;
@@ -1048,6 +1064,7 @@ export function migrateRawConfig(raw: unknown): unknown {
         delete li['systemPrompts'];
         if (typeof li['audio'] === 'object' && li['audio'] !== null) {
           migrateAudioSettings(li['audio'] as Record<string, unknown>);
+          pinPreRenameSpeechServerNames(li['audio'] as Record<string, unknown>);
         }
       }
     }

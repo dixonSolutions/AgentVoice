@@ -70,7 +70,7 @@ const resolver = createBinResolver(AGENT_BIN_SPECS.codex);
 
 function codexEnv(base: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   // Codex reads OPENAI_API_KEY itself for API-key auth — never strip it here.
-  // AGENTVOICE_MCP_TOKEN is what config.toml's bearer_token_env_var points at,
+  // SQUEAKR_MCP_TOKEN is what config.toml's bearer_token_env_var points at,
   // so the bridge token never has to be written into a config file.
   return {
     ...base,
@@ -387,7 +387,7 @@ function resolveCodexConfigPath(): string {
  * rather than writing it into config.toml keeps the secret out of a file that
  * users routinely paste into issues.
  */
-export const CODEX_TOKEN_ENV_VAR = 'AGENTVOICE_MCP_TOKEN';
+export const CODEX_TOKEN_ENV_VAR = 'SQUEAKR_MCP_TOKEN';
 
 /**
  * Remove `[mcp_servers.<name>]` and any of its sub-tables from a TOML document.
@@ -412,7 +412,7 @@ function escapeRegex(value: string): string {
 
 const RMCP_FLAG = 'experimental_use_rmcp_client';
 
-/** The `[mcp_servers."agent-voice"]` table, appended at the end of the document. */
+/** The `[mcp_servers."squeakr"]` table, appended at the end of the document. */
 function buildCodexTomlEntry(ctx: McpRegistrationContext): string {
   return [
     '',

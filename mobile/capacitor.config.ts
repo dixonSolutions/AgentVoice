@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.cursorvoice.app',
+  appId: 'com.squeakr.app',
   appName: 'Squeakr',
   webDir: '../web/dist',
   server: {

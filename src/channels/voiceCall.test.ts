@@ -151,7 +151,7 @@ describe('VoiceCall — like the phone', () => {
     const call = new VoiceCall({
       name: 'rich call',
       source: 'discord',
-      greeting: 'AgentVoice here.',
+      greeting: 'Squeakr here.',
       sink: {
         async play(pcm) {
           let n = 0;
@@ -194,7 +194,7 @@ describe('VoiceCall — like the phone', () => {
     const h = rich(false);
     h.call.start();
     await flush(50);
-    assert.deepEqual(h.synthesized, ['AgentVoice here.']);
+    assert.deepEqual(h.synthesized, ['Squeakr here.']);
     assert.ok(h.played.length >= 2, 'cue + greeting');
     h.call.pushAudio('u1', 'Ana', speech(600));
     h.call.speakerPaused('u1');
@@ -256,7 +256,7 @@ describe('VoiceCall — like the phone', () => {
     assert.deepEqual(summary, [
       'started',
       'cue:listening',
-      'reply:own:AgentVoice here.',
+      'reply:own:Squeakr here.',
       'heard:request:Ana:run the tests',
       'cue:sent',
       'activity:🔧 Running tests',

@@ -2,7 +2,7 @@
  * Slack — Socket Mode over a WebSocket the bridge opens itself (no public
  * URL), the Web API over plain HTTPS. No SDK.
  *
- * Commands: `@AgentVoice …` in a channel, anything in a DM with the app, or
+ * Commands: `@Squeakr …` in a channel, anything in a DM with the app, or
  * the `/av` slash command. Slack has no API for an app to join a huddle or
  * hear its audio (only a user account driving the web client could), so there
  * are no calls here; `watch` keeps a status message updated. See docs/44.
@@ -20,7 +20,7 @@ const log = childLogger('channels:slack');
 const MAX_TEXT = 3500;
 
 export const SLACK_CAPABILITIES: ChannelCapabilities = {
-  mentions: { supported: true, note: '`@AgentVoice status` in a channel the app is in, or the `/av` slash command.' },
+  mentions: { supported: true, note: '`@Squeakr status` in a channel the app is in, or the `/av` slash command.' },
   directMessages: { supported: true, note: 'Anything in the app\'s DM is a command.' },
   voiceCalls: {
     supported: false,
@@ -198,7 +198,7 @@ export class SlackAdapter implements ChannelAdapter {
       },
       out,
       this.capabilities,
-      { howToAddress: 'tag me (`@AgentVoice sessions`), use `/av sessions`, or DM me.', explicit },
+      { howToAddress: 'tag me (`@Squeakr sessions`), use `/av sessions`, or DM me.', explicit },
     );
   }
 

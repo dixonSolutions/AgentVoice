@@ -25,7 +25,7 @@ function promptRoots(): string[] {
   return roots;
 }
 
-export function readAgentVoicePrompt(relativePath: string): string {
+export function readSqueakrPrompt(relativePath: string): string {
   const tried: string[] = [];
   for (const root of promptRoots()) {
     const candidate = join(root, relativePath);
@@ -56,11 +56,11 @@ function applyVoicePromptVars(text: string): string {
 }
 
 /** Server `instructions` returned on MCP initialize. */
-export function agentVoiceMcpInstructions(): string {
-  return applyVoicePromptVars(readAgentVoicePrompt('prompts/agentvoice/mcp-instructions.md'));
+export function squeakrMcpInstructions(): string {
+  return applyVoicePromptVars(readSqueakrPrompt('prompts/squeakr/mcp-instructions.md'));
 }
 
 /** The Squeakr system prompt — boot prompt body and CLI rule-file body. */
-export function agentVoiceRuleBody(): string {
-  return applyVoicePromptVars(readAgentVoicePrompt('prompts/agentvoice/system.md'));
+export function squeakrRuleBody(): string {
+  return applyVoicePromptVars(readSqueakrPrompt('prompts/squeakr/system.md'));
 }

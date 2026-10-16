@@ -37,7 +37,7 @@ import {
   forgetSpokenPrompts,
   type ReadPromptsMode,
 } from '../../prompt-speech.js';
-import type { ApprovalRequest } from '@agentvoice/client';
+import type { ApprovalRequest } from '@squeakr/client';
 
 export interface TranscriptEntry {
   id: number;
@@ -673,7 +673,7 @@ export class VoiceSessionService {
         // MCP speak() already drives TTS via the `speak` WS event. Scheduling fallback
         // here replays the same line after playback when assistant_transcript follows speak().
         const cursorVoiceTts =
-          this.voiceProviders.data()?.tts.agentVoiceEnabled ?? true;
+          this.voiceProviders.data()?.tts.agentSpeechEnabled ?? true;
         if (!cursorVoiceTts) {
           scheduleTtsFallback(text, () => this._speaking());
         }

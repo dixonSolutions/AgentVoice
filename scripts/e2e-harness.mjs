@@ -60,7 +60,7 @@ async function freePort() {
  * @param {Record<string, string>} [opts.extraEnv]  more lines for the home's .env
  */
 export async function createInstance({ bin, canned, configure, ttsChunkDelayMs = 0, extraEnv = {} }) {
-  const tmp = mkdtempSync(join(tmpdir(), 'agentvoice-e2e-'));
+  const tmp = mkdtempSync(join(tmpdir(), 'squeakr-e2e-'));
   const instance = join(tmp, 'instance');
   const project = join(tmp, 'project');
   const home = join(tmp, 'home');

@@ -267,7 +267,7 @@ export type ToolName = keyof typeof TOOL_SCHEMAS;
 export type ToolArgs<T extends ToolName> = z.infer<(typeof TOOL_SCHEMAS)[T]>;
 
 /**
- * Tool names shipped before the AgentVoice rename (docs/26).
+ * Tool names shipped before the Cursor Voice → AgentVoice rename (docs/26).
  *
  * They are accepted by `dispatchTool` (the control-WebSocket / WebSocket
  * relay path) so an in-flight session that still remembers the old vocabulary

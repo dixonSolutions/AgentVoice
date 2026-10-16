@@ -286,7 +286,7 @@ export interface SpeakResult {
   /** False when nobody heard this line — it was kept for the catch-up digest. */
   delivered?: boolean;
   buffered?: boolean;
-  /** Presence and the away policy, on every agent-voice result (docs/36 §3.1). */
+  /** Presence and the away policy, on every squeakr result (docs/36 §3.1). */
   listener?: ListenerBlock;
 }
 

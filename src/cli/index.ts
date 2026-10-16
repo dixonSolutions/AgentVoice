@@ -1,7 +1,7 @@
 /**
  * `squeakr` — the management CLI.
  *
- * bin/agentvoice.mjs is a shim over this file. The logic lives in TypeScript so
+ * bin/squeakr.mjs is a shim over this file. The logic lives in TypeScript so
  * it is typechecked with the rest of the bridge and can import from src/ rather
  * than re-deriving things the bridge already knows — install mode, run-mode
  * ports, the systemd unit layout.
@@ -426,12 +426,13 @@ async function dispatch(argv: string[]): Promise<void> {
 
     case 'upgrade-from-agentvoice': {
       const parsed = parseArgs(args);
-      rejectUnknown(parsed, ['dry-run', 'keep-old', 'keep-remote']);
+      rejectUnknown(parsed, ['dry-run', 'keep-old', 'keep-remote', 'skip-system']);
       if (parsed.positionals.length) throw new UsageError('upgrade-from-agentvoice takes no arguments');
       process.exitCode = await upgradeFromAgentvoiceCommand({
         dryRun: parsed.switches.has('dry-run'),
         keepOld: parsed.switches.has('keep-old'),
         keepRemote: parsed.switches.has('keep-remote'),
+        skipSystem: parsed.switches.has('skip-system'),
       });
       return;
     }
@@ -505,7 +506,7 @@ function help(): void {
 
 // `node dist/cli.js status` should work as well as `squeakr status` — handy
 // in a clone, and what the bin shim would do anyway. argv[1] tells the two
-// apart so being imported by bin/agentvoice.mjs does not run main twice.
+// apart so being imported by bin/squeakr.mjs does not run main twice.
 const argv1 = process.argv[1];
 if (argv1 && import.meta.url === pathToFileURL(argv1).href) {
   void main(process.argv.slice(2));

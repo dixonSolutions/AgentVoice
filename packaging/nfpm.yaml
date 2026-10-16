@@ -23,9 +23,11 @@
 #
 # Populated by .github/workflows/npm-publish.yml, which stages the payload into
 # packaging/root/ before calling nfpm.
-# Still `agentvoice`: renaming the package would stop `apt upgrade` / `dnf
-# upgrade` from moving existing installs forward (docs/45, stage B).
-name: agentvoice
+# Was `agentvoice` up to 0.1.x (docs/45). The relations below make installing
+# squeakr replace it: `apt install squeakr` removes agentvoice (Conflicts +
+# Replaces), and for dnf `replaces` becomes Obsoletes, so `dnf install
+# squeakr` swaps it. postinstall moves the apt / dnf source to the new URL.
+name: squeakr
 arch: ${PKG_ARCH}
 platform: linux
 version: ${PKG_VERSION}
@@ -37,7 +39,7 @@ description: |
   Talk to your coding agents from your phone — the bridge runs on your own
   machine and the agents run as you.
 vendor: Squeakr
-homepage: https://github.com/dixonSolutions/AgentVoice
+homepage: https://github.com/dixonSolutions/Squeakr
 license: MIT
 
 # The speech server is a container image, not a package, so it is a suggestion.
@@ -49,26 +51,31 @@ recommends:
 suggests:
   - podman
 
+# deb: Replaces + Conflicts on every pre-rename agentvoice. rpm: `replaces`
+# is Obsoletes; a Conflicts there would make dnf refuse instead of swap.
+replaces:
+  - agentvoice (<< ${PKG_VERSION})
+conflicts:
+  - agentvoice (<< ${PKG_VERSION})
+overrides:
+  rpm:
+    replaces:
+      - agentvoice < ${PKG_VERSION}
+    conflicts: []
+
 contents:
-  - src: ./root/usr/lib/agentvoice
-    dst: /usr/lib/agentvoice
+  - src: ./root/usr/lib/squeakr
+    dst: /usr/lib/squeakr
     type: tree
 
-  - src: ./root/usr/bin/agentvoice
-    dst: /usr/bin/agentvoice
-    file_info:
-      mode: 0755
-
-  # `squeakr` is the command since the rename (docs/45); the package itself
-  # keeps the name `agentvoice` until stage B, so `apt upgrade` still finds it.
   - src: ./root/usr/bin/squeakr
     dst: /usr/bin/squeakr
     file_info:
       mode: 0755
 
   # Not enabled: post-install prints how, and by which user.
-  - src: ./root/usr/lib/systemd/user/agentvoice.service
-    dst: /usr/lib/systemd/user/agentvoice.service
+  - src: ./root/usr/lib/systemd/user/squeakr.service
+    dst: /usr/lib/systemd/user/squeakr.service
 
   # The .install-source marker src/serve/installMode.ts reads — so the Serve
   # page shows `apt` / `dnf` instead of an update button it cannot honour — is
@@ -81,7 +88,7 @@ scripts:
 
 deb:
   fields:
-    Bugs: https://github.com/dixonSolutions/AgentVoice/issues
+    Bugs: https://github.com/dixonSolutions/Squeakr/issues
 
 rpm:
   group: Development/Tools

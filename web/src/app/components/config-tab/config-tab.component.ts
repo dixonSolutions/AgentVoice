@@ -194,7 +194,7 @@ const ALL_SECTIONS: ConfigSection[] = [
   },
   {
     // Replaces the old Narrator section. Three places used to decide what is
-    // spoken about work — agent voice, narrator and Speech out — and none of
+    // spoken about work — agent speech, narrator and Speech out — and none of
     // them agreed (docs/39 A10).
     id: 'spoken',
     label: 'What gets spoken',
@@ -548,7 +548,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected readAloud: 'replies' | 'titles' | 'summary' | 'everything' = 'replies';
   /** docs/40 §1 — how much of an on-screen question / plan card is read out. */
   protected readPrompts: 'off' | 'announce' | 'question' | 'full' = 'question';
-  protected agentVoiceEnabled = true;
+  protected agentSpeechEnabled = true;
   protected errorSoundEnabled = true;
   protected errorSpeakEnabled = true;
   protected webkitRate = 1.02;
@@ -641,7 +641,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     if (data?.workerPollTimeoutMs) this.workerPollTimeoutMs = Number(data.workerPollTimeoutMs);
     this.userName = data?.userName ?? '';
     if (data?.tts) {
-      this.agentVoiceEnabled = data.tts.agentVoiceEnabled;
+      this.agentSpeechEnabled = data.tts.agentSpeechEnabled;
       this.readAloud = data.tts.readAloud ?? 'replies';
       this.readPrompts = data.tts.readPrompts ?? 'question';
       this.errorSoundEnabled = data.tts.errorSoundEnabled ?? true;
@@ -737,7 +737,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     this.savingTts = true;
     try {
       await this.voiceProviders.updateVoiceTts({
-        agentVoiceEnabled: this.agentVoiceEnabled,
+        agentSpeechEnabled: this.agentSpeechEnabled,
         readAloud: this.readAloud,
         readPrompts: this.readPrompts,
         errorSoundEnabled: this.errorSoundEnabled,
@@ -1096,7 +1096,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected journalLines: string[] = [];
   protected journalLive = false;
   protected journalError: string | null = null;
-  protected journalUnit = 'agentvoice.service';
+  protected journalUnit = 'squeakr.service';
   private journalAbort: AbortController | null = null;
   private journalPollTimer: ReturnType<typeof setTimeout> | null = null;
 

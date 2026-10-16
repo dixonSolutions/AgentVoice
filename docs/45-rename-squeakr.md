@@ -1,4 +1,4 @@
-# 44 — Rename: AgentVoice → Squeakr
+# 45 — Rename: AgentVoice → Squeakr
 
 > Added: October 2026. Follows [`26-rename-agentvoice.md`](./26-rename-agentvoice.md)
 > (Cursor Voice → AgentVoice).
@@ -9,135 +9,149 @@
 platform listed on G2, Capterra and TrustRadius. It owns the search results, and
 it sits close enough to this project (AI + voice agents) to be a trademark risk
 once the npm package and the VS Code extension get noticed. **Squeakr** was
-clear on npm (plain and `-cli`) and had no product of that name in a web search.
+free on npm (plain and `-cli`), the VS Code Marketplace, Open VSX, PyPI and
+crates.io, as a GitHub account, and had no product of that name in a web
+search — the only other users are a 2018 k-mer counter and an R package for
+rodent vocalisations, neither near this space.
 
-## Stage A — this release (0.2.0)
+## What was renamed (0.2.0)
 
-What people see and type:
+Everything that carried the old names, in one release:
 
-| Surface | Before | Now | Old name still works? |
+| Surface | Before | Now | What an old install keeps |
 | --- | --- | --- | --- |
-| Display name (PWA, CallKit, push titles, CLI output, docs, site, banner) | AgentVoice | Squeakr | — |
-| npm package | `@ratitisrad/agentvoice` | `squeakr` (unscoped) | final 0.1.6 release hands over — see below |
-| CLI command | `agentvoice` | `squeakr` | `/usr/bin/agentvoice` in the .deb/.rpm; npm installs only `squeakr` (two packages sharing one bin name would collide on `npm i -g`) |
-| Environment variables | `AGENTVOICE_*` | `SQUEAKR_*` | yes — every reader falls back to `AGENTVOICE_*` (`src/brand.ts#brandEnv`, `${SQUEAKR_X:-${AGENTVOICE_X:-…}}` in scripts) |
-| Bridge home | `~/.agentvoice` | `~/.squeakr` | yes — used until `squeakr upgrade-from-agentvoice` moves it, then a symlink |
-| Askpass helper env | `AGENTVOICE_BRIDGE_URL` / `_ASKPASS_TOKEN` | `SQUEAKR_*` | regenerated on every boot |
-| Spoken project aliases | "agent voice" | adds "squeakr", "squeaker" | yes |
-| Version | 0.1.5 | 0.2.0 | — |
+| Display name (PWA, CallKit, push titles, CLI output, channels, docs, site) | AgentVoice | Squeakr | — |
+| npm package | `@ratitisrad/agentvoice` | `squeakr` (unscoped) | the final 0.1.6 hands over — below |
+| CLI command | `agentvoice` | `squeakr` | — |
+| GitHub repo | `dixonSolutions/AgentVoice` | `dixonSolutions/Squeakr` | GitHub redirects repo, clone, issue and PR URLs |
+| Environment variables | `AGENTVOICE_*` | `SQUEAKR_*` | every reader falls back to `AGENTVOICE_*` (`src/brand.ts#brandEnv`, `${SQUEAKR_X:-${AGENTVOICE_X:-…}}` in scripts) |
+| Bridge home | `~/.agentvoice` | `~/.squeakr` | used until `squeakr upgrade-from-agentvoice` moves it; then a symlink |
+| systemd units | `agentvoice.service`, `-watch.path`, `-tunnel`, `-caddy` | `squeakr.service`, `squeakr-watch.path`, … | retired by `squeakr service install` / the upgrade (`src/cli/legacyService.ts`) |
+| launchd label | `com.agentvoice.bridge` | `com.squeakr.bridge` | same |
+| Windows service | `AgentVoice` | `Squeakr` | same (elevated terminal) |
+| .deb / .rpm | `agentvoice`, `/usr/lib/agentvoice` | `squeakr`, `/usr/lib/squeakr` | `squeakr` Conflicts/Replaces (deb) and Obsoletes (rpm) `agentvoice` |
+| apt / dnf repository | `dixonsolutions.github.io/AgentVoice/` | `dixonsolutions.github.io/Squeakr/` | **GitHub Pages does not redirect** — the source has to be moved (below) |
+| MCP server key | `agent-voice` (`mcp__agent-voice__*`) | `squeakr` (`mcp__squeakr__*`) | the bridge strips the old key from every agent CLI's config at startup |
+| Cursor rule file | `agent-voice.mdc` | `squeakr.mdc` | old file blanked |
+| Prompt files | `prompts/agentvoice/` | `prompts/squeakr/` | — |
+| "Play the agent's replies aloud" | `agentVoiceEnabled` | `agentSpeechEnabled` | config migrated on load; the API accepts both |
+| Speech server container / model volume | `agentvoice-speech`, `agentvoice-speech-models` | `squeakr-speech`, `squeakr-speech-models` | an existing config is pinned to the old names, so models are not downloaded again |
+| Cloudflare named tunnel | `agent-voice-<host>` | `squeakr-<host>` | an existing tunnel is reused (its DNS route points at it) |
+| PWA model caches | `agentvoice-vosk-v2`, `agentvoice-models-v1` | `squeakr-*` | the service worker copies them over, so the 41 MB wake-word model is not fetched again |
+| Mobile app id | `com.cursorvoice.app` | `com.squeakr.app` | a new app id: reinstall the app; it registers a fresh push token |
+| Workspace packages | `@agentvoice/client`, `@agentvoice/call-session` | `@squeakr/client`, `@squeakr/call-session` | not published |
+| Demo video | `docs/demo/agentvoice-demo.*` | `docs/demo/squeakr-demo.*` | — |
 
-## Stage B — deliberately not yet
-
-Each of these is load-bearing for an install that is running right now.
-Renaming them needs its own migration and its own release:
-
-| Surface | Kept as | Why |
-| --- | --- | --- |
-| systemd unit | `agentvoice.service` (+ `-watch.path`, `-tunnel`, `-caddy`) | a renamed unit orphans the enabled one; `serve/index.ts`, `update.sh`, the .deb all restart it by name |
-| launchd label | `com.agentvoice.bridge` | same, on macOS |
-| Windows service | `AgentVoice` | NSSM service; renaming needs an elevated reinstall |
-| .deb / .rpm package | `agentvoice` | a new package name stops `apt upgrade` / `dnf upgrade` moving installs forward; needs a transitional package |
-| apt/dnf repo + landing page | `dixonsolutions.github.io/AgentVoice/` | GitHub Pages does **not** redirect after a repo rename — every configured apt/dnf source would 404 |
-| MCP server key / tool prefix | `agent-voice`, `mcp__agent-voice__*` | users' agent permission allowlists name it |
-| Config keys, internal symbols | `agentVoiceEnabled`, `agentVoice` bookkeeping, `agentVoicePrompt.ts` | internal; a rename buys nothing |
-| Shim file | `bin/agentvoice.mjs` | existing units' `ExecStart` point at it by path |
-| Browser caches | `agentvoice-vosk-v2`, `agentvoice-models-v1` | renaming them re-downloads the 41 MB wake-word model on every device |
-| Mobile bundle id | `com.cursorvoice.app` | unchanged since docs/26 — changing it invalidates APNs device tokens |
+Kept on purpose: `bin/agentvoice.mjs` (a two-line forward to `bin/squeakr.mjs`,
+because an AgentVoice-era unit in a clone runs it by path), the legacy readers
+in the table's last column, and the spoken project aliases ("agent voice") —
+those match a *folder* someone named that, not the product.
 
 ## Moving an install over
 
-### npm (global) — the common case
+### One command, any install
 
 ```bash
-npm install -g squeakr
-squeakr upgrade-from-agentvoice --dry-run   # see the plan
-squeakr upgrade-from-agentvoice
+curl -fsSL https://raw.githubusercontent.com/dixonSolutions/Squeakr/main/scripts/migrate-to-squeakr.sh | bash
 ```
 
-Or, from the old install, one command that does both:
+Run it as yourself (it uses `sudo` for the system steps). `--dry-run` shows
+the plan first. It works out what you have and does only what applies — every
+step is safe to repeat:
 
-```bash
-agentvoice migrate-to-squeakr               # needs @ratitisrad/agentvoice 0.1.6
-```
+1. **apt / dnf source** — any source pointing at `…github.io/AgentVoice` is
+   rewritten to `…github.io/Squeakr` (`agentvoice.sources` → `squeakr.sources`,
+   `agentvoice.repo` → `squeakr.repo`, the keyring copied to
+   `/etc/apt/keyrings/squeakr.asc` — the signing key is the same). Only once
+   the new URL answers, so running it early changes nothing.
+2. **.deb / .rpm** — `apt-get install squeakr` / `dnf install squeakr`, which
+   replaces `agentvoice`.
+3. **npm** — `@ratitisrad/agentvoice` installed globally → `npm install -g
+   squeakr`; its postinstall points the background service at Squeakr straight
+   away.
+4. **clone** — `origin` → `dixonSolutions/Squeakr` (keeping https vs ssh),
+   `git pull --ff-only`, `npm ci`, `npm run build`.
+5. **your install** — `squeakr upgrade-from-agentvoice` (below).
 
-What happens, step by step:
+### `squeakr upgrade-from-agentvoice`
 
-1. **`npm install -g squeakr`.** Its postinstall sees
-   `node_modules/@ratitisrad/agentvoice` beside it and re-points the
-   background service at Squeakr (`service install --force --now`), then
-   restarts it. The bridge is now Squeakr, still reading `~/.agentvoice`.
-2. **`squeakr upgrade-from-agentvoice`**:
-   - stops the service, so nothing writes mid-move;
-   - **moves the home** `~/.agentvoice` → `~/.squeakr` — `config.json`, `.env`
-     (provider keys and the pairing `APP_TOKEN`, so paired devices keep
-     working), `data/state.db` (jobs, sessions, history), `logs/`,
-     transcripts and the `vosk/` model — with one `rename`, so nothing is
-     copied or re-encoded;
-   - leaves `~/.agentvoice` as a **symlink** to `~/.squeakr`;
-   - rewrites the service for this install and this home, and starts it;
-   - in a clone, switches `origin` to `dixonSolutions/Squeakr` (below);
-   - runs `npm rm -g @ratitisrad/agentvoice`.
+The part that runs as you:
 
-Every step is idempotent — a second run reports "already" for each. It
-refuses to merge if both `~/.agentvoice` and `~/.squeakr` hold a home; carry
-just the config and keys with `squeakr migrate ~/.agentvoice --with-data`
+- stops the bridge (old or new service), so nothing writes mid-move;
+- **moves the home** `~/.agentvoice` → `~/.squeakr` — `config.json`, `.env`
+  (provider keys and the pairing `APP_TOKEN`, so paired devices keep working),
+  `data/state.db` (jobs, sessions, history), `logs/`, transcripts and the
+  `vosk/` model — with one `rename`, so nothing is copied or re-encoded, and
+  leaves `~/.agentvoice` as a **symlink** to it;
+- **replaces the service**: the AgentVoice unit / agent / Windows service is
+  stopped, disabled and removed, its companion units are re-created under
+  their `squeakr-*` names (enabled again if they were), and `squeakr.service`
+  is written for this install and this home and started;
+- on a .deb / .rpm install, runs step 1–2 of the script above;
+- in a clone, switches `origin`;
+- runs `npm rm -g @ratitisrad/agentvoice`.
+
+It refuses to merge if both `~/.agentvoice` and `~/.squeakr` hold a home;
+carry just the config and keys with `squeakr migrate ~/.agentvoice --with-data`
 instead. A custom `$AGENTVOICE_HOME` is left where it is (the env fallback
-keeps finding it). `--keep-old` leaves the old package installed,
-`--keep-remote` leaves `origin` alone.
+keeps finding it). `--keep-old` leaves the old npm package, `--keep-remote`
+leaves `origin` alone, `--dry-run` changes nothing.
 
-The in-app update on the Serve page of 0.1.6 does step 1 for you; run step 2
-from a terminal afterwards.
+### From the old package
 
-### Clone
-
-```bash
-git pull                                    # main is Squeakr
-npm ci --legacy-peer-deps && npm run build
-node bin/agentvoice.mjs upgrade-from-agentvoice
-```
-
-A clone is its own home, so only `~/.agentvoice/vosk` moves. The **remote**:
-`origin` is switched from `dixonSolutions/AgentVoice` (or `Cursor-Voice`) to
-`dixonSolutions/Squeakr`, keeping https vs ssh — but only once the new URL
-answers `git ls-remote`, so running it before the GitHub rename is harmless.
-By hand:
+`@ratitisrad/agentvoice@0.1.6` — the last release under that name — adds:
 
 ```bash
-git remote set-url origin https://github.com/dixonSolutions/Squeakr.git
+agentvoice migrate-to-squeakr
 ```
 
-### .deb / .rpm
+which installs `squeakr` and hands over to `squeakr upgrade-from-agentvoice`.
+Every other command of 0.1.6 prints that Squeakr replaces it, and its in-app
+update installs `squeakr`.
 
-`sudo apt upgrade` / `sudo dnf upgrade` — the package keeps the name
-`agentvoice` in stage A, so it moves forward as usual and adds
-`/usr/bin/squeakr`. `squeakr upgrade-from-agentvoice` moves the home when
-you like; until then `~/.agentvoice` keeps being used.
+### .deb / .rpm by hand
 
-### Windows
+```bash
+# Debian / Ubuntu
+sudo sed -i 's#github.io/AgentVoice#github.io/Squeakr#; s#keyrings/agentvoice.asc#keyrings/squeakr.asc#' /etc/apt/sources.list.d/agentvoice.sources
+sudo mv /etc/apt/keyrings/agentvoice.asc /etc/apt/keyrings/squeakr.asc
+sudo mv /etc/apt/sources.list.d/agentvoice.sources /etc/apt/sources.list.d/squeakr.sources
+sudo apt update && sudo apt install squeakr        # removes agentvoice
 
-Same as npm, from an **elevated** terminal (the service is NSSM-wrapped and
-keeps the name `AgentVoice`).
+# Fedora / RHEL
+sudo rm /etc/yum.repos.d/agentvoice.repo
+sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/rpm/squeakr.repo -o /etc/yum.repos.d/squeakr.repo
+sudo dnf install squeakr                           # obsoletes agentvoice
+```
+
+The `squeakr` package's postinstall also moves the source and hands the user
+service over (stops `agentvoice.service` for every logged-in user, starts
+`squeakr.service` where it ran).
 
 ## Releasing it — the order matters
 
-1. **Merge** this PR. `npm-publish.yml` publishes `squeakr@0.2.0` — the
+1. **Merge** the rename. `npm-publish.yml` publishes `squeakr@0.2.0` — the
    first version of a **new package name**, so Trusted Publishing cannot do
-   it: set the `NPM_TOKEN` repository secret (granular, allowed to publish
-   new packages, "bypass 2FA" on) first. Then configure Trusted Publishing on
-   `squeakr` on npmjs.com and delete the secret again.
-2. **Release the hand-over**: branch `release/agentvoice-final` (cut from
-   v0.1.5) holds `@ratitisrad/agentvoice@0.1.6` — `migrate-to-squeakr`, a
-   notice on every command, and an in-app update that installs `squeakr`.
-   Push tag `v0.1.6` on that branch to publish it. It must ship *after*
-   step 1, because it installs `squeakr`.
-3. **Deprecate** the old package so every install and `npm view` points over:
+   it: the `NPM_TOKEN` repository secret (granular, allowed to publish new
+   packages, "bypass 2FA" on) must be set. Configure Trusted Publishing on
+   `squeakr` on npmjs.com afterwards and delete the secret. The same run
+   builds the `squeakr` .deb / .rpm and deploys the Pages site — still served
+   at `/AgentVoice/` until step 4, with every link already pointing at
+   `/Squeakr/`.
+2. **Release the hand-over**: push tag `v0.1.6` on `release/agentvoice-final`
+   (cut from v0.1.5). It publishes `@ratitisrad/agentvoice@0.1.6` through the
+   existing Trusted Publisher — which is bound to the repo name, so **before
+   step 4** — and, with `NPM_TOKEN` set, deprecates the package. It builds no
+   .deb / .rpm and deploys no site.
+3. **Deprecate**, if step 2 could not:
    ```bash
    npm deprecate @ratitisrad/agentvoice "Renamed to squeakr. Run: agentvoice migrate-to-squeakr (or npm i -g squeakr && squeakr upgrade-from-agentvoice)"
    ```
-4. **Rename the GitHub repo** (Settings → General → Repository name →
-   `Squeakr`). Repo, clone, issue and PR URLs redirect. Pages URLs do not —
-   see stage B.
+4. **Rename the GitHub repo** to `Squeakr`. The Pages site moves to
+   `/Squeakr/` with it; `/AgentVoice/` 404s from here on, which is what step 1
+   of the migration script is for.
 5. After a few weeks: **archive** — delete `release/agentvoice-final`
    (the `v0.1.6` tag keeps the code), and leave the deprecation in place.
-6. The VS Code extension is not in this repo; rename it wherever it is published, the
-   same way (new extension id, final release of the old one pointing over).
+6. The VS Code extension is not in this repo; rename it wherever it is
+   published, the same way (new extension id, a final release of the old one
+   pointing over).

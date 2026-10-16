@@ -1,10 +1,10 @@
 /**
- * `agentvoice channel` — Discord / Telegram / Slack / WhatsApp (docs/44).
+ * `squeakr channel` — Discord / Telegram / Slack / WhatsApp (docs/44).
  *
- *   agentvoice channel                     status of every channel
- *   agentvoice channel allow <id> <user>   let a platform user command the bridge
- *   agentvoice channel enable|disable <id>
- *   agentvoice channel set <id> <key> <value>
+ *   squeakr channel                     status of every channel
+ *   squeakr channel allow <id> <user>   let a platform user command the bridge
+ *   squeakr channel enable|disable <id>
+ *   squeakr channel set <id> <key> <value>
  *       messageChannel <conversation id|none>   the bot's own text channel / chat
  *       voiceChannel <room id|none>              where calls happen
  *       logs | voice | autoJoin | welcomeDm | voiceNotes | requireMention  on|off
@@ -62,7 +62,7 @@ function asChannel(value: string | undefined): Channel {
 /** Edit config.json in place when no bridge is running. */
 function editOffline(home: string, edit: (channels: Record<string, Record<string, unknown>>) => void): void {
   const cfg = readConfig(home);
-  if (!cfg.exists || !cfg.config) throw new Error(cfg.error ?? `no config.json at ${cfg.path} — run agentvoice setup first`);
+  if (!cfg.exists || !cfg.config) throw new Error(cfg.error ?? `no config.json at ${cfg.path} — run squeakr setup first`);
   const raw = cfg.config as unknown as { settings?: Record<string, unknown> };
   raw.settings ??= {};
   const channels = (raw.settings['channels'] ??= {}) as Record<string, Record<string, unknown>>;
@@ -79,7 +79,7 @@ export async function channelCommand(positionals: string[]): Promise<number> {
   try {
     if (action === 'status' || action === 'list') {
       if (!endpoint) {
-        fail('the bridge is not running — start it to see channel status (agentvoice start)');
+        fail('the bridge is not running — start it to see channel status (squeakr start)');
         return 1;
       }
       const res = await bridgeApi<{ channels: ChannelRow[]; commandPrefix: string }>(home, endpoint, '/api/channels');
@@ -101,7 +101,7 @@ export async function channelCommand(positionals: string[]): Promise<number> {
     if (action === 'allow') {
       const id = asChannel(args[0]);
       const user = (args[1] ?? '').trim();
-      if (!user) throw new Error('usage: agentvoice channel allow <channel> <user id>');
+      if (!user) throw new Error('usage: squeakr channel allow <channel> <user id>');
       if (endpoint) {
         const res = await bridgeApi(home, endpoint, `/api/channels/${id}/allow`, 15_000, { method: 'POST', body: { userId: user } });
         if (!res.ok) throw new Error(res.error);
@@ -141,7 +141,7 @@ export async function channelCommand(positionals: string[]): Promise<number> {
     if (action === 'set') {
       const id = asChannel(args[0]);
       const spec = SETTABLE[(args[1] ?? '').toLowerCase().replace(/[-_]/g, '')];
-      if (!spec) throw new Error(`usage: agentvoice channel set <channel> <${Object.values(SETTABLE).map((x) => x.key).join('|')}> <value>`);
+      if (!spec) throw new Error(`usage: squeakr channel set <channel> <${Object.values(SETTABLE).map((x) => x.key).join('|')}> <value>`);
       const value = settingValue(spec.kind, args.slice(2).join(' '), spec.key);
       if (endpoint) {
         const res = await bridgeApi(home, endpoint, `/api/channels/${id}`, 30_000, { method: 'PATCH', body: { [spec.key]: value } });

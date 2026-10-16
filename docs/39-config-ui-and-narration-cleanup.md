@@ -7,7 +7,7 @@
 
 ## Decisions (2026-09-15)
 
-Config cleanup is tracked in [#60](https://github.com/dixonSolutions/AgentVoice/issues/60); narration toggles and templates in [#61](https://github.com/dixonSolutions/AgentVoice/issues/61).
+Config cleanup is tracked in [#60](https://github.com/dixonSolutions/Squeakr/issues/60); narration toggles and templates in [#61](https://github.com/dixonSolutions/Squeakr/issues/61).
 
 | Question | Decision |
 | --- | --- |
@@ -55,7 +55,7 @@ Severity: **bug**, **confusing**, **cosmetic**. `ts` / `html` =
 
 ### Duplicated or misplaced
 
-10. **Three places decide what is spoken about work** — Agent voice
+10. **Three places decide what is spoken about work** — Agent speech
     (`readAloud`), Narrator (`narratorEnabled`), Speech out. "Replies only"
     claims to speak only what the agent chose, yet narration still speaks
     (Part B). → one "What gets spoken" section.
@@ -128,7 +128,7 @@ stay raw-JSON only.
    controls, start muted, turn submit / VAD (one save)
 4. Speech engines — the Speech tab, plus AWS audio region and browser-voice
    defaults
-5. What gets spoken — agent voice, read-aloud level, error sound / speech, job
+5. What gets spoken — agent speech, read-aloud level, error sound / speech, job
    announcements (replaces Narrator; toggles and templates from Part B)
 6. Agent — client picker for all four CLIs with per-provider binary env var and
    extra args, default model / effort / fast, default mode, worker poll
@@ -234,7 +234,7 @@ route.
 Part A: the dead settings (narrator cadence, plan-first) are gone from the
 schema, the API and the screen; log level moved to the Debug section that
 advertised it; the Narrator section became "What gets spoken" and absorbed the
-agent-voice and read-aloud controls; extra launch flags and the worker poll
+squeakr and read-aloud controls; extra launch flags and the worker poll
 interval moved to Agent, which also absorbed Personal; "Clear all sessions"
 asks first; timeouts are entered in minutes; forms gate on `canUseApi()`; and
 the stale descriptions, keywords and duplicate icons are corrected. Provider

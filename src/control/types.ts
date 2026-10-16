@@ -1,11 +1,11 @@
 /**
- * Running the bridge from outside it — the `agentvoice` CLI's control
+ * Running the bridge from outside it — the `squeakr` CLI's control
  * commands (sessions, use, new, agent stop, say, config, default), served over
  * `/api/control/*` (routes.ts). Chat channels reach the same commands by
  * running the CLI (channels/commands.ts), so there is one implementation.
  */
 
-/** The `agentvoice` commands that drive the agent — what a chat may run besides read-only host checks. */
+/** The `squeakr` commands that drive the agent — what a chat may run besides read-only host checks. */
 export const CONTROL_COMMANDS = ['agent', 'projects', 'project', 'sessions', 'use', 'new', 'say', 'config', 'default'] as const;
 export type ControlCommand = (typeof CONTROL_COMMANDS)[number];
 

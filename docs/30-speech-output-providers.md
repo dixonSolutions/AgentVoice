@@ -184,4 +184,4 @@ ends with "the rest is in the log" rather than silently stopping. Content is spl
 on paragraph and sentence boundaries so the queue plays it in order, instead of
 being truncated the way a single over-long reply would be.
 
-Change it in Config → Agent voice (TTS), or `PATCH /api/voice/tts { "readAloud": … }`.
+Change it in Config → Agent speech (TTS), or `PATCH /api/voice/tts { "readAloud": … }`.

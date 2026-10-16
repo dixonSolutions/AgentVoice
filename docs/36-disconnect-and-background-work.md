@@ -13,7 +13,7 @@ unattended keeps going on its own.
 
 ## Decisions (2026-09-15)
 
-Tracked in [#55](https://github.com/dixonSolutions/AgentVoice/issues/55).
+Tracked in [#55](https://github.com/dixonSolutions/Squeakr/issues/55).
 
 | Question | Decision |
 | --- | --- |
@@ -96,7 +96,7 @@ session: z.object({
 MCP is pull-only, so the signal rides on Squeakr tool results. That works
 identically for Cursor, Codex, Claude Code and Codewhale.
 
-1. **Presence block on every agent-voice result**, like `pendingTurnNotice()`:
+1. **Presence block on every squeakr result**, like `pendingTurnNotice()`:
    `listener: { state: 'connected'|'grace'|'away', away_since, policy, instructions }`.
 2. **Policy-aware voice tools** instead of a bare `NO_VOICE_SESSION`:
    - `speak` while away → `{ ok: true, delivered: false, buffered: true }`,
@@ -107,7 +107,7 @@ identically for Cursor, Codex, Claude Code and Codewhale.
    - `done` while away with nothing queued → the run may exit normally.
    - `stop_all` → results say "stop at a safe point"; the bridge kills after
      `graceMs` regardless.
-3. **Prompt** — an "away" section in `agentVoiceRuleBody()` and the MCP
+3. **Prompt** — an "away" section in `squeakrRuleBody()` and the MCP
    instructions; spawns started with nobody listening get a
    `VOICE_AWAY_SUFFIX` in `buildVoiceBootPrompt()`.
 4. **Workers** never call voice tools; `jobManager` applies the policy for
@@ -190,7 +190,7 @@ Shipped:
 - `src/state/awayPolicy.ts` — the policy, the listener block, the unattended
   budgets, and the approval / askpass decisions, all as pure functions over
   injected settings so they are unit-testable.
-- The `listener` block on **every** agent-voice tool result, via
+- The `listener` block on **every** squeakr tool result, via
   `mcp/server/listenerEnvelope.ts` — not just the voice tools, so an agent
   grinding through its own Read/Bash tools still finds out.
 - Policy-aware `speak` / `done` / `next_voice_turn`, with a server-enforced

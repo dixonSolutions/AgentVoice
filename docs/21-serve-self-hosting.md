@@ -9,7 +9,7 @@ Serve is for:
 1. **Update** — [`scripts/update.sh`](../scripts/update.sh), the single update path
 2. **Restart the entire service** — detached `scripts/restart.sh` (build + systemd)
 3. **Health check** — `GET /healthz` on the configured backend port
-4. **Live journalctl logs** — follow `agentvoice.service` (user unit, then system)
+4. **Live journalctl logs** — follow `squeakr.service` (user unit, then system)
 
 ## One update script
 
@@ -36,7 +36,7 @@ In order, it:
 | 7 | `git_stash_pop` | Pops the stash; a conflicting pop keeps the stash and warns rather than losing it |
 | 8 | `deps` | `npm ci`, falling back to `npm install --legacy-peer-deps`, then `npm rebuild` |
 | 9 | `build` | `npm run build` (backend + PWA), then asserts `dist/index.js` exists |
-| 10 | `restart` | `systemctl restart agentvoice.service` — **user unit if one exists, else the system unit** (`sudo -n` when not root) |
+| 10 | `restart` | `systemctl restart squeakr.service` — **user unit if one exists, else the system unit** (`sudo -n` when not root) |
 | 11 | `health` | `GET /healthz` on `settings.runModes.serve.backendPort`, retried for ~20s |
 
 Options:
@@ -106,7 +106,7 @@ on the host. `trackBranch` is:
 | **Stash, rebase & update** (`stash-update`) | The same script with `--stash`. Local changes are stashed (including untracked), the rebase runs, the stash is popped. |
 | **Restart service** (`restart`) | Spawns detached `scripts/restart.sh` (deps + build + systemd restart + health). Touches no git state. |
 | **Health check** (`health`) | `GET /healthz` on the configured backend port |
-| **Service logs** | Live `journalctl -f -u agentvoice.service` (SSE). Snapshot `GET` is the fallback. |
+| **Service logs** | Live `journalctl -f -u squeakr.service` (SSE). Snapshot `GET` is the fallback. |
 
 The old `pull` action is gone. It only rebased — it never installed, built or
 restarted, so "pulled successfully" routinely meant "still running the old
@@ -207,11 +207,11 @@ stops, which took the bridge down permanently. They are spawned via
 script outlives the process that launched it.
 
 `update.sh` detects which unit actually exists — `systemctl --user cat
-agentvoice.service` first, then the system unit via `sudo -n` — instead of
+squeakr.service` first, then the system unit via `sudo -n` — instead of
 assuming a user unit. A host with neither gets a clear error pointing at
 `scripts/install-systemd.sh`, not a silent no-op.
 
-Restart used to report `skipped` whenever `agentvoice-watch.path` was active, on
+Restart used to report `skipped` whenever `squeakr-watch.path` was active, on
 the assumption that the unit would pick up the new `dist/index.js`. When that
 trigger silently failed, the old process kept serving while the UI reported
 success. Restart is now unconditional; a redundant restart is harmless.

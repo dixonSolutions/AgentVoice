@@ -1,5 +1,5 @@
 /**
- * `agentvoice agent | projects | project | sessions | use | new | say | config | default`
+ * `squeakr agent | projects | project | sessions | use | new | say | config | default`
  * — run the voice agent's side of a running bridge from a terminal.
  *
  * Every chat channel runs these same commands (channels/commands.ts parses a
@@ -10,7 +10,7 @@
  * `--channel <id> --conversation <id> --user <id>` say which chat a command
  * came from: `default` pins per conversation (or, with `--user`, per person —
  * their voice calls), `sessions` marks what is pinned, `say` applies it.
- * AGENTVOICE_MARKDOWN=1 writes **bold** and `code` marks instead of colour —
+ * SQUEAKR_MARKDOWN=1 writes **bold** and `code` marks instead of colour —
  * what a chat renders.
  */
 
@@ -27,7 +27,7 @@ export const CONTROL_VALUE_FLAGS = ['channel', 'conversation', 'user'];
 const TERMINAL: Style = { bold, code: cyan };
 
 function style(): Style {
-  return process.env['AGENTVOICE_MARKDOWN'] === '1' ? MARKDOWN : TERMINAL;
+  return process.env['SQUEAKR_MARKDOWN'] === '1' ? MARKDOWN : TERMINAL;
 }
 
 /** Where a command came from — none of these when it is typed in a terminal. */
@@ -57,7 +57,7 @@ export async function controlCommand(command: ControlCommand, parsed: Parsed): P
   const bridge = await findBridge(home);
   const endpoint = bridge.answering?.endpoint;
   if (!endpoint) {
-    fail('the bridge is not running — start it first (agentvoice start)');
+    fail('the bridge is not running — start it first (squeakr start)');
     return 1;
   }
   const api = async <T>(path: string, body?: unknown): Promise<T> => {
@@ -84,7 +84,7 @@ export async function controlCommand(command: ControlCommand, parsed: Parsed): P
 
       case 'projects': {
         const r = await api<{ projects: { name: string; active: boolean }[] }>('/api/control/projects');
-        out(r.projects.length ? r.projects.map((p) => `${p.active ? '▶' : '•'} ${p.name}`).join('\n') : 'No projects registered — `agentvoice add <path>` on the host.');
+        out(r.projects.length ? r.projects.map((p) => `${p.active ? '▶' : '•'} ${p.name}`).join('\n') : 'No projects registered — `squeakr add <path>` on the host.');
         return 0;
       }
 

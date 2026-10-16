@@ -23,7 +23,7 @@ has — that behaviour is a published contract and nothing may take it back.
 | `run` | Boot the bridge in the foreground. Seeds the home on first run. |
 | `local <path>` / `local --this-dir` | Throwaway bridge + web client with only that directory as the project; logs stream in the terminal; nothing saved. See [`local`](#local). |
 | `add <path>` / `add --this-dir` | Register a directory as a project, with name, description and aliases filled in. See [`add`](#add). |
-| `start` / `stop` / `restart` | Manage the background service — `agentvoice.service` (systemd), `com.agentvoice.bridge` (launchd) or `AgentVoice` (Windows — the service name predates the rename). |
+| `start` / `stop` / `restart` | Manage the background service — `squeakr.service` (systemd), `com.squeakr.bridge` (launchd) or `Squeakr` (Windows — the service name predates the rename). |
 | `service install [--now] [--force] [--dry-run]` | Install that service for this install — see [The service](#the-service). |
 | `logs [-n N] [-f]` | `journalctl` for a systemd unit. `-f` follows. Everywhere else (launchd, Windows, no service), the bridge's own session log. |
 | `logs --list` / `--files` / `--transcripts` / `--cat <file\|latest>` | The session log files and voice transcripts under `<home>/logs/` — list, tail (`-f` follows across rollovers), or print (`.gz` included). `--profile test` for the dev folder. See docs/42. |
@@ -47,7 +47,7 @@ has — that behaviour is a published contract and nothing may take it back.
 
 Every chat channel runs the agent commands above: a message is parsed into
 these arguments and this CLI runs them (docs/44), so a chat and a terminal
-read the same answers. `AGENTVOICE_MARKDOWN=1` writes **bold** / `code`
+read the same answers. `SQUEAKR_MARKDOWN=1` writes **bold** / `code`
 marks instead of colour, which is what a chat renders.
 
 ### Exit codes
@@ -90,7 +90,7 @@ the packaged `web/dist` and `package.json`.
   config   ok 17 projects
            /home/you/Squeakr/config.json
   service  active (running)
-           agentvoice.service (user unit, enabled)
+           squeakr.service (user unit, enabled)
            since Fri 2026-09-12 18:04:11 CEST · pid 31184
   bridge   healthy  http://127.0.0.1:5089
            port 5089 from config.json settings.runModes.serve.backendPort
@@ -230,7 +230,7 @@ it borrows, read-only:
   layout keys are never borrowed.
 
 The wake-word model is shared with the real home, so it is not re-downloaded.
-One side effect, printed in the banner: the agent CLI's `agent-voice` MCP entry
+One side effect, printed in the banner: the agent CLI's `squeakr` MCP entry
 points at the throwaway instance while it runs; your main bridge restores its
 own on its next voice turn.
 
@@ -319,9 +319,9 @@ the platform has:
 
 | Platform | Service | Detected by |
 | --- | --- | --- |
-| Linux | `agentvoice.service` | `systemctl --user cat` (the user unit `service install` and `scripts/install-systemd.sh` write), then `systemctl cat` (a system unit) — the order `scripts/update.sh` and `src/serve/index.ts` use. |
-| macOS | `com.agentvoice.bridge` launchd agent | `~/Library/LaunchAgents/com.agentvoice.bridge.plist` exists. |
-| Windows | `AgentVoice` service (NSSM) | `sc.exe query AgentVoice` — the service `scripts/setup.ps1` has always installed. |
+| Linux | `squeakr.service` | `systemctl --user cat` (the user unit `service install` and `scripts/install-systemd.sh` write), then `systemctl cat` (a system unit) — the order `scripts/update.sh` and `src/serve/index.ts` use. |
+| macOS | `com.squeakr.bridge` launchd agent | `~/Library/LaunchAgents/com.squeakr.bridge.plist` exists. |
+| Windows | `Squeakr` service (NSSM) | `sc.exe query Squeakr` — the service `scripts/setup.ps1` has always installed. |
 
 None found: say so, and point at `squeakr service install` or `squeakr run`.
 
@@ -369,7 +369,7 @@ delete that cache, taking the service's target with it.
 ## Structure
 
 ```
-bin/agentvoice.mjs     shim: import dist/cli.js, call main()
+bin/squeakr.mjs     shim: import dist/cli.js, call main()
 src/cli/index.ts       argv dispatch, usage screen, exit codes
 src/cli/silence.ts     silences the bridge's pino logger (imported first)
 src/cli/args.ts        flag parser

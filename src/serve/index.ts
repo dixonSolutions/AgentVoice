@@ -47,7 +47,7 @@ const FALLBACK_TRACK_BRANCH = 'main';
 /** Fixed unit name — never interpolated from user input. */
 const execFileAsync = promisify(execFile);
 
-const SERVICE_UNIT = 'agentvoice.service';
+const SERVICE_UNIT = 'squeakr.service';
 
 /** How long to let the registry answer before giving up on a version check. */
 const REGISTRY_TIMEOUT_MS = 8000;
@@ -499,7 +499,7 @@ function spawnDetachedFromService(
 
 /**
  * Restart the entire service via scripts/restart.sh (build + systemd restart +
- * health check). Always spawned, even when agentvoice-watch.path is active.
+ * health check). Always spawned, even when squeakr-watch.path is active.
  */
 async function triggerRestart(repoDir: string, runId: string): Promise<ServeOutcome> {
   const script = join(repoDir, 'scripts/restart.sh');

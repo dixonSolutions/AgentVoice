@@ -247,7 +247,7 @@ New-Item -ItemType Directory -Force -Path (Join-Path $ProjectDir 'data') | Out-N
 # ── 6. Windows Service (NSSM) ─────────────────────────────────────────────
 Section "Windows Service"
 
-$ServiceName = 'AgentVoice'
+$ServiceName = 'Squeakr'
 $NssmPath    = Join-Path $ProjectDir 'tools\nssm.exe'
 
 # Download NSSM if not present
@@ -329,7 +329,7 @@ $watcherContent = @"
 param([string]\$ProjectDir = '$ProjectDir')
 
 \$distFile = Join-Path \$ProjectDir 'dist\index.js'
-\$serviceName = 'AgentVoice'
+\$serviceName = 'Squeakr'
 \$watcher = [System.IO.FileSystemWatcher]::new((Split-Path \$distFile), (Split-Path \$distFile -Leaf))
 \$watcher.NotifyFilter = [System.IO.NotifyFilters]::LastWrite
 \$watcher.EnableRaisingEvents = \$true

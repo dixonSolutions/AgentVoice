@@ -15,11 +15,11 @@
 </p>
 
 <p align="center">
-  <a href="./docs/demo/agentvoice-demo.mp4"><img src="./docs/demo/agentvoice-demo.gif" alt="43-second demo: in the Squeakr web client, pick a project and model, say &quot;cursor listen&quot; and a question; Whisper transcribes it locally and Claude Code answers by voice" width="820"></a>
+  <a href="./docs/demo/squeakr-demo.mp4"><img src="./docs/demo/squeakr-demo.gif" alt="43-second demo: in the Squeakr web client, pick a project and model, say &quot;cursor listen&quot; and a question; Whisper transcribes it locally and Claude Code answers by voice" width="820"></a>
 </p>
 <p align="center">
   <em>One real voice session in the web client — pick the project and model, tap the orb, say “cursor listen” and ask; Claude Code answers by voice.
-  <a href="./docs/demo/agentvoice-demo.mp4">▶ Watch with sound (MP4)</a> · <a href="./docs/demo/README.md">transcript &amp; how it was made</a></em>
+  <a href="./docs/demo/squeakr-demo.mp4">▶ Watch with sound (MP4)</a> · <a href="./docs/demo/README.md">transcript &amp; how it was made</a></em>
 </p>
 
 Self-hosted voice bridge for driving a coding agent CLI —
@@ -29,8 +29,7 @@ Self-hosted voice bridge for driving a coding agent CLI —
 **speech, from your phone**.
 
 Speak from an iPhone **native app (CallKit)** or PWA; the active agent CLI is the reasoning
-layer via the **agent-voice MCP server** (`speak`, `done`, `next_voice_turn`) — the MCP
-registration key stays `agent-voice` for compatibility. Coding work is
+layer via the **squeakr MCP server** (`speak`, `done`, `next_voice_turn`). Coding work is
 delegated to worker agents via `spawn_agent`. **Speech is pluggable in both
 directions** — listen with the browser, a **self-hosted Whisper container**
 (no key, audio never leaves the host), Groq, OpenAI, Deepgram, Gemini,
@@ -56,10 +55,10 @@ from Config → Serve → Network. See
 iPhone PWA (Vosk wake + STT + TTS)
         │  /ws/intelligence (app token)
         ▼
-Bridge (Node/TS) ── VoiceTurnQueue ── MCP /mcp ──► Cursor voice agent
+Bridge (Node/TS) ── VoiceTurnQueue ── MCP /mcp ──► voice agent (agent CLI)
         │                                              │
         │                                              ▼ spawn_agent
-        └──────────────────────────────────────► cursor-agent workers → git
+        └──────────────────────────────────────► agent CLI workers → git
 ```
 
 **Default workflow:** `agent_native` — see [`docs/16-mcp-server-agent-as-brain.md`](./docs/16-mcp-server-agent-as-brain.md).
@@ -105,18 +104,20 @@ example and a random `APP_TOKEN` in `~/.squeakr/.env`. Open
 `http://127.0.0.1:5089` (the PWA is served from the same port) and paste the
 token from `squeakr token` when it asks you to pair.
 
-**Coming from AgentVoice?** The npm package was `@ratitisrad/agentvoice`.
-Install the new one, then move your home, service and settings over — the
-pairing token comes along, so paired devices keep working:
+**Coming from AgentVoice?** One command moves any install — npm, .deb/.rpm or
+a clone — with its config, keys, pairing token (paired devices keep working),
+history, logs and background service:
 
 ```bash
-npm install -g squeakr
-squeakr upgrade-from-agentvoice      # --dry-run first if you like
+curl -fsSL https://raw.githubusercontent.com/dixonSolutions/Squeakr/main/scripts/migrate-to-squeakr.sh | bash -s -- --dry-run   # see the plan
+curl -fsSL https://raw.githubusercontent.com/dixonSolutions/Squeakr/main/scripts/migrate-to-squeakr.sh | bash
 ```
 
-It moves `~/.agentvoice` to `~/.squeakr` (leaving a symlink), points the
-service at Squeakr and removes the old package. Clones, .deb/.rpm installs
-and what was deliberately *not* renamed: [`docs/45`](./docs/45-rename-squeakr.md).
+On npm the same is `npm install -g squeakr && squeakr upgrade-from-agentvoice`,
+or `agentvoice migrate-to-squeakr` from the last AgentVoice release (0.1.6).
+It moves `~/.agentvoice` to `~/.squeakr` (leaving a symlink), replaces the
+agentvoice service, moves an apt/dnf source to the new URL (GitHub Pages does
+not redirect it) and removes the old package. Details: [`docs/45`](./docs/45-rename-squeakr.md).
 
 **Moving from a clone?** `squeakr migrate ~/Projects/Squeakr` carries
 its `config.json` and `.env` (keys and pairing token included, written 0600,
@@ -138,23 +139,23 @@ list is required. Requires **Node 20+** and one of the agent CLIs —
 ### Install from apt / dnf
 
 Signed repositories for amd64 and arm64 are published at
-https://dixonsolutions.github.io/AgentVoice/ — upgrades then arrive with the
+https://dixonsolutions.github.io/Squeakr/ — upgrades then arrive with the
 rest of your system (`apt upgrade` / `dnf upgrade`).
 
 **Debian / Ubuntu**
 
 ```bash
 sudo install -d -m 0755 /etc/apt/keyrings
-sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/agentvoice.asc -o /etc/apt/keyrings/agentvoice.asc
-sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/apt/agentvoice.sources -o /etc/apt/sources.list.d/agentvoice.sources
-sudo apt update && sudo apt install agentvoice
+sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/squeakr.asc -o /etc/apt/keyrings/squeakr.asc
+sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/apt/squeakr.sources -o /etc/apt/sources.list.d/squeakr.sources
+sudo apt update && sudo apt install squeakr
 ```
 
 **Fedora / RHEL**
 
 ```bash
-sudo curl -fsSL https://dixonsolutions.github.io/AgentVoice/rpm/agentvoice.repo -o /etc/yum.repos.d/agentvoice.repo
-sudo dnf install agentvoice
+sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/rpm/squeakr.repo -o /etc/yum.repos.d/squeakr.repo
+sudo dnf install squeakr
 ```
 
 Both enable Squeakr as a background user service out of the box; then run
@@ -195,12 +196,12 @@ arecord -f S16_LE -r 16000 -c 1 -t raw | squeakr pipe
 
 **Channels** make Discord, Telegram, Slack and WhatsApp a way in too: call the
 bot in a Discord voice channel and talk to the agent, send it a voice message
-on Telegram or WhatsApp, or tag it (`@AgentVoice sessions`, `default 2`,
+on Telegram or WhatsApp, or tag it (`@Squeakr sessions`, `default 2`,
 `config tts openai`) to manage sessions and settings from any chat
 ([`docs/44`](./docs/44-channels.md)):
 
 ```bash
-agentvoice channel enable discord && agentvoice channel allow discord <your id>
+squeakr channel enable discord && squeakr channel allow discord <your id>
 ```
 
 Every bridge run writes a date-named session log and every voice session a
@@ -244,7 +245,7 @@ Prerequisites: [Node.js 20 LTS](https://nodejs.org), [Git](https://git-scm.com),
 
 ```powershell
 # 1. Clone the repo
-git clone https://github.com/dixonSolutions/AgentVoice.git
+git clone https://github.com/dixonSolutions/Squeakr.git
 cd Squeakr
 # Formerly Cursor-Voice — see docs/26-rename-agentvoice.md
 
@@ -276,7 +277,7 @@ Prerequisites: Node.js 20 LTS, Git, and one agent CLI on PATH — `cursor-agent`
 
 ```bash
 # 1. Clone the repo
-git clone https://github.com/dixonSolutions/AgentVoice.git
+git clone https://github.com/dixonSolutions/Squeakr.git
 cd Squeakr
 # Formerly Cursor-Voice — see docs/26-rename-agentvoice.md
 
@@ -332,7 +333,7 @@ Full design in [`docs/`](./docs) — start with [`docs/README.md`](./docs/README
 | --- | --- |
 | [`02-architecture.md`](./docs/02-architecture.md) | System architecture |
 | [`06-voice-audio-webrtc.md`](./docs/06-voice-audio-webrtc.md) | STT, TTS, VAD, wake words |
-| [`16-mcp-server-agent-as-brain.md`](./docs/16-mcp-server-agent-as-brain.md) | Default Cursor voice workflow |
+| [`16-mcp-server-agent-as-brain.md`](./docs/16-mcp-server-agent-as-brain.md) | Default voice workflow (the agent as the brain) |
 | [`11-mcp-tool-surface.md`](./docs/11-mcp-tool-surface.md) | MCP tool inventory |
 | [`20-native-callkit-shell.md`](./docs/20-native-callkit-shell.md) | CallKit native app + push notifications |
 | [`23-multi-agent-client.md`](./docs/23-multi-agent-client.md) | Cursor / Codex / Claude Code / Codewhale CLI setup |

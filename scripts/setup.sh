@@ -90,4 +90,4 @@ fi
 
 # ── 2. The wizard ──────────────────────────────────────────────────────────
 section "Setup"
-exec node "${PROJECT_DIR}/bin/agentvoice.mjs" setup ${WIZARD_ARGS[@]+"${WIZARD_ARGS[@]}"}
+exec node "${PROJECT_DIR}/bin/squeakr.mjs" setup ${WIZARD_ARGS[@]+"${WIZARD_ARGS[@]}"}

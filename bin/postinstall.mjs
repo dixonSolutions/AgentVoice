@@ -28,7 +28,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const cli = join(root, 'bin', 'agentvoice.mjs');
+const cli = join(root, 'bin', 'squeakr.mjs');
 const env = process.env;
 
 function skip(reason) {
@@ -36,8 +36,8 @@ function skip(reason) {
   process.exit(0);
 }
 
-if (env.SQUEAKR_NO_SERVICE) skip('SQUEAKR_NO_SERVICE is set');
 if (env.AGENTVOICE_NO_SERVICE) skip('AGENTVOICE_NO_SERVICE is set');
+if (env.SQUEAKR_NO_SERVICE) skip('SQUEAKR_NO_SERVICE is set');
 if (env.npm_config_global !== 'true') skip('not a global install');
 if (!root.split(sep).includes('node_modules')) skip('not installed under node_modules');
 if (env.CI) skip('CI');
