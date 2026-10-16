@@ -106,10 +106,13 @@ jobs:
       # the tarball to this workflow run and this commit.
       id-token: write
     # The packages job builds from the tag this job pushes, and only when it
-    # pushed one.
+    # pushed one — or when a `v*` tag was pushed by hand: that is the way to
+    # build the .deb / .rpm and the repositories for a version that reached
+    # npm some other way (a first publish from a maintainer's shell, which a
+    # brand-new package name needs).
     outputs:
       version: ${{ steps.v.outputs.version }}
-      published: ${{ steps.shipped.outputs.already == 'false' }}
+      published: ${{ steps.shipped.outputs.already == 'false' || github.ref_type == 'tag' }}
     steps:
       - uses: actions/checkout@v5
         with:

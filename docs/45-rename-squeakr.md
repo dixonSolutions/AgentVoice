@@ -130,13 +130,16 @@ service over (stops `agentvoice.service` for every logged-in user, starts
 
 ## Releasing it — the order matters
 
-1. **Merge** the rename. `npm-publish.yml` publishes `squeakr@0.2.0` — the
-   first version of a **new package name**, so Trusted Publishing cannot do
-   it: the `NPM_TOKEN` repository secret (granular, allowed to publish new
-   packages, "bypass 2FA" on) must be set. Configure Trusted Publishing on
-   `squeakr` on npmjs.com afterwards and delete the secret. The same run
-   builds the `squeakr` .deb / .rpm and deploys the Pages site — still served
-   at `/AgentVoice/` until step 4, with every link already pointing at
+1. **Publish `squeakr@0.2.0`, merge, tag.** It is the first version of a
+   **new package name**, which Trusted Publishing cannot create. Either set
+   the `NPM_TOKEN` repository secret (granular, allowed to publish new
+   packages, "bypass 2FA" on) and merge — `npm-publish.yml` publishes — or, as
+   was done: `npm login` and `npm publish` from a maintainer's terminal (in a
+   TTY, so npm's browser 2FA works), then merge, then push tag `v0.2.0`: a
+   hand-pushed tag builds the .deb / .rpm and deploys the Pages site even
+   though npm already has the version. Configure Trusted Publishing on
+   `squeakr` on npmjs.com afterwards. The site is still served at
+   `/AgentVoice/` until step 4, with every link already pointing at
    `/Squeakr/`.
 2. **Release the hand-over**: push tag `v0.1.6` on `release/agentvoice-final`
    (cut from v0.1.5). It publishes `@ratitisrad/agentvoice@0.1.6` through the
