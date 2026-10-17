@@ -16,7 +16,7 @@
 #                      in GNUPGHOME, in keyring order. All of them sign the apt
 #                      Release and repomd.xml; the first one signs the RPMs.
 #   BASE_URL           public URL of the site
-#                      (default https://dixonsolutions.github.io/Squeakr)
+#                      (default https://dixonsolutions.github.io/Squeaky)
 #   KEEP_VERSIONS      newest versions to keep (default 3)
 #   SITE_BUDGET_MB     GitHub Pages refuses sites over 1 GB, and each version is
 #                      four ~70 MB packages; after KEEP_VERSIONS, the oldest
@@ -26,12 +26,12 @@
 # Layout produced:
 #   apt/dists/stable/{Release,InRelease,Release.gpg}
 #   apt/dists/stable/main/binary-{amd64,arm64}/Packages{,.gz}
-#   apt/pool/main/s/squeakr/*.deb
-#   apt/squeakr.sources          deb822 source for /etc/apt/sources.list.d/
+#   apt/pool/main/s/squeaky/*.deb
+#   apt/squeaky.sources          deb822 source for /etc/apt/sources.list.d/
 #   rpm/packages/*.rpm              (signed)
 #   rpm/repodata/…, repomd.xml.asc
-#   rpm/squeakr.repo             for /etc/yum.repos.d/
-#   squeakr.asc                  the public key(s)
+#   rpm/squeaky.repo             for /etc/yum.repos.d/
+#   squeaky.asc                  the public key(s)
 #   manifest.txt                    sha256 + path of every package, read back
 #                                   by fetch-published.sh on the next run
 #   packages.html      (the site root is the landing page, laid on top by the workflow)
@@ -40,14 +40,14 @@ set -euo pipefail
 
 site="${1:?usage: build-repos.sh <site-dir> <incoming-dir>}"
 incoming="${2:?usage: build-repos.sh <site-dir> <incoming-dir>}"
-base_url="${BASE_URL:-https://dixonsolutions.github.io/Squeakr}"
+base_url="${BASE_URL:-https://dixonsolutions.github.io/Squeaky}"
 base_url="${base_url%/}"
 keep="${KEEP_VERSIONS:-3}"
 budget_mb="${SITE_BUDGET_MB:-900}"
-package=squeakr
+package=squeaky
 # The .deb packages a repository may carry. A list, and one pool directory per
 # package, so a second package needs no change below.
-allowed_debs=(squeakr)
+allowed_debs=(squeaky)
 suite=stable
 component=main
 deb_arches=(amd64 arm64)
@@ -201,13 +201,13 @@ done
 
 release_tmp="$(mktemp)"
 (cd "${dists}" && apt-ftparchive \
-  -o APT::FTPArchive::Release::Origin=Squeakr \
-  -o APT::FTPArchive::Release::Label=Squeakr \
+  -o APT::FTPArchive::Release::Origin=Squeaky \
+  -o APT::FTPArchive::Release::Label=Squeaky \
   -o APT::FTPArchive::Release::Suite="${suite}" \
   -o APT::FTPArchive::Release::Codename="${suite}" \
   -o APT::FTPArchive::Release::Architectures="${deb_arches[*]}" \
   -o APT::FTPArchive::Release::Components="${component}" \
-  -o APT::FTPArchive::Release::Description="Squeakr packages" \
+  -o APT::FTPArchive::Release::Description="Squeaky packages" \
   release .) > "${release_tmp}"
 mv "${release_tmp}" "${dists}/Release"
 chmod 644 "${dists}/Release"
@@ -226,16 +226,16 @@ gpg --batch --yes --digest-algo SHA512 "${signer_args[@]}" \
   --armor --detach-sign --output "${site}/rpm/repodata/repomd.xml.asc" "${site}/rpm/repodata/repomd.xml"
 
 # ── 6. Key, client config, landing page ───────────────────────────────────────
-gpg --batch --armor --export "${keys[@]}" > "${site}/squeakr.asc"
+gpg --batch --armor --export "${keys[@]}" > "${site}/squeaky.asc"
 
 cat > "${site}/rpm/${package}.repo" <<REPO
 [${package}]
-name=Squeakr
+name=Squeaky
 baseurl=${base_url}/rpm
 enabled=1
 gpgcheck=1
 repo_gpgcheck=1
-gpgkey=${base_url}/squeakr.asc
+gpgkey=${base_url}/squeaky.asc
 metadata_expire=6h
 REPO
 
@@ -250,7 +250,7 @@ SOURCES
 
 newest="${versions[${#versions[@]}-1]}"
 fingerprints="$(printf '%s<br>\n' "${keys[@]}")"
-# packages.html, not index.html: the site root is the Squeakr landing page
+# packages.html, not index.html: the site root is the Squeaky landing page
 # (site/ in the repo), which the workflow lays over this directory afterwards.
 cat > "${site}/packages.html" <<HTML
 <!doctype html>
@@ -258,7 +258,7 @@ cat > "${site}/packages.html" <<HTML
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Squeakr package repositories</title>
+<title>Squeaky package repositories</title>
 <style>
   body { font: 16px/1.5 system-ui, sans-serif; max-width: 48rem; margin: 2rem auto; padding: 0 1rem; color: #1b1b1b; }
   pre { background: #f3f3f3; padding: .75rem 1rem; overflow-x: auto; border-radius: 6px; }
@@ -267,31 +267,31 @@ cat > "${site}/packages.html" <<HTML
 </style>
 </head>
 <body>
-<h1>Squeakr package repositories</h1>
+<h1>Squeaky package repositories</h1>
 <p>Signed apt and dnf repositories for
-<a href="./">Squeakr</a>, amd64 and arm64 (<a href="https://github.com/dixonSolutions/Squeakr">source</a>).
+<a href="./">Squeaky</a>, amd64 and arm64 (<a href="https://github.com/dixonSolutions/Squeaky">source</a>).
 Newest version: <strong>${newest}</strong>. Published versions: ${versions[*]}.</p>
 
 <h2>Debian / Ubuntu (apt)</h2>
 <pre><code>sudo install -d -m 0755 /etc/apt/keyrings
-sudo curl -fsSL ${base_url}/squeakr.asc -o /etc/apt/keyrings/squeakr.asc
-sudo curl -fsSL ${base_url}/apt/squeakr.sources -o /etc/apt/sources.list.d/squeakr.sources
+sudo curl -fsSL ${base_url}/squeaky.asc -o /etc/apt/keyrings/squeaky.asc
+sudo curl -fsSL ${base_url}/apt/squeaky.sources -o /etc/apt/sources.list.d/squeaky.sources
 sudo apt update
-sudo apt install squeakr</code></pre>
+sudo apt install squeaky</code></pre>
 <p>Upgrades then arrive with <code>sudo apt update &amp;&amp; sudo apt upgrade</code>.</p>
 
 <h2>Fedora / RHEL (dnf)</h2>
-<pre><code>sudo curl -fsSL ${base_url}/rpm/squeakr.repo -o /etc/yum.repos.d/squeakr.repo
-sudo dnf install squeakr</code></pre>
+<pre><code>sudo curl -fsSL ${base_url}/rpm/squeaky.repo -o /etc/yum.repos.d/squeaky.repo
+sudo dnf install squeaky</code></pre>
 <p>Upgrades then arrive with <code>sudo dnf upgrade</code>. dnf asks you to confirm the key on first use.</p>
 
 <h2>After installing</h2>
-<p>The package enables Squeakr as a user service out of the box. Then:</p>
-<pre><code>squeakr setup      # agent CLI, projects, and hosting such as Tailscale
+<p>The package enables Squeaky as a user service out of the box. Then:</p>
+<pre><code>squeaky setup      # agent CLI, projects, and hosting such as Tailscale
 loginctl enable-linger "\$USER"   # keep it running after you log out</code></pre>
 
 <h2>Signing key</h2>
-<p><a href="squeakr.asc">squeakr.asc</a> — fingerprint(s):<br>
+<p><a href="squeaky.asc">squeaky.asc</a> — fingerprint(s):<br>
 <code>${fingerprints}</code></p>
 </body>
 </html>
@@ -302,17 +302,17 @@ HTML
   | sort | xargs -r sha256sum) > "${site}/manifest.txt"
 
 # ── 7. Verify what is about to be published, with only the public key ────────
-gpg --batch --quiet --dearmor --output "${scratch}/keyring.gpg" < "${site}/squeakr.asc"
+gpg --batch --quiet --dearmor --output "${scratch}/keyring.gpg" < "${site}/squeaky.asc"
 gpgv --quiet --keyring "${scratch}/keyring.gpg" "${dists}/InRelease" 2>/dev/null \
-  || fail "InRelease does not verify against squeakr.asc"
+  || fail "InRelease does not verify against squeaky.asc"
 gpgv --quiet --keyring "${scratch}/keyring.gpg" "${dists}/Release.gpg" "${dists}/Release" 2>/dev/null \
-  || fail "Release.gpg does not verify against squeakr.asc"
+  || fail "Release.gpg does not verify against squeaky.asc"
 gpgv --quiet --keyring "${scratch}/keyring.gpg" \
   "${site}/rpm/repodata/repomd.xml.asc" "${site}/rpm/repodata/repomd.xml" 2>/dev/null \
-  || fail "repomd.xml.asc does not verify against squeakr.asc"
+  || fail "repomd.xml.asc does not verify against squeaky.asc"
 
 rpmkeys --dbpath "${scratch}/rpmdb" --initdb 2>/dev/null || true
-rpmkeys --dbpath "${scratch}/rpmdb" --import "${site}/squeakr.asc"
+rpmkeys --dbpath "${scratch}/rpmdb" --import "${site}/squeaky.asc"
 for f in "${rpms}"/*.rpm; do
   out="$(rpmkeys --dbpath "${scratch}/rpmdb" --checksig "${f}" 2>&1)" || fail "$(basename "${f}"): ${out}"
   [[ "${out}" == *"signatures OK"* ]] || fail "$(basename "${f}") is not signed by the published key: ${out}"

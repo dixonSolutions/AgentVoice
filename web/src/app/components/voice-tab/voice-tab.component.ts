@@ -521,7 +521,7 @@ export class VoiceTabComponent {
   /**
    * The single place the coding agent identifies itself in the UI, e.g.
    * "Claude Code · Opus (1M context) · High · Fast". Everything else refers to
-   * the pipeline or to Squeakr — see app/branding.ts.
+   * the pipeline or to Squeaky — see app/branding.ts.
    */
   protected readonly activeProviderChip = computed(() => {
     const provider = this.agentProviders.activeProvider;

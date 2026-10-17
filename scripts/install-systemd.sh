@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install squeakr as a systemd user service (survives logout/reboot with linger).
+# Install squeaky as a systemd user service (survives logout/reboot with linger).
 #
 # Usage:
 #   bash scripts/install-systemd.sh
@@ -53,11 +53,11 @@ section "Installing systemd user units"
 SYSTEMD_DIR="${HOME}/.config/systemd/user"
 mkdir -p "$SYSTEMD_DIR"
 
-SERVICE_FILE="${SYSTEMD_DIR}/squeakr.service"
+SERVICE_FILE="${SYSTEMD_DIR}/squeaky.service"
 info "Writing ${SERVICE_FILE}..."
 cat > "$SERVICE_FILE" <<EOF
 [Unit]
-Description=Squeakr Bridge
+Description=Squeaky Bridge
 After=network-online.target tailscaled.service
 Wants=network-online.target
 
@@ -72,21 +72,21 @@ RestartSec=3
 
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=squeakr
+SyslogIdentifier=squeaky
 
 [Install]
 WantedBy=default.target
 EOF
 
-PATH_FILE="${SYSTEMD_DIR}/squeakr-watch.path"
+PATH_FILE="${SYSTEMD_DIR}/squeaky-watch.path"
 info "Writing ${PATH_FILE}..."
 cat > "$PATH_FILE" <<EOF
 [Unit]
-Description=Watch Squeakr build output for changes
+Description=Watch Squeaky build output for changes
 
 [Path]
 PathModified=${PROJECT_DIR}/dist/index.js
-Unit=squeakr.service
+Unit=squeaky.service
 
 [Install]
 WantedBy=default.target
@@ -108,18 +108,31 @@ fi
 section "Stopping manual bridge (if any)"
 bash "${SCRIPT_DIR}/stop.sh" --quiet || true
 
+# A unit from before a rename (docs/45, docs/46) would start a second bridge
+# on the same port at every boot. stop.sh above stopped it; disable it too.
+# Its files stay for `squeaky upgrade-from-squeakr`, which also moves the home.
+for old in squeakr agentvoice; do
+  if [ "$(systemctl --user show -p LoadState --value "${old}.service" 2>/dev/null)" = loaded ]; then
+    section "Retiring the pre-rename ${old}.service"
+    systemctl --user disable --now "${old}-watch.path" >/dev/null 2>&1 || true
+    systemctl --user disable --now "${old}.service" >/dev/null 2>&1 || true
+    ok "${old}.service and ${old}-watch.path disabled."
+    info "To move its home (~/.${old}) over as well: squeaky upgrade-from-squeakr"
+  fi
+done
+
 section "Starting systemd units"
 systemctl --user daemon-reload
-systemctl --user enable squeakr.service squeakr-watch.path
-systemctl --user restart squeakr.service
-systemctl --user start squeakr-watch.path
+systemctl --user enable squeaky.service squeaky-watch.path
+systemctl --user restart squeaky.service
+systemctl --user start squeaky-watch.path
 
 sleep 2
-if systemctl --user is-active --quiet squeakr.service; then
-  ok "squeakr.service is active."
+if systemctl --user is-active --quiet squeaky.service; then
+  ok "squeaky.service is active."
 else
-  warn "Service may have failed — check: journalctl --user -u squeakr -n 30"
-  systemctl --user status squeakr.service --no-pager -l | tail -15 || true
+  warn "Service may have failed — check: journalctl --user -u squeaky -n 30"
+  systemctl --user status squeaky.service --no-pager -l | tail -15 || true
   exit 1
 fi
 
@@ -132,8 +145,8 @@ fi
 
 echo ""
 ok "systemd install complete."
-echo -e "  ${BLU}Status:${NC} systemctl --user status squeakr"
-echo -e "  ${BLU}Logs:${NC}   journalctl --user -u squeakr -f"
+echo -e "  ${BLU}Status:${NC} systemctl --user status squeaky"
+echo -e "  ${BLU}Logs:${NC}   journalctl --user -u squeaky -f"
 echo -e "  ${BLU}Files:${NC}  ${PROJECT_DIR}/logs/serve/bridge/ and logs/serve/transcripts/ (older ones gzipped)"
 echo -e "  ${BLU}Restart:${NC} bash scripts/restart.sh --no-build"
 echo ""

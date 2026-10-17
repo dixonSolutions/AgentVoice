@@ -2,6 +2,11 @@
 
 > Added: October 2026. Follows [`26-rename-agentvoice.md`](./26-rename-agentvoice.md)
 > (Cursor Voice → AgentVoice).
+>
+> **Superseded:** Squeakr was renamed again, to **Squeaky**, a few days later —
+> see [`46-rename-squeaky.md`](./46-rename-squeaky.md). This page is kept as the
+> record of the first rename; its commands still work under their new names
+> (`squeaky upgrade-from-agentvoice`, `scripts/migrate-to-squeaky.sh`).
 
 ## Why
 
@@ -27,7 +32,7 @@ Everything that carried the old names, in one release:
 | Environment variables | `AGENTVOICE_*` | `SQUEAKR_*` | every reader falls back to `AGENTVOICE_*` (`src/brand.ts#brandEnv`, `${SQUEAKR_X:-${AGENTVOICE_X:-…}}` in scripts) |
 | Bridge home | `~/.agentvoice` | `~/.squeakr` | used until `squeakr upgrade-from-agentvoice` moves it; then a symlink |
 | systemd units | `agentvoice.service`, `-watch.path`, `-tunnel`, `-caddy` | `squeakr.service`, `squeakr-watch.path`, … | retired by `squeakr service install` / the upgrade (`src/cli/legacyService.ts`) |
-| launchd label | `com.agentvoice.bridge` | `com.squeakr.bridge` | same |
+| launchd label | `com.agentvoice.bridge` | `com.squeaky.bridge` | same |
 | Windows service | `AgentVoice` | `Squeakr` | same (elevated terminal) |
 | .deb / .rpm | `agentvoice`, `/usr/lib/agentvoice` | `squeakr`, `/usr/lib/squeakr` | `squeakr` Conflicts/Replaces (deb) and Obsoletes (rpm) `agentvoice` |
 | apt / dnf repository | `dixonsolutions.github.io/AgentVoice/` | `dixonsolutions.github.io/Squeakr/` | **GitHub Pages does not redirect** — the source has to be moved (below) |

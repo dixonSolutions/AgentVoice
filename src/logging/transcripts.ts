@@ -3,7 +3,7 @@
  *
  *   logs/<runMode>/transcripts/2026-09-23_14-06-01.log
  *
- *   # Squeakr voice transcript
+ *   # Squeaky voice transcript
  *   # opened 2026-09-23 14:06:01.204 (UTC+10:00) — session start
  *   # agent=Claude Code · workflow=agent_native · input=turns · project=site
  *   [14:06:04] USER (phone): fix the login redirect
@@ -66,7 +66,7 @@ function utcOffset(d: Date): string {
 function header(reason: RotateReason, previous: string | null): string {
   const at = new Date();
   const lines = [
-    '# Squeakr voice transcript',
+    '# Squeaky voice transcript',
     `# opened ${formatTimestamp(at.getTime())} (UTC${utcOffset(at)}) — ${REASON_TEXT[reason]}`,
   ];
   if (previous) lines.push(`# continued from ${previous.split('/').pop()}`);

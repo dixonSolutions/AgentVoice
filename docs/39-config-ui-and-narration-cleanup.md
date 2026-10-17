@@ -7,7 +7,7 @@
 
 ## Decisions (2026-09-15)
 
-Config cleanup is tracked in [#60](https://github.com/dixonSolutions/Squeakr/issues/60); narration toggles and templates in [#61](https://github.com/dixonSolutions/Squeakr/issues/61).
+Config cleanup is tracked in [#60](https://github.com/dixonSolutions/Squeaky/issues/60); narration toggles and templates in [#61](https://github.com/dixonSolutions/Squeaky/issues/61).
 
 | Question | Decision |
 | --- | --- |
@@ -161,7 +161,7 @@ stay raw-JSON only.
 
 ### It duplicates the voice agent
 
-The Squeakr prompt makes the agent the narrator (speak before spawning, on
+The Squeaky prompt makes the agent the narrator (speak before spawning, on
 file written / command done / phase change / error, summarise the diff at the
 end). The watcher independently speaks `job_started` right after the agent's
 own "starting" line, every `file_write` with the raw path, `job_done` ending in
@@ -234,7 +234,7 @@ route.
 Part A: the dead settings (narrator cadence, plan-first) are gone from the
 schema, the API and the screen; log level moved to the Debug section that
 advertised it; the Narrator section became "What gets spoken" and absorbed the
-squeakr and read-aloud controls; extra launch flags and the worker poll
+squeaky and read-aloud controls; extra launch flags and the worker poll
 interval moved to Agent, which also absorbed Personal; "Clear all sessions"
 asks first; timeouts are entered in minutes; forms gate on `canUseApi()`; and
 the stale descriptions, keywords and duplicate icons are corrected. Provider

@@ -1,7 +1,7 @@
 /**
  * Discord — the one platform where a bot can take a real voice call.
  *
- * Commands: the `/av` slash command, `@Squeakr …` in a server channel, or
+ * Commands: the `/av` slash command, `@Squeaky …` in a server channel, or
  * anything in a DM. No privileged intent is needed for those; reading the
  * `!av` prefix in servers needs Message Content enabled in the developer
  * portal. Voice: `join` brings the bot into the voice channel you are in and
@@ -31,9 +31,11 @@ const log = childLogger('channels:discord');
 
 const MAX_TEXT = 2000;
 const HOW_TO_ADDRESS =
-  'tag me (`@Squeakr sessions`), use `/av sessions`, DM me, or write in my message channel (`channel here` sets it). `chat <message>` talks to the agent; `stream on` keeps talking.';
+  'tag me (`@Squeaky sessions`), use `/av sessions`, DM me, or write in my message channel (`channel here` sets it). `chat <message>` talks to the agent; `stream on` keeps talking.';
 /** Every private voice room starts with this, so it is recognised after a restart too. */
-const ROOM_PREFIX = '🎙️ Squeakr · ';
+const ROOM_PREFIX = '🎙️ Squeaky · ';
+/** The same prefix under the earlier names — such a room is still the user's, and is renamed when next used. */
+const LEGACY_ROOM_PREFIXES = ['🎙️ Squeakr · ', '🎙️ AgentVoice · '];
 /**
  * What the invite asks for: View Channels, Send Messages, Read Message History,
  * Connect, Speak — plus Manage Channels and Manage Roles, to make each user's
@@ -48,7 +50,7 @@ type SendableChannel = {
 };
 
 export const DISCORD_CAPABILITIES: ChannelCapabilities = {
-  mentions: { supported: true, note: '`@Squeakr status`, or the `/av` slash command.' },
+  mentions: { supported: true, note: '`@Squeaky status`, or the `/av` slash command.' },
   directMessages: { supported: true, note: 'Anything you DM the bot is a command.' },
   voiceCalls: {
     supported: true,
@@ -139,14 +141,14 @@ export class DiscordAdapter implements ChannelAdapter {
         await ready.application.commands.set([
           new d.SlashCommandBuilder()
             .setName('av')
-            .setDescription('Squeakr: status, sessions, use, default, join, leave, say …')
+            .setDescription('Squeaky: status, sessions, use, default, join, leave, say …')
             .addStringOption((o) => o.setName('command').setDescription('e.g. "sessions", "default 2", "join"').setRequired(false))
             .toJSON(),
         ]);
       } catch (err) {
         log.warn({ err }, 'registering the /av slash command failed');
       }
-      await this.brand(ready).catch((err: unknown) => log.warn({ err }, 'setting the Squeakr avatar failed'));
+      await this.brand(ready).catch((err: unknown) => log.warn({ err }, 'setting the Squeaky avatar failed'));
       await this.welcomeDms(ready).catch((err: unknown) => log.warn({ err }, 'sending welcome DMs failed'));
       await this.pickUpWaiting(ready).catch((err: unknown) => log.warn({ err }, 'picking up waiting callers failed'));
     });
@@ -212,7 +214,7 @@ export class DiscordAdapter implements ChannelAdapter {
   }
 
   /**
-   * The Squeakr logo as the bot's avatar and the application's icon — only
+   * The Squeaky logo as the bot's avatar and the application's icon — only
    * while they are still Discord's defaults, so a custom picture is never
    * replaced (and Discord's avatar rate limit never hit on every restart).
    */
@@ -222,18 +224,18 @@ export class DiscordAdapter implements ChannelAdapter {
     const png = readFileSync(icon);
     if (!ready.user.avatar) {
       await ready.user.setAvatar(png);
-      log.info('bot avatar set to the Squeakr logo');
+      log.info('bot avatar set to the Squeaky logo');
     }
     const app = await ready.application.fetch();
     if (!app.icon) {
       await app.edit({ icon: png });
-      log.info('application icon set to the Squeakr logo');
+      log.info('application icon set to the Squeaky logo');
     }
   }
 
   /**
    * A DM with each allowlisted member, opened by the bot with a welcome the
-   * first time — so "Squeakr" sits in their Direct Messages, where commands
+   * first time — so "Squeaky" sits in their Direct Messages, where commands
    * need no tag. Never repeated once the DM has any message in it.
    */
   private async welcomeDms(ready: Client<true>): Promise<void> {
@@ -247,7 +249,7 @@ export class DiscordAdapter implements ChannelAdapter {
         if (last.size > 0) continue;
         await dm.send(
           [
-            `👋 **Squeakr** — this DM is yours. Commands need no tag here: try \`help\`, \`sessions\`, \`status\`.`,
+            `👋 **Squeaky** — this DM is yours. Commands need no tag here: try \`help\`, \`sessions\`, \`status\`.`,
             `Talk to the agent with \`chat <message>\` (attach images, video or a voice message), or \`stream on --voice --rep=voice\` to swap voice notes until \`stream break\`. For a call, send \`call\` — I pick up in the voice channel set for me (\`voice here\`), or a private room for just us two.`,
             `Calls listen the way the app does (Voice settings): ${howToTalk(VoiceCall.turnSettings()) || 'everything you say is a request.'}`,
           ].join('\n'),
@@ -469,8 +471,8 @@ export class DiscordAdapter implements ChannelAdapter {
   private roomOwner(channel: VoiceBasedChannel): string | null {
     const known = this.rooms.get(channel.id);
     if (known) return known;
-    // Rooms made before the Squeakr rename carry the old prefix.
-    if (!(channel.name.startsWith(ROOM_PREFIX) || channel.name.startsWith('🎙️ AgentVoice · ')) || !this.d) return null;
+    // Rooms made before the renames carry an old prefix.
+    if (![ROOM_PREFIX, ...LEGACY_ROOM_PREFIXES].some((p) => channel.name.startsWith(p)) || !this.d) return null;
     const viewChannel = this.d.PermissionFlagsBits.ViewChannel;
     const owner = channel.permissionOverwrites.cache.find(
       (o) => o.type === this.d!.OverwriteType.Member && o.id !== this.client?.user?.id && o.allow.has(viewChannel),
@@ -496,13 +498,21 @@ export class DiscordAdapter implements ChannelAdapter {
     const existing = guild.channels.cache.find(
       (c): c is VoiceBasedChannel => c.type === d.ChannelType.GuildVoice && this.roomOwner(c as VoiceBasedChannel) === member.id,
     );
-    if (existing) return existing;
+    if (existing) {
+      const legacy = LEGACY_ROOM_PREFIXES.find((p) => existing.name.startsWith(p));
+      if (legacy) {
+        await existing
+          .setName(`${ROOM_PREFIX}${existing.name.slice(legacy.length)}`.slice(0, 100))
+          .catch((err: unknown) => log.warn({ err, room: existing.id }, 'renaming a pre-rename voice room failed'));
+      }
+      return existing;
+    }
     const me = guild.members.me ?? (await guild.members.fetchMe());
     const talk = [d.PermissionFlagsBits.ViewChannel, d.PermissionFlagsBits.Connect, d.PermissionFlagsBits.Speak];
     const room = await guild.channels.create({
       name: `${ROOM_PREFIX}${member.displayName}`.slice(0, 100),
       type: d.ChannelType.GuildVoice,
-      reason: `Squeakr private call for ${member.user.tag}`,
+      reason: `Squeaky private call for ${member.user.tag}`,
       permissionOverwrites: [
         { id: guild.roles.everyone.id, deny: [d.PermissionFlagsBits.ViewChannel] },
         { id: member.id, type: d.OverwriteType.Member, allow: talk },
@@ -664,7 +674,7 @@ export class DiscordAdapter implements ChannelAdapter {
     const guild = member.guild;
     // The phone's voice settings decide when speech is a request (callTurns.ts).
     const how = howToTalk(VoiceCall.turnSettings());
-    const greeting = `Squeakr here. ${pinned ? `Continuing ${pinned}.` : 'Go ahead.'}${how ? ` ${how}` : ''}`;
+    const greeting = `Squeaky here. ${pinned ? `Continuing ${pinned}.` : 'Go ahead.'}${how ? ` ${how}` : ''}`;
     // What is said, and what the agent does, is written up in the message channel when there is one.
     const messageChannel = this.messageChannelOut();
     const lines = messageChannel ?? out;

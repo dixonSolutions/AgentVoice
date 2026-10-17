@@ -4,7 +4,7 @@
  *
  * Everything that can be real is real:
  *
- *   squeakr run / pipe / logs           the built CLI (or an installed one, --bin)
+ *   squeaky run / pipe / logs           the built CLI (or an installed one, --bin)
  *   the bridge                             a fresh bridge home, serve profile
  *   speech-to-text                         the real local_whisper provider over HTTP,
  *                                          pointed at a tiny OpenAI-compatible stand-in
@@ -20,13 +20,13 @@
  *   - the agent's replies come back down the pipe
  *   - a transcript file records the conversation, a bridge .log file records the session
  *   - later sessions gzip earlier sessions' files once they pile up
- *   - `squeakr logs` shows the session log with no service unit, `--list`
+ *   - `squeaky logs` shows the session log with no service unit, `--list`
  *     lists the files and `--cat` reads a .gz back
  *   - turn-based input from the phone socket still reaches the agent and is
  *     transcribed with its source
  *
  * Usage:
- *   npm run build:backend && node scripts/live-pipe-test.mjs [--bin squeakr] [--keep]
+ *   npm run build:backend && node scripts/live-pipe-test.mjs [--bin squeaky] [--keep]
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -89,7 +89,7 @@ try {
   say(`cli: ${BIN.join(' ')}`);
 
   const version = await av.run(['version']);
-  check(version.code === 0 && /squeakr \d/.test(version.stdout), 'squeakr version', version.stdout + version.stderr);
+  check(version.code === 0 && /squeaky \d/.test(version.stdout), 'squeaky version', version.stdout + version.stderr);
 
   // ── session 1 ─────────────────────────────────────────────────────────
   await av.startBridge();
@@ -117,7 +117,7 @@ try {
   const segs = ev.filter((e) => e.type === 'segment');
   const speaks = ev.filter((e) => e.type === 'speak').map((e) => e.text);
   say(`pipe exited ${pipe.code}; ${segs.length} segments; agent said: ${JSON.stringify(speaks)}`);
-  check(pipe.code === 0, 'squeakr pipe exits 0', pipe.stderr.slice(-800));
+  check(pipe.code === 0, 'squeaky pipe exits 0', pipe.stderr.slice(-800));
   check(ev.some((e) => e.type === 'ready' && e.listening === true), 'bridge accepted the stream');
   check(segs.length === 2, 'two phrases → two segments', `got ${segs.length}`);
   check(segs[0]?.text === CANNED[0] && segs[1]?.text === CANNED[1], 'segments transcribed in order');
@@ -136,7 +136,7 @@ try {
   const transcripts1 = av.readFolder('transcripts');
   check(transcripts1.length === 1, 'one transcript file for the session', transcripts1.join(','));
   const tText = av.readNewest('transcripts');
-  check(/^# Squeakr voice transcript\n/.test(tText), 'transcript has a header');
+  check(/^# Squeaky voice transcript\n/.test(tText), 'transcript has a header');
   check(tText.includes('EVENT: e2e pipe connected'), 'transcript names the pipe');
   check(tText.includes(`USER (stream): ${CANNED[0]}`) && tText.includes(`USER (stream): ${CANNED[1]}`), 'transcript has both user segments');
   check(tText.includes(`AGENT: ECHO stream: ${CANNED[1]}`), 'transcript has the agent reply');
@@ -147,7 +147,7 @@ try {
   const bridge1 = av.readFolder('bridge');
   check(bridge1.length === 1 && /^\d{4}-\d\d-\d\d_\d\d-\d\d-\d\d(_\d+)?\.log$/.test(bridge1[0] ?? ''), 'one date-named bridge log', bridge1.join(','));
   const bText = bridge1[0] ? readFileSync(join(av.logDir('bridge'), bridge1[0]), 'utf-8') : '';
-  check(/^# Squeakr bridge log\n/.test(bText), 'bridge log has a header');
+  check(/^# Squeaky bridge log\n/.test(bText), 'bridge log has a header');
   check(/runMode=serve/.test(bText) && /agent=claude-code/.test(bText), 'header describes the session');
   check(bText.includes('[config] config loaded'), 'boot lines before the logger started were kept');
   check(bText.includes('audio stream started') && bText.includes('stream segment transcribed'), 'pipe activity logged');
@@ -199,18 +199,18 @@ try {
     'phone turns are transcribed with their source',
   );
 
-  // ── squeakr logs ─────────────────────────────────────────────────────
+  // ── squeaky logs ─────────────────────────────────────────────────────
   const plain = await av.run(['logs', '-n', '20']);
   check(
     plain.code === 0 && /INFO /.test(plain.stdout) && plain.stderr.includes('session log'),
-    'squeakr logs falls back to the session log without a service unit',
+    'squeaky logs falls back to the session log without a service unit',
     plain.stdout.slice(0, 300) + plain.stderr,
   );
   const list = await av.run(['logs', '--list']);
-  check(list.code === 0 && list.stdout.includes('Bridge logs') && list.stdout.includes('.log.gz'), 'squeakr logs --list lists files', list.stdout);
+  check(list.code === 0 && list.stdout.includes('Bridge logs') && list.stdout.includes('.log.gz'), 'squeaky logs --list lists files', list.stdout);
   const gzName = transcripts2.find((n) => n.endsWith('.gz'));
   const cat = await av.run(['logs', '--transcripts', '--cat', gzName ?? 'missing']);
-  check(cat.code === 0 && cat.stdout.includes(`USER (stream): ${CANNED[0]}`), 'squeakr logs --cat reads a .gz back');
+  check(cat.code === 0 && cat.stdout.includes(`USER (stream): ${CANNED[0]}`), 'squeaky logs --cat reads a .gz back');
 
   // ── the in-app log viewer falls back to the session file (no journald unit here) ─
   const viewer = JSON.parse((await av.api('/api/admin/serve/logs?lines=20')).text);

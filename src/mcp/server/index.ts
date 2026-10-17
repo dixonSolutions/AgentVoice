@@ -1,7 +1,7 @@
 /**
- * MCP Streamable HTTP server — exposes every Squeakr tool to the coding CLI.
+ * MCP Streamable HTTP server — exposes every Squeaky tool to the coding CLI.
  *
- * Each provider registers this bridge as an MCP server named `squeakr` in
+ * Each provider registers this bridge as an MCP server named `squeaky` in
  * its own config (see providers/agents/<client>.ts). Once connected, the
  * conversational voice agent can call every tool listed below.
  *
@@ -56,7 +56,7 @@ import {
   makeAgentHandlers,
 } from './agentToolHandlers.js';
 import { dispatchTool } from '../handlers.js';
-import { squeakrMcpInstructions } from '../squeakrPrompt.js';
+import { squeakyMcpInstructions } from '../squeakyPrompt.js';
 import { MCP_ENTRY_VERSION, MCP_SERVER_NAME } from '../../providers/agents/mcpRegistration.js';
 import { bindVoiceAgentMcpSession } from '../../executor/voiceAgent.js';
 import { registerRequest, type UserInputRequest, type PlanApprovalRequest, type PermissionRequest } from './approvalRegistry.js';
@@ -131,7 +131,7 @@ function buildMcpServer(sessionKey: string): McpServer {
     { name: MCP_SERVER_NAME, version: MCP_ENTRY_VERSION },
     {
       capabilities: { tools: {} },
-      instructions: squeakrMcpInstructions(),
+      instructions: squeakyMcpInstructions(),
     },
   );
 

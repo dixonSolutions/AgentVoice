@@ -1,4 +1,4 @@
-// Squeakr site: install tabs and copy buttons. The page works without it:
+// Squeaky site: install tabs and copy buttons. The page works without it:
 // with JS off the install methods are stacked sections and there are no copy buttons.
 (function () {
   'use strict';

@@ -113,8 +113,8 @@ export const openrouterSpeechInput: SpeechInputVendor = {
           Authorization: `Bearer ${apiKey()}`,
           'Content-Type': 'application/json',
           // OpenRouter attributes usage with these; harmless if the app is unlisted.
-          'HTTP-Referer': 'https://github.com/dixonSolutions/Squeakr',
-          'X-Title': 'Squeakr',
+          'HTTP-Referer': 'https://github.com/dixonSolutions/Squeaky',
+          'X-Title': 'Squeaky',
         },
         body: JSON.stringify({
           model: call.model,

@@ -128,7 +128,7 @@ export class LogsTabComponent {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `squeakr-logs-${stamp}.json`;
+    anchor.download = `squeaky-logs-${stamp}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
     this.toast.success('Exported JSON', undefined, false);

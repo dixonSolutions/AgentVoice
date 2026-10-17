@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Squeakr — hosting setup (Linux)
+# Squeaky — hosting setup (Linux)
 #
 # Chooses how the bridge (127.0.0.1:PORT) is exposed and records the choice in
 # config.json (settings.hosting.provider, settings.runModes.serve.publicBaseUrl).
@@ -8,7 +8,7 @@
 #   tailscale  tailscale serve --bg PORT  → https://<machine>.<tailnet>.ts.net
 #              (needs a one-time `sudo tailscale set --operator=$USER`)
 #   caddy      mkcert cert + Caddy TLS terminator on :8443 → 127.0.0.1:PORT,
-#              installed as the squeakr-caddy.service systemd --user unit.
+#              installed as the squeaky-caddy.service systemd --user unit.
 #              Recorded as hosting.provider=manual.
 #   lan        hosting.provider=lan (plain LAN access; no TLS is set up here)
 #   local      hosting.provider=local — loopback only, nothing exposed
@@ -26,10 +26,10 @@
 #   -h, --help                This screen
 #
 # Environment overrides (for testing against a scratch copy):
-#   SQUEAKR_CONFIG        config.json path      (default ./config.json)
-#   SQUEAKR_ENV_FILE      .env path             (default ./.env)
-#   SQUEAKR_TLS_DIR       cert/Caddyfile dir    (default ~/.config/squeakr-tls)
-#   SQUEAKR_SYSTEMD_DIR   user unit dir         (default ~/.config/systemd/user)
+#   SQUEAKY_CONFIG        config.json path      (default ./config.json)
+#   SQUEAKY_ENV_FILE      .env path             (default ./.env)
+#   SQUEAKY_TLS_DIR       cert/Caddyfile dir    (default ~/.config/squeaky-tls)
+#   SQUEAKY_SYSTEMD_DIR   user unit dir         (default ~/.config/systemd/user)
 #
 # Re-running is safe.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -79,12 +79,18 @@ fi
 
 [[ "$(uname -s)" == "Linux" ]] || err "Linux only."
 
-CONFIG_FILE="${SQUEAKR_CONFIG:-${AGENTVOICE_CONFIG:-${PROJECT_DIR}/config.json}}"
-ENV_FILE="${SQUEAKR_ENV_FILE:-${AGENTVOICE_ENV_FILE:-${PROJECT_DIR}/.env}}"
-# ~/.config/squeakr-tls, unless only the pre-rename agentvoice-tls exists (docs/45).
-if [[ -d "${HOME}/.config/squeakr-tls" || ! -d "${HOME}/.config/agentvoice-tls" ]]; then DEFAULT_TLS_DIR="${HOME}/.config/squeakr-tls"; else DEFAULT_TLS_DIR="${HOME}/.config/agentvoice-tls"; fi
-TLS_DIR="${SQUEAKR_TLS_DIR:-${AGENTVOICE_TLS_DIR:-${DEFAULT_TLS_DIR}}}"
-SYSTEMD_DIR="${SQUEAKR_SYSTEMD_DIR:-${AGENTVOICE_SYSTEMD_DIR:-${HOME}/.config/systemd/user}}"
+CONFIG_FILE="${SQUEAKY_CONFIG:-${SQUEAKR_CONFIG:-${AGENTVOICE_CONFIG:-${PROJECT_DIR}/config.json}}}"
+ENV_FILE="${SQUEAKY_ENV_FILE:-${SQUEAKR_ENV_FILE:-${AGENTVOICE_ENV_FILE:-${PROJECT_DIR}/.env}}}"
+# ~/.config/squeaky-tls, unless only a pre-rename squeakr-tls or agentvoice-tls
+# exists — newest first (docs/45, docs/46).
+DEFAULT_TLS_DIR="${HOME}/.config/squeaky-tls"
+if [[ ! -d "${DEFAULT_TLS_DIR}" ]]; then
+  for old in squeakr agentvoice; do
+    [[ -d "${HOME}/.config/${old}-tls" ]] && { DEFAULT_TLS_DIR="${HOME}/.config/${old}-tls"; break; }
+  done
+fi
+TLS_DIR="${SQUEAKY_TLS_DIR:-${SQUEAKR_TLS_DIR:-${AGENTVOICE_TLS_DIR:-${DEFAULT_TLS_DIR}}}}"
+SYSTEMD_DIR="${SQUEAKY_SYSTEMD_DIR:-${SQUEAKR_SYSTEMD_DIR:-${AGENTVOICE_SYSTEMD_DIR:-${HOME}/.config/systemd/user}}}"
 
 [[ -f "$CONFIG_FILE" ]] || err "${CONFIG_FILE} not found — run: bash scripts/prepare.sh"
 command -v node >/dev/null 2>&1 || err "node not found on PATH (needed to edit config.json)"
@@ -278,7 +284,7 @@ setup_caddy() {
 	auto_https off
 }
 
-# Squeakr bridge — TLS terminator in front of the loopback-only bridge.
+# Squeaky bridge — TLS terminator in front of the loopback-only bridge.
 # WAN :443 (router forward) -> this host :${TLS_PORT} -> 127.0.0.1:${PORT}
 :${TLS_PORT} {
 	tls ${cert} ${key}
@@ -306,11 +312,11 @@ EOF
     && ok "Caddyfile validates." || warn "caddy validate reported a problem — check ${caddyfile}"
 
   mkdir -p "$SYSTEMD_DIR"
-  unit="${SYSTEMD_DIR}/squeakr-caddy.service"
+  unit="${SYSTEMD_DIR}/squeaky-caddy.service"
   cat > "$unit" <<EOF
 [Unit]
-Description=Caddy TLS front for Squeakr bridge (:${TLS_PORT} -> 127.0.0.1:${PORT})
-After=network-online.target squeakr.service
+Description=Caddy TLS front for Squeaky bridge (:${TLS_PORT} -> 127.0.0.1:${PORT})
+After=network-online.target squeaky.service
 
 [Service]
 Type=simple
@@ -331,7 +337,7 @@ EOF
   fi
 
   if ! $START_SERVICES; then
-    warn "--no-start: not enabling squeakr-caddy.service. Start later: systemctl --user enable --now squeakr-caddy"
+    warn "--no-start: not enabling squeaky-caddy.service. Start later: systemctl --user enable --now squeaky-caddy"
     return
   fi
   if [[ "$SYSTEMD_DIR" != "${HOME}/.config/systemd/user" ]]; then
@@ -339,12 +345,20 @@ EOF
     return
   fi
   systemctl --user daemon-reload
-  systemctl --user enable --now squeakr-caddy.service
+  # A pre-rename Caddy unit would hold the same TLS port (docs/45, docs/46).
+  local old
+  for old in squeakr agentvoice; do
+    if [ "$(systemctl --user show -p LoadState --value "${old}-caddy.service" 2>/dev/null)" = loaded ]; then
+      systemctl --user disable --now "${old}-caddy.service" >/dev/null 2>&1 || true
+      ok "Retired the pre-rename ${old}-caddy.service."
+    fi
+  done
+  systemctl --user enable --now squeaky-caddy.service
   sleep 2
-  if systemctl --user is-active --quiet squeakr-caddy.service; then
-    ok "squeakr-caddy.service is active."
+  if systemctl --user is-active --quiet squeaky-caddy.service; then
+    ok "squeaky-caddy.service is active."
   else
-    warn "squeakr-caddy.service failed — journalctl --user -u squeakr-caddy -n 30"
+    warn "squeaky-caddy.service failed — journalctl --user -u squeaky-caddy -n 30"
   fi
   local code
   code="$(http_code "https://127.0.0.1:${TLS_PORT}/healthz" 8)"
@@ -383,5 +397,5 @@ esac
 
 section "Hosting setup complete"
 echo -e "  provider: ${BLD}${PROVIDER}${NC}   config: ${CONFIG_FILE}"
-echo -e "  Restart the bridge to apply: ${BLD}systemctl --user restart squeakr${NC}   Verify: ${BLD}bash scripts/doctor.sh${NC}"
+echo -e "  Restart the bridge to apply: ${BLD}systemctl --user restart squeaky${NC}   Verify: ${BLD}bash scripts/doctor.sh${NC}"
 echo ""

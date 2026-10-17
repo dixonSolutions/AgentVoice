@@ -63,7 +63,7 @@ function harness() {
       registerPresence: () => ({ release() {} }),
       prepare: async () => undefined,
       segmentSettings: () => ({ segmentSilenceMs: 700, maxSegmentMs: 15_000, minSpeechMs: 300, speechThreshold: 0.012, preRollMs: 300 }),
-      turnSettings: () => ({ inputMode: 'turns', wakeWordsEnabled: false, wakeWords: { start: 'hey squeaker' }, turnSubmit: { silenceMs: 700, vadEnabled: true } }),
+      turnSettings: () => ({ inputMode: 'turns', wakeWordsEnabled: false, wakeWords: { start: 'hey squeaky' }, turnSubmit: { silenceMs: 700, vadEnabled: true } }),
     },
   });
   return {
@@ -151,7 +151,7 @@ describe('VoiceCall — like the phone', () => {
     const call = new VoiceCall({
       name: 'rich call',
       source: 'discord',
-      greeting: 'Squeakr here.',
+      greeting: 'Squeaky here.',
       sink: {
         async play(pcm) {
           let n = 0;
@@ -161,7 +161,7 @@ describe('VoiceCall — like the phone', () => {
       },
       onActivity: (l) => activity.push(l),
       deps: {
-        transcribe: async () => ({ text: wake ? 'hey squeaker run the tests' : 'run the tests' }),
+        transcribe: async () => ({ text: wake ? 'hey squeaky run the tests' : 'run the tests' }),
         deliver: (text) => {
           delivered.push(text);
           return { ok: true, delivery: 'spawn' };
@@ -181,7 +181,7 @@ describe('VoiceCall — like the phone', () => {
         turnSettings: () => ({
           inputMode: 'turns',
           wakeWordsEnabled: wake,
-          wakeWords: { start: 'hey squeaker', end: 'send', cancel: 'cancel' },
+          wakeWords: { start: 'hey squeaky', end: 'send', cancel: 'cancel' },
           turnSubmit: { silenceMs: 700, vadEnabled: true },
         }),
         mirror: (frame) => mirrored.push(frame),
@@ -194,7 +194,7 @@ describe('VoiceCall — like the phone', () => {
     const h = rich(false);
     h.call.start();
     await flush(50);
-    assert.deepEqual(h.synthesized, ['Squeakr here.']);
+    assert.deepEqual(h.synthesized, ['Squeaky here.']);
     assert.ok(h.played.length >= 2, 'cue + greeting');
     h.call.pushAudio('u1', 'Ana', speech(600));
     h.call.speakerPaused('u1');
@@ -256,7 +256,7 @@ describe('VoiceCall — like the phone', () => {
     assert.deepEqual(summary, [
       'started',
       'cue:listening',
-      'reply:own:Squeakr here.',
+      'reply:own:Squeaky here.',
       'heard:request:Ana:run the tests',
       'cue:sent',
       'activity:🔧 Running tests',

@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { Subject } from 'rxjs';
-import { approvalFromPush, type ApprovalRequest, type ApprovalResponse } from '@squeakr/client';
+import { approvalFromPush, type ApprovalRequest, type ApprovalResponse } from '@squeaky/client';
 export type WsStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 export type WorkflowId = 'agent_native' | 'llm_intelligence';
@@ -119,7 +119,7 @@ export type {
   PermissionResponse,
   SecretInputResponse,
   ApprovalResponse,
-} from '@squeakr/client';
+} from '@squeaky/client';
 
 // ── Image carousel push types ─────────────────────────────────────────────
 

@@ -15,8 +15,9 @@ const STT_WORD_FIXES: Array<[RegExp, string]> = [
   [/\bcursor\s+voice\b/gi, 'cursorvoice'],
   [/\bagent\s+voice\b/gi, 'agentvoice'],
   [/\bagentvoice\b/gi, 'agentvoice'],
-  // Squeakr is said "squeaker"; STT spells it that way, or as two words.
-  [/\bsqueak(?:er|a|\s+her|\s+are)\b/gi, 'squeakr'],
+  // Squeakr (the name before Squeaky) is said "squeaker"; STT spells it that
+  // way, or as two words. Both fold to "squeaky", so either name finds the project.
+  [/\bsqueak(?:er|r|a|\s+her|\s+are)\b/gi, 'squeaky'],
 ];
 
 /** Collapse to lowercase alphanumeric for comparison. */

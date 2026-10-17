@@ -21,7 +21,7 @@
       "dom"
     ],
     "paths": {
-      "@squeakr/client": [
+      "@squeaky/client": [
         "../packages/client/src/index.ts"
       ]
     },

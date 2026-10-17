@@ -1,5 +1,5 @@
 /**
- * `squeakr logs --files | --transcripts | --list | --cat` — the bridge's own
+ * `squeaky logs --files | --transcripts | --list | --cat` — the bridge's own
  * log files (docs/42-logging.md), for every install: journald only exists for a
  * systemd unit, but the session logs and transcripts are written however the
  * bridge was started.
@@ -17,7 +17,7 @@ import { listLogFiles, type LogFileInfo } from '../../logging/logFiles.js';
 import { logFolderPath, type LogFolder } from '../../logging/logPaths.js';
 import { followFile, tailLines } from '../../logging/tail.js';
 import { UsageError } from '../args.js';
-import { envValue, readConfig, resolveHome } from '../home.js';
+import { brandEnvValue, readConfig, resolveHome } from '../home.js';
 import { bold, dim, fail, note, say } from '../out.js';
 
 export interface LogFileOptions {
@@ -41,7 +41,7 @@ export interface LogLocations {
   console: string;
 }
 
-/** Where this home's bridge writes its files, honouring settings.logging.dir and $SQUEAKR_LOG_DIR (or legacy $AGENTVOICE_LOG_DIR). */
+/** Where this home's bridge writes its files, honouring settings.logging.dir and $SQUEAKY_LOG_DIR (or legacy $SQUEAKR_LOG_DIR / $AGENTVOICE_LOG_DIR). */
 export function logLocations(profileOverride?: string): LogLocations {
   const home = resolveHome();
   const settings = readConfig(home).config?.settings as
@@ -51,7 +51,7 @@ export function logLocations(profileOverride?: string): LogLocations {
   if (profile !== 'serve' && profile !== 'test') {
     throw new UsageError(`--profile must be serve or test (got "${profile}")`);
   }
-  const envDir = envValue(home, 'SQUEAKR_LOG_DIR') ?? envValue(home, 'AGENTVOICE_LOG_DIR');
+  const envDir = brandEnvValue(home, 'LOG_DIR');
   const opts = { home, ...(settings?.logging?.dir ? { dir: settings.logging.dir } : {}), ...(envDir ? { envDir } : {}) };
   const at = (folder: LogFolder): string => logFolderPath(opts, profile, folder);
   return { home, profile, bridge: at('bridge'), transcripts: at('transcripts'), console: at('console') };
@@ -110,7 +110,7 @@ export async function logFilesCommand(opts: LogFileOptions): Promise<number> {
     const target =
       opts.cat === 'latest' ? files[0] : files.find((f) => f.name === opts.cat || f.path === opts.cat);
     if (!target) {
-      fail(`no ${opts.cat === 'latest' ? 'files' : `"${opts.cat}"`} in ${dir} — see: squeakr logs --list`);
+      fail(`no ${opts.cat === 'latest' ? 'files' : `"${opts.cat}"`} in ${dir} — see: squeaky logs --list`);
       return 1;
     }
     await catFile(target.path);

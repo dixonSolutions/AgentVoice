@@ -1,5 +1,5 @@
 /**
- * `/api/control/*` — what the `squeakr` control commands call (sessions,
+ * `/api/control/*` — what the `squeaky` control commands call (sessions,
  * use, new, agent, say, config, default). App-token auth like every /api
  * route. Answers are data; the CLI words them (control/format.ts), so a chat
  * that runs the CLI reads exactly what a terminal does.

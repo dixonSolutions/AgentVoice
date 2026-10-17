@@ -51,7 +51,7 @@ const ProjectUpdateSchema = z
     externalMailbox: z.boolean().optional(),
     /**
      * `false` adopts a discovered entry: hand-owned from then on, so discovery
-     * stops managing it (`squeakr add`). Only ever false — a hand-written
+     * stops managing it (`squeaky add`). Only ever false — a hand-written
      * entry cannot be handed to discovery through the API.
      */
     discovered: z.literal(false).optional(),

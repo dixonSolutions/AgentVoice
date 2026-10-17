@@ -24,14 +24,14 @@ describe('formatting', () => {
 
 describe('Telegram command parsing', () => {
   const tg = new TelegramAdapter({} as ChannelHub, 'token');
-  (tg as unknown as { username: string }).username = 'SqueakrBot';
+  (tg as unknown as { username: string }).username = 'SqueakyBot';
   it('turns /commands into the command line and ignores other bots’ commands', () => {
     assert.deepEqual(tg.normalize('/status', []), { text: 'status', mentioned: true });
-    assert.deepEqual(tg.normalize('/use@SqueakrBot 2', []), { text: 'use 2', mentioned: true });
+    assert.deepEqual(tg.normalize('/use@SqueakyBot 2', []), { text: 'use 2', mentioned: true });
     assert.deepEqual(tg.normalize('/use@OtherBot 2', []), { text: '', mentioned: false });
   });
   it('strips a mention of this bot', () => {
-    const text = '@SqueakrBot sessions site';
+    const text = '@SqueakyBot sessions site';
     assert.deepEqual(tg.normalize(text, [{ type: 'mention', offset: 0, length: 11 }]), { text: 'sessions site', mentioned: true });
     assert.deepEqual(tg.normalize('@someone hi', [{ type: 'mention', offset: 0, length: 8 }]), { text: '@someone hi', mentioned: false });
   });

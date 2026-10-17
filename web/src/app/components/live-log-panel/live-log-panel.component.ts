@@ -214,7 +214,7 @@ export class LiveLogPanelComponent implements AfterViewInit, OnDestroy {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `squeakr-session-${stamp}.json`;
+    anchor.download = `squeaky-session-${stamp}.json`;
     anchor.click();
     URL.revokeObjectURL(url);
     this.toast.success('Exported JSON', undefined, false);

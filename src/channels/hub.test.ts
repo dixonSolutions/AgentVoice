@@ -113,7 +113,7 @@ describe('ChannelHub', () => {
     assert.equal(at('hello there', { isDirect: false, mentioned: false, conversationId: 'group-1' }, own), null);
   });
 
-  it('commands run the squeakr CLI and post its answer', async () => {
+  it('commands run the squeaky CLI and post its answer', async () => {
     const { hub, out, sent, ran } = setup();
     await hub.handle({ channel: 'telegram', user, conversation, text: 'sessions' }, out, CAPS);
     assert.deepEqual(ran[0], ['sessions', '--channel', 'telegram', '--conversation', 'chat-1', '--user', '42']);
@@ -194,7 +194,7 @@ describe('ChannelHub', () => {
     const { hub } = setup();
     assert.equal(hub.isAllowed('telegram', '42'), true);
     assert.equal(hub.isAllowed('telegram', '7'), false);
-    assert.match(hub.strangerNotice('telegram', '7') ?? '', /id is `7`.*squeakr channel allow telegram 7/);
+    assert.match(hub.strangerNotice('telegram', '7') ?? '', /id is `7`.*squeaky channel allow telegram 7/);
     assert.equal(hub.strangerNotice('telegram', '7'), null, 'not every message');
   });
 

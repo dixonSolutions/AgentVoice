@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Squeakr — setup from a clone (Linux / macOS)
+# Squeaky — setup from a clone (Linux / macOS)
 #
-# This script only builds. Everything after that is `squeakr setup`, the
+# This script only builds. Everything after that is `squeaky setup`, the
 # same guided wizard an npm or .deb/.rpm install runs:
 #
 #   1. install dependencies and compile the backend + web client
-#   2. squeakr setup
+#   2. squeaky setup
 #        - asks whether to install a background service
 #        - project config: agent CLI, where your repos live
 #        - only if you said yes: the service, then hosting (e.g. Tailscale)
 #
 # Usage:
-#   bash scripts/setup.sh [options] [-- <squeakr setup options>]
+#   bash scripts/setup.sh [options] [-- <squeaky setup options>]
 #
 # Options:
 #   --skip-install     Do not run npm install
@@ -24,7 +24,7 @@
 #                      (tailscale | cloudflare | ngrok | devtunnel | lan)
 #   -h, --help         This screen
 #
-# Anything after `--` goes to `squeakr setup` unchanged
+# Anything after `--` goes to `squeaky setup` unchanged
 # (e.g. `-- --agent claude-code --projects-dir ~/code`). Re-running is safe.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
@@ -90,4 +90,4 @@ fi
 
 # ── 2. The wizard ──────────────────────────────────────────────────────────
 section "Setup"
-exec node "${PROJECT_DIR}/bin/squeakr.mjs" setup ${WIZARD_ARGS[@]+"${WIZARD_ARGS[@]}"}
+exec node "${PROJECT_DIR}/bin/squeaky.mjs" setup ${WIZARD_ARGS[@]+"${WIZARD_ARGS[@]}"}

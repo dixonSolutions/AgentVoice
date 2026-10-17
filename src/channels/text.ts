@@ -1,8 +1,8 @@
 /**
  * What is left of a chat message once the bot's tag is taken out.
  *
- * People write `@Squeakr sessions`, `@Squeakr\nsessions`,
- * `@Squeakr: default 2`, `hey @Squeakr, status` — and Discord inserts
+ * People write `@Squeaky sessions`, `@Squeaky\nsessions`,
+ * `@Squeaky: default 2`, `hey @Squeaky, status` — and Discord inserts
  * the bot's *role* mention (`<@&id>`) as often as its user mention. Every
  * form of the tag goes, wherever it sits, along with the spaces, line breaks
  * and punctuation that separated it from the command, and invisible

@@ -1,16 +1,16 @@
 /**
- * `squeakr` — the management CLI.
+ * `squeaky` — the management CLI.
  *
- * bin/squeakr.mjs is a shim over this file. The logic lives in TypeScript so
+ * bin/squeaky.mjs is a shim over this file. The logic lives in TypeScript so
  * it is typechecked with the rest of the bridge and can import from src/ rather
  * than re-deriving things the bridge already knows — install mode, run-mode
  * ports, the systemd unit layout.
  *
  * Exit codes: 0 success, 1 failure, 2 usage error. `status` reports 1 when the
- * bridge is not answering, so `squeakr status >/dev/null` is a liveness
+ * bridge is not answering, so `squeaky status >/dev/null` is a liveness
  * probe.
  *
- * `run` is the default command, because bare `squeakr` has always booted the
+ * `run` is the default command, because bare `squeaky` has always booted the
  * bridge and a published package cannot take that back.
  */
 
@@ -26,7 +26,7 @@ import { doctorCommand } from './commands/doctor.js';
 import { runCommand } from './commands/run.js';
 import { logsCommand, serviceCommand } from './commands/service.js';
 import { migrateCommand } from './commands/migrate.js';
-import { upgradeFromAgentvoiceCommand } from './commands/upgradeFromAgentvoice.js';
+import { upgradeFromSqueakrCommand } from './commands/upgradeFromSqueakr.js';
 import { addCommand } from './commands/add.js';
 import { channelCommand } from './commands/channel.js';
 import { localCommand } from './commands/local.js';
@@ -43,10 +43,10 @@ import { CONTROL_VALUE_FLAGS, controlCommand } from './commands/control.js';
 import type { ControlCommand } from '../control/types.js';
 
 const USAGE = `
-  ${bold(cyan('squeakr'))} — self-hosted voice bridge for agent CLIs
+  ${bold(cyan('squeaky'))} — self-hosted voice bridge for agent CLIs
 
   ${bold('Usage')}
-    squeakr [command] [options]
+    squeaky [command] [options]
 
   ${bold('Getting started')}
     setup                  Guided setup: agent CLI and projects, then (if you want
@@ -102,9 +102,10 @@ const USAGE = `
     update [--stash]       Update this install the way it was installed
     migrate <path>         Carry an existing bridge's config.json + .env into
                            this install's home (copies only; starts nothing)
-    upgrade-from-agentvoice
-                           Move an AgentVoice install to Squeakr: home, service,
-                           git remote, and remove @ratitisrad/agentvoice (docs/45)
+    upgrade-from-squeakr | upgrade-from-agentvoice
+                           Move a Squeakr or AgentVoice install to Squeaky: home,
+                           service, git remote, and remove the old npm packages
+                           squeakr / @ratitisrad/agentvoice (docs/46)
     token [--new]          Print the pairing token, or mint a fresh one
     prepare-vosk [--force] Fetch the wake-word model now (the bridge also does on boot)
     version                Package version (plus the commit, in a clone)
@@ -136,11 +137,12 @@ const USAGE = `
     --stash                Stash local changes across a git update (update)
     --dry-run              Report what would happen, change nothing
                            (update, service install, migrate, add,
-                           upgrade-from-agentvoice)
-    --keep-old             Leave @ratitisrad/agentvoice installed (upgrade-from-agentvoice)
-    --keep-remote          Leave a clone's origin remote alone (upgrade-from-agentvoice)
+                           upgrade-from-squeakr)
+    --keep-old             Leave squeakr / @ratitisrad/agentvoice installed
+                           (upgrade-from-squeakr)
+    --keep-remote          Leave a clone's origin remote alone (upgrade-from-squeakr)
     --branch <name>        Rebase onto origin/<name> (update, git installs)
-    --to <dir>             Home to migrate into (migrate; default ~/.squeakr)
+    --to <dir>             Home to migrate into (migrate; default ~/.squeaky)
     --yes                  Take every default without asking (setup)
     --service, --no-service
                            Answer "install a background service?" (setup)
@@ -160,14 +162,14 @@ const USAGE = `
                            The chat a command came from (sessions, new, say, default, agent)
 
   ${bold('Environment')}
-    SQUEAKR_HOME           Bridge home. Defaults to the current directory when
-                           it already holds a config.json, else ~/.squeakr.
+    SQUEAKY_HOME           Bridge home. Defaults to the current directory when
+                           it already holds a config.json, else ~/.squeaky.
 
   Docs: docs/35-cli.md
 `;
 
 /**
- * `squeakr <command> --help`: the USAGE lines for that command and the
+ * `squeaky <command> --help`: the USAGE lines for that command and the
  * options whose parenthetical names it. Derived from USAGE rather than kept as
  * a second copy, so the two cannot disagree.
  */
@@ -198,7 +200,7 @@ export function commandHelp(command: string): string | null {
 
   return [
     '',
-    `  ${bold(`squeakr ${command}`)}`,
+    `  ${bold(`squeaky ${command}`)}`,
     '',
     ...commands.flatMap((e) => e.text),
     ...(options.length ? ['', `  ${bold('Options')}`, ...options.flatMap((e) => e.text)] : []),
@@ -232,10 +234,11 @@ async function dispatch(argv: string[]): Promise<void> {
   const command = first.startsWith('-') ? 'run' : first || 'run';
   const args = first.startsWith('-') ? argv : rest;
 
-  // `squeakr logs --help` — anywhere before a bare `--`.
+  // `squeaky logs --help` — anywhere before a bare `--`.
   const flagArgs = args.includes('--') ? args.slice(0, args.indexOf('--')) : args;
   if (flagArgs.includes('--help') || flagArgs.includes('-h')) {
-    const text = commandHelp(command);
+    // The AgentVoice-era name shares upgrade-from-squeakr's options.
+    const text = commandHelp(command === 'upgrade-from-agentvoice' ? 'upgrade-from-squeakr' : command);
     if (!text) throw new UsageError(`unknown command "${command}"`);
     say(text);
     return;
@@ -424,11 +427,14 @@ async function dispatch(argv: string[]): Promise<void> {
       return;
     }
 
+    // One command for either older install; the AgentVoice-era name stays, as
+    // docs/45 and scripts/migrate-to-squeaky.sh call it that.
+    case 'upgrade-from-squeakr':
     case 'upgrade-from-agentvoice': {
       const parsed = parseArgs(args);
       rejectUnknown(parsed, ['dry-run', 'keep-old', 'keep-remote', 'skip-system']);
-      if (parsed.positionals.length) throw new UsageError('upgrade-from-agentvoice takes no arguments');
-      process.exitCode = await upgradeFromAgentvoiceCommand({
+      if (parsed.positionals.length) throw new UsageError(`${command} takes no arguments`);
+      process.exitCode = await upgradeFromSqueakrCommand({
         dryRun: parsed.switches.has('dry-run'),
         keepOld: parsed.switches.has('keep-old'),
         keepRemote: parsed.switches.has('keep-remote'),
@@ -490,23 +496,23 @@ async function versionCommand(): Promise<void> {
   const version = packageVersion(install.root);
 
   if (install.mode !== 'git') {
-    say(`squeakr ${version}`);
+    say(`squeaky ${version}`);
     return;
   }
   const git = await gitVersion(install.root);
   const detail = git
     ? ` ${dim(`(${git.branch ?? 'detached'} @ ${git.commit ?? '?'}${git.dirty ? ', dirty' : ''})`)}`
     : '';
-  say(`squeakr ${version}${detail}`);
+  say(`squeaky ${version}${detail}`);
 }
 
 function help(): void {
   say(USAGE);
 }
 
-// `node dist/cli.js status` should work as well as `squeakr status` — handy
+// `node dist/cli.js status` should work as well as `squeaky status` — handy
 // in a clone, and what the bin shim would do anyway. argv[1] tells the two
-// apart so being imported by bin/squeakr.mjs does not run main twice.
+// apart so being imported by bin/squeaky.mjs does not run main twice.
 const argv1 = process.argv[1];
 if (argv1 && import.meta.url === pathToFileURL(argv1).href) {
   void main(process.argv.slice(2));

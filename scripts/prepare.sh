@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Squeakr — prepare the solution end to end (Linux / macOS)
+# Squeaky — prepare the solution end to end (Linux / macOS)
 #
 # What this script does:
 #   1. Checks prerequisites (Node >= 20, npm, openssl or node for token gen)
@@ -8,7 +8,7 @@
 #      `npm install` fails on an optimus-ui / @angular/cdk peer conflict)
 #   3. Builds backend + PWA        (npm run build)
 #   4. Prepares the Vosk wake-word model and copies it into
-#      $SQUEAKR_HOME/vosk/ — the production bridge serves /vosk/ ONLY from
+#      $SQUEAKY_HOME/vosk/ — the production bridge serves /vosk/ ONLY from
 #      there (src/webDispatch.ts registerUserVoskDir); `prepare-vosk` in a
 #      clone writes to web/public/vosk, which a packaged bridge never serves.
 #      Without the copy /vosk/model.tar.gz returns index.html (text/html) and
@@ -31,9 +31,9 @@
 #   -h, --help                     This screen
 #
 # Environment overrides (useful for testing against a scratch copy):
-#   SQUEAKR_CONFIG     path to config.json        (default ./config.json)
-#   SQUEAKR_ENV_FILE   path to .env               (default ./.env)
-#   SQUEAKR_HOME       user data dir for vosk/    (default ~/.squeakr)
+#   SQUEAKY_CONFIG     path to config.json        (default ./config.json)
+#   SQUEAKY_ENV_FILE   path to .env               (default ./.env)
+#   SQUEAKY_HOME       user data dir for vosk/    (default ~/.squeaky)
 #
 # Re-running is safe — existing .env values and config.json settings are
 # preserved; finished steps are detected and skipped.
@@ -85,11 +85,17 @@ if $INTERACTIVE && ! $FORCE_INTERACTIVE && [[ ! -t 0 ]]; then
 fi
 
 # ── Paths (env overrides for testability) ─────────────────────────────────
-CONFIG_FILE="${SQUEAKR_CONFIG:-${AGENTVOICE_CONFIG:-${PROJECT_DIR}/config.json}}"
-ENV_FILE="${SQUEAKR_ENV_FILE:-${AGENTVOICE_ENV_FILE:-${PROJECT_DIR}/.env}}"
-# ~/.squeakr, unless only a not-yet-upgraded ~/.agentvoice exists (docs/45).
-if [[ -e "${HOME}/.squeakr" || ! -e "${HOME}/.agentvoice" ]]; then DEFAULT_HOME="${HOME}/.squeakr"; else DEFAULT_HOME="${HOME}/.agentvoice"; fi
-AV_HOME="${SQUEAKR_HOME:-${AGENTVOICE_HOME:-${DEFAULT_HOME}}}"
+CONFIG_FILE="${SQUEAKY_CONFIG:-${SQUEAKR_CONFIG:-${AGENTVOICE_CONFIG:-${PROJECT_DIR}/config.json}}}"
+ENV_FILE="${SQUEAKY_ENV_FILE:-${SQUEAKR_ENV_FILE:-${AGENTVOICE_ENV_FILE:-${PROJECT_DIR}/.env}}}"
+# ~/.squeaky, unless only a not-yet-upgraded ~/.squeakr or ~/.agentvoice
+# exists — newest first (docs/45, docs/46).
+DEFAULT_HOME="${HOME}/.squeaky"
+if [[ ! -e "${DEFAULT_HOME}" ]]; then
+  for old in .squeakr .agentvoice; do
+    [[ -e "${HOME}/${old}" ]] && { DEFAULT_HOME="${HOME}/${old}"; break; }
+  done
+fi
+AV_HOME="${SQUEAKY_HOME:-${SQUEAKR_HOME:-${AGENTVOICE_HOME:-${DEFAULT_HOME}}}}"
 VOSK_DIR="${AV_HOME}/vosk"
 EXAMPLE_CONFIG="${PROJECT_DIR}/config.example.json"
 
@@ -276,10 +282,10 @@ else
 
     if [[ -z "$SRC_MODEL" ]]; then
       [[ -f dist/cli.js ]] || err "dist/cli.js missing — cannot run prepare-vosk (build first, or drop --skip-build)."
-      info "Downloading the model (~41 MB) via: node bin/squeakr.mjs prepare-vosk"
-      # The CLI honours SQUEAKR_HOME itself for packaged installs; in a clone
+      info "Downloading the model (~41 MB) via: node bin/squeaky.mjs prepare-vosk"
+      # The CLI honours SQUEAKY_HOME itself for packaged installs; in a clone
       # it writes web/public/vosk, which is why we copy below.
-      SQUEAKR_HOME="$AV_HOME" node bin/squeakr.mjs prepare-vosk
+      SQUEAKY_HOME="$AV_HOME" node bin/squeaky.mjs prepare-vosk
       for cand in web/public/vosk/model.tar.gz web/dist/vosk/model.tar.gz "$USER_MODEL"; do
         if [[ -f "$cand" ]] && [[ "$(file_size "$cand")" -ge "$MIN_MODEL_BYTES" ]]; then SRC_MODEL="$cand"; break; fi
       done
@@ -300,7 +306,7 @@ else
   if [[ "$MAGIC" == "1f8b" ]]; then
     ok "model.tar.gz has a gzip header."
   else
-    warn "model.tar.gz does not look like gzip (header ${MAGIC:-none}) — re-run with: node bin/squeakr.mjs prepare-vosk --force"
+    warn "model.tar.gz does not look like gzip (header ${MAGIC:-none}) — re-run with: node bin/squeaky.mjs prepare-vosk --force"
   fi
 
   # If a bridge is up, verify it actually serves the model as application/gzip.
@@ -312,7 +318,7 @@ else
         ok "Bridge on :${LIVE_PORT} serves /vosk/model.tar.gz as ${CT}";;
       *)
         warn "Bridge on :${LIVE_PORT} serves /vosk/model.tar.gz as '${CT:-no response}' (expected application/gzip)."
-        warn "The bridge registers ${VOSK_DIR} at startup — restart it: systemctl --user restart squeakr";;
+        warn "The bridge registers ${VOSK_DIR} at startup — restart it: systemctl --user restart squeaky";;
     esac
   else
     info "No bridge on 127.0.0.1:${LIVE_PORT} — skipping the served content-type check (doctor.sh checks it later)."
@@ -334,7 +340,7 @@ if [[ ! -f "$ENV_FILE" ]]; then
   info "Creating ${ENV_FILE}..."
   mkdir -p "$(dirname "$ENV_FILE")"
   ( umask 077; cat > "$ENV_FILE" <<EOF
-# Squeakr — secrets + machine-specific paths
+# Squeaky — secrets + machine-specific paths
 # chmod 600 this file and never commit it.
 
 APP_TOKEN=
@@ -356,7 +362,7 @@ fi
 
 if [[ -z "$(env_get APP_TOKEN)" ]]; then
   env_set APP_TOKEN "$(gen_token)"
-  ok "APP_TOKEN generated (view later with: node bin/squeakr.mjs token)."
+  ok "APP_TOKEN generated (view later with: node bin/squeaky.mjs token)."
 else
   ok "APP_TOKEN already set."
 fi

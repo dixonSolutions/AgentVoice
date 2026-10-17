@@ -8,7 +8,7 @@ import { childLogger, closeLogger, getSessionLog, initLogger } from './log.js';
 // Declared at import time, before initLogger() — exactly like every module in src/.
 const early = childLogger('early-module');
 
-const dir = mkdtempSync(join(tmpdir(), 'squeakr-log-'));
+const dir = mkdtempSync(join(tmpdir(), 'squeaky-log-'));
 after(() => {
   closeLogger('test end');
   rmSync(dir, { recursive: true, force: true });
@@ -40,7 +40,7 @@ describe('logger', () => {
     closeLogger('test shutdown');
 
     const text = readFileSync(path, 'utf-8');
-    assert.match(text, /^# Squeakr bridge log\n/);
+    assert.match(text, /^# Squeaky bridge log\n/);
     assert.match(text, /# version=test · pid=42\n/);
     // Replayed from the boot buffer, at or above the file level.
     assert.match(text, /INFO  \[early-module\] logged before init phase=boot\n/);

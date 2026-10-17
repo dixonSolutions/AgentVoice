@@ -16,7 +16,7 @@ import {
 
 const roots: string[] = [];
 function tempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'squeakr-logs-'));
+  const dir = mkdtempSync(join(tmpdir(), 'squeaky-logs-'));
   roots.push(dir);
   return dir;
 }

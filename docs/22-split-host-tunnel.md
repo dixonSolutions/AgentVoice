@@ -1,6 +1,6 @@
 # Split-host: container bridge + Tailscale front door
 
-**Squeakr runs in the incus container** (`dev` on the debian host) — bridge,
+**Squeaky runs in the incus container** (`dev` on the debian host) — bridge,
 nginx, and AWS calls all live there. Your laptop or home PC is **not** the host;
 it only runs the SSH tunnel and Tailscale Serve when you want a stable public URL
 on that machine's MagicDNS name.
@@ -14,7 +14,7 @@ Phone / browser
   → ssh -L … borys@debian:5671
   → incus proxy host:5671 → container:5671
   → nginx :5671 in container           (PWA + /api /ws /mcp proxy)
-  → squeakr :1234 in container    (bridge API, Amazon Transcribe/Polly)
+  → squeaky :1234 in container    (bridge API, Amazon Transcribe/Polly)
 ```
 
 The bridge `publicBaseUrl` is the Tailscale HTTPS URL. All services (bridge,
@@ -22,11 +22,11 @@ nginx, `cursor-agent`, MCP, SQLite) run **inside the container**.
 
 ---
 
-## Container setup (where Squeakr is hosted)
+## Container setup (where Squeaky is hosted)
 
 Run these **inside the incus container**, e.g. `incus exec dev -- bash`:
 
-1. **Clone / pull** the repo (e.g. `/root/Projects/Squeakr`).
+1. **Clone / pull** the repo (e.g. `/root/Projects/Squeaky`).
 
 2. **Fix DNS** — required for Amazon Transcribe/Polly/Bedrock in LXC/incus:
 
@@ -43,10 +43,10 @@ Run these **inside the incus container**, e.g. `incus exec dev -- bash`:
 
    ```bash
    npm run build
-   systemctl enable --now squeakr nginx
+   systemctl enable --now squeaky nginx
    ```
 
-   See [`scripts/nginx-squeakr.conf.example`](../scripts/nginx-squeakr.conf.example)
+   See [`scripts/nginx-squeaky.conf.example`](../scripts/nginx-squeaky.conf.example)
    and incus proxy `host:5671 → container:5671`. Nginx must set
    `client_max_body_size 12m` (default `1m` returns **413** on longer Amazon
    Transcribe uploads).
@@ -66,7 +66,7 @@ cause — not the phone or the tunnel machine:
 
 ```bash
 sudo bash scripts/install-fix-dns.sh   # inside container
-systemctl restart squeakr
+systemctl restart squeaky
 ```
 
 ---
@@ -75,22 +75,22 @@ systemctl restart squeakr
 
 Only needed when Tailscale Serve runs on a **different** machine than the
 container (e.g. eva → debian incus). **Do not** install `fix-dns` or
-`squeakr` here — only the SSH tunnel.
+`squeaky` here — only the SSH tunnel.
 
 1. **SSH key auth** to the debian host (`ssh borys@100.118.238.2`).
 
 2. **Install the tunnel service** on the tunnel machine:
 
    ```bash
-   cd /path/to/Squeakr
+   cd /path/to/Squeaky
    bash scripts/install-remote-tunnel.sh \
      --remote borys@100.118.238.2 \
      --remote-port 5671 \
      --local-port 15671
    ```
 
-   Writes `~/.config/squeakr/tunnel.env` and enables
-   `squeakr-tunnel.service` (systemd user, `Restart=always`).
+   Writes `~/.config/squeaky/tunnel.env` and enables
+   `squeaky-tunnel.service` (systemd user, `Restart=always`).
 
 3. **Point Tailscale Serve** at the local tunnel port:
 
@@ -109,14 +109,14 @@ container (e.g. eva → debian incus). **Do not** install `fix-dns` or
 
 | Where | Task | Command |
 |-------|------|---------|
-| Container | Bridge status | `systemctl status squeakr nginx fix-dns` |
-| Container | Bridge logs | `journalctl -u squeakr -f` |
-| Container | Redeploy | `git pull && npm run build && systemctl restart squeakr nginx` |
-| Tunnel machine | Tunnel status | `systemctl --user status squeakr-tunnel` |
-| Tunnel machine | Tunnel logs | `journalctl --user -u squeakr-tunnel -f` |
-| Tunnel machine | Restart tunnel | `systemctl --user restart squeakr-tunnel` |
+| Container | Bridge status | `systemctl status squeaky nginx fix-dns` |
+| Container | Bridge logs | `journalctl -u squeaky -f` |
+| Container | Redeploy | `git pull && npm run build && systemctl restart squeaky nginx` |
+| Tunnel machine | Tunnel status | `systemctl --user status squeaky-tunnel` |
+| Tunnel machine | Tunnel logs | `journalctl --user -u squeaky-tunnel -f` |
+| Tunnel machine | Restart tunnel | `systemctl --user restart squeaky-tunnel` |
 
-Tunnel config: `~/.config/squeakr/tunnel.env` on the **tunnel machine** (see
+Tunnel config: `~/.config/squeaky/tunnel.env` on the **tunnel machine** (see
 [`scripts/remote-tunnel.env.example`](../scripts/remote-tunnel.env.example)).
 
 ## Why the tunnel dies

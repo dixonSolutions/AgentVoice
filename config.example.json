@@ -45,12 +45,12 @@
             "manage": "container",
             "runtime": "auto",
             "image": "ghcr.io/speaches-ai/speaches:latest-cpu",
-            "containerName": "squeakr-speech",
+            "containerName": "squeaky-speech",
             "port": 8770,
             "containerPort": 8000,
             "apiPath": "/v1",
             "gpu": false,
-            "modelVolume": "squeakr-speech-models",
+            "modelVolume": "squeaky-speech-models",
             "modelCachePath": "/home/ubuntu/.cache/huggingface/hub"
           }
         }
@@ -58,7 +58,7 @@
     },
     "voice": {
       "wakeWords": {
-        "start": "hey squeaker",
+        "start": "hey squeaky",
         "end": "cursor send",
         "cancel": "cancel",
         "wakeConfidenceThreshold": 0.45

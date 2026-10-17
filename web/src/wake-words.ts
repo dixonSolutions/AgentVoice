@@ -1,6 +1,6 @@
 /**
  * Re-export of the shared matcher. The implementation moved to
- * @squeakr/client so the editor uses the same rules; this file stays so the
+ * @squeaky/client so the editor uses the same rules; this file stays so the
  * app's existing imports keep working.
  */
-export * from '@squeakr/client';
+export * from '@squeaky/client';

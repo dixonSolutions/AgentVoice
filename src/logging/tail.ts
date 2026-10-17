@@ -1,7 +1,7 @@
 /**
  * Read the end of a log file, and follow it as it grows — for the in-app log
  * viewer when journald has nothing (npm installs, manual runs) and for
- * `squeakr logs --follow`.
+ * `squeaky logs --follow`.
  */
 
 import { closeSync, existsSync, openSync, readSync, statSync, unwatchFile, watchFile } from 'node:fs';

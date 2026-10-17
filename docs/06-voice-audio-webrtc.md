@@ -80,9 +80,9 @@ library call that follows resolves locally.
 
 | Asset | Size | Cache |
 | --- | --- | --- |
-| `/vosk/model.tar.gz` | ~50 MB | `squeakr-vosk-v1` |
-| `/silero-vad/silero_vad_v5.onnx` | 2.2 MB | `squeakr-models-v1` |
-| `/silero-vad/ort-wasm-simd-threaded.wasm` | 13 MB | `squeakr-models-v1` |
+| `/vosk/model.tar.gz` | ~50 MB | `squeaky-vosk-v1` |
+| `/silero-vad/silero_vad_v5.onnx` | 2.2 MB | `squeaky-models-v1` |
+| `/silero-vad/ort-wasm-simd-threaded.wasm` | 13 MB | `squeaky-models-v1` |
 
 `LlmIntelligenceSession.start()` calls `prefetchVoiceModels()` after the
 WebSocket authenticates and before the wake phase, so the download happens while

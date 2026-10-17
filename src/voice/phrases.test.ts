@@ -38,8 +38,8 @@ function settings(overrides: Partial<NarrationSettings> = {}): NarrationSettings
 describe('phrase rendering', () => {
   test('fills named placeholders', () => {
     assert.equal(
-      phrase('job_started', { agent: 'Codex', project: 'squeakr' }, 'en', settings()),
-      'Codex started working on squeakr.',
+      phrase('job_started', { agent: 'Codex', project: 'squeaky' }, 'en', settings()),
+      'Codex started working on squeaky.',
     );
   });
 

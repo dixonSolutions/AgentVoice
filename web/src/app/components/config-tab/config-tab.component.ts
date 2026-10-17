@@ -1096,7 +1096,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
   protected journalLines: string[] = [];
   protected journalLive = false;
   protected journalError: string | null = null;
-  protected journalUnit = 'squeakr.service';
+  protected journalUnit = 'squeaky.service';
   private journalAbort: AbortController | null = null;
   private journalPollTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -1154,7 +1154,7 @@ export class ConfigTabComponent implements OnInit, OnDestroy {
     return this.serveInstallMode === 'npm' && !this.serveIsNpxRun;
   }
 
-  /** `npx squeakr` — a cache copy, so the next npx run is the update. */
+  /** `npx squeaky-cli` — a cache copy, so the next npx run is the update. */
   protected get serveIsNpxRun(): boolean {
     return this.serveInstallMode === 'npm' && this.serveStatus?.install?.npx === true;
   }

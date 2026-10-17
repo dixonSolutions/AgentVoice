@@ -699,7 +699,7 @@ export class SpeechTabComponent implements OnInit, OnDestroy {
       return;
     }
     const utterance = new SpeechSynthesisUtterance(
-      'This is the Squeakr preview. Speaking a file path: src slash providers slash speech.',
+      'This is the Squeaky preview. Speaking a file path: src slash providers slash speech.',
     );
     const voice = this.rawBrowserVoices.find((v) => v.voiceURI === this.browserVoiceUri);
     if (voice) utterance.voice = voice;

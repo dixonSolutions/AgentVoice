@@ -2,7 +2,7 @@
 /**
  * End-to-end: channels (docs/44) against a real bridge.
  *
- * `squeakr run` with Telegram, Slack and WhatsApp enabled, each pointed at
+ * `squeaky run` with Telegram, Slack and WhatsApp enabled, each pointed at
  * a stand-in for its platform API — the adapters speak exactly the HTTP and
  * WebSocket protocol they use against the real services:
  *
@@ -25,7 +25,7 @@
  *   - `watch` posts a status message and edits it as things change
  *   - Slack mentions and the /av slash command are acked and answered
  *   - WhatsApp webhooks need Meta's signature; verification echoes the challenge
- *   - GET /api/channels and `squeakr channel` report them; `channel allow` works
+ *   - GET /api/channels and `squeaky channel` report them; `channel allow` works
  *
  * Usage:
  *   npm run build:backend && node scripts/live-channels-test.mjs [--keep]
@@ -90,7 +90,7 @@ const tgServer = createServer(async (req, res) => {
   const body = (req.headers['content-type'] ?? '').includes('json') ? JSON.parse(raw.toString() || '{}') : {};
   switch (method) {
     case 'getMe':
-      return json({ id: 999, is_bot: true, username: 'SqueakrTestBot' });
+      return json({ id: 999, is_bot: true, username: 'SqueakyTestBot' });
     case 'setMyCommands':
       tg.commands = body.commands;
       return json(true);
@@ -134,7 +134,7 @@ const slackApi = createServer(async (req, res) => {
   const body = JSON.parse(Buffer.concat(chunks).toString() || '{}');
   const ok = (extra = {}) => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ ok: true, ...extra }));
   const method = req.url.split('/').pop();
-  if (method === 'auth.test') return ok({ user_id: 'UBOT', user: 'squeakr', team: 'Test' });
+  if (method === 'auth.test') return ok({ user_id: 'UBOT', user: 'squeaky', team: 'Test' });
   if (method === 'apps.connections.open') {
     if (req.headers.authorization !== 'Bearer xapp-test') return ok({ ok: false, error: 'invalid_auth' });
     return ok({ url: `ws://127.0.0.1:${slackWss.address().port}` });
@@ -239,7 +239,7 @@ try {
   let mark = tg.sent.length;
   dm(STRANGER_TG, 'status');
   await until(() => tg.sent.length > mark, 10_000, 'stranger notice');
-  check(/id is <code>7<\/code>/.test(tgSince(mark)) && /squeakr channel allow telegram 7/.test(tgSince(mark)), 'a stranger is told their id and how to be allowed');
+  check(/id is <code>7<\/code>/.test(tgSince(mark)) && /squeaky channel allow telegram 7/.test(tgSince(mark)), 'a stranger is told their id and how to be allowed');
   mark = tg.sent.length;
   dm(STRANGER_TG, 'sessions');
   await sleep(800);
@@ -260,7 +260,7 @@ try {
   check(/<b>Sessions<\/b>/.test(tgSince(mark)) && /<b>Host CLI<\/b>/.test(tgSince(mark)) && !/<b>Voice calls<\/b>/.test(tgSince(mark)), 'help lists the groups (no voice-call group on Telegram)');
   mark = tg.sent.length;
   // A group message: the tag, blank lines, then the command.
-  const tagged = '@SqueakrTestBot\n\n  whoami';
+  const tagged = '@SqueakyTestBot\n\n  whoami';
   tgPush({ from: { id: OWNER_TG, first_name: 'Ana' }, chat: { id: -100, type: 'supergroup', title: 'Dev' }, text: tagged, entities: [{ type: 'mention', offset: 0, length: 15 }] });
   await until(() => tg.sent.length > mark, 10_000, 'tagged group command');
   check(/telegram id <code>42<\/code>/.test(tgSince(mark)), 'a group tag followed by line breaks still reads as the command');
@@ -271,7 +271,7 @@ try {
   mark = tg.sent.length;
   dm(OWNER_TG, 'cli version');
   await until(() => tg.sent.length > mark, 30_000, 'cli version');
-  check(/<code>squeakr version<\/code>/.test(tgSince(mark)) && /squeakr \d+\.\d+\.\d+/.test(tgSince(mark)), 'cli version runs the host CLI and posts its output', tgSince(mark).slice(0, 200));
+  check(/<code>squeaky version<\/code>/.test(tgSince(mark)) && /squeaky \d+\.\d+\.\d+/.test(tgSince(mark)), 'cli version runs the host CLI and posts its output', tgSince(mark).slice(0, 200));
   mark = tg.sent.length;
   dm(OWNER_TG, 'cli update');
   await until(() => tg.sent.length > mark, 10_000, 'cli update refusal');
@@ -327,7 +327,7 @@ try {
   // ── Telegram: the group becomes the message channel ───────────────────
   const GROUP = { id: -100, type: 'supergroup', title: 'Dev' };
   mark = tg.sent.length;
-  tgPush({ from: { id: OWNER_TG, first_name: 'Ana' }, chat: GROUP, text: '@SqueakrTestBot channel here', entities: [{ type: 'mention', offset: 0, length: 15 }] });
+  tgPush({ from: { id: OWNER_TG, first_name: 'Ana' }, chat: GROUP, text: '@SqueakyTestBot channel here', entities: [{ type: 'mention', offset: 0, length: 15 }] });
   await until(() => /messageChannel/.test(tgSince(mark)), 30_000, 'channel here');
   check(/messageChannel → -100/.test(tgSince(mark)), '`channel here` makes the group the message channel', tgSince(mark).slice(0, 200));
   mark = tg.sent.length;
@@ -397,9 +397,9 @@ try {
 
   // ── CLI ───────────────────────────────────────────────────────────────
   const cli = await av.run(['channel']);
-  check(cli.code === 0 && /Telegram\s+connected/.test(cli.stdout) && /Discord\s+off/.test(cli.stdout), 'squeakr channel shows them', cli.stdout + cli.stderr);
+  check(cli.code === 0 && /Telegram\s+connected/.test(cli.stdout) && /Discord\s+off/.test(cli.stdout), 'squeaky channel shows them', cli.stdout + cli.stderr);
   const allow = await av.run(['channel', 'allow', 'telegram', '77']);
-  check(allow.code === 0, 'squeakr channel allow', allow.stderr);
+  check(allow.code === 0, 'squeaky channel allow', allow.stderr);
   const after = JSON.parse((await av.api('/api/channels')).text).channels.find((c) => c.id === 'telegram');
   check(after.allowUsers.includes('77'), 'the new user is on the allowlist', JSON.stringify(after.allowUsers));
   mark = tg.sent.length;

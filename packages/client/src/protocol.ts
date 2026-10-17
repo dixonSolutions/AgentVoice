@@ -1,5 +1,5 @@
 /**
- * Wire types shared by every Squeakr frontend (PWA, VS Code / Cursor
+ * Wire types shared by every Squeaky frontend (PWA, VS Code / Cursor
  * extension). The bridge (src/) is the source of truth for behaviour; this
  * file mirrors the shapes it sends so two clients can never drift apart on
  * what an approval card or an agent event looks like.

@@ -1,5 +1,5 @@
 /**
- * `squeakr doctor` — the checks that actually stop a bridge from working.
+ * `squeaky doctor` — the checks that actually stop a bridge from working.
  *
  * Every check answers with a remedy, not just a verdict: a doctor that says
  * "better-sqlite3: fail" and stops has moved the problem, not solved it. Order
@@ -66,7 +66,7 @@ export async function doctorCommand(opts: { json: boolean }): Promise<number> {
   }
 
   say('');
-  say(`  ${bold(cyan('squeakr doctor'))}  ${dim(home)}`);
+  say(`  ${bold(cyan('squeaky doctor'))}  ${dim(home)}`);
   say('');
   for (const check of checks) {
     say(`  ${mark(check.status)}  ${bold(check.name.padEnd(16))} ${check.detail}`);
@@ -86,7 +86,7 @@ function checkNode(): Check {
   return {
     name: 'node',
     status: 'fail',
-    detail: `${process.version} — Squeakr needs Node ${MIN_NODE_MAJOR}+`,
+    detail: `${process.version} — Squeaky needs Node ${MIN_NODE_MAJOR}+`,
     fix: 'Install a newer Node and re-run. nvm: nvm install --lts && nvm use --lts',
   };
 }
@@ -111,7 +111,7 @@ function checkConfig(home: string): Check {
       name: 'config.json',
       status: 'fail',
       detail: `missing at ${cfg.path}`,
-      fix: 'Run `squeakr` once — it seeds config.json from the packaged example.',
+      fix: 'Run `squeaky` once — it seeds config.json from the packaged example.',
     };
   }
   if (cfg.error) {
@@ -119,7 +119,7 @@ function checkConfig(home: string): Check {
       name: 'config.json',
       status: 'fail',
       detail: `unparseable — ${cfg.error}`,
-      fix: `Fix the JSON in ${cfg.path}, or delete it and run \`squeakr\` to re-seed.`,
+      fix: `Fix the JSON in ${cfg.path}, or delete it and run \`squeaky\` to re-seed.`,
     };
   }
 
@@ -159,7 +159,7 @@ function checkDataDir(home: string): Check {
     mkdirSync(dir, { recursive: true });
     // accessSync(W_OK) lies on some mounts (and on every container running as
     // root); an actual write is the only answer worth reporting.
-    const probe = join(dir, `.squeakr-doctor-${process.pid}`);
+    const probe = join(dir, `.squeaky-doctor-${process.pid}`);
     writeFileSync(probe, 'ok');
     rmSync(probe, { force: true });
   } catch (err) {
@@ -189,7 +189,7 @@ function checkToken(home: string): Check {
       name: 'APP_TOKEN',
       status: 'warn',
       detail: 'not configured — no client can pair',
-      fix: 'Mint one:  squeakr token --new',
+      fix: 'Mint one:  squeaky token --new',
     };
   }
   // The bridge's own EnvSchema rejects anything shorter; catching it here beats
@@ -199,7 +199,7 @@ function checkToken(home: string): Check {
       name: 'APP_TOKEN',
       status: 'fail',
       detail: `too short (${token.length} chars) — the bridge requires at least 16`,
-      fix: 'Replace it:  squeakr token --new',
+      fix: 'Replace it:  squeaky token --new',
     };
   }
   return {
@@ -266,13 +266,13 @@ async function checkPort(home: string): Promise<Check> {
 
   const probe = await probeHealth(endpoint, 2500);
   if (probe.ok) {
-    return { name: 'port', status: 'ok', detail: `${endpoint.port} held by this Squeakr (${endpoint.url})` };
+    return { name: 'port', status: 'ok', detail: `${endpoint.port} held by this Squeaky (${endpoint.url})` };
   }
   if (probe.foreign) {
     return {
       name: 'port',
       status: 'fail',
-      detail: `${endpoint.port} is in use by something that is not Squeakr — ${probe.detail}`,
+      detail: `${endpoint.port} is in use by something that is not Squeaky — ${probe.detail}`,
       fix: `Find it:  ss -ltnp 'sport = :${endpoint.port}'\nOr move the bridge: settings.runModes.<runMode>.backendPort in config.json.`,
     };
   }
@@ -281,7 +281,7 @@ async function checkPort(home: string): Promise<Check> {
 
 /**
  * Is a background service installed and running? Not installed is only a
- * warning — `squeakr run` in a terminal is a perfectly good way to use it.
+ * warning — `squeaky run` in a terminal is a perfectly good way to use it.
  */
 async function checkService(): Promise<Check[]> {
   const unit = await detectUnit();
@@ -291,7 +291,7 @@ async function checkService(): Promise<Check[]> {
         name: 'service',
         status: 'warn',
         detail: unit.noSystemd ? 'no service manager on this host' : 'none installed — the bridge only runs while a terminal does',
-        ...(unit.noSystemd ? {} : { fix: 'Install one:  squeakr service install --now' }),
+        ...(unit.noSystemd ? {} : { fix: 'Install one:  squeaky service install --now' }),
       },
     ];
   }
@@ -304,7 +304,7 @@ async function checkService(): Promise<Check[]> {
           name: 'service',
           status: 'warn',
           detail: `${describeUnit(unit)} is ${state ? `${state.activeState} (${state.subState})` : 'in an unknown state'}`,
-          fix: 'Start it:  squeakr start   ·   Why it stopped:  squeakr logs -n 50',
+          fix: 'Start it:  squeaky start   ·   Why it stopped:  squeaky logs -n 50',
         },
   ];
 
@@ -353,7 +353,7 @@ async function checkThroughBridge(home: string): Promise<Check[]> {
         name: 'bridge',
         status: 'warn',
         detail: 'not running — agent sign-in and hosting checks skipped',
-        fix: 'Start it (squeakr start, or squeakr run) and re-run doctor.',
+        fix: 'Start it (squeaky start, or squeaky run) and re-run doctor.',
       },
     ];
   }

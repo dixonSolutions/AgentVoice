@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; upgrade-insecure-requests">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Squeakr: voice control for coding agent CLIs</title>
-<meta name="description" content="Squeakr is an open-source, self-hosted bridge that lets you talk to Claude Code, Codex, Cursor or Codewhale from your phone. MIT licensed.">
+<title>Squeaky: voice control for coding agent CLIs</title>
+<meta name="description" content="Squeaky is an open-source, self-hosted bridge that lets you talk to Claude Code, Codex, Cursor or Codewhale from your phone. MIT licensed.">
 <meta name="theme-color" content="#16142c">
-<link rel="canonical" href="https://dixonsolutions.github.io/Squeakr/">
+<link rel="canonical" href="https://dixonsolutions.github.io/Squeaky/">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="icon" href="assets/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="assets/icon-192.png">
@@ -16,14 +16,14 @@
 <script src="assets/site.js" defer></script>
 
 <meta property="og:type" content="website">
-<meta property="og:site_name" content="Squeakr">
-<meta property="og:title" content="Squeakr: voice control for coding agent CLIs">
+<meta property="og:site_name" content="Squeaky">
+<meta property="og:title" content="Squeaky: voice control for coding agent CLIs">
 <meta property="og:description" content="Open-source, self-hosted. Talk to Claude Code, Codex, Cursor or Codewhale from your phone.">
-<meta property="og:url" content="https://dixonsolutions.github.io/Squeakr/">
-<meta property="og:image" content="https://dixonsolutions.github.io/Squeakr/assets/banner.png">
+<meta property="og:url" content="https://dixonsolutions.github.io/Squeaky/">
+<meta property="og:image" content="https://dixonsolutions.github.io/Squeaky/assets/banner.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="360">
-<meta property="og:image:alt" content="Squeakr: voice control for coding agent CLIs. Self-hosted, open source.">
+<meta property="og:image:alt" content="Squeaky: voice control for coding agent CLIs. Self-hosted, open source.">
 <meta name="twitter:card" content="summary_large_image">
 </head>
 <body>
@@ -33,14 +33,14 @@
   <div class="wrap header-inner">
     <a class="brand" href="./">
       <img src="assets/icon.svg" alt="" width="28" height="28">
-      <span>Squeakr</span>
+      <span>Squeaky</span>
     </a>
     <nav aria-label="Primary">
       <ul class="nav-list">
         <li><a href="#demo">Demo</a></li>
         <li><a href="#install">Install</a></li>
-        <li><a href="https://github.com/dixonSolutions/Squeakr/tree/main/docs">Docs</a></li>
-        <li><a href="https://github.com/dixonSolutions/Squeakr">GitHub</a></li>
+        <li><a href="https://github.com/dixonSolutions/Squeaky/tree/main/docs">Docs</a></li>
+        <li><a href="https://github.com/dixonSolutions/Squeaky">GitHub</a></li>
       </ul>
     </nav>
   </div>
@@ -49,16 +49,16 @@
 <main id="main" class="wrap">
 
   <section class="intro" aria-labelledby="title">
-    <h1 id="title">Squeakr</h1>
+    <h1 id="title">Squeaky</h1>
     <p class="lede">An open-source bridge that lets you talk to your coding agent from your phone.</p>
-    <p>Squeakr runs on your own machine next to the agent CLI you already use (Claude Code, Codex,
+    <p>Squeaky runs on your own machine next to the agent CLI you already use (Claude Code, Codex,
       Cursor's <code>cursor-agent</code> or Codewhale). You speak in the web app or the iPhone app, it
       transcribes what you said, the agent works in your repo, and the reply is read back to you.
       Nothing goes through a hosted service: the bridge, the agent and, if you want, the speech models
       all run on your hardware.</p>
     <p class="meta">
-      <a href="https://github.com/dixonSolutions/Squeakr">Source on GitHub</a> ·
-      <a href="https://www.npmjs.com/package/squeakr">npm</a> ·
+      <a href="https://github.com/dixonSolutions/Squeaky">Source on GitHub</a> ·
+      <a href="https://www.npmjs.com/package/squeaky-cli">npm</a> ·
       MIT licensed
     </p>
   </section>
@@ -72,7 +72,7 @@
       </video>
       <figcaption>One real session (the only cut is 7 seconds of waiting): pick a project and model,
         say the wake phrase and a question, Whisper transcribes it locally and Claude Code answers by voice.
-        <a href="https://github.com/dixonSolutions/Squeakr/blob/main/docs/demo/README.md">How it was recorded</a>.</figcaption>
+        <a href="https://github.com/dixonSolutions/Squeaky/blob/main/docs/demo/README.md">How it was recorded</a>.</figcaption>
     </figure>
   </section>
 
@@ -104,49 +104,49 @@
     <div class="tabs" data-tabs>
       <section class="tab-panel" id="tab-npm" aria-labelledby="tab-npm-title">
         <h3 id="tab-npm-title" class="tab-title">npm <span class="tab-sub">Linux, macOS, Windows</span></h3>
-        <div class="code"><pre><code>npm install -g squeakr
-squeakr setup
-squeakr token</code></pre></div>
+        <div class="code"><pre><code>npm install -g squeaky-cli
+squeaky setup
+squeaky token</code></pre></div>
         <p>The install starts the bridge as a background user service on <code>http://127.0.0.1:5089</code>.
-          <code>squeakr setup</code> picks the agent CLI, your projects folder and how your phone reaches the
-          machine; <code>squeakr token</code> prints the pairing token the app asks for. Skip the service with
-          <code>SQUEAKR_NO_SERVICE=1</code>; on Windows run <code>squeakr service install --now</code> once.</p>
+          <code>squeaky setup</code> picks the agent CLI, your projects folder and how your phone reaches the
+          machine; <code>squeaky token</code> prints the pairing token the app asks for. Skip the service with
+          <code>SQUEAKY_NO_SERVICE=1</code>; on Windows run <code>squeaky service install --now</code> once.</p>
       </section>
 
       <section class="tab-panel" id="tab-apt" aria-labelledby="tab-apt-title">
         <h3 id="tab-apt-title" class="tab-title">Debian / Ubuntu <span class="tab-sub">apt</span></h3>
         <div class="code"><pre><code>sudo install -d -m 0755 /etc/apt/keyrings
-sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/squeakr.asc -o /etc/apt/keyrings/squeakr.asc
-sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/apt/squeakr.sources -o /etc/apt/sources.list.d/squeakr.sources
-sudo apt update &amp;&amp; sudo apt install squeakr
-squeakr setup</code></pre></div>
+sudo curl -fsSL https://dixonsolutions.github.io/Squeaky/squeaky.asc -o /etc/apt/keyrings/squeaky.asc
+sudo curl -fsSL https://dixonsolutions.github.io/Squeaky/apt/squeaky.sources -o /etc/apt/sources.list.d/squeaky.sources
+sudo apt update &amp;&amp; sudo apt install squeaky
+squeaky setup</code></pre></div>
         <p>Signed packages for amd64 and arm64; updates come with <code>apt upgrade</code>.
-          <a href="squeakr.asc">Public key</a> · <a href="packages.html">published versions</a>.</p>
+          <a href="squeaky.asc">Public key</a> · <a href="packages.html">published versions</a>.</p>
       </section>
 
       <section class="tab-panel" id="tab-dnf" aria-labelledby="tab-dnf-title">
         <h3 id="tab-dnf-title" class="tab-title">Fedora / RHEL <span class="tab-sub">dnf</span></h3>
-        <div class="code"><pre><code>sudo curl -fsSL https://dixonsolutions.github.io/Squeakr/rpm/squeakr.repo -o /etc/yum.repos.d/squeakr.repo
-sudo dnf install squeakr
-squeakr setup</code></pre></div>
+        <div class="code"><pre><code>sudo curl -fsSL https://dixonsolutions.github.io/Squeaky/rpm/squeaky.repo -o /etc/yum.repos.d/squeaky.repo
+sudo dnf install squeaky
+squeaky setup</code></pre></div>
         <p>Signed packages for x86_64 and aarch64; updates come with <code>dnf upgrade</code>.
-          <a href="rpm/squeakr.repo">Repo file</a> · <a href="packages.html">published versions</a>.</p>
+          <a href="rpm/squeaky.repo">Repo file</a> · <a href="packages.html">published versions</a>.</p>
       </section>
 
       <section class="tab-panel" id="tab-source" aria-labelledby="tab-source-title">
         <h3 id="tab-source-title" class="tab-title">From source <span class="tab-sub">git</span></h3>
-        <div class="code"><pre><code>git clone https://github.com/dixonSolutions/Squeakr.git
-cd Squeakr
+        <div class="code"><pre><code>git clone https://github.com/dixonSolutions/Squeaky.git
+cd Squeaky
 bash scripts/setup.sh</code></pre></div>
-        <p>Builds and then runs the same <code>squeakr setup</code>. On Windows use
+        <p>Builds and then runs the same <code>squeaky setup</code>. On Windows use
           <code>.\scripts\setup.ps1</code> from an elevated PowerShell.</p>
       </section>
     </div>
 
     <h3>Coming from AgentVoice?</h3>
-    <p>Squeakr was called AgentVoice until October 2026. One command moves an npm, .deb/.rpm or source install
+    <p>Squeaky was called AgentVoice until October 2026. One command moves an npm, .deb/.rpm or source install
       over, with its config, keys, pairing token and history:</p>
-    <div class="code"><pre><code>curl -fsSL https://raw.githubusercontent.com/dixonSolutions/Squeakr/main/scripts/migrate-to-squeakr.sh | bash</code></pre></div>
+    <div class="code"><pre><code>curl -fsSL https://raw.githubusercontent.com/dixonSolutions/Squeaky/main/scripts/migrate-to-squeaky.sh | bash</code></pre></div>
   </section>
 
   <section id="usage" aria-labelledby="usage-title">
@@ -154,31 +154,31 @@ bash scripts/setup.sh</code></pre></div>
     <div class="table-scroll" tabindex="0" role="region" aria-label="Commands">
       <table>
         <tbody>
-          <tr><td><code>squeakr status</code></td><td>Install, version, service, port, health and public URL</td></tr>
-          <tr><td><code>squeakr doctor</code></td><td>Checks Node, config, the agent CLI and its sign-in, the port and hosting</td></tr>
-          <tr><td><code>squeakr logs -f</code></td><td>Follow the bridge log</td></tr>
-          <tr><td><code>squeakr pipe --mic</code></td><td>Talk to the agent from the terminal, no phone needed</td></tr>
-          <tr><td><code>squeakr add --this-dir</code></td><td>Register the current directory as a project</td></tr>
-          <tr><td><code>squeakr update</code></td><td>Update the way it was installed</td></tr>
+          <tr><td><code>squeaky status</code></td><td>Install, version, service, port, health and public URL</td></tr>
+          <tr><td><code>squeaky doctor</code></td><td>Checks Node, config, the agent CLI and its sign-in, the port and hosting</td></tr>
+          <tr><td><code>squeaky logs -f</code></td><td>Follow the bridge log</td></tr>
+          <tr><td><code>squeaky pipe --mic</code></td><td>Talk to the agent from the terminal, no phone needed</td></tr>
+          <tr><td><code>squeaky add --this-dir</code></td><td>Register the current directory as a project</td></tr>
+          <tr><td><code>squeaky update</code></td><td>Update the way it was installed</td></tr>
         </tbody>
       </table>
     </div>
-    <p>Everything else: <a href="https://github.com/dixonSolutions/Squeakr/blob/main/docs/35-cli.md">the CLI reference</a>
-      and <a href="https://github.com/dixonSolutions/Squeakr/tree/main/docs">the docs folder</a>.</p>
+    <p>Everything else: <a href="https://github.com/dixonSolutions/Squeaky/blob/main/docs/35-cli.md">the CLI reference</a>
+      and <a href="https://github.com/dixonSolutions/Squeaky/tree/main/docs">the docs folder</a>.</p>
   </section>
 
   <section id="contribute" aria-labelledby="contribute-title">
     <h2 id="contribute-title">Source and issues</h2>
-    <p>Squeakr is developed in the open at
-      <a href="https://github.com/dixonSolutions/Squeakr">github.com/dixonSolutions/Squeakr</a>.
+    <p>Squeaky is developed in the open at
+      <a href="https://github.com/dixonSolutions/Squeaky">github.com/dixonSolutions/Squeaky</a>.
       Bug reports and pull requests are welcome in
-      <a href="https://github.com/dixonSolutions/Squeakr/issues">the issue tracker</a>.</p>
+      <a href="https://github.com/dixonSolutions/Squeaky/issues">the issue tracker</a>.</p>
   </section>
 </main>
 
 <footer class="site-footer">
   <div class="wrap footer-inner">
-    <p><img src="assets/icon.svg" alt="" width="20" height="20"> Squeakr · MIT licensed · no cookies or trackers on this page</p>
+    <p><img src="assets/icon.svg" alt="" width="20" height="20"> Squeaky · MIT licensed · no cookies or trackers on this page</p>
   </div>
 </footer>
 </body>

@@ -9,9 +9,9 @@
  *
  * A new voice/text turn can also resolve pending waits early with
  * `interrupted_by_voice_turn` so the agent sees the utterance as tool output
- * immediately. That interrupt is NOT wired here — it comes from Squeakr's
+ * immediately. That interrupt is NOT wired here — it comes from Squeaky's
  * single interrupt hook (server/pendingWaits.ts), which every blocking
- * Squeakr tool registers with. This registry only owns the user-facing
+ * Squeaky tool registers with. This registry only owns the user-facing
  * request/response lifecycle.
  *
  * Four request types share the same registry:
@@ -156,7 +156,7 @@ export function registerRequest(
   pendingPayloads.set(request_id, payload);
 
   // Register with the shared interrupt hook so a new user turn reaches this
-  // tool the same way it reaches any other blocking Squeakr tool.
+  // tool the same way it reaches any other blocking Squeaky tool.
   const { id: waitId, interrupted } = registerResolveWait({
     tool: REQUEST_TOOL_NAMES[payload.kind],
     meta: payload,

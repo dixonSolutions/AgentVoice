@@ -1,5 +1,5 @@
 /**
- * `squeakr prepare-vosk` — fetch the wake-word model now.
+ * `squeaky prepare-vosk` — fetch the wake-word model now.
  *
  * Vosk's small English model is ~41 MB of weights and is not in the published
  * tarball. The bridge fetches it on its own the first time it boots
@@ -11,7 +11,7 @@
  * download: the two used to write to different directories, so a model this
  * command fetched into the package was invisible to the bridge's check,
  * downloaded again, and lost on the next `npm update`. Both now land in
- * `<SQUEAKR_HOME>/vosk`, which no upgrade touches.
+ * `<SQUEAKY_HOME>/vosk`, which no upgrade touches.
  */
 
 import { existsSync, rmSync, statSync } from 'node:fs';
@@ -32,7 +32,7 @@ export async function prepareVoskCommand(opts: { force?: boolean } = {}): Promis
   const existing = await findPreparedModel();
   if (existing && !opts.force) {
     say(`${green('ok')}  Wake-word model already present — ${existing} (${megabytes(existing)} MB)`);
-    say(dim('  Re-download with: squeakr prepare-vosk --force'));
+    say(dim('  Re-download with: squeaky prepare-vosk --force'));
     return;
   }
   if (opts.force && existsSync(target)) rmSync(target, { force: true });

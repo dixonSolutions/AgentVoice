@@ -1,6 +1,6 @@
 # 09 — Competitive Landscape & Open Source vs Commercial
 
-> Historical snapshot — written before the August 2026 rename to **AgentVoice** (now **Squeakr**, docs/45)
+> Historical snapshot — written before the August 2026 rename to **AgentVoice** (now **Squeaky**, docs/45)
 > (see [`docs/26-rename-agentvoice.md`](./26-rename-agentvoice.md)). Left as
 > "Cursor Voice" throughout to preserve the point-in-time record; the third-party
 > `agent-voice-cli` project mentioned below is unrelated to this repo either way.

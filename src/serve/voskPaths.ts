@@ -1,13 +1,13 @@
 /**
  * Where the Vosk wake-word model lives (docs/38).
  *
- * `squeakr prepare-vosk` used to write the ~41 MB model into
+ * `squeaky prepare-vosk` used to write the ~41 MB model into
  * `<root>/web/dist/vosk`, which is fine for a clone or an npm install and
- * impossible for a distro package: `/usr/lib/squeakr` belongs to root and
+ * impossible for a distro package: `/usr/lib/squeaky` belongs to root and
  * to the package manager, so the command would fail for every .deb user and
  * wake words would simply never work for them.
  *
- * The model therefore has a user-owned home — `~/.squeakr/vosk` — which the
+ * The model therefore has a user-owned home — `~/.squeaky/vosk` — which the
  * bridge serves in preference to the packaged copy. A clone keeps writing into
  * `web/public/` so the file survives the next `ng build`.
  *
@@ -33,8 +33,8 @@ export interface VoskPaths {
   packagedRootReadOnly: boolean;
 }
 
-/** `~/.squeakr` (or a not-yet-migrated `~/.agentvoice`), or `SQUEAKR_HOME` (legacy `AGENTVOICE_HOME`) when the user pointed it elsewhere. */
-export function squeakrHome(): string {
+/** `~/.squeaky` (or a not-yet-migrated `~/.squeakr` / `~/.agentvoice`), or `SQUEAKY_HOME` (legacy `SQUEAKR_HOME` / `AGENTVOICE_HOME`) when the user pointed it elsewhere. */
+export function squeakyHome(): string {
   const fromEnv = brandEnv('HOME');
   return fromEnv ? fromEnv : defaultHomeDir();
 }
@@ -45,7 +45,7 @@ export function voskPaths(
   const install = detectInstallMode();
   const root = opts.root ?? install.root;
   const mode = opts.mode ?? install.mode;
-  const home = opts.home ?? squeakrHome();
+  const home = opts.home ?? squeakyHome();
 
   const userDir = join(home, 'vosk');
   const distDir = join(root, 'web', 'dist', 'vosk');

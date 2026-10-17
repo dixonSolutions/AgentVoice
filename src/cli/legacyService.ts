@@ -1,13 +1,19 @@
 /**
- * The background service as AgentVoice installed it, before the Squeakr rename
- * (docs/45): `agentvoice.service` (+ the `agentvoice-watch`, `-tunnel` and
- * `-caddy` companions scripts/ wrote), the launchd agent
- * `com.agentvoice.bridge`, the Windows service `AgentVoice`.
+ * The background service as an older install left it, under either earlier
+ * name:
  *
- * `squeakr service install` and `squeakr upgrade-from-agentvoice` retire it:
- * stop it, disable it, remove what an install wrote, and carry the companion
- * units over under their new names. Two bridges on one port would otherwise
- * fight over it at every boot.
+ *   Squeakr (0.2.x, docs/45)   `squeakr.service` (+ `squeakr-watch`, `-tunnel`,
+ *                              `-caddy`), `com.squeakr.bridge`, `Squeakr`
+ *   AgentVoice (≤ 0.1.x)       `agentvoice.service` (+ the same companions),
+ *                              `com.agentvoice.bridge`, `AgentVoice`
+ *
+ * The companions are the units scripts/ wrote; the launchd agent and the
+ * Windows service are what `service install` / scripts/setup.ps1 created.
+ *
+ * `squeaky service install` and `squeaky upgrade-from-squeakr` retire them:
+ * stop, disable, remove what an install wrote, and carry the companion units
+ * over under their new names. Two bridges on one port would otherwise fight
+ * over it at every boot.
  */
 
 import { existsSync, lstatSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -15,28 +21,47 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { capture, passthrough, ran } from './exec.js';
 import { dim, green, note, say, yellow } from './out.js';
-import { unitLoaded } from './service.js';
+import { WINDOWS_SERVICE, unitLoaded } from './service.js';
 
-export const LEGACY_SERVICE_UNIT = 'agentvoice.service';
-export const LEGACY_LAUNCHD_LABEL = 'com.agentvoice.bridge';
-export const LEGACY_WINDOWS_SERVICE = 'AgentVoice';
+export interface LegacyGeneration {
+  /** Display name, for messages. */
+  product: string;
+  /** systemd unit (user or system). */
+  unit: string;
+  /** launchd label of the per-user agent. */
+  launchdLabel: string;
+  /** Windows service name. */
+  windowsService: string;
+  /** Companion user units scripts/install-systemd.sh and hosting-setup.sh wrote. */
+  companions: readonly string[];
+}
 
-/** Companion user units scripts/install-systemd.sh and hosting-setup.sh wrote. */
-export const LEGACY_COMPANION_UNITS = [
-  'agentvoice-watch.path',
-  'agentvoice-watch.service',
-  'agentvoice-tunnel.service',
-  'agentvoice-caddy.service',
-] as const;
+function generation(product: string, slug: string): LegacyGeneration {
+  return {
+    product,
+    unit: `${slug}.service`,
+    launchdLabel: `com.${slug}.bridge`,
+    windowsService: product,
+    companions: [`${slug}-watch.path`, `${slug}-watch.service`, `${slug}-tunnel.service`, `${slug}-caddy.service`],
+  };
+}
 
-/** `agentvoice-watch.path` → `squeakr-watch.path`; any unit name, in any text. */
+/** Every earlier name the service had, newest first. */
+export const LEGACY_GENERATIONS: readonly LegacyGeneration[] = [
+  generation('Squeakr', 'squeakr'),
+  generation('AgentVoice', 'agentvoice'),
+];
+
+/** `squeakr-watch.path` / `agentvoice-watch.path` → `squeaky-watch.path`; any unit name, in any text. */
 export function renameLegacyUnits(text: string): string {
-  return text.replace(/\bagentvoice((?:-[a-z]+)?\.(?:service|path))\b/g, 'squeakr$1');
+  return text.replace(/\b(?:squeakr|agentvoice)((?:-[a-z]+)?\.(?:service|path))\b/g, 'squeaky$1');
 }
 
 export type LegacyScope = 'user' | 'system' | 'launchd' | 'windows';
 
 export interface LegacyService {
+  /** Which earlier name it ran under — "Squeakr", "AgentVoice". */
+  product: string;
   scope: LegacyScope;
   unit: string;
   active: boolean;
@@ -51,27 +76,45 @@ function userUnitDir(): string {
   return join(base, 'systemd', 'user');
 }
 
-function legacyPlistPath(): string {
-  return join(homedir(), 'Library', 'LaunchAgents', `${LEGACY_LAUNCHD_LABEL}.plist`);
+function plistPath(label: string): string {
+  return join(homedir(), 'Library', 'LaunchAgents', `${label}.plist`);
 }
 
-function launchdTarget(): string {
-  return `gui/${process.getuid?.() ?? 0}/${LEGACY_LAUNCHD_LABEL}`;
+function launchdTarget(label: string): string {
+  return `gui/${process.getuid?.() ?? 0}/${label}`;
 }
 
-/** The pre-rename service on this machine, or null when there is none. */
-export async function findLegacyService(): Promise<LegacyService | null> {
+/**
+ * Every pre-rename service on this machine, newest name first; empty when
+ * there is none. Usually one — `service install` under Squeakr retired the
+ * AgentVoice one — but a machine that skipped a step can have both.
+ */
+export async function findLegacyServices(): Promise<LegacyService[]> {
+  const found: LegacyService[] = [];
+  for (const gen of LEGACY_GENERATIONS) {
+    const svc = await findGeneration(gen);
+    if (svc === undefined) return found; // no service manager to ask
+    if (svc) found.push(svc);
+  }
+  return found;
+}
+
+/** One generation's service, null when it is not there, undefined when systemctl cannot run. */
+async function findGeneration(gen: LegacyGeneration): Promise<LegacyService | null | undefined> {
+  const { product } = gen;
   if (process.platform === 'darwin') {
-    if (!existsSync(legacyPlistPath())) return null;
-    const loaded = (await capture('launchctl', ['print', launchdTarget()])).code === 0;
-    return { scope: 'launchd', unit: LEGACY_LAUNCHD_LABEL, active: loaded, userFiles: [legacyPlistPath()], companions: [] };
+    const plist = plistPath(gen.launchdLabel);
+    if (!existsSync(plist)) return null;
+    const loaded = (await capture('launchctl', ['print', launchdTarget(gen.launchdLabel)])).code === 0;
+    return { product, scope: 'launchd', unit: gen.launchdLabel, active: loaded, userFiles: [plist], companions: [] };
   }
   if (process.platform === 'win32') {
-    const query = await capture('sc.exe', ['query', LEGACY_WINDOWS_SERVICE]);
+    const query = await capture('sc.exe', ['query', gen.windowsService]);
     if (!ran(query) || query.code !== 0) return null;
     return {
+      product,
       scope: 'windows',
-      unit: LEGACY_WINDOWS_SERVICE,
+      unit: gen.windowsService,
       active: /RUNNING/.test(query.stdout),
       userFiles: [],
       companions: [],
@@ -79,12 +122,13 @@ export async function findLegacyService(): Promise<LegacyService | null> {
   }
 
   const dir = userUnitDir();
-  const companions = LEGACY_COMPANION_UNITS.filter((u) => existsSync(join(dir, u)));
-  const userFiles = [LEGACY_SERVICE_UNIT, ...companions].map((u) => join(dir, u)).filter((p) => existsSync(p));
+  const unit = gen.unit;
+  const companions = gen.companions.filter((u) => existsSync(join(dir, u)));
+  const userFiles = [unit, ...companions].map((u) => join(dir, u)).filter((p) => existsSync(p));
 
   // Enabled from a .deb that has since been replaced: the unit file is gone,
   // the enablement symlink is not.
-  const wants = join(dir, 'default.target.wants', LEGACY_SERVICE_UNIT);
+  const wants = join(dir, 'default.target.wants', unit);
   let dangling = false;
   try {
     dangling = lstatSync(wants).isSymbolicLink();
@@ -92,15 +136,15 @@ export async function findLegacyService(): Promise<LegacyService | null> {
     /* not enabled */
   }
 
-  const user = await unitLoaded(['--user'], LEGACY_SERVICE_UNIT);
-  if (user === null) return null;
+  const user = await unitLoaded(['--user'], unit);
+  if (user === null) return undefined;
   if (user || companions.length || dangling) {
-    const active = (await capture('systemctl', ['--user', 'is-active', LEGACY_SERVICE_UNIT])).stdout.trim() === 'active';
-    return { scope: 'user', unit: LEGACY_SERVICE_UNIT, active, userFiles, companions };
+    const active = (await capture('systemctl', ['--user', 'is-active', unit])).stdout.trim() === 'active';
+    return { product, scope: 'user', unit, active, userFiles, companions };
   }
-  if (!(await unitLoaded([], LEGACY_SERVICE_UNIT))) return null;
-  const active = (await capture('systemctl', ['is-active', LEGACY_SERVICE_UNIT])).stdout.trim() === 'active';
-  return { scope: 'system', unit: LEGACY_SERVICE_UNIT, active, userFiles: [], companions: [] };
+  if (!(await unitLoaded([], unit))) return null;
+  const active = (await capture('systemctl', ['is-active', unit])).stdout.trim() === 'active';
+  return { product, scope: 'system', unit, active, userFiles: [], companions: [] };
 }
 
 /**
@@ -144,7 +188,7 @@ export async function stopLegacyService(svc: LegacyService): Promise<number> {
         ? passthrough('systemctl', ['stop', svc.unit])
         : passthrough('sudo', ['-n', 'systemctl', 'stop', svc.unit]);
     case 'launchd':
-      return passthrough('launchctl', ['bootout', launchdTarget()]);
+      return passthrough('launchctl', ['bootout', launchdTarget(svc.unit)]);
     case 'windows': {
       const code = await passthrough('sc.exe', ['stop', svc.unit]);
       return code === 1062 ? 0 : code; // 1062: not started
@@ -153,15 +197,15 @@ export async function stopLegacyService(svc: LegacyService): Promise<number> {
 }
 
 /**
- * Stop, disable and remove the pre-rename service, and re-create its
- * companion units under their Squeakr names (enabled again if they were).
- * Returns the number of steps that need the user's attention; each is
- * reported with the command to finish it by hand.
+ * Stop, disable and remove a pre-rename service, and re-create its companion
+ * units under their Squeaky names (enabled again if they were). Returns the
+ * number of steps that need the user's attention; each is reported with the
+ * command to finish it by hand.
  */
 export async function retireLegacyService(svc: LegacyService, opts: { dryRun?: boolean } = {}): Promise<number> {
   const dry = Boolean(opts.dryRun);
   if (dry) {
-    say(`  ${yellow('would')}  stop, disable and remove ${svc.unit} ${dim('(the AgentVoice service)')}`);
+    say(`  ${yellow('would')}  stop, disable and remove ${svc.unit} ${dim(`(the ${svc.product} service)`)}`);
     for (const c of svc.companions) say(`  ${yellow('would')}  replace ${c} with ${renameLegacyUnits(c)}`);
     return 0;
   }
@@ -187,8 +231,8 @@ export async function retireLegacyService(svc: LegacyService, opts: { dryRun?: b
       return 0;
     }
     case 'launchd':
-      await capture('launchctl', ['bootout', launchdTarget()]);
-      rmSync(legacyPlistPath(), { force: true });
+      await capture('launchctl', ['bootout', launchdTarget(svc.unit)]);
+      rmSync(plistPath(svc.unit), { force: true });
       say(`  ${green('retired')}  ${svc.unit}`);
       return 0;
     case 'windows': {
@@ -201,7 +245,7 @@ export async function retireLegacyService(svc: LegacyService, opts: { dryRun?: b
       }
       say(`  ${green('retired')}  ${svc.unit} ${dim('(Windows service)')}`);
       note(`  ${yellow('note')}  if it ran as your account, set the new one the same way:`);
-      note(`          nssm set Squeakr ObjectName .\\${process.env['USERNAME'] ?? '<you>'} <your-password>`);
+      note(`          nssm set ${WINDOWS_SERVICE} ObjectName .\\${process.env['USERNAME'] ?? '<you>'} <your-password>`);
       return 0;
     }
   }
@@ -220,6 +264,7 @@ async function retireUserUnits(svc: LegacyService): Promise<number> {
     const wasActive = (await capture('systemctl', ['--user', 'is-active', unit])).stdout.trim() === 'active';
     await capture('systemctl', ['--user', 'disable', unit]);
     await capture('systemctl', ['--user', 'stop', unit]);
+    // Already there when an older generation's companion was carried over first.
     if (!existsSync(to)) {
       try {
         writeFileSync(to, renameLegacyUnits(readFileSync(from, 'utf-8')), 'utf-8');

@@ -88,7 +88,7 @@ jobs:
 
       - uses: actions/upload-artifact@v5
         with:
-          name: squeakr-npm-tarball
+          name: squeaky-npm-tarball
           path: '*.tgz'
           if-no-files-found: error
 
@@ -206,9 +206,9 @@ jobs:
       #   404 Not Found - PUT https://registry.npmjs.org/@ratitisrad%2fagentvoice
       # for exactly that reason.
       #
-      # The Squeakr rename (docs/45) is a new package name, so the first
-      # `squeakr` release is in the same position: it needs NPM_TOKEN again,
-      # and Trusted Publishing has to be configured on `squeakr` afterwards.
+      # The Squeaky rename (docs/46) is a new package name, so the first
+      # `squeaky-cli` release is in the same position: it needs NPM_TOKEN again,
+      # and Trusted Publishing has to be configured on `squeaky-cli` afterwards.
       #
       # It cannot be bootstrapped by hand either. Publishing from a shell hits
       # the account's 2FA, and npm answers with a browser URL whose id it
@@ -272,7 +272,7 @@ jobs:
           version="${{ steps.v.outputs.version }}"
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git tag -a "v${version}" -m "Squeakr v${version}"
+          git tag -a "v${version}" -m "Squeaky v${version}"
           git push origin "v${version}"
 
       - name: Pack for the GitHub Release
@@ -284,36 +284,36 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.v.outputs.version }}
-          name: Squeakr v${{ steps.v.outputs.version }}
+          name: Squeaky v${{ steps.v.outputs.version }}
           body: |
-            Squeakr v${{ steps.v.outputs.version }} is on npm.
+            Squeaky v${{ steps.v.outputs.version }} is on npm.
 
             ```bash
-            npm install -g squeakr                 # starts as a background service
-            squeakr setup                          # agent CLI, projects, hosting
+            npm install -g squeaky-cli             # starts as a background service
+            squeaky setup                          # agent CLI, projects, hosting
             ```
 
             Or install the .deb / .rpm attached below — they bundle Node, so
             they work on distros that still ship Node 18.
 
             ```bash
-            sudo apt install ./squeakr_${{ steps.v.outputs.version }}_amd64.deb
-            sudo dnf install ./squeakr-${{ steps.v.outputs.version }}.x86_64.rpm
+            sudo apt install ./squeaky_${{ steps.v.outputs.version }}_amd64.deb
+            sudo dnf install ./squeaky-${{ steps.v.outputs.version }}.x86_64.rpm
             ```
 
-            Both enable Squeakr as a background user service out of the box.
+            Both enable Squeaky as a background user service out of the box.
 
             For upgrades through `apt upgrade` / `dnf upgrade`, add the
-            signed repository instead: https://dixonsolutions.github.io/Squeakr/
+            signed repository instead: https://dixonsolutions.github.io/Squeaky/
 
-            The wake-word model is not bundled — run `squeakr prepare-vosk`
+            The wake-word model is not bundled — run `squeaky prepare-vosk`
             if you want wake words.
 
-            Coming from AgentVoice? One command moves everything over —
+            Coming from Squeakr or AgentVoice? One command moves everything over —
             config, keys, pairing token, history, service, apt/dnf source:
 
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/dixonSolutions/Squeakr/main/scripts/migrate-to-squeakr.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/dixonSolutions/Squeaky/main/scripts/migrate-to-squeaky.sh | bash
             ```
           files: '*.tgz'
 
@@ -398,7 +398,7 @@ jobs:
       - name: Assert the wake-word model is not packaged
         run: |
           set -eu
-          if [ -f packaging/root/usr/lib/squeakr/web/dist/vosk/model.tar.gz ]; then
+          if [ -f packaging/root/usr/lib/squeaky/web/dist/vosk/model.tar.gz ]; then
             echo "::error::the wake-word model is in the staging tree — packaging/stage.sh should have removed it"
             exit 1
           fi
@@ -432,21 +432,21 @@ jobs:
       - name: Install it and run the CLI
         run: |
           set -eu
-          sudo apt-get install -y ./squeakr_*_${{ matrix.arch }}.deb
-          squeakr --version
+          sudo apt-get install -y ./squeaky_*_${{ matrix.arch }}.deb
+          squeaky --version
           # The install mode has to come back as `system`, or the Serve page
           # would offer an npm update for a package-manager install, and
-          # `squeakr update` would install a second copy the service does
+          # `squeaky update` would install a second copy the service does
           # not run (docs/38). Parsed rather than grepped: the output is
           # pretty-printed JSON.
-          mode="$(squeakr status --json | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).install.mode')"
+          mode="$(squeaky status --json | node -p 'JSON.parse(require("fs").readFileSync(0,"utf8")).install.mode')"
           echo "install mode: ${mode}"
           [ "${mode}" = system ]
-          sudo apt-get remove -y squeakr
+          sudo apt-get remove -y squeaky
 
       - uses: actions/upload-artifact@v5
         with:
-          name: squeakr-packages-${{ matrix.arch }}
+          name: squeaky-packages-${{ matrix.arch }}
           path: |
             *.deb
             *.rpm

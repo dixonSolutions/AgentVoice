@@ -10,7 +10,7 @@ import { detectInstallMode } from '../serve/installMode.js';
  *
  * The bridge home wins, so anyone can override a prompt by dropping their own
  * copy next to config.json. The install root is the fallback and is what makes
- * this work at all for an npm or .deb install: the home is `~/.squeakr`,
+ * this work at all for an npm or .deb install: the home is `~/.squeaky`,
  * the prompts ship with the package, and the two are different directories.
  *
  * Resolving only from the config directory meant every MCP `initialize` on a
@@ -25,7 +25,7 @@ function promptRoots(): string[] {
   return roots;
 }
 
-export function readSqueakrPrompt(relativePath: string): string {
+export function readSqueakyPrompt(relativePath: string): string {
   const tried: string[] = [];
   for (const root of promptRoots()) {
     const candidate = join(root, relativePath);
@@ -33,7 +33,7 @@ export function readSqueakrPrompt(relativePath: string): string {
     if (existsSync(candidate)) return readFileSync(candidate, 'utf-8').trim();
   }
   throw new Error(
-    `Squeakr prompt "${relativePath}" not found. Looked in:\n  ${tried.join('\n  ')}\n` +
+    `Squeaky prompt "${relativePath}" not found. Looked in:\n  ${tried.join('\n  ')}\n` +
       'A packaged install ships these under its install root; a clone has them in prompts/.',
   );
 }
@@ -56,11 +56,11 @@ function applyVoicePromptVars(text: string): string {
 }
 
 /** Server `instructions` returned on MCP initialize. */
-export function squeakrMcpInstructions(): string {
-  return applyVoicePromptVars(readSqueakrPrompt('prompts/squeakr/mcp-instructions.md'));
+export function squeakyMcpInstructions(): string {
+  return applyVoicePromptVars(readSqueakyPrompt('prompts/squeaky/mcp-instructions.md'));
 }
 
-/** The Squeakr system prompt — boot prompt body and CLI rule-file body. */
-export function squeakrRuleBody(): string {
-  return applyVoicePromptVars(readSqueakrPrompt('prompts/squeakr/system.md'));
+/** The Squeaky system prompt — boot prompt body and CLI rule-file body. */
+export function squeakyRuleBody(): string {
+  return applyVoicePromptVars(readSqueakyPrompt('prompts/squeaky/system.md'));
 }

@@ -12,9 +12,9 @@ each piece, and hands every transcript to the agent the moment it lands. It is
 also the first way to talk to the agent from something that is not the phone:
 
 ```bash
-arecord -f S16_LE -r 16000 -c 1 -t raw | squeakr pipe   # anything that emits PCM
-squeakr pipe --mic                                    # the default microphone
-squeakr pipe --file question.wav                      # a recording
+arecord -f S16_LE -r 16000 -c 1 -t raw | squeaky pipe   # anything that emits PCM
+squeaky pipe --mic                                    # the default microphone
+squeaky pipe --file question.wav                      # a recording
 ```
 
 ## Turns or stream?
@@ -26,7 +26,7 @@ squeakr pipe --file question.wav                      # a recording
 | What the agent receives | one whole request | pieces, as you speak them |
 | Latency to first word | after you stop talking | after your first pause |
 | Where STT runs | phone (browser) or bridge | bridge only |
-| Works from a terminal | no | yes — `squeakr pipe` |
+| Works from a terminal | no | yes — `squeaky pipe` |
 
 Turns are recommended because the agent always acts on a complete request. In
 stream mode a thought spoken with a pause in the middle arrives as two turns,
@@ -47,15 +47,15 @@ progress is cut at that moment. Mute stops the stream; Speak just unmutes.
 Hanging up sends `end` and waits for `drained`, so a phrase spoken right before
 the orb is tapped is still transcribed and delivered rather than dropped.
 
-**Terminal:** `squeakr pipe` reads stdin, `--mic`, or `--file`
+**Terminal:** `squeaky pipe` reads stdin, `--mic`, or `--file`
 (`npm run cli -- pipe` in a clone). It finds the bridge the same way
-`squeakr status` does — the home from `$SQUEAKR_HOME`, the current
-directory or `~/.squeakr`, then whichever configured port answers — and
+`squeaky status` does — the home from `$SQUEAKY_HOME`, the current
+directory or `~/.squeaky`, then whichever configured port answers — and
 authenticates with the `APP_TOKEN` in that home's `.env`. `--url` / `--token`
 point it at a remote bridge:
 
 ```bash
-squeakr pipe --mic --url https://box.tailnet.ts.net --token "$APP_TOKEN"
+squeaky pipe --mic --url https://box.tailnet.ts.net --token "$APP_TOKEN"
 ```
 
 The agent works in the bridge's **active project** — what the phone's project
@@ -65,7 +65,7 @@ registered name or alias) before the first segment, exactly like
 chosen answers "No project is selected":
 
 ```bash
-squeakr pipe --mic --project my-app
+squeaky pipe --mic --project my-app
 ```
 
 WAV input of any rate/channel count is converted on the client (16-bit PCM or
@@ -74,7 +74,7 @@ WAV input of any rate/channel count is converted on the client (16-bit PCM or
 first recorder it finds: `pw-record`, `parec`, `arecord`, `sox`, `ffmpeg`.
 
 The conversation goes to stdout (`you ▸ …` / `agent ◂ …`), diagnostics to
-stderr, so `squeakr pipe --mic > session.txt` keeps just the dialogue.
+stderr, so `squeaky pipe --mic > session.txt` keeps just the dialogue.
 `--json` prints every bridge event as NDJSON instead. The pipe registers as a
 voice client **and as a listener** (presence kind `audio_pipe`, docs/36), so the
 agent's `speak()` / `next_voice_turn()` work with no phone connected and the
@@ -129,7 +129,7 @@ the agent that such a turn may be half a thought: if it reads as unfinished,
 call `next_voice_turn(timeout_ms=2500)` to collect the rest before acting;
 otherwise handle it normally. Turn-based input never carries these fields.
 
-A segment that arrives while the agent is inside another Squeakr tool is
+A segment that arrives while the agent is inside another Squeaky tool is
 delivered through that tool's result instead (docs/16 § 8.4) — with the same
 three fields, so a pause-cut fragment never reads as a finished request.
 
@@ -146,7 +146,7 @@ three fields, so a pause-cut fragment never reads as a finished request.
 | `stream.speechThreshold` | `0.012` | RMS (0–1 of full scale) that counts as speech |
 | `stream.preRollMs` | `300` | audio kept from before the first loud frame |
 
-`squeakr pipe --silence / --max-segment / --threshold` override these for
+`squeaky pipe --silence / --max-segment / --threshold` override these for
 one pipe. Raise the threshold if background noise keeps segments open; lower it
 if quiet speech is missed.
 
@@ -187,7 +187,7 @@ The stream is refused (fatal error, socket closed) unless the workflow is
 - Unit: `src/voice/audioStream/*.test.ts`, `src/mcp/server/turnQueue.test.ts`,
   `src/cli/audioInput.test.ts` (`npm test`).
 - Unit: `src/state/presence.test.ts` covers the `audio_pipe` listener.
-- End to end: `node scripts/live-pipe-test.mjs` drives `squeakr run / pipe /
+- End to end: `node scripts/live-pipe-test.mjs` drives `squeaky run / pipe /
   logs` against a stand-in Whisper server and the stub agent, and checks
   delivery, replies, transcripts and log files. `scripts/live-pwa-stream-test.mjs`
   does the same through the real PWA in headless Chromium with a fake

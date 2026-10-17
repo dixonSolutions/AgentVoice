@@ -13,7 +13,7 @@ export function packageRoot(): string | null {
     const pkg = join(dir, 'package.json');
     if (existsSync(pkg)) {
       try {
-        if ((JSON.parse(readFileSync(pkg, 'utf8')) as { name?: string }).name === 'squeakr') {
+        if ((JSON.parse(readFileSync(pkg, 'utf8')) as { name?: string }).name === 'squeaky-cli') {
           cached = dir;
           return dir;
         }
@@ -27,7 +27,7 @@ export function packageRoot(): string | null {
   return null;
 }
 
-/** The Squeakr app icon (512 px PNG) — the built web client's, else the source's. */
+/** The Squeaky app icon (512 px PNG) — the built web client's, else the source's. */
 export function appIconPath(): string | null {
   const root = packageRoot();
   if (!root) return null;

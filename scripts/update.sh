@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Squeakr — THE update script.
+# Squeaky — THE update script.
 #
 # This is the single, centralized update path. The Serve config page calls it
 # for both of its buttons; run it by hand and you get exactly the same thing.
@@ -154,9 +154,20 @@ if [[ -d "${GIT_DIR_ABS}/rebase-merge" || -d "${GIT_DIR_ABS}/rebase-apply" ]]; t
   fail preflight "a rebase is already in progress — resolve it (git rebase --abort) and re-run"
 fi
 
+# The service to restart: squeaky's, or on an install from before a rename
+# that `squeaky upgrade-from-squeakr` has not moved over yet, squeakr's or
+# agentvoice's (docs/45, docs/46).
+UNIT='squeaky.service'
+for name in squeaky squeakr agentvoice; do
+  if [ "$(systemctl --user show -p LoadState --value "${name}.service" 2>/dev/null)" = loaded ] ||
+     [ "$(systemctl show -p LoadState --value "${name}.service" 2>/dev/null)" = loaded ]; then
+    UNIT="${name}.service"; break
+  fi
+done
+
 # Prefer the Node the service actually runs, so the build matches the runtime.
 SERVICE_NODE=""
-for unit in "${HOME}/.config/systemd/user/squeakr.service" /etc/systemd/system/squeakr.service; do
+for unit in "${HOME}/.config/systemd/user/${UNIT}" "/etc/systemd/system/${UNIT}"; do
   [[ -f "$unit" ]] || continue
   SERVICE_NODE="$(grep -oP '(?<=ExecStart=)\S+node' "$unit" 2>/dev/null || true)"
   [[ -n "$SERVICE_NODE" ]] && break
@@ -261,7 +272,7 @@ if [[ "$DRY_RUN" == true ]]; then
   [[ "$STASH_MODE" == true && "$DIRTY" == true ]] && emit git_stash skip "dry run — would stash ${LOCAL_COUNT} local change(s)"
   emit deps skip "dry run — would run npm ci"
   emit build skip "dry run — would run npm run build"
-  emit restart skip "dry run — would restart squeakr.service"
+  emit restart skip "dry run — would restart ${UNIT}"
   emit finish ok "Dry run complete — ${BEHIND} commit(s) behind ${UPSTREAM_REF}"
   trap - EXIT
   exit 0
@@ -271,7 +282,7 @@ fi
 STASHED=false
 if [[ "$STASH_MODE" == true && "$DIRTY" == true ]]; then
   if git -C "$PROJECT_DIR" stash push --include-untracked \
-       -m "squeakr update ${RUN_ID}" >/dev/null 2>&1; then
+       -m "squeaky update ${RUN_ID}" >/dev/null 2>&1; then
     STASHED=true
     emit git_stash ok "stashed ${LOCAL_COUNT} local change(s)"
   else
@@ -329,7 +340,6 @@ fi
 if [[ "$DO_RESTART" != true ]]; then
   emit restart skip "--no-restart"
 else
-  UNIT='squeakr.service'
   if [ "$(systemctl --user show -p LoadState --value "$UNIT" 2>/dev/null)" = loaded ]; then
     systemctl --user restart "$UNIT" || fail restart "systemctl --user restart ${UNIT} failed"
     sleep 1
@@ -400,5 +410,5 @@ NEW_SUBJECT="$(git -C "$PROJECT_DIR" log -1 --pretty=%s)"
 emit finish ok "Updated to ${UPSTREAM_REF} @ ${NEW_SHA:0:8} — ${NEW_SUBJECT}"
 trap - EXIT
 
-echo -e "\n${GRN}${BLD}Update complete.${NC}  ${BLU}Logs:${NC} journalctl --user -u squeakr -f"
+echo -e "\n${GRN}${BLD}Update complete.${NC}  ${BLU}Logs:${NC} journalctl --user -u ${UNIT%.service} -f"
 exit 0

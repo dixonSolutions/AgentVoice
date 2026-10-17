@@ -9,7 +9,7 @@ import { discoverProjectPaths } from './projectDiscovery.js';
 const cleanup: string[] = [];
 
 function fixture(): string {
-  const root = mkdtempSync(join(tmpdir(), 'squeakr-discovery-'));
+  const root = mkdtempSync(join(tmpdir(), 'squeaky-discovery-'));
   cleanup.push(root);
   return root;
 }

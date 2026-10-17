@@ -3,7 +3,7 @@
   "version": 1,
   "newProjectRoot": "projects",
   "projects": {
-    "squeakr-web": {
+    "squeaky-web": {
       "projectType": "application",
       "root": "web",
       "sourceRoot": "web/src",
@@ -80,10 +80,10 @@
           "builder": "@angular/build:dev-server",
           "configurations": {
             "production": {
-              "buildTarget": "squeakr-web:build:production"
+              "buildTarget": "squeaky-web:build:production"
             },
             "development": {
-              "buildTarget": "squeakr-web:build:development"
+              "buildTarget": "squeaky-web:build:development"
             }
           },
           "options": {

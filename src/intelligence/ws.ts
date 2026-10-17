@@ -2,7 +2,7 @@
  * WebSocket handler for cascade voice workflows (/ws).
  *
  * Supports:
- *   agent_native   — STT → VoiceTurnQueue → squeakr MCP (speak/done)
+ *   agent_native   — STT → VoiceTurnQueue → squeaky MCP (speak/done)
  *   llm_intelligence — STT → Bedrock Claude orchestrator
  *
  * Phone → Bridge:

@@ -1,5 +1,5 @@
 /**
- * Microphone capture and noise filtering for Squeakr PWA.
+ * Microphone capture and noise filtering for Squeaky PWA.
  *
  * - getUserMedia with browser DSP (noise suppression, echo cancellation, AGC)
  * - Web Audio high-pass filter — cuts leaf-blower / HVAC low-frequency rumble

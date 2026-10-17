@@ -95,7 +95,7 @@ export class SessionLog {
   private header(reason: RotateReason, previous: string | null): string {
     const at = new Date();
     const lines = [
-      '# Squeakr bridge log',
+      '# Squeaky bridge log',
       `# opened ${formatTimestamp(at.getTime())} (UTC${utcOffset(at)}) — ${REASON_TEXT[reason]}`,
       `# session started ${formatTimestamp(this.startedAt.getTime())}`,
     ];

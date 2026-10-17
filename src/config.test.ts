@@ -16,7 +16,7 @@ type Raw = { settings: { voice: { tts: Record<string, unknown> }; workflow: Reco
 const example = (): Raw =>
   JSON.parse(readFileSync(new URL('../config.example.json', import.meta.url), 'utf8')) as Raw;
 
-test('the agent-speech flag carries over from both pre-Squeakr names', () => {
+test('the agent-speech flag carries over from both pre-Squeaky names', () => {
   const tts = (flags: Record<string, unknown>) => {
     const raw = example();
     delete raw.settings.voice.tts['agentSpeechEnabled'];
@@ -47,13 +47,13 @@ test('a pre-rename speech server keeps its container and model volume', () => {
     modelVolume: 'agentvoice-speech-models',
   });
   // Names the user chose (or the new defaults, once saved) are left alone.
-  assert.deepEqual(server({ containerName: 'squeakr-speech', modelVolume: 'mine' }), {
-    containerName: 'squeakr-speech',
+  assert.deepEqual(server({ containerName: 'squeaky-speech', modelVolume: 'mine' }), {
+    containerName: 'squeaky-speech',
     modelVolume: 'mine',
   });
 });
 
-test('the untouched "cursor listen" default moves to "hey squeaker"; a chosen phrase stays', () => {
+test('the untouched "cursor listen" and "hey squeaker" defaults move to "hey squeaky"; a chosen phrase stays', () => {
   const start = (phrase: string) => {
     const raw = JSON.parse(readFileSync(new URL('../config.example.json', import.meta.url), 'utf8')) as {
       settings: { voice: { wakeWords: { start: string } } };
@@ -62,7 +62,8 @@ test('the untouched "cursor listen" default moves to "hey squeaker"; a chosen ph
     migrateRawConfig(raw);
     return raw.settings.voice.wakeWords.start;
   };
-  assert.equal(start('cursor listen'), 'hey squeaker');
-  assert.equal(start('Cursor Listen '), 'hey squeaker');
+  assert.equal(start('cursor listen'), 'hey squeaky');
+  assert.equal(start('Cursor Listen '), 'hey squeaky');
+  assert.equal(start('hey squeaker'), 'hey squeaky');
   assert.equal(start('computer listen'), 'computer listen');
 });

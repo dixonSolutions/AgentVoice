@@ -3,12 +3,16 @@
 # Long-running — intended for systemd user service (Restart=always).
 set -euo pipefail
 
-DEFAULT_TUNNEL_ENV="${HOME}/.config/squeakr/tunnel.env"
-[[ ! -f "${DEFAULT_TUNNEL_ENV}" && -f "${HOME}/.config/agentvoice/tunnel.env" ]] && DEFAULT_TUNNEL_ENV="${HOME}/.config/agentvoice/tunnel.env"
-CONFIG="${SQUEAKR_TUNNEL_ENV:-${AGENTVOICE_TUNNEL_ENV:-${CURSOR_VOICE_TUNNEL_ENV:-${DEFAULT_TUNNEL_ENV}}}}"
+DEFAULT_TUNNEL_ENV="${HOME}/.config/squeaky/tunnel.env"
+# Pre-rename locations (docs/45, docs/46), newest first.
+for old in squeakr agentvoice; do
+  [[ -f "${DEFAULT_TUNNEL_ENV}" ]] && break
+  [[ -f "${HOME}/.config/${old}/tunnel.env" ]] && DEFAULT_TUNNEL_ENV="${HOME}/.config/${old}/tunnel.env"
+done
+CONFIG="${SQUEAKY_TUNNEL_ENV:-${SQUEAKR_TUNNEL_ENV:-${AGENTVOICE_TUNNEL_ENV:-${CURSOR_VOICE_TUNNEL_ENV:-${DEFAULT_TUNNEL_ENV}}}}}"
 
 if [[ ! -f "$CONFIG" ]]; then
-  echo "squeakr tunnel: missing config ${CONFIG}" >&2
+  echo "squeaky tunnel: missing config ${CONFIG}" >&2
   echo "Run: bash scripts/install-remote-tunnel.sh" >&2
   exit 1
 fi

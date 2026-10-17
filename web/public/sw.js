@@ -1,5 +1,5 @@
 /**
- * Squeakr — Service Worker
+ * Squeaky — Service Worker
  *
  * Minimal PWA service worker. Caches the app shell so the UI loads
  * instantly even on a slow Tailscale connection. API calls are always
@@ -16,18 +16,20 @@
  * MODEL_CACHE_NAME when the bundled model assets themselves change.
  */
 
-const CACHE_NAME = 'squeakr-v6';
-const VOSK_CACHE_NAME = 'squeakr-vosk-v2';
-const MODEL_CACHE_NAME = 'squeakr-models-v1';
+const CACHE_NAME = 'squeaky-v6';
+const VOSK_CACHE_NAME = 'squeaky-vosk-v2';
+const MODEL_CACHE_NAME = 'squeaky-models-v1';
 const VOSK_MODEL_PATH = '/vosk/model.tar.gz';
 const SILERO_ASSET_PREFIX = '/silero-vad/';
 
 /**
- * Model caches under their AgentVoice names (docs/45). Their contents are
+ * Model caches under their Squeakr and AgentVoice names (docs/46, docs/45). Their contents are
  * carried into the new caches before the cleanup below deletes them, so the
  * rename does not re-download the 41 MB wake-word model on every device.
  */
 const PRE_RENAME_MODEL_CACHES = [
+  ['squeakr-vosk-v2', VOSK_CACHE_NAME],
+  ['squeakr-models-v1', MODEL_CACHE_NAME],
   ['agentvoice-vosk-v2', VOSK_CACHE_NAME],
   ['agentvoice-models-v1', MODEL_CACHE_NAME],
 ];
@@ -159,9 +161,9 @@ self.addEventListener('push', (event) => {
     payload = { body: event.data.text() };
   }
   const p = payload;
-  const title = p.title || 'Squeakr';
+  const title = p.title || 'Squeaky';
   const body = p.body || 'New update from Cursor';
-  const tag = p.tag || 'squeakr';
+  const tag = p.tag || 'squeaky';
   const url = p.url || '/?tab=voice';
 
   event.waitUntil(

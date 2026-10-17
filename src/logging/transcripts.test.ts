@@ -18,7 +18,7 @@ const roots: string[] = [];
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 function configure(graceMs = 40): string {
-  const dir = mkdtempSync(join(tmpdir(), 'squeakr-transcripts-'));
+  const dir = mkdtempSync(join(tmpdir(), 'squeaky-transcripts-'));
   roots.push(dir);
   configureTranscripts({
     enabled: true,
@@ -54,7 +54,7 @@ describe('voice transcripts', () => {
     assert.equal(currentTranscriptPath(), null);
 
     const text = readFileSync(path, 'utf-8');
-    assert.match(text, /^# Squeakr voice transcript\n# opened .* — session start\n# agent=Stub · workflow=agent_native · input=stream\n/);
+    assert.match(text, /^# Squeaky voice transcript\n# opened .* — session start\n# agent=Stub · workflow=agent_native · input=stream\n/);
     assert.match(text, /\[\d\d:\d\d:\d\d\] EVENT: phone connected\n/);
     assert.match(text, /\] USER \(phone\): fix the login redirect\n/);
     assert.match(text, /\] AGENT: Looking at the auth middleware now\.\n/);

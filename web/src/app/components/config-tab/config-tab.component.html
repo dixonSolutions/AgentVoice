@@ -201,7 +201,7 @@
               <label for="cfg-stream-threshold">Speech level</label>
             </p-iftalabel>
             <p-message severity="secondary" variant="simple"
-              text="Raise the speech level if background noise keeps segments open; lower it if quiet speech is missed. The same settings apply to `squeakr pipe` from a terminal." />
+              text="Raise the speech level if background noise keeps segments open; lower it if quiet speech is missed. The same settings apply to `squeaky pipe` from a terminal." />
           }
           <p-button label="Save input mode" icon="pi pi-check"
             [loading]="savingInput" [disabled]="!isBridgeConnected()"
@@ -622,7 +622,7 @@
               means the copy is wrong the day a fifth arrives, so it does not.
             -->
             <p-message severity="secondary" variant="simple"
-              text="The coding agent the bridge spawns for voice and worker jobs. Every client registers the same squeakr MCP server." />
+              text="The coding agent the bridge spawns for voice and worker jobs. Every client registers the same squeaky MCP server." />
             <div class="cv-client-list">
               @for (client of agentClientData.clients; track client.id) {
                 <button
@@ -887,7 +887,7 @@
                   <p-iftalabel>
                     <input pInputText id="cfg-serve-repo"
                       [(ngModel)]="serveRepoDir"
-                      placeholder="/path/to/squeakr"
+                      placeholder="/path/to/squeaky"
                       [disabled]="!canUseApi()" />
                     <label for="cfg-serve-repo">Repository directory (optional)</label>
                   </p-iftalabel>
@@ -971,7 +971,7 @@
                       severity="secondary" [outlined]="true"
                       (onClick)="copyUpdateCommand()" />
                     <p-message severity="secondary" variant="simple"
-                      text="After upgrading, restart it as yourself: systemctl --user restart squeakr" />
+                      text="After upgrading, restart it as yourself: systemctl --user restart squeaky" />
                   } @else {
                     <p-message severity="warn" variant="simple"
                       [text]="'Cannot update automatically — ' + serveInstallReason + '. Reinstall it the way you want to maintain it: npm, a system package, or a git clone.'" />
@@ -1188,7 +1188,7 @@
                     <span class="cv-cfg-muted">{{ journalUnit }}</span>
                   </div>
                   <p-message severity="secondary" variant="simple"
-                    text="Follows journalctl -u squeakr.service (user unit first, then system). Argv is fixed — no shell input." />
+                    text="Follows journalctl -u squeaky.service (user unit first, then system). Argv is fixed — no shell input." />
                   @if (journalError) {
                     <p-message severity="warn" variant="simple" [text]="journalError" />
                   }

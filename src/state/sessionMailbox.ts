@@ -7,15 +7,15 @@
  * stdin at all, and a `-p <prompt>` run would not read new input mid-run even
  * if it did. Every call returned `delivered: false`.
  *
- * A mailbox works with the grain of what actually exists: the squeakr MCP
+ * A mailbox works with the grain of what actually exists: the squeaky MCP
  * server is registered for all four CLIs, every worker calls its tools, and a
  * tool result can carry anything. Messages queue here and ride out on the next
- * Squeakr tool result the target makes — or on an explicit
+ * Squeaky tool result the target makes — or on an explicit
  * `check_messages()` call. Delivery is at the next tool call, which is honest
  * and bounded, rather than "best-effort" and never.
  *
  * Sessions started outside the bridge only receive mailbox messages if their
- * squeakr rule tells them to call `check_messages()`, and only when the
+ * squeaky rule tells them to call `check_messages()`, and only when the
  * project has opted in — see docs/37 §4.
  */
 

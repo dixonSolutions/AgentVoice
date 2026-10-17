@@ -2,10 +2,10 @@
  * The background service behind `start`, `stop`, `restart`, `status` and `logs`
  * — whichever service manager this platform has:
  *
- *   Linux    a systemd unit, `squeakr.service` (user unit first, then system)
- *   macOS    a launchd agent, `com.squeakr.bridge`
- *   Windows  a Windows service, `Squeakr` (NSSM-wrapped, as scripts/setup.ps1
- *            and `squeakr service install` create it)
+ *   Linux    a systemd unit, `squeaky.service` (user unit first, then system)
+ *   macOS    a launchd agent, `com.squeaky.bridge`
+ *   Windows  a Windows service, `Squeaky` (NSSM-wrapped, as scripts/setup.ps1
+ *            and `squeaky service install` create it)
  *
  * systemd detection mirrors scripts/update.sh and src/serve/index.ts exactly,
  * and that order is load-bearing: `systemctl --user cat` first, then the system
@@ -25,15 +25,16 @@ import { join } from 'node:path';
 import { capture, passthrough, ran } from './exec.js';
 
 /**
- * Fixed unit name — never interpolated from user input. Before the Squeakr
- * rename these were agentvoice.service, com.agentvoice.bridge and AgentVoice;
- * `service install` retires those (cli/legacyService.ts, docs/45).
+ * Fixed unit name — never interpolated from user input. Before the Squeaky
+ * rename these were squeakr.service, com.squeakr.bridge and Squeakr, and
+ * before that agentvoice.service, com.agentvoice.bridge and AgentVoice;
+ * `service install` retires those (cli/legacyService.ts, docs/45, docs/46).
  */
-export const SERVICE_UNIT = 'squeakr.service';
+export const SERVICE_UNIT = 'squeaky.service';
 /** launchd label for the per-user agent on macOS. */
-export const LAUNCHD_LABEL = 'com.squeakr.bridge';
+export const LAUNCHD_LABEL = 'com.squeaky.bridge';
 /** Windows service name — the one scripts/setup.ps1 has always installed. */
-export const WINDOWS_SERVICE = 'Squeakr';
+export const WINDOWS_SERVICE = 'Squeaky';
 
 export type UnitScope = 'user' | 'system' | 'launchd' | 'windows' | 'none';
 
@@ -48,7 +49,7 @@ export interface UnitInfo {
   noSystemd: boolean;
 }
 
-/** `~/Library/LaunchAgents/com.squeakr.bridge.plist`. */
+/** `~/Library/LaunchAgents/com.squeaky.bridge.plist`. */
 export function launchdPlistPath(): string {
   return join(homedir(), 'Library', 'LaunchAgents', `${LAUNCHD_LABEL}.plist`);
 }
@@ -325,7 +326,7 @@ export function noUnitAdvice(info: UnitInfo, installRoot: string): string {
   if (info.noSystemd) {
     return (
       'no service manager is available on this host, so there is no service to manage.\n' +
-      '  Run the bridge in the foreground instead:  squeakr run'
+      '  Run the bridge in the foreground instead:  squeaky run'
     );
   }
 
@@ -337,7 +338,7 @@ export function noUnitAdvice(info: UnitInfo, installRoot: string): string {
         : `${info.unit} (neither a user nor a system unit)`;
 
   /**
-   * `squeakr service install` works from whatever install is running, so it
+   * `squeaky service install` works from whatever install is running, so it
    * is the answer for everyone. The shell scripts only exist in a clone, and
    * pointing an npm or .deb user at a path that is not there was worse than
    * saying nothing (docs/38).
@@ -354,9 +355,9 @@ export function noUnitAdvice(info: UnitInfo, installRoot: string): string {
 
   return (
     `no ${kind} is installed.\n` +
-    '  Install one:  squeakr service install --now' +
+    '  Install one:  squeaky service install --now' +
     `${extra}\n` +
-    '  Or run the bridge in the foreground:  squeakr run'
+    '  Or run the bridge in the foreground:  squeaky run'
   );
 }
 

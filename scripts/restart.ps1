@@ -1,11 +1,11 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Squeakr — restart script for Windows
+    Squeaky — restart script for Windows
 
 .DESCRIPTION
     1. Builds the project (backend + PWA)
-    2. Restarts the Squeakr Windows service
+    2. Restarts the Squeaky Windows service
     3. Runs a health check against /healthz
     4. Optionally streams the log
 
@@ -75,10 +75,10 @@ function Get-NpmBin {
     return 'npm'
 }
 
-Write-Host "Squeakr — restart (Windows)" -ForegroundColor Magenta
+Write-Host "Squeaky — restart (Windows)" -ForegroundColor Magenta
 Write-Host "  Project: $ProjectDir"
 
-$ServiceName = 'Squeakr'
+$ServiceName = 'Squeaky'
 $EnvFile     = Join-Path $ProjectDir '.env'
 $LogFile     = Join-Path $ProjectDir 'logs\bridge.log'
 $NodeBin     = Get-ServiceNodeBin -ProjectRoot $ProjectDir -SvcName $ServiceName

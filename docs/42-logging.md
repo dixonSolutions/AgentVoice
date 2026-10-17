@@ -3,13 +3,13 @@
 > Added: September 2026
 
 The bridge used to log only to stdout — journald under systemd, the terminal
-otherwise — so `squeakr run`, an npm install or a manual start kept no
+otherwise — so `squeaky run`, an npm install or a manual start kept no
 history at all, and nothing but the turn database recorded what was said in a
 voice session. Every run now writes its own files into its home (docs/35),
 however it was started:
 
 ```
-<home>/logs/                            settings.logging.dir or $SQUEAKR_LOG_DIR
+<home>/logs/                            settings.logging.dir or $SQUEAKY_LOG_DIR
 └── serve/                              run profile (serve = host, test = npm run dev)
     ├── bridge/
     │   ├── 2026-09-23_14-05-12.log     this run
@@ -21,8 +21,8 @@ however it was started:
     └── console/                        raw stdout of a nohup'd bridge (scripts/start.sh)
 ```
 
-Terminal and journald output is unchanged, and `squeakr logs` /
-`journalctl --user -u squeakr` still read the journal for a systemd install.
+Terminal and journald output is unchanged, and `squeaky logs` /
+`journalctl --user -u squeaky` still read the journal for a systemd install.
 
 ## Bridge session logs
 
@@ -32,11 +32,11 @@ crash**, and its last lines are the ones you want (writes are synchronous, so
 nothing is lost in a buffer on `process.exit`).
 
 ```
-# Squeakr bridge log
+# Squeaky bridge log
 # opened 2026-09-23 20:23:10.759 (UTC+10:00) — session start
 # session started 2026-09-23 20:23:10.758
-# version=0.1.0 (4386b85) · node=v26.9.0 · pid=544294 · runMode=serve · agent=claude-code · workflow=agent_native · cwd=/opt/squeakr
-2026-09-23 20:23:10.757 INFO  [config] config loaded configPath=/opt/squeakr/config.json projectCount=1 runMode=serve
+# version=0.1.0 (4386b85) · node=v26.9.0 · pid=544294 · runMode=serve · agent=claude-code · workflow=agent_native · cwd=/opt/squeaky
+2026-09-23 20:23:10.757 INFO  [config] config loaded configPath=/opt/squeaky/config.json projectCount=1 runMode=serve
 2026-09-23 20:23:11.404 INFO  [api:audio-stream] audio stream started client="e2e pipe" listen=true stt="Self-hosted Whisper"
 2026-09-23 20:23:13.361 INFO  [api:audio-stream] stream segment transcribed index=1 audioMs=1600 latencyMs=97 provider=local_whisper
 …
@@ -68,7 +68,7 @@ root, so the level and destinations chosen at startup apply everywhere.
 What was said, by whom, and when — one file per voice session:
 
 ```
-# Squeakr voice transcript
+# Squeaky voice transcript
 # opened 2026-09-23 20:23:11.403 (UTC+10:00) — session start
 # agent=Claude Code · workflow=agent_native · input=turns · pid=544294
 [20:23:11] EVENT: phone connected
@@ -113,14 +113,14 @@ Archives are kept forever unless `retentionDays` is set.
 ## Reading them
 
 ```bash
-squeakr logs                       # the journal — or, with no service unit, the session log
-squeakr logs --files -f            # follow the session log file across rollovers
-squeakr logs --list                # bridge logs + transcripts on disk, newest first
-squeakr logs --transcripts         # the newest transcript
-squeakr logs --cat latest          # print a file (.gz decompressed)
-squeakr logs --transcripts --cat 2026-09-22_08-31-15.log.gz
+squeaky logs                       # the journal — or, with no service unit, the session log
+squeaky logs --files -f            # follow the session log file across rollovers
+squeaky logs --list                # bridge logs + transcripts on disk, newest first
+squeaky logs --transcripts         # the newest transcript
+squeaky logs --cat latest          # print a file (.gz decompressed)
+squeaky logs --transcripts --cat 2026-09-22_08-31-15.log.gz
 npm run cli -- logs --list            # same, from a clone
-zgrep 'stream segment' ~/.squeakr/logs/serve/bridge/*.gz
+zgrep 'stream segment' ~/.squeaky/logs/serve/bridge/*.gz
 ```
 
 `--profile test` reads the `npm run dev` folder instead of the one
@@ -144,21 +144,21 @@ viewer now works for npm installs and manual runs too.
 | `maxFileMb` | `25` | roll to a new file past this size (0 = only at midnight) |
 | `retentionDays` | `0` | delete archives older than this (0 = keep all) |
 
-Environment: `SQUEAKR_LOG_DIR` overrides `dir`; `LOG_LEVEL` overrides
+Environment: `SQUEAKY_LOG_DIR` overrides `dir`; `LOG_LEVEL` overrides
 `logLevel` for the terminal.
 
 ## Service notes
 
 - **systemd user unit** (`scripts/install-systemd.sh`): `WorkingDirectory` is
   the checkout, so files land in `<checkout>/logs/serve/`. Nothing to configure.
-- **system unit** (`squeakr.service`): `ProtectSystem=strict` makes the
+- **system unit** (`squeaky.service`): `ProtectSystem=strict` makes the
   filesystem read-only except `ReadWritePaths`, which now includes
-  `/opt/squeakr/logs`.
+  `/opt/squeaky/logs`.
 - **manual start** (`scripts/start.sh` / `restart.sh` without systemd): stdout
   goes to `logs/serve/console/<date>.log` instead of one ever-growing
   `logs/bridge.log`, and those captures are compressed like everything else.
-- **npm install / `squeakr run`**: the bridge runs in its home, so the files
-  land in `<home>/logs/` next to `config.json` (`~/.squeakr/logs` by
+- **npm install / `squeaky run`**: the bridge runs in its home, so the files
+  land in `<home>/logs/` next to `config.json` (`~/.squeaky/logs` by
   default). The CLI itself logs nothing there — `src/cli/silence.ts` turns every
   destination off for management commands.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Squeakr — doctor (Linux)
+# Squeaky — doctor (Linux)
 #
 # Standalone health check of an install: pure bash, no build needed, changes
 # nothing. Prints green/yellow/red per check and exits 1 if anything is red.
@@ -8,19 +8,19 @@
 # Checks:
 #   toolchain   node >= 20, npm
 #   install     node_modules, dist/index.js, dist/cli.js, web/dist/
-#   vosk        $SQUEAKR_HOME/vosk/model.tar.gz present, gzip, ~40 MB, and
+#   vosk        $SQUEAKY_HOME/vosk/model.tar.gz present, gzip, ~40 MB, and
 #               served by the bridge as application/gzip (text/html here is
 #               THE classic failure: the PWA hangs at "unpacking")
 #   .env        APP_TOKEN present (never printed); provider keys set (names only)
 #   config      config.json parses; agentClient CLI on PATH; hosting provider
-#   bridge      port listening; /healthz; squeakr.service active
+#   bridge      port listening; /healthz; squeaky.service active
 #   audio       PipeWire default audio source (mic) exists
-#   hosting     tailscale serve / squeakr-caddy.service when configured
+#   hosting     tailscale serve / squeaky-caddy.service when configured
 #
 # Usage: bash scripts/doctor.sh [--quiet]
 #
 # Environment overrides:
-#   SQUEAKR_CONFIG, SQUEAKR_ENV_FILE, SQUEAKR_HOME (see prepare.sh)
+#   SQUEAKY_CONFIG, SQUEAKY_ENV_FILE, SQUEAKY_HOME (see prepare.sh)
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
@@ -44,14 +44,20 @@ case "${1:-}" in
   *) echo "Unknown option: $1" >&2; exit 2;;
 esac
 
-CONFIG_FILE="${SQUEAKR_CONFIG:-${AGENTVOICE_CONFIG:-${PROJECT_DIR}/config.json}}"
-ENV_FILE="${SQUEAKR_ENV_FILE:-${AGENTVOICE_ENV_FILE:-${PROJECT_DIR}/.env}}"
-# ~/.squeakr, unless only a not-yet-upgraded ~/.agentvoice exists (docs/45).
-if [[ -e "${HOME}/.squeakr" || ! -e "${HOME}/.agentvoice" ]]; then DEFAULT_HOME="${HOME}/.squeakr"; else DEFAULT_HOME="${HOME}/.agentvoice"; fi
-AV_HOME="${SQUEAKR_HOME:-${AGENTVOICE_HOME:-${DEFAULT_HOME}}}"
+CONFIG_FILE="${SQUEAKY_CONFIG:-${SQUEAKR_CONFIG:-${AGENTVOICE_CONFIG:-${PROJECT_DIR}/config.json}}}"
+ENV_FILE="${SQUEAKY_ENV_FILE:-${SQUEAKR_ENV_FILE:-${AGENTVOICE_ENV_FILE:-${PROJECT_DIR}/.env}}}"
+# ~/.squeaky, unless only a not-yet-upgraded ~/.squeakr or ~/.agentvoice
+# exists — newest first (docs/45, docs/46).
+DEFAULT_HOME="${HOME}/.squeaky"
+if [[ ! -e "${DEFAULT_HOME}" ]]; then
+  for old in .squeakr .agentvoice; do
+    [[ -e "${HOME}/${old}" ]] && { DEFAULT_HOME="${HOME}/${old}"; break; }
+  done
+fi
+AV_HOME="${SQUEAKY_HOME:-${SQUEAKR_HOME:-${AGENTVOICE_HOME:-${DEFAULT_HOME}}}}"
 VOSK_MODEL="${AV_HOME}/vosk/model.tar.gz"
 
-echo -e "${BLD}Squeakr — doctor${NC}   ${PROJECT_DIR}"
+echo -e "${BLD}Squeaky — doctor${NC}   ${PROJECT_DIR}"
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 env_get() {
@@ -116,8 +122,8 @@ else
 fi
 if [[ -f dist/index.js ]]; then pass "dist/index.js ($(date -r dist/index.js '+%Y-%m-%d %H:%M' 2>/dev/null))"
 else fail "dist/index.js missing — run: npm run build"; fi
-if [[ -f dist/cli.js ]]; then pass "dist/cli.js (squeakr CLI)"
-else warn "dist/cli.js missing — 'node bin/squeakr.mjs' will not work until: npm run build"; fi
+if [[ -f dist/cli.js ]]; then pass "dist/cli.js (squeaky CLI)"
+else warn "dist/cli.js missing — 'node bin/squeaky.mjs' will not work until: npm run build"; fi
 if [[ -f web/dist/index.html ]]; then pass "web/dist/ (PWA) built"
 else fail "web/dist/index.html missing — run: npm run build"; fi
 if [[ -f dist/index.js ]]; then
@@ -210,18 +216,31 @@ if [[ -n "$HEALTH" ]]; then
   pass "/healthz responds"
   info "$(echo "$HEALTH" | tr -d '\n' | cut -c1-200)"
 else
-  fail "/healthz not responding on http://127.0.0.1:${PORT} — journalctl --user -u squeakr -n 30"
+  fail "/healthz not responding on http://127.0.0.1:${PORT} — journalctl --user -u squeaky -n 30"
 fi
 if command -v systemctl >/dev/null 2>&1; then
-  if systemctl --user is-active --quiet squeakr.service 2>/dev/null; then
-    pass "squeakr.service active"
-    systemctl --user is-enabled --quiet squeakr.service 2>/dev/null && pass "squeakr.service enabled" || warn "squeakr.service not enabled — systemctl --user enable squeakr"
-  elif [ "$(systemctl --user show -p LoadState --value squeakr.service 2>/dev/null)" = loaded ]; then
-    if $BRIDGE_UP; then warn "squeakr.service installed but inactive (bridge is running some other way)"
-    else fail "squeakr.service inactive — systemctl --user start squeakr"; fi
+  # A unit installed before a rename (docs/45, docs/46) and not moved over yet.
+  LEGACY_UNIT=""
+  for old in squeakr agentvoice; do
+    if [ "$(systemctl --user show -p LoadState --value "${old}.service" 2>/dev/null)" = loaded ]; then
+      LEGACY_UNIT="${old}.service"; break
+    fi
+  done
+  if systemctl --user is-active --quiet squeaky.service 2>/dev/null; then
+    pass "squeaky.service active"
+    systemctl --user is-enabled --quiet squeaky.service 2>/dev/null && pass "squeaky.service enabled" || warn "squeaky.service not enabled — systemctl --user enable squeaky"
+  elif [ "$(systemctl --user show -p LoadState --value squeaky.service 2>/dev/null)" = loaded ]; then
+    if $BRIDGE_UP; then warn "squeaky.service installed but inactive (bridge is running some other way)"
+    else fail "squeaky.service inactive — systemctl --user start squeaky"; fi
+  elif [[ -n "$LEGACY_UNIT" ]]; then
+    if systemctl --user is-active --quiet "$LEGACY_UNIT" 2>/dev/null; then
+      warn "the bridge runs as the pre-rename ${LEGACY_UNIT} — move it over: squeaky upgrade-from-squeakr"
+    else
+      fail "only the pre-rename ${LEGACY_UNIT} is installed, and it is inactive — squeaky upgrade-from-squeakr"
+    fi
   else
-    if $BRIDGE_UP; then warn "no squeakr.service unit (bridge running manually) — bash scripts/install-systemd.sh for persistence"
-    else fail "no squeakr.service unit and no bridge — bash scripts/install-systemd.sh"; fi
+    if $BRIDGE_UP; then warn "no squeaky.service unit (bridge running manually) — bash scripts/install-systemd.sh for persistence"
+    else fail "no squeaky.service unit and no bridge — bash scripts/install-systemd.sh"; fi
   fi
   if command -v loginctl >/dev/null 2>&1; then
     loginctl show-user "${USER:-$(id -un)}" -p Linger 2>/dev/null | grep -q 'Linger=yes' && pass "linger enabled (service survives logout)" || warn "linger off — service stops at logout: loginctl enable-linger ${USER:-$(id -un)}"
@@ -237,7 +256,7 @@ if [[ -f "$VOSK_MODEL" ]]; then
   if [[ "$SIZE" -ge "$MIN_MODEL_BYTES" && "$MAGIC" == "1f8b" ]]; then
     pass "model present: ${VOSK_MODEL} ($((SIZE / 1024 / 1024)) MB, gzip)"
   else
-    fail "model file is bad ($((SIZE / 1024 / 1024)) MB, header ${MAGIC:-none}) — node bin/squeakr.mjs prepare-vosk --force, then copy to ${AV_HOME}/vosk/"
+    fail "model file is bad ($((SIZE / 1024 / 1024)) MB, header ${MAGIC:-none}) — node bin/squeaky.mjs prepare-vosk --force, then copy to ${AV_HOME}/vosk/"
   fi
 else
   fail "model missing: ${VOSK_MODEL} — the bridge serves /vosk/ ONLY from ${AV_HOME}/vosk. Fix: bash scripts/prepare.sh (or prepare-vosk + cp web/public/vosk/model.tar.gz ${AV_HOME}/vosk/)"
@@ -252,7 +271,7 @@ if $BRIDGE_UP; then
     application/gzip*|application/x-gzip*|application/octet-stream*)
       pass "bridge serves /vosk/model.tar.gz as ${TYPE} (HTTP ${CODE})";;
     text/html*)
-      fail "bridge serves /vosk/model.tar.gz as ${TYPE} — that is index.html (SPA fallback), the PWA will hang at 'unpacking'. Put the model in ${AV_HOME}/vosk/ and restart: systemctl --user restart squeakr";;
+      fail "bridge serves /vosk/model.tar.gz as ${TYPE} — that is index.html (SPA fallback), the PWA will hang at 'unpacking'. Put the model in ${AV_HOME}/vosk/ and restart: systemctl --user restart squeaky";;
     *)
       fail "bridge serves /vosk/model.tar.gz as '${TYPE}' (HTTP ${CODE}) — expected application/gzip";;
   esac
@@ -318,15 +337,15 @@ if [[ "$HOSTING" == "tailscale" ]]; then
     fi
   fi
 elif [[ "$HOSTING" == "manual" ]]; then
-  if [ "$(systemctl --user show -p LoadState --value squeakr-caddy.service 2>/dev/null)" = loaded ]; then
-    if systemctl --user is-active --quiet squeakr-caddy.service; then
-      pass "squeakr-caddy.service active"
-      CADDY_PORT="$(grep -hoE '^:[0-9]+' "${HOME}/.config/squeakr-tls/Caddyfile" "${HOME}/.config/agentvoice-tls/Caddyfile" 2>/dev/null | head -1 | tr -d ':' || true)"
+  if [ "$(systemctl --user show -p LoadState --value squeaky-caddy.service 2>/dev/null)" = loaded ]; then
+    if systemctl --user is-active --quiet squeaky-caddy.service; then
+      pass "squeaky-caddy.service active"
+      CADDY_PORT="$(grep -hoE '^:[0-9]+' "${HOME}/.config/squeaky-tls/Caddyfile" "${HOME}/.config/squeakr-tls/Caddyfile" "${HOME}/.config/agentvoice-tls/Caddyfile" 2>/dev/null | head -1 | tr -d ':' || true)"
       CADDY_PORT="${CADDY_PORT:-8443}"
       CODE="$(http_code "https://127.0.0.1:${CADDY_PORT}/healthz" 8)"
       [[ "$CODE" == "200" ]] && pass "https://127.0.0.1:${CADDY_PORT}/healthz → 200 (via caddy)" || fail "caddy front https://127.0.0.1:${CADDY_PORT}/healthz → ${CODE}"
     else
-      warn "squeakr-caddy.service installed but inactive — systemctl --user start squeakr-caddy"
+      warn "squeaky-caddy.service installed but inactive — systemctl --user start squeaky-caddy"
     fi
   else
     info "hosting=manual, no caddy unit — you are responsible for exposing 127.0.0.1:${PORT} over HTTPS"
@@ -343,8 +362,8 @@ elif [[ "$HOSTING" == "local" ]]; then
 fi
 
 # Stray helpers that are configured but not selected.
-if [[ "$HOSTING" != "manual" ]] && systemctl --user is-active --quiet squeakr-caddy.service 2>/dev/null; then
-  info "squeakr-caddy.service is active too (hosting=${HOSTING})"
+if [[ "$HOSTING" != "manual" ]] && systemctl --user is-active --quiet squeaky-caddy.service 2>/dev/null; then
+  info "squeaky-caddy.service is active too (hosting=${HOSTING})"
 fi
 if [[ "$HOSTING" != "tailscale" && -n "$TS_HOST" ]] && tailscale serve status 2>/dev/null | grep -q "127.0.0.1:${PORT}"; then
   info "tailscale serve also proxies :${PORT} (hosting=${HOSTING}) at https://${TS_HOST}"

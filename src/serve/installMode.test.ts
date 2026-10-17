@@ -3,13 +3,13 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
-import { classifyNpmRoot, npmProjectDir, PACKAGE_NAME } from './installMode.js';
+import { classifyNpmRoot, LEGACY_PACKAGE_NAMES, legacyPackageAt, npmProjectDir, PACKAGE_NAME } from './installMode.js';
 
-const scratch = mkdtempSync(join(tmpdir(), 'squeakr-installmode-'));
+const scratch = mkdtempSync(join(tmpdir(), 'squeaky-installmode-'));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 function pkgUnder(prefix: string): string {
-  const root = join(prefix, 'node_modules', 'squeakr');
+  const root = join(prefix, 'node_modules', 'squeaky');
   mkdirSync(root, { recursive: true });
   return root;
 }
@@ -45,4 +45,22 @@ test('the pre-rename scoped package still classifies as a global install', () =>
   const root = join(scratch, 'legacy', 'lib', 'node_modules', '@ratitisrad', 'agentvoice');
   mkdirSync(root, { recursive: true });
   assert.deepEqual(classifyNpmRoot(root), { global: true, npx: false });
+});
+
+test('an install running from a pre-rename package is recognised by its path', () => {
+  assert.equal(legacyPackageAt(join(scratch, 'lib', 'node_modules', 'squeakr')), 'squeakr');
+  assert.equal(
+    legacyPackageAt(join(scratch, 'lib', 'node_modules', '@ratitisrad', 'agentvoice')),
+    '@ratitisrad/agentvoice',
+  );
+  assert.equal(legacyPackageAt('C:\\Users\\a\\AppData\\Roaming\\npm\\node_modules\\squeakr'), 'squeakr');
+  assert.equal(legacyPackageAt(join(scratch, 'lib', 'node_modules', PACKAGE_NAME)), null);
+  // A clone that happens to be called squeakr is not an npm install of it.
+  assert.equal(legacyPackageAt(join(scratch, 'src', 'squeakr')), null);
+  assert.equal(legacyPackageAt(join(scratch, 'lib', 'node_modules', 'agentvoice')), null);
+});
+
+test('no legacy package name is the current one, and squeaky itself is never one', () => {
+  for (const name of LEGACY_PACKAGE_NAMES) assert.notEqual(name, PACKAGE_NAME);
+  assert.ok(!(LEGACY_PACKAGE_NAMES as readonly string[]).includes('squeaky'));
 });

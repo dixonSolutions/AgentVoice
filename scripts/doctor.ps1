@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Squeakr — connectivity doctor (Windows)
+    Squeaky — connectivity doctor (Windows)
 
 .DESCRIPTION
     Diagnoses why https://<machine>.ts.net might not be reachable.
@@ -29,7 +29,7 @@ function Info ($msg) { Write-Host "    -->   $msg" -ForegroundColor Cyan }
 function Section ($msg) { Write-Host "`n  -- $msg --" -ForegroundColor Magenta }
 
 Write-Host ""
-Write-Host "  Squeakr -- connectivity doctor (Windows)" -ForegroundColor White
+Write-Host "  Squeaky -- connectivity doctor (Windows)" -ForegroundColor White
 Write-Host ""
 
 # ── Read .env for PORT ────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ if (Test-Path $EnvFile) {
 # ── 1. Windows Service ────────────────────────────────────────────────────────
 Section "Windows Service"
 
-$ServiceName = 'Squeakr'
+$ServiceName = 'Squeaky'
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
 if ($svc -and $svc.Status -eq 'Running') {
     Pass "Windows service '$ServiceName' is running"

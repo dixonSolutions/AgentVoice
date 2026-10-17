@@ -21,7 +21,7 @@ function ensureConfigured(): boolean {
   const { env } = getConfig();
   const pub = env.WEB_PUSH_VAPID_PUBLIC_KEY?.trim();
   const priv = env.WEB_PUSH_VAPID_PRIVATE_KEY?.trim();
-  const subject = env.WEB_PUSH_VAPID_SUBJECT?.trim() || 'mailto:squeakr@localhost';
+  const subject = env.WEB_PUSH_VAPID_SUBJECT?.trim() || 'mailto:squeaky@localhost';
   if (!pub || !priv) return false;
   webpush.setVapidDetails(subject, pub, priv);
   configured = true;

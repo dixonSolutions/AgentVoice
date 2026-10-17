@@ -38,7 +38,7 @@ export const AgentManageProjectsSchema = z.object({
   action: z
     .enum(['describe', 'list', 'add', 'update', 'remove'])
     .describe(
-      'describe = what projects are in Squeakr; list = filter registry; add/update/remove = mutate config',
+      'describe = what projects are in Squeaky; list = filter registry; add/update/remove = mutate config',
     ),
   query: z.string().optional().describe('For list: filter by name, alias, or description'),
   enabled: z.boolean().optional().describe('For list: filter by enabled flag'),

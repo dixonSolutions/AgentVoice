@@ -3,7 +3,7 @@
  *
  * The bridge — not each client — owns the Vosk model. If it is missing from
  * the directory the bridge serves `/vosk/` from (`voskPaths().serveFrom[0]`,
- * i.e. `~/.squeakr/vosk`), this downloads and repacks it once, reporting
+ * i.e. `~/.squeaky/vosk`), this downloads and repacks it once, reporting
  * progress so the socket can relay a live status to connected clients. Every
  * caller shares one in-flight preparation (memoised), so N clients connecting
  * during a cold start trigger a single download, not N.
@@ -125,7 +125,7 @@ async function prepare(target: string, dir: string): Promise<void> {
     throw new Error('`tar` and `unzip` are required to prepare the wake-word model');
   }
 
-  const work = resolve(tmpdir(), `squeakr-vosk-${process.pid}-${Date.now()}`);
+  const work = resolve(tmpdir(), `squeaky-vosk-${process.pid}-${Date.now()}`);
   mkdirSync(work, { recursive: true });
   const zip = join(work, 'model.zip');
   try {

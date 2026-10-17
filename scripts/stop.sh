@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Squeakr — stop script (Linux)
+# Squeaky — stop script (Linux)
 #
-# Stops the production HOST bridge (the long-running squeakr service).
+# Stops the production HOST bridge (the long-running squeaky service).
 #   1. Stops the systemd watch unit (so it won't auto-restart the service)
-#   2. Stops the squeakr.service systemd unit
+#   2. Stops the squeaky.service systemd unit
 #   3. Falls back to killing the manual nohup process (data/.bridge.pid)
 #   4. Frees the host bridge port (PORT, default 8787) as a safety net
 #
@@ -57,35 +57,40 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 PORT="${PORT:-8787}"   # production host (serve) bridge port
 
-$QUIET || echo -e "${CYN}${BLD}Squeakr — stop host${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
+$QUIET || echo -e "${CYN}${BLD}Squeaky — stop host${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
 
 # ── 1 + 2. Stop systemd units (user, then system) ───────────────────────────
+# squeaky's, and any pre-rename squeakr / agentvoice unit that
+# `squeaky upgrade-from-squeakr` has not retired yet (docs/45, docs/46) — it
+# would hold the same port.
 stopped_via_systemd=false
 
-if systemctl --user list-unit-files squeakr.service &>/dev/null && \
-   [ "$(systemctl --user show -p LoadState --value squeakr.service 2>/dev/null)" = loaded ]; then
-  section "Stopping systemd user units"
-  # Stop the watch path first so it can't re-trigger the service.
-  if systemctl --user is-active --quiet squeakr-watch.path; then
-    systemctl --user stop squeakr-watch.path || warn "Could not stop squeakr-watch.path"
-    ok "squeakr-watch.path stopped."
-  else
-    info "squeakr-watch.path already inactive."
+for svc in squeaky squeakr agentvoice; do
+  if systemctl --user list-unit-files "${svc}.service" &>/dev/null && \
+     [ "$(systemctl --user show -p LoadState --value "${svc}.service" 2>/dev/null)" = loaded ]; then
+    section "Stopping systemd user units"
+    # Stop the watch path first so it can't re-trigger the service.
+    if systemctl --user is-active --quiet "${svc}-watch.path"; then
+      systemctl --user stop "${svc}-watch.path" || warn "Could not stop ${svc}-watch.path"
+      ok "${svc}-watch.path stopped."
+    else
+      info "${svc}-watch.path already inactive."
+    fi
+    if systemctl --user is-active --quiet "${svc}.service"; then
+      systemctl --user stop "${svc}.service" || warn "Could not stop ${svc}.service"
+      ok "${svc}.service stopped."
+    else
+      info "${svc}.service already inactive."
+    fi
+    stopped_via_systemd=true
+  elif [ "$(systemctl show -p LoadState --value "${svc}.service" 2>/dev/null)" = loaded ]; then
+    section "Stopping systemd system unit"
+    sudo systemctl stop "${svc}-watch.path" 2>/dev/null || true
+    sudo systemctl stop "${svc}.service" || warn "Could not stop system ${svc}.service"
+    ok "system ${svc}.service stopped."
+    stopped_via_systemd=true
   fi
-  if systemctl --user is-active --quiet squeakr.service; then
-    systemctl --user stop squeakr.service || warn "Could not stop squeakr.service"
-    ok "squeakr.service stopped."
-  else
-    info "squeakr.service already inactive."
-  fi
-  stopped_via_systemd=true
-elif [ "$(systemctl show -p LoadState --value squeakr.service 2>/dev/null)" = loaded ]; then
-  section "Stopping systemd system unit"
-  sudo systemctl stop squeakr-watch.path 2>/dev/null || true
-  sudo systemctl stop squeakr.service || warn "Could not stop system squeakr.service"
-  ok "system squeakr.service stopped."
-  stopped_via_systemd=true
-fi
+done
 
 # ── 3. Stop manual nohup process (restart.sh fallback path) ─────────────────
 PID_FILE="${PROJECT_DIR}/data/.bridge.pid"
@@ -126,4 +131,4 @@ free_port() {
 section "Freeing host port"
 free_port "$PORT" "host bridge"
 
-$QUIET || { echo ""; ok "Squeakr host stopped. Start it again with: npm run start:service"; echo ""; }
+$QUIET || { echo ""; ok "Squeaky host stopped. Start it again with: npm run start:service"; echo ""; }

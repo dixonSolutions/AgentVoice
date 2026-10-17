@@ -1,17 +1,17 @@
 # 44 — Channels: Discord, Telegram, Slack and WhatsApp as remote access
 
-> Added: October 2026. Tracked in [#93](https://github.com/dixonSolutions/Squeakr/issues/93).
+> Added: October 2026. Tracked in [#93](https://github.com/dixonSolutions/Squeaky/issues/93).
 > Builds on the direct audio stream ([docs/41](./41-audio-stream-pipe.md)) and
 > streamed speech output ([docs/30](./30-speech-output-providers.md#streaming--the-phone-plays-the-first-chunk-not-the-whole-file)).
 
-Until now the bridge was reached one way: the PWA (or `squeakr pipe`) over
+Until now the bridge was reached one way: the PWA (or `squeaky pipe`) over
 Tailscale, a tunnel or a public address. **Channels** add the chat apps people
 already have open as a second way in — the model OpenClaw uses as its primary
 remote access. Two things come through a channel:
 
-1. **Voice calls** — the point of Squeakr. On Discord you call the bot in a
+1. **Voice calls** — the point of Squeaky. On Discord you call the bot in a
    voice channel and talk to the agent, hands-free, from any device Discord runs on.
-2. **A command line by tagging** — `@Squeakr sessions`, `default 2`,
+2. **A command line by tagging** — `@Squeaky sessions`, `default 2`,
    `config tts openai` … to see and manage sessions and settings from wherever
    you are. Text conversation with the agent itself is what the agent CLIs'
    own chat integrations already do, so it is here (`say …`), but it is not
@@ -26,13 +26,13 @@ becomes a turn and the agent answers with a voice message.
 | --- | --- | --- | --- | --- |
 | **Voice calls** | ✅ bots join voice channels, send and receive audio | ❌ Bot API bots cannot join or take calls | ❌ no API for huddle audio | ❌ *not yet* — possible via the Calling API, see below |
 | **Voice messages** | ✅ in (transcribed) and out (real voice messages, with waveform) | ✅ in and out (Ogg/Opus) | ❌ not read yet (clips are AAC/WebM) | ✅ in and out (Ogg/Opus) |
-| **Command line** | `/av …`, `@Squeakr …`, DMs | `/status`… menu, `@bot …`, DMs | `/av …`, `@Squeakr …`, DMs | every message (DMs only) |
+| **Command line** | `/av …`, `@Squeaky …`, DMs | `/status`… menu, `@bot …`, DMs | `/av …`, `@Squeaky …`, DMs | every message (DMs only) |
 | **Live status** (`watch`) | ✅ edited message | ✅ edited message | ✅ `chat.update` | ❌ messages cannot be edited |
 | **Needs a public URL** | no (gateway WebSocket) | no (long polling) | no (Socket Mode) | **yes** — Meta calls a webhook |
 
 Each adapter declares every one of these as supported or not, with the
 reason, in its `capabilities` (`src/channels/adapters/*.ts`); `GET
-/api/channels` and `squeakr channel` show them.
+/api/channels` and `squeaky channel` show them.
 
 - **Discord.** Voice moved entirely to end-to-end encryption (DAVE) in March
   2026; clients without DAVE cannot join. `@discordjs/voice` 0.19 implements
@@ -64,7 +64,7 @@ docs): one plugin per channel; Discord voice through `@discordjs/voice` with
 a WASM Opus codec in a worker thread; Telegram through grammY; WhatsApp
 through Baileys; DMs gated by pairing codes or allowlists, groups by
 mention; Discord voice either STT → agent → TTS or a realtime model
-fronting the agent. Squeakr keeps the same shape with fewer moving parts:
+fronting the agent. Squeaky keeps the same shape with fewer moving parts:
 its own speech chain (docs/29, docs/30) instead of a realtime model, and no
 SDK where plain HTTP does (Telegram, Slack, WhatsApp).
 
@@ -83,15 +83,15 @@ Tokens go in the home's `.env` (never `config.json`); everything else is
 Then:
 
 ```bash
-squeakr channel enable discord
-squeakr channel allow discord 123456789012345678   # your Discord user id
-squeakr channel                                     # status of every channel
+squeaky channel enable discord
+squeaky channel allow discord 123456789012345678   # your Discord user id
+squeaky channel                                     # status of every channel
 ```
 
 **Nobody is allowed by default.** A bot token is control of your machine, so
 a channel obeys only the user ids in `allowUsers`. Anyone else who talks to
 the bot is told their id (once an hour) and ignored — that is how you find
-your own id: message the bot, then `squeakr channel allow …` what it says.
+your own id: message the bot, then `squeaky channel allow …` what it says.
 In a voice call, only allowlisted members are listened to.
 
 ```jsonc
@@ -121,7 +121,7 @@ What you define per channel is two places:
   a Telegram group, a Slack channel). There, no tag is needed: a command word
   runs the command, anything else goes to the agent; calls are written up and
   every session log line is posted there. `channel here` (typed there) sets it;
-  `squeakr channel set discord messageChannel <id|none>` from the host.
+  `squeaky channel set discord messageChannel <id|none>` from the host.
 - **`voiceChannel`** — where calls happen (Discord). Walking in is the call,
   `call` points you there. `voice here` (typed while you are in it) sets it.
 
@@ -137,15 +137,15 @@ Cloudflare tunnel, ngrok, Tailscale Funnel — docs/25). Calls need
 
 ## The command line
 
-Mention the bot (`@Squeakr …`), DM it, write in its message channel, use
+Mention the bot (`@Squeaky …`), DM it, write in its message channel, use
 `/av …` (Discord, Slack) or the `/status`… menu (Telegram), or the `!av`
 prefix.
 
-**Commands are the `squeakr` CLI.** `src/channels/commands.ts` is a
+**Commands are the `squeaky` CLI.** `src/channels/commands.ts` is a
 parser: it turns the message into CLI arguments — plus where it came from,
 `--channel --conversation --user` — and runs the real CLI
 (`src/channels/cliRunner.ts`, this package's `dist/cli.js`, the bridge's own
-home, `SQUEAKR_MARKDOWN=1` so answers carry `**bold**` / `` `code` ``
+home, `SQUEAKY_MARKDOWN=1` so answers carry `**bold**` / `` `code` ``
 instead of colour). The CLI's control commands (`agent`, `sessions`, `use`,
 `new`, `say`, `config`, `default` …) call `/api/control/*`
 (`src/control/routes.ts`), so a terminal and a chat are one implementation
@@ -173,7 +173,7 @@ stream break                    → ends the stream here, and your call if one i
 message is transcribed, text is not); `--rep` picks how the agent answers,
 defaulting to the same. Phones turning `--` into `—` is fine. In a stream,
 every message is a turn — even one starting with a command word — except a
-tagged or prefixed command (`@Squeakr status`, `!av status`, `/av …`) and
+tagged or prefixed command (`@Squeaky status`, `!av status`, `/av …`) and
 `stream …` itself. A stream listens until it is broken, not just for ten
 minutes. Streams are kept in memory: a bridge restart ends them.
 
@@ -209,13 +209,13 @@ in groups; `help sessions|voice|config|cli` shows one.
 | --- | --- |
 | `chat <message>` · `say` | a turn for the agent, attachments included; replies come back here |
 | `stream on [--voice\|--text] [--rep=voice\|text]` · `stream status` · `stream break` | keep the conversation open to the agent — see below |
-| `status` | agent running or idle, active project, who is listening, speech providers, this conversation's default session (`squeakr agent`) |
+| `status` | agent running or idle, active project, who is listening, speech providers, this conversation's default session (`squeaky agent`) |
 | `sessions [project]` | numbered list of voice, worker, recent and external sessions (docs/37) with status and last activity |
 | `use <n\|name>` | continue that session on the next turn (the phone's session picker) |
 | `default [<n\|name\|project>\|none]` | pin the session **this conversation** talks to — see below |
 | `new [project]` | start a fresh session |
 | `project [name]` · `projects` | show / switch the active project |
-| `stop` | stop the voice agent (`squeakr agent stop`) |
+| `stop` | stop the voice agent (`squeaky agent stop`) |
 | `config [key] [value]` | `agent`, `model`, `permissions`, `workflow`, `input`, `stt`, `tts`, `wake`, `vad`, `silence`, `startphrase` / `endphrase` / `cancelphrase`, `away` — the voice-session ones are the app's own, so a phone and a call listen the same way |
 | `channel here` | this conversation becomes the message channel |
 | `voice` | the session your calls continue |
@@ -225,7 +225,7 @@ in groups; `help sessions|voice|config|cli` shows one.
 | `voice autojoin on\|off` | join you in any voice channel you step into (`channel set <ch> autoJoin`) |
 | `call` · `hangup` | a call — in the configured voice channel, else your private room; works from a DM |
 | `join` · `leave` | voice call (Discord: the voice channel you are in) |
-| `cli <command>` | run `squeakr <command>` on the host and post its output — the control commands above, and `status`, `doctor`, `version`, `logs [-n N] [--list]`, `channel [allow\|set …]`; also typed as `squeakr doctor`, or `doctor` / `version` / `logs` alone |
+| `cli <command>` | run `squeaky <command>` on the host and post its output — the control commands above, and `status`, `doctor`, `version`, `logs [-n N] [--list]`, `channel [allow\|set …]`; also typed as `squeaky doctor`, or `doctor` / `version` / `logs` alone |
 | `watch` | post a status message and keep editing it as sessions change (again to stop) |
 | `whoami` | your platform id |
 
@@ -247,10 +247,10 @@ same thing the phone's session picker does. Bindings are per conversation
 ### Preparing a Discord call
 
 ```
-@Squeakr sessions            → numbered list
-@Squeakr voice default 2     → 📌 your calls continue session 2
-@Squeakr voice autojoin on   → (optional) stepping into a voice channel is the call
-  … join a voice channel, then @Squeakr join (or just walk in, with auto-join)
+@Squeaky sessions            → numbered list
+@Squeaky voice default 2     → 📌 your calls continue session 2
+@Squeaky voice autojoin on   → (optional) stepping into a voice channel is the call
+  … join a voice channel, then @Squeaky join (or just walk in, with auto-join)
 🔊 In Dev — talk to me. Continuing auth worker.
 ```
 
@@ -264,7 +264,7 @@ hangup                          → 👋 Hung up.
 
 **Discord bots cannot join DM or group-DM calls** — only server voice
 channels. So `call` is the DM call: it finds or creates
-`🎙️ Squeakr · <your name>` in a server you share with the bot (the one
+`🎙️ Squeaky · <your name>` in a server you share with the bot (the one
 `call` was typed in, else the first), hidden from @everyone and open only to
 you and the bot. That needs *Manage Channels* and *Manage Roles*. Walking into
 your room always starts the call, auto-join or not; the room is kept for next
@@ -322,7 +322,7 @@ agent speak() ─▶ synthesize(stream: true) (docs/30) ─▶ PCM chunks
   from chat), read when the call starts (`src/channels/callTurns.ts`):
   - `input: stream` — every segment is a request; wake words do not apply.
   - `input: turns` with wake words on — the start phrase opens a request
-    ("hey squeaker, run the tests", or the phrase, a pause, then the
+    ("hey squeaky, run the tests", or the phrase, a pause, then the
     request); anything else is room talk and is not sent. With VAD on, the
     pause ends it; with VAD off, the end phrase does. The cancel phrase drops it.
   - wake words off — every utterance is a request (VAD off: the silence timer
@@ -420,7 +420,7 @@ in as a channel/phone *conversation mode* in front of the same agent session
   resampling; `adapters/*.test.ts` — Telegram parsing, platform formatting,
   Meta signatures, and the Discord call against a stand-in `@discordjs/voice`
   (real Opus packets in per member, 48 kHz stereo out).
-- End to end: `node scripts/live-channels-test.mjs` runs `squeakr run`
+- End to end: `node scripts/live-channels-test.mjs` runs `squeaky run`
   with Telegram, Slack and WhatsApp pointed at stand-ins of their APIs (Bot
   API long polling and files, Socket Mode, a signed webhook and the Graph API)
   and the stub agent: access control, every command (through the real CLI),
@@ -440,4 +440,4 @@ in as a channel/phone *conversation mode* in front of the same agent session
 - One voice agent: channels and the phone drive the same agent and the same
   active project; `default` decides *which session* it continues, not a
   second agent in parallel.
-- No Config-screen panel yet — `squeakr channel`, the API, or `config.json`.
+- No Config-screen panel yet — `squeaky channel`, the API, or `config.json`.

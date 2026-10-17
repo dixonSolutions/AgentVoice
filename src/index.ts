@@ -1,5 +1,5 @@
 /**
- * Squeakr — bridge entry point.
+ * Squeaky — bridge entry point.
  *
  * Boot sequence:
  *   1. Load .env (dotenv)
@@ -43,7 +43,7 @@ async function main(): Promise<void> {
   startLogging(config);
   const log = getLogger();
 
-  log.info('squeakr bridge starting');
+  log.info('squeaky bridge starting');
 
   const provider = getActiveProvider();
   const agentBinPath = provider.resolveBin();
@@ -139,7 +139,7 @@ async function main(): Promise<void> {
       webUrl: run.webUrl,
       defaultWorkflow: config.settings.workflow.default,
     },
-    'squeakr bridge ready',
+    'squeaky bridge ready',
   );
 
   // ── Graceful shutdown ────────────────────────────────────────────────────

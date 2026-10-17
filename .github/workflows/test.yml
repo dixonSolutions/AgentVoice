@@ -49,7 +49,7 @@ jobs:
       - name: Build
         run: npm run build
 
-      # squeakr run / pipe / logs against a stand-in Whisper server and the
+      # squeaky run / pipe / logs against a stand-in Whisper server and the
       # stub agent: segmentation, delivery, replies, transcripts, session logs
       # and their compression across restarts.
       - name: End to end — audio pipe, transcripts, session logs

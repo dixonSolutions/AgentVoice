@@ -2,10 +2,10 @@
   "projectsRoot": "Projects",
   "projects": [
     {
-      "name": "squeakr",
-      "relativePath": "SideProjects/Squeakr",
-      "aliases": ["squeakr", "squeaker", "the voice project"],
-      "description": "Squeakr (formerly AgentVoice) — self-hosted voice bridge for driving Cursor, Codex, or Claude Code from a phone or PWA."
+      "name": "squeaky",
+      "relativePath": "SideProjects/Squeaky",
+      "aliases": ["squeaky", "squeaker", "the voice project"],
+      "description": "Squeaky (formerly Squeakr and AgentVoice) — self-hosted voice bridge for driving Cursor, Codex, or Claude Code from a phone or PWA."
     },
     {
       "name": "bambamofficeboy",

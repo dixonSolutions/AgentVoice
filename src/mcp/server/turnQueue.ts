@@ -11,14 +11,14 @@
  *
  * Delivery order for one incoming turn:
  *   1. a waiting `next_voice_turn()` poll, else
- *   2. Squeakr's interrupt hook (server/pendingWaits.ts) — whichever of OUR
+ *   2. Squeaky's interrupt hook (server/pendingWaits.ts) — whichever of OUR
  *      tools the agent is currently blocked in, else
  *   3. the buffer, for the agent's next poll.
  *
  * Step 2 is protocol-level, so it works identically on Cursor, Codex and
  * Claude Code — nothing here depends on a particular CLI.
  *
- * Streamed input (voice.inputMode = "stream", or `squeakr pipe`) enqueues
+ * Streamed input (voice.inputMode = "stream", or `squeaky pipe`) enqueues
  * one turn per audio segment. When several are waiting, a dequeue hands them
  * over together — the agent gets everything said since it last listened,
  * rather than one clause per poll. See docs/41-audio-stream-pipe.md.
@@ -69,7 +69,7 @@ export interface EnqueueVoiceTurnOptions {
 
 export type EnqueueDelivery =
   | { kind: 'waiter' }
-  /** Delivered through a blocking Squeakr tool instead of a poll. */
+  /** Delivered through a blocking Squeaky tool instead of a poll. */
   | { kind: 'tool_interrupt'; aborted: PendingWait[]; annotated: PendingWait[] }
   | { kind: 'queued'; queueLen: number };
 
@@ -98,7 +98,7 @@ class VoiceTurnQueue {
   private interruptFlagAt = 0;
   /** Fired when a turn is buffered because the agent is not in next_voice_turn(). */
   private onQueuedWithoutWaiter: ((queueLen: number) => void) | null = null;
-  /** Fired when in-flight Squeakr tool calls received this turn. */
+  /** Fired when in-flight Squeaky tool calls received this turn. */
   private onToolsInterrupted:
     | ((delivery: { aborted: PendingWait[]; annotated: PendingWait[] }, turn: VoiceTurn) => void)
     | null = null;
@@ -118,7 +118,7 @@ class VoiceTurnQueue {
   /**
    * Push a transcribed turn from the PWA into the queue.
    * If a waiter is already blocking on `dequeue()`, it is woken immediately.
-   * Else if any Squeakr tool call is in flight, the turn is delivered
+   * Else if any Squeaky tool call is in flight, the turn is delivered
    * through it (resolving user-facing waits, riding along on working ones) —
    * running work is never stopped just because the user spoke.
    * Otherwise the turn is buffered for a later `next_voice_turn()`.
@@ -156,7 +156,7 @@ class VoiceTurnQueue {
       return { kind: 'waiter' };
     }
 
-    // No next_voice_turn waiter — hand the turn to whichever Squeakr tool
+    // No next_voice_turn waiter — hand the turn to whichever Squeaky tool
     // the agent is sitting in right now. It carries the same stream fields
     // next_voice_turn() returns: a pause-cut fragment must not read as a
     // complete request just because it arrived mid-tool.
@@ -177,7 +177,7 @@ class VoiceTurnQueue {
           annotated: delivery.annotated.map((w) => w.tool),
           text: turn.text.slice(0, 80),
         },
-        'turn delivered through in-flight Squeakr tool(s)',
+        'turn delivered through in-flight Squeaky tool(s)',
       );
       this.onToolsInterrupted?.(delivery, turn);
       // Annotated tools keep working; the turn still needs to be dequeueable if

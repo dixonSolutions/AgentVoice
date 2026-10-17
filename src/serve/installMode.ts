@@ -1,12 +1,12 @@
 /**
  * How was this bridge installed, and therefore how does it update?
  *
- * There are three ways to be running Squeakr, and they have nothing in
+ * There are three ways to be running Squeaky, and they have nothing in
  * common when it comes to getting a newer one:
  *
  *   git    — a clone. Updating means fetch, rebase, install, build, restart,
  *            and "what version am I" is a branch and a commit.
- *   npm    — `npm i -g squeakr`. No repo to rebase; updating
+ *   npm    — `npm i -g squeaky-cli`. No repo to rebase; updating
  *            means asking the registry and letting npm replace the package.
  *   system — a .deb or .rpm (docs/38). The package manager owns the files, the
  *            bridge cannot write to them, and updating is `apt` or `dnf`. The
@@ -34,20 +34,46 @@ const log = childLogger('serve:install-mode');
  * Our name on the npm registry. Kept in step with package.json#name by
  * installMode.test.ts.
  *
- * Unscoped since the Squeakr rename (docs/45). Releases up to 0.1.5 were
- * published as LEGACY_PACKAGE_NAME; an install of that package has to be
- * replaced by hand (`npm i -g squeakr`), because `npm update` never crosses
+ * `squeaky-cli` since the Squeaky rename (docs/46) — `squeaky` on npm is an
+ * unrelated package. Earlier releases went out under LEGACY_PACKAGE_NAMES; an
+ * install of one of those has to be replaced by hand (`npm i -g squeaky-cli`,
+ * then `squeaky upgrade-from-squeakr`), because `npm update` never crosses
  * package names.
  */
-export const PACKAGE_NAME = 'squeakr';
+export const PACKAGE_NAME = 'squeaky-cli';
 
-/** The npm package AgentVoice was published as before the rename. */
-export const LEGACY_PACKAGE_NAME = '@ratitisrad/agentvoice';
+/**
+ * The npm packages this project was published as before, newest first:
+ * `squeakr` (0.2.x, docs/45) and `@ratitisrad/agentvoice` (up to 0.1.6).
+ */
+export const LEGACY_PACKAGE_NAMES = ['squeakr', '@ratitisrad/agentvoice'] as const;
+export type LegacyPackageName = (typeof LEGACY_PACKAGE_NAMES)[number];
+
+/**
+ * The pre-rename package `root` is installed as — `…/node_modules/squeakr`,
+ * `…/node_modules/@ratitisrad/agentvoice` — or null. Read from the path, as
+ * the npm checks below are: a package root says which name npm put it under.
+ */
+export function legacyPackageAt(root: string): LegacyPackageName | null {
+  const segments = root.split(/[\\/]/).filter(Boolean);
+  for (const name of LEGACY_PACKAGE_NAMES) {
+    const parts = name.split('/');
+    const tail = segments.slice(-parts.length);
+    if (
+      segments[segments.length - parts.length - 1] === 'node_modules' &&
+      tail.length === parts.length &&
+      tail.every((part, i) => part === parts[i])
+    ) {
+      return name;
+    }
+  }
+  return null;
+}
 
 export type InstallMode = 'git' | 'npm' | 'system' | 'unknown';
 
-/** Prefixes a distro package installs Squeakr under. */
-const SYSTEM_ROOTS = ['/usr/lib/squeakr', '/usr/share/squeakr', '/opt/squeakr'];
+/** Prefixes a distro package installs Squeaky under. */
+const SYSTEM_ROOTS = ['/usr/lib/squeaky', '/usr/share/squeaky', '/opt/squeaky'];
 
 /**
  * Marker the .deb / .rpm ships so the bridge can name the right update
@@ -68,7 +94,7 @@ export interface InstallModeInfo {
   /** Globally installed (`npm i -g`) rather than a local dependency. */
   global: boolean;
   /**
-   * Running out of npx's cache (`npx squeakr`). There is nothing
+   * Running out of npx's cache (`npx squeaky-cli`). There is nothing
    * to update in place — the next `npx …@latest` fetches a fresh copy — and a
    * service must not point into a cache npm is free to delete.
    */
@@ -152,14 +178,18 @@ export function detectInstallMode(opts: { refresh?: boolean } = {}): InstallMode
     };
   } else if (npmInstalled) {
     const { global, npx } = classifyNpmRoot(realpathOrSelf(root));
+    // Under an older name `npm update` never reaches squeaky-cli; the update
+    // command below installs it under the new one instead.
+    const legacy = legacyPackageAt(realpathOrSelf(root)) ?? legacyPackageAt(root);
     info = {
       mode: 'npm',
       root,
-      reason: npx
+      reason: (npx
         ? 'running from the npx cache (nothing installed to update)'
         : global
           ? 'installed globally by npm (npm i -g)'
-          : 'installed by npm as a project dependency',
+          : 'installed by npm as a project dependency') +
+        (legacy ? `, as the pre-rename ${legacy} package` : ''),
       global,
       npx,
       updateCommand: npx
@@ -196,7 +226,7 @@ function realpathOrSelf(path: string): string {
  * Is this a distro package?
  *
  * Checked *before* the node_modules test: a .deb ships a pruned node_modules
- * inside /usr/lib/squeakr, so the npm heuristic would otherwise claim it
+ * inside /usr/lib/squeaky, so the npm heuristic would otherwise claim it
  * and offer `npm i -g`, which would install a second copy the service does not
  * run.
  */
@@ -243,9 +273,9 @@ function osPackageFamily(): 'deb' | 'rpm' | null {
 }
 
 function systemUpdateCommand(family: 'deb' | 'rpm' | null): string {
-  if (family === 'deb') return 'sudo apt update && sudo apt install --only-upgrade squeakr';
-  if (family === 'rpm') return 'sudo dnf upgrade squeakr';
-  return 'Use your package manager to upgrade the squeakr package';
+  if (family === 'deb') return 'sudo apt update && sudo apt install --only-upgrade squeaky';
+  if (family === 'rpm') return 'sudo dnf upgrade squeaky';
+  return 'Use your package manager to upgrade the squeaky package';
 }
 
 /**

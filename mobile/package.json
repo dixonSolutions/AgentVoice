@@ -1,8 +1,8 @@
 {
-  "name": "squeakr-mobile",
+  "name": "squeaky-mobile",
   "version": "0.1.0",
   "private": true,
-  "description": "Capacitor native shell for Squeakr (CallKit + push)",
+  "description": "Capacitor native shell for Squeaky (CallKit + push)",
   "scripts": {
     "sync": "cap sync",
     "ios": "cap open ios",
@@ -13,7 +13,7 @@
     "@capacitor/core": "^7.2.0",
     "@capacitor/ios": "^7.2.0",
     "@capacitor/push-notifications": "^7.0.1",
-    "@squeakr/call-session": "file:./plugins/call-session"
+    "@squeaky/call-session": "file:./plugins/call-session"
   },
   "devDependencies": {
     "@capacitor/cli": "^7.2.0"

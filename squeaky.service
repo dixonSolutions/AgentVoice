@@ -1,15 +1,15 @@
 [Unit]
-Description=Squeakr Bridge
+Description=Squeaky Bridge
 After=network-online.target fix-dns.service tailscaled.service
 Wants=network-online.target fix-dns.service
 
 [Service]
 Type=simple
-User=squeakr
-WorkingDirectory=/opt/squeakr
-Environment=HOME=/home/squeakr
-EnvironmentFile=/opt/squeakr/.env
-ExecStart=/usr/bin/node /opt/squeakr/dist/index.js
+User=squeaky
+WorkingDirectory=/opt/squeaky
+Environment=HOME=/home/squeaky
+EnvironmentFile=/opt/squeaky/.env
+ExecStart=/usr/bin/node /opt/squeaky/dist/index.js
 Restart=on-failure
 RestartSec=3
 
@@ -19,7 +19,7 @@ ProtectSystem=strict
 # Adjust ReadWritePaths to include every allowlisted project workspace.
 # The bridge data dir, its log dir (session logs + transcripts, see
 # docs/33-logging.md) and the project workspaces are the only writable locations.
-ReadWritePaths=/opt/squeakr/data /opt/squeakr/logs /home/projects
+ReadWritePaths=/opt/squeaky/data /opt/squeaky/logs /home/projects
 PrivateTmp=true
 
 [Install]

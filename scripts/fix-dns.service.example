@@ -3,7 +3,7 @@
 #
 [Unit]
 Description=Fix container DNS (public resolvers)
-Before=network-online.target squeakr.service
+Before=network-online.target squeaky.service
 DefaultDependencies=no
 
 [Service]

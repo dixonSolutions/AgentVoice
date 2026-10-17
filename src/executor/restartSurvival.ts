@@ -41,7 +41,7 @@ const log = childLogger('restart-survival');
 
 /** Prepended to the original prompt when a run is picked back up. */
 export const RESUME_PROMPT_PREFIX =
-  'The Squeakr bridge restarted while you were part-way through this task, so ' +
+  'The Squeaky bridge restarted while you were part-way through this task, so ' +
   'the tool call you were running was lost. Before doing anything else, run ' +
   '`git status` and `git diff` to see what you had already changed, then continue ' +
   'from there. Do not start over and do not revert your own earlier work.\n\n' +
@@ -72,7 +72,7 @@ export function keepAliveSupport(): KeepAliveSupport {
   return {
     supported: false,
     reason:
-      'the Squeakr MCP transports are in-memory, so a surviving CLI cannot re-attach ' +
+      'the Squeaky MCP transports are in-memory, so a surviving CLI cannot re-attach ' +
       'to /mcp after the bridge restarts',
   };
 }

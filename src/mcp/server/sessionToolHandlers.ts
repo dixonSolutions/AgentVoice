@@ -205,7 +205,7 @@ function deliver(entry: SessionEntry, text: string): SendToSessionResult {
         delivery: 'mailbox_pending',
         message:
           `Left in ${entry.name}'s mailbox (${pendingCount(entry.handle)} waiting). ` +
-          'It arrives on its next Squeakr tool call, not instantly.',
+          'It arrives on its next Squeaky tool call, not instantly.',
       };
     }
 
@@ -252,8 +252,8 @@ function deliver(entry: SessionEntry, text: string): SendToSessionResult {
         ok: false,
         delivery: 'refused',
         message:
-          `${entry.name} cannot be written to: it was started outside Squeakr and ` +
-          `${entry.providerName} has no way to branch it. Squeakr never types into ` +
+          `${entry.name} cannot be written to: it was started outside Squeaky and ` +
+          `${entry.providerName} has no way to branch it. Squeaky never types into ` +
           "someone's terminal.",
       };
   }

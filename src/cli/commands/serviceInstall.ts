@@ -1,13 +1,14 @@
 /**
- * `squeakr service install` — install a background service for this install,
+ * `squeaky service install` — install a background service for this install,
  * with whatever service manager the platform has:
  *
- *   Linux    a systemd **user** unit      ~/.config/systemd/user/squeakr.service
- *   macOS    a launchd agent              ~/Library/LaunchAgents/com.squeakr.bridge.plist
- *   Windows  an NSSM-wrapped service      Squeakr
+ *   Linux    a systemd **user** unit      ~/.config/systemd/user/squeaky.service
+ *   macOS    a launchd agent              ~/Library/LaunchAgents/com.squeaky.bridge.plist
+ *   Windows  an NSSM-wrapped service      Squeaky
  *
- * An AgentVoice-era service (agentvoice.service, com.agentvoice.bridge, the
- * AgentVoice Windows service) is retired first — cli/legacyService.ts.
+ * A service left by an earlier name — Squeakr's (squeakr.service,
+ * com.squeakr.bridge, the Squeakr Windows service) or AgentVoice's
+ * (agentvoice.service, …) — is retired first — cli/legacyService.ts.
  *
  * `noUnitAdvice()` used to point at `scripts/install-systemd.sh`, which only
  * exists in a git clone. An npm install — and a .deb, which ships no scripts
@@ -18,7 +19,7 @@
  * A *user* service, deliberately. The bridge has to run as the developer: it
  * spawns `claude`, `cursor-agent` and `codex` with their credentials, writes
  * `~/.cursor/mcp.json`, `~/.codex/config.toml` and `~/.claude.json`, and edits
- * the user's own projects. The repo's system unit (`User=squeakr`,
+ * the user's own projects. The repo's system unit (`User=squeaky`,
  * `ProtectSystem=strict`) only suits a dedicated server and would leave every
  * one of those inaccessible. Windows has no per-user services, so there the
  * command says how to run the service under your own account.
@@ -42,7 +43,7 @@ import { resolveHome } from '../home.js';
 import { capture, passthrough, ran } from '../exec.js';
 import { LAUNCHD_LABEL, SERVICE_UNIT, WINDOWS_SERVICE, launchdPlistPath } from '../service.js';
 import { bold, dim, fail, green, note, say, yellow } from '../out.js';
-import { findLegacyService, retireLegacyService } from '../legacyService.js';
+import { findLegacyServices, retireLegacyService } from '../legacyService.js';
 
 export interface ServiceInstallOptions {
   /** Print the unit and what would happen, without writing anything. */
@@ -59,14 +60,14 @@ export async function serviceInstallCommand(opts: ServiceInstallOptions = {}): P
     fail(
       'this is running from the npx cache, which npm is free to delete — a service\n' +
         '  pointing into it would break without warning. Install it first:\n' +
-        `    npm install -g ${PACKAGE_NAME} && squeakr service install --now`,
+        `    npm install -g ${PACKAGE_NAME} && squeaky service install --now`,
     );
     return 1;
   }
 
-  // The AgentVoice-era service (docs/45) would fight this one for the port.
-  const legacy = await findLegacyService();
-  if (legacy) await retireLegacyService(legacy, { dryRun: opts.dryRun });
+  // A Squeakr- or AgentVoice-era service (docs/45, docs/46) would fight this
+  // one for the port.
+  for (const legacy of await findLegacyServices()) await retireLegacyService(legacy, { dryRun: opts.dryRun });
 
   const home = resolveHome();
   if (process.platform === 'darwin') return installLaunchd(home, opts);
@@ -103,13 +104,13 @@ function servicePath(): string {
 
 /**
  * What the service should run: this Node and this install's launcher, by
- * absolute path, so it works whether or not `squeakr` is on the service's
+ * absolute path, so it works whether or not `squeaky` is on the service's
  * PATH. Falls back to the bare command when there is no shim (never expected).
  */
 function launchCommand(): string[] {
-  const shim = join(detectInstallMode().root, 'bin', 'squeakr.mjs');
+  const shim = join(detectInstallMode().root, 'bin', 'squeaky.mjs');
   if (existsSync(shim)) return [process.execPath, shim, 'run'];
-  return ['squeakr', 'run'];
+  return ['squeaky', 'run'];
 }
 
 /**
@@ -162,8 +163,8 @@ function writeIfChanged(path: string, content: string, force: boolean | undefine
 
 // ── Linux: systemd user unit ───────────────────────────────────────────────
 
-/** The user unit a .deb / .rpm installs (packaging/squeakr.user.service). */
-const PACKAGED_USER_UNIT = '/usr/lib/systemd/user/squeakr.service';
+/** The user unit a .deb / .rpm installs (packaging/squeaky.user.service). */
+const PACKAGED_USER_UNIT = '/usr/lib/systemd/user/squeaky.service';
 
 function userUnitPath(): string {
   const base = process.env['XDG_CONFIG_HOME']?.trim() || join(homedir(), '.config');
@@ -172,8 +173,8 @@ function userUnitPath(): string {
 
 function renderUnit(opts: { exec: string; home: string; stop?: string }): string {
   return `[Unit]
-Description=Squeakr Bridge
-Documentation=https://github.com/dixonSolutions/Squeakr
+Description=Squeaky Bridge
+Documentation=https://github.com/dixonSolutions/Squeaky
 After=network-online.target
 Wants=network-online.target
 
@@ -186,7 +187,7 @@ RestartSec=3
 # Agent CLIs live in per-user bin directories a user unit would not see.
 Environment=PATH=${servicePath()}
 Environment=NODE_ENV=production
-Environment=SQUEAKR_HOME=${opts.home}
+Environment=SQUEAKY_HOME=${opts.home}
 
 [Install]
 WantedBy=default.target
@@ -198,7 +199,7 @@ async function installSystemd(home: string, opts: ServiceInstallOptions): Promis
   if (!ran(probe)) {
     fail(
       'systemd user services are not available on this host.\n' +
-        '  Run the bridge in the foreground instead:  squeakr run',
+        '  Run the bridge in the foreground instead:  squeaky run',
     );
     return 1;
   }
@@ -302,12 +303,12 @@ ${strings(opts.args)}
     <string>${xmlEscape(opts.path)}</string>
     <key>NODE_ENV</key>
     <string>production</string>
-    <key>SQUEAKR_HOME</key>
+    <key>SQUEAKY_HOME</key>
     <string>${xmlEscape(opts.home)}</string>
   </dict>
   <key>RunAtLoad</key>
   <true/>
-  <!-- Restart after a crash, but let \`squeakr stop\` stay stopped. -->
+  <!-- Restart after a crash, but let \`squeaky stop\` stay stopped. -->
   <key>KeepAlive</key>
   <dict>
     <key>SuccessfulExit</key>
@@ -355,7 +356,7 @@ async function installLaunchd(home: string, opts: ServiceInstallOptions): Promis
 
   note('');
   note(`  ${bold('Start it (and at every login from now on):')}`);
-  note('    squeakr start');
+  note('    squeaky start');
   return 0;
 }
 
@@ -375,12 +376,12 @@ async function installWindows(home: string, opts: ServiceInstallOptions): Promis
   const steps: string[][] = [
     ['install', WINDOWS_SERVICE, program!, ...args],
     ['set', WINDOWS_SERVICE, 'AppDirectory', home],
-    ['set', WINDOWS_SERVICE, 'Description', 'Squeakr Bridge'],
+    ['set', WINDOWS_SERVICE, 'Description', 'Squeaky Bridge'],
     ['set', WINDOWS_SERVICE, 'Start', 'SERVICE_AUTO_START'],
     ['set', WINDOWS_SERVICE, 'AppRestartDelay', '3000'],
     ['set', WINDOWS_SERVICE, 'AppStdout', log],
     ['set', WINDOWS_SERVICE, 'AppStderr', log],
-    ['set', WINDOWS_SERVICE, 'AppEnvironmentExtra', 'NODE_ENV=production', `SQUEAKR_HOME=${home}`],
+    ['set', WINDOWS_SERVICE, 'AppEnvironmentExtra', 'NODE_ENV=production', `SQUEAKY_HOME=${home}`],
   ];
 
   if (opts.dryRun || !nssm) {
@@ -434,7 +435,7 @@ async function installWindows(home: string, opts: ServiceInstallOptions): Promis
     say(`${green('started')}  ${WINDOWS_SERVICE}`);
   } else {
     note('');
-    note(`  ${bold('Start it:')}  squeakr start`);
+    note(`  ${bold('Start it:')}  squeaky start`);
   }
   return 0;
 }
@@ -454,9 +455,9 @@ function safeRead(path: string): string | null {
 // ── Uninstall ─────────────────────────────────────────────────────────────
 
 /**
- * `squeakr service uninstall` — stop the service and remove what `service
+ * `squeaky service uninstall` — stop the service and remove what `service
  * install` wrote. npm (v7+) runs no uninstall scripts, so this is the step
- * before `npm uninstall -g`. The bridge home (~/.squeakr: config, database,
+ * before `npm uninstall -g`. The bridge home (~/.squeaky: config, database,
  * token) is never touched.
  */
 export async function serviceUninstallCommand(opts: { dryRun?: boolean } = {}): Promise<number> {
@@ -526,8 +527,8 @@ export async function serviceUninstallCommand(opts: { dryRun?: boolean } = {}): 
     // The package's unit stays on disk (the package owns it) and may be
     // enabled for every user; mask it so it stays off for this one.
     await capture('systemctl', ['--user', 'mask', SERVICE_UNIT]);
-    say(`${green('disabled')}  ${SERVICE_UNIT} ${dim('(packaged unit, masked for this user — `systemctl --user unmask squeakr` undoes it)')}`);
+    say(`${green('disabled')}  ${SERVICE_UNIT} ${dim('(packaged unit, masked for this user — `systemctl --user unmask squeaky` undoes it)')}`);
   }
-  say(dim('  Your bridge home (~/.squeakr) is left as it was.'));
+  say(dim('  Your bridge home (~/.squeaky) is left as it was.'));
   return 0;
 }

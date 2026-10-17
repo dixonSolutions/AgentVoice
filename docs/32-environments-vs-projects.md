@@ -1,7 +1,7 @@
 # 32 — Environment selection vs. the project registry (issue #40)
 
 > Diagnosis, September 2026. Nothing here is implemented yet — this records
-> *why* the request in [#40](https://github.com/dixonSolutions/Squeakr/issues/40)
+> *why* the request in [#40](https://github.com/dixonSolutions/Squeaky/issues/40)
 > collides with the current model and what the least-damaging path looks like.
 
 ## The ask
@@ -23,9 +23,9 @@ project is an absolute path on the host the bridge runs on**.
 | Diff / revert | `simple-git` opens the same path for `agent_diff`, `agent_revert`, checkpoints | `executor/git.ts`, `mcp/tools/*` |
 | Watcher | stdout of a local child process is the only progress signal | `executor/watcher.ts`, `executor/agentProcess.ts` |
 | Resume | `resume_id` is a thread in the *local* CLI's store (`~/.claude/projects`, `~/.codex/sessions`, …); `sessionStatus()` inspects that store | `providers/agents/*.ts sessionStatus`, `state/resumeMigration.ts` |
-| MCP registration | the CLI's config on this host gets the `squeakr` server entry so the spawned process can call back | `providers/agents/mcpRegistration.ts` |
+| MCP registration | the CLI's config on this host gets the `squeaky` server entry so the spawned process can call back | `providers/agents/mcpRegistration.ts` |
 | Auth | `checkAuth()` / login flows talk to the CLI on this host; tokens land in this host's `.env` / keyring | `providers/agents/*.ts`, `state/envFile.ts` |
-| Deployment | systemd `ReadWritePaths` whitelists exactly those local paths | `squeakr.service` |
+| Deployment | systemd `ReadWritePaths` whitelists exactly those local paths | `squeaky.service` |
 
 An "environment" changes the answer to *where does the path live and who runs
 the binary*, which is the one thing all eight layers hard-code. That is the
@@ -75,8 +75,8 @@ and make the desktop case the only one that carries a path:
 
 ```jsonc
 {
-  "name": "squeakr",
-  "environment": { "kind": "desktop", "path": "/home/…/Squeakr" },   // today's shape, explicit
+  "name": "squeaky",
+  "environment": { "kind": "desktop", "path": "/home/…/Squeaky" },   // today's shape, explicit
   // or
   "environment": { "kind": "ssh", "host": "devbox", "path": "/srv/…" },
   // or

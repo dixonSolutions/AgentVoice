@@ -21,7 +21,7 @@ export type LogFolder = (typeof LOG_FOLDERS)[number];
 export interface LogDirOptions {
   /** settings.logging.dir */
   dir?: string;
-  /** $SQUEAKR_LOG_DIR (legacy $AGENTVOICE_LOG_DIR), when the caller reads it from somewhere other than process.env. */
+  /** $SQUEAKY_LOG_DIR (legacy $SQUEAKR_LOG_DIR / $AGENTVOICE_LOG_DIR), when the caller reads it from somewhere other than process.env. */
   envDir?: string;
   /**
    * The bridge home that relative paths resolve against. The bridge runs with
@@ -31,7 +31,7 @@ export interface LogDirOptions {
   home?: string;
 }
 
-/** Base log directory: `SQUEAKR_LOG_DIR` (or legacy `AGENTVOICE_LOG_DIR`), else `settings.logging.dir`, else ./logs. */
+/** Base log directory: `SQUEAKY_LOG_DIR` (or legacy `SQUEAKR_LOG_DIR` / `AGENTVOICE_LOG_DIR`), else `settings.logging.dir`, else ./logs. */
 export function logBaseDir(opts: LogDirOptions = {}): string {
   const base = (opts.envDir ?? brandEnv('LOG_DIR'))?.trim() || opts.dir || 'logs';
   return resolve(opts.home ?? process.cwd(), base);

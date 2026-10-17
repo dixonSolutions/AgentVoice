@@ -8,7 +8,7 @@
  * Discord enabled, prints the invite link for the bot, waits for it to come
  * online, then stays up while you try it:
  *
- *   @Squeakr help · sessions · voice default 1 · voice autojoin on · join
+ *   @Squeaky help · sessions · voice default 1 · voice autojoin on · join
  *   …talk in the voice channel: each pause becomes a turn ("ECHO …" is spoken back)
  *
  * The token comes from the environment and is never printed:
@@ -88,7 +88,7 @@ await av.startBridge();
 await av.api('/api/active-project', { project: 'e2e' });
 await av.api('/api/voice-session/prepare', { project: 'e2e' });
 // One turn up front, so there is a session to list, pin and continue.
-await av.api('/api/turns', { text: 'start the Squeakr live check' });
+await av.api('/api/turns', { text: 'start the Squeaky live check' });
 say(`bridge up at ${av.base} (scratch home ${av.instance})`);
 say(`invite the bot: ${invite}`);
 

@@ -1,7 +1,7 @@
 /**
  * Project registry CRUD — shared by admin API and MCP manage tool.
  *
- * Projects are allowlisted codebases Squeakr may open via cursor-agent.
+ * Projects are allowlisted codebases Squeaky may open via cursor-agent.
  * config.json is authoritative; reconcileRegistry() syncs to SQLite.
  */
 
@@ -14,7 +14,7 @@ import { reconcileRegistry } from './registry.js';
 const SLUG_RE = /^[a-z0-9_-]+$/;
 
 export const PROJECTS_CATALOG_DESCRIPTION =
-  'Squeakr projects are allowlisted codebases the bridge may open as cursor-agent workspaces. ' +
+  'Squeaky projects are allowlisted codebases the bridge may open as cursor-agent workspaces. ' +
   'Each entry has a slug name, spoken aliases for STT, and an absolute path on the host. ' +
   'The user selects the active project in the PWA dropdown before voice; the model may list or switch projects via tools. ' +
   'Paths are never sent to the phone — only names, aliases, and descriptions.';
@@ -97,7 +97,7 @@ export interface AddProjectInput {
   description?: string;
   aliases?: string[];
   enabled?: boolean;
-  /** docs/37 §4 — let the phone write into sessions Squeakr did not start. */
+  /** docs/37 §4 — let the phone write into sessions Squeaky did not start. */
   allowExternalSessions?: boolean;
   /** docs/37 §2 — tell sessions in this project to poll check_messages(). */
   externalMailbox?: boolean;

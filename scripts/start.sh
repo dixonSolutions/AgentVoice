@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# Squeakr — start script (Linux)
+# Squeaky — start script (Linux)
 #
 # Starts the production HOST bridge back up after `npm run stop`.
 # Counterpart to scripts/stop.sh. (The local dev server `npm run dev` runs on a
 # separate port — default 5089 — and is managed independently.)
-#   1. Starts the squeakr.service systemd unit
-#   2. Starts the squeakr-watch.path unit (auto-restart on rebuilds)
+#   1. Starts the squeaky.service systemd unit
+#   2. Starts the squeaky-watch.path unit (auto-restart on rebuilds)
 #   3. Falls back to a manual nohup process when no systemd unit exists
 #   4. Runs a /healthz check to confirm startup
 #
@@ -48,7 +48,7 @@ if [[ "$(uname -s)" != "Linux" ]]; then
   err "This script is Linux-only. Use start.ps1 on Windows."
 fi
 
-echo -e "${CYN}${BLD}Squeakr — start${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
+echo -e "${CYN}${BLD}Squeaky — start${NC}  |  Project: ${BLD}${PROJECT_DIR}${NC}"
 
 # ── Load .env for PORT ──────────────────────────────────────────────────────
 ENV_FILE="${PROJECT_DIR}/.env"
@@ -65,26 +65,38 @@ fi
 DIST_FILE="${PROJECT_DIR}/dist/index.js"
 
 # ── Start systemd units (user, then system), else manual nohup ──────────────
-if [ "$(systemctl --user show -p LoadState --value squeakr.service 2>/dev/null)" = loaded ]; then
+# The unit to start: squeaky's, or on an install from before a rename that
+# `squeaky upgrade-from-squeakr` has not moved over yet, squeakr's or
+# agentvoice's (docs/45, docs/46).
+SVC=squeaky
+for name in squeaky squeakr agentvoice; do
+  if [ "$(systemctl --user show -p LoadState --value "${name}.service" 2>/dev/null)" = loaded ] ||
+     [ "$(systemctl show -p LoadState --value "${name}.service" 2>/dev/null)" = loaded ]; then
+    SVC="$name"; break
+  fi
+done
+[[ "$SVC" == squeaky ]] || warn "Starting the pre-rename ${SVC}.service — move it over with: squeaky upgrade-from-squeakr"
+
+if [ "$(systemctl --user show -p LoadState --value "${SVC}.service" 2>/dev/null)" = loaded ]; then
   section "Starting systemd user units"
-  systemctl --user start squeakr.service
-  systemctl --user start squeakr-watch.path 2>/dev/null || \
-    warn "squeakr-watch.path not started (auto-restart on rebuild disabled)."
+  systemctl --user start "${SVC}.service"
+  systemctl --user start "${SVC}-watch.path" 2>/dev/null || \
+    warn "${SVC}-watch.path not started (auto-restart on rebuild disabled)."
   sleep 1
-  if systemctl --user is-active --quiet squeakr.service; then
-    ok "squeakr.service started."
+  if systemctl --user is-active --quiet "${SVC}.service"; then
+    ok "${SVC}.service started."
   else
-    warn "Service may have failed. Check: journalctl --user -u squeakr -n 30"
-    systemctl --user status squeakr.service --no-pager -l | tail -15
+    warn "Service may have failed. Check: journalctl --user -u ${SVC} -n 30"
+    systemctl --user status "${SVC}.service" --no-pager -l | tail -15
   fi
 
-elif [ "$(systemctl show -p LoadState --value squeakr.service 2>/dev/null)" = loaded ]; then
+elif [ "$(systemctl show -p LoadState --value "${SVC}.service" 2>/dev/null)" = loaded ]; then
   section "Starting systemd system unit"
-  sudo systemctl start squeakr.service
-  sudo systemctl start squeakr-watch.path 2>/dev/null || true
+  sudo systemctl start "${SVC}.service"
+  sudo systemctl start "${SVC}-watch.path" 2>/dev/null || true
   sleep 1
-  systemctl status squeakr.service --no-pager -l | head -12
-  ok "system squeakr.service started."
+  systemctl status "${SVC}.service" --no-pager -l | head -12
+  ok "system ${SVC}.service started."
 
 else
   section "Starting bridge manually (no systemd unit)"
@@ -93,7 +105,7 @@ else
   # The bridge writes its own session log (logs/serve/bridge/); this captures
   # raw stdout/stderr too — crashes before the logger starts land only here.
   # One file per start, named by date; the bridge gzips older ones.
-  CONSOLE_DIR="${SQUEAKR_LOG_DIR:-${AGENTVOICE_LOG_DIR:-${PROJECT_DIR}/logs}}/serve/console"
+  CONSOLE_DIR="${SQUEAKY_LOG_DIR:-${SQUEAKR_LOG_DIR:-${AGENTVOICE_LOG_DIR:-${PROJECT_DIR}/logs}}}/serve/console"
   mkdir -p "$CONSOLE_DIR"
   CONSOLE_LOG="${CONSOLE_DIR}/$(date +%Y-%m-%d_%H-%M-%S).log"
   NODE_BIN="$(command -v node || echo node)"
@@ -123,11 +135,11 @@ fi
 if $TAIL_LOGS; then
   echo ""
   info "Tailing logs (Ctrl-C to stop)..."
-  journalctl --user -u squeakr -f --no-pager
+  journalctl --user -u "${SVC}" -f --no-pager
 fi
 
 echo ""
 ok "Done."
-echo -e "  ${BLU}Logs:${NC} journalctl --user -u squeakr -f"
+echo -e "  ${BLU}Logs:${NC} journalctl --user -u ${SVC} -f"
 echo -e "  ${BLU}Files:${NC} logs/serve/bridge/ (session logs) · logs/serve/transcripts/ — npm run cli -- logs --list"
 echo ""

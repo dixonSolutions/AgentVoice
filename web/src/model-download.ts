@@ -29,8 +29,8 @@ export const SILERO_MODEL_URL = `${SILERO_ASSET_BASE}silero_vad_v5.onnx`;
 export const ORT_RUNTIME_URL = `${SILERO_ASSET_BASE}ort-wasm-simd-threaded.wasm`;
 
 /** Must match the cache names in web/public/sw.js. */
-export const VOSK_MODEL_CACHE = 'squeakr-vosk-v2';
-export const VOICE_MODEL_CACHE = 'squeakr-models-v1';
+export const VOSK_MODEL_CACHE = 'squeaky-vosk-v2';
+export const VOICE_MODEL_CACHE = 'squeaky-models-v1';
 
 export type ModelDownloadPhase = 'downloading' | 'unpacking';
 

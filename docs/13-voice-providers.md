@@ -1,6 +1,6 @@
 # 13 — Voice Settings & AWS Audio
 
-How Squeakr configures wake words, turn submit timing, and AWS services for
+How Squeaky configures wake words, turn submit timing, and AWS services for
 STT/TTS fallback and the `llm_intelligence` orchestrator.
 
 ## config.json — voice settings
@@ -10,7 +10,7 @@ STT/TTS fallback and the `llm_intelligence` orchestrator.
   "settings": {
     "voice": {
       "wakeWords": {
-        "start": "hey squeaker",
+        "start": "hey squeaky",
         "end": "cursor send",
         "cancel": "cancel",
         "wakeConfidenceThreshold": 0.45

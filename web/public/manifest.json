@@ -1,6 +1,6 @@
 {
-  "name": "Squeakr",
-  "short_name": "Squeakr",
+  "name": "Squeaky",
+  "short_name": "Squeaky",
   "description": "Voice control for your coding agent — hands-free coding on your home machine",
   "display": "standalone",
   "orientation": "portrait",

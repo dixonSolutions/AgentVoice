@@ -1,4 +1,4 @@
-# nfpm recipe for the Squeakr .deb / .rpm (docs/38, #58).
+# nfpm recipe for the Squeaky .deb / .rpm (docs/38, #58).
 #
 # Three decisions this file encodes, all of them load-bearing:
 #
@@ -23,11 +23,12 @@
 #
 # Populated by .github/workflows/npm-publish.yml, which stages the payload into
 # packaging/root/ before calling nfpm.
-# Was `agentvoice` up to 0.1.x (docs/45). The relations below make installing
-# squeakr replace it: `apt install squeakr` removes agentvoice (Conflicts +
-# Replaces), and for dnf `replaces` becomes Obsoletes, so `dnf install
-# squeakr` swaps it. postinstall moves the apt / dnf source to the new URL.
-name: squeakr
+# Was `agentvoice` up to 0.1.x (docs/45), then `squeakr` in 0.2.x (docs/46).
+# The relations below make installing squeaky replace either: `apt install
+# squeaky` removes them (Conflicts + Replaces), and for dnf `replaces` becomes
+# Obsoletes, so `dnf install squeaky` swaps them. postinstall moves the apt /
+# dnf source to the new URL.
+name: squeaky
 arch: ${PKG_ARCH}
 platform: linux
 version: ${PKG_VERSION}
@@ -38,8 +39,8 @@ description: |
   Self-hosted voice bridge for Cursor, Codex, Claude Code and Codewhale.
   Talk to your coding agents from your phone — the bridge runs on your own
   machine and the agents run as you.
-vendor: Squeakr
-homepage: https://github.com/dixonSolutions/Squeakr
+vendor: Squeaky
+homepage: https://github.com/dixonSolutions/Squeaky
 license: MIT
 
 # The speech server is a container image, not a package, so it is a suggestion.
@@ -51,31 +52,37 @@ recommends:
 suggests:
   - podman
 
-# deb: Replaces + Conflicts on every pre-rename agentvoice. rpm: `replaces`
-# is Obsoletes; a Conflicts there would make dnf refuse instead of swap.
+# deb: Replaces + Conflicts on every pre-rename squeakr and agentvoice. rpm:
+# `replaces` is Obsoletes; a Conflicts there would make dnf refuse instead of
+# swap. squeakr is unversioned: squeaky's first release may carry the same
+# version as squeakr's last (0.2.x), and a `<<` relation would then leave
+# squeakr installed beside it. Neither old name is ever published again.
 replaces:
+  - squeakr
   - agentvoice (<< ${PKG_VERSION})
 conflicts:
+  - squeakr
   - agentvoice (<< ${PKG_VERSION})
 overrides:
   rpm:
     replaces:
+      - squeakr
       - agentvoice < ${PKG_VERSION}
     conflicts: []
 
 contents:
-  - src: ./root/usr/lib/squeakr
-    dst: /usr/lib/squeakr
+  - src: ./root/usr/lib/squeaky
+    dst: /usr/lib/squeaky
     type: tree
 
-  - src: ./root/usr/bin/squeakr
-    dst: /usr/bin/squeakr
+  - src: ./root/usr/bin/squeaky
+    dst: /usr/bin/squeaky
     file_info:
       mode: 0755
 
   # Not enabled: post-install prints how, and by which user.
-  - src: ./root/usr/lib/systemd/user/squeakr.service
-    dst: /usr/lib/systemd/user/squeakr.service
+  - src: ./root/usr/lib/systemd/user/squeaky.service
+    dst: /usr/lib/systemd/user/squeaky.service
 
   # The .install-source marker src/serve/installMode.ts reads — so the Serve
   # page shows `apt` / `dnf` instead of an update button it cannot honour — is
@@ -88,7 +95,7 @@ scripts:
 
 deb:
   fields:
-    Bugs: https://github.com/dixonSolutions/Squeakr/issues
+    Bugs: https://github.com/dixonSolutions/Squeaky/issues
 
 rpm:
   group: Development/Tools

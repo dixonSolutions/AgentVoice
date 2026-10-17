@@ -19,7 +19,7 @@
  * spoken answer resolves the card through the paths that already exist.
  */
 
-// Relative rather than the `@squeakr/client` alias: this module is also
+// Relative rather than the `@squeaky/client` alias: this module is also
 // exercised by the node:test suite, which has no Angular path mapping.
 import type { ApprovalRequest } from '../../packages/client/src/protocol.js';
 

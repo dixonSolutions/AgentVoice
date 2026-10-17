@@ -1,10 +1,10 @@
 /**
- * `squeakr pipe` — stream audio straight into the voice agent.
+ * `squeaky pipe` — stream audio straight into the voice agent.
  *
- *   arecord -f S16_LE -r 16000 -c 1 -t raw | squeakr pipe
- *   squeakr pipe --mic
- *   squeakr pipe --file question.wav
- *   squeakr pipe --mic --project my-app     # select the project first
+ *   arecord -f S16_LE -r 16000 -c 1 -t raw | squeaky pipe
+ *   squeaky pipe --mic
+ *   squeaky pipe --file question.wav
+ *   squeaky pipe --mic --project my-app     # select the project first
  *
  * Audio goes to the bridge's /ws/audio-stream, which cuts it at pauses,
  * transcribes each piece and hands it to the agent as it lands. The agent's
@@ -13,7 +13,7 @@
  * the recommended way to talk to the agent — see docs/41-audio-stream-pipe.md.
  *
  * The conversation goes to stdout and diagnostics to stderr, so
- * `squeakr pipe --mic > convo.txt` keeps just the dialogue; `--json` prints
+ * `squeaky pipe --mic > convo.txt` keeps just the dialogue; `--json` prints
  * every bridge event as NDJSON instead.
  */
 
@@ -139,7 +139,7 @@ export async function pipeCommand(opts: PipeOptions): Promise<number> {
   const home = resolveHome();
   const token = opts.token?.trim() || envValue(home, 'APP_TOKEN')?.trim();
   if (!token) {
-    fail(`no APP_TOKEN — pass --token, or run where ${home}/.env has one (squeakr token --new)`);
+    fail(`no APP_TOKEN — pass --token, or run where ${home}/.env has one (squeaky token --new)`);
     return 1;
   }
 
@@ -148,7 +148,7 @@ export async function pipeCommand(opts: PipeOptions): Promise<number> {
     const bridge = await findBridge(home);
     if (!bridge.answering) {
       const where = bridge.configured?.url ?? 'the configured port';
-      fail(`the bridge is not answering at ${where} — start it (squeakr run, or squeakr start), or pass --url`);
+      fail(`the bridge is not answering at ${where} — start it (squeaky run, or squeaky start), or pass --url`);
       return 1;
     }
     base = bridge.answering.endpoint.url;
@@ -315,7 +315,7 @@ function runPipe(opts: PipeOptions, base: string, token: string, done: (code: nu
       case 'ready': {
         ready = true;
         const seg = msg['segment'] as { segmentSilenceMs?: number } | undefined;
-        status(`squeakr pipe → ${wsUrl}`);
+        status(`squeaky pipe → ${wsUrl}`);
         status(
           dim(
             `  speech-to-text: ${String(msg['stt'])} · segments end after ${seg?.segmentSilenceMs ?? '?'} ms of silence` +

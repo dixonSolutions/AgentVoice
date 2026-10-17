@@ -3,7 +3,7 @@
  * End-to-end latency of the transcript hop: speech engine answers → the web
  * client has the text.
  *
- * A real bridge (`squeakr run`, serve profile) with the real local_whisper
+ * A real bridge (`squeaky run`, serve profile) with the real local_whisper
  * provider pointed at the harness's stand-in Whisper, and the stub agent as
  * "Claude Code". This script then plays the PWA on /ws/audio-stream
  * (`client: "pwa"`, `listen: false`) and streams three phrases in real time.
@@ -27,7 +27,7 @@
  *   - delivery still happens: spawn first, then the running agent
  *
  * Usage:
- *   npm run build:backend && node scripts/live-transcript-latency-test.mjs [--bin squeakr] [--keep]
+ *   npm run build:backend && node scripts/live-transcript-latency-test.mjs [--bin squeaky] [--keep]
  */
 
 import { join } from 'node:path';

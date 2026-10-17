@@ -281,7 +281,7 @@ export function encodeOggOpus(pcm: Buffer, rate: number, bitrate = 32_000): Buff
   head.writeUInt32LE(rate, 12);
   head.writeInt16LE(0, 16);
   head[18] = 0;
-  const vendor = Buffer.from('Squeakr');
+  const vendor = Buffer.from('Squeaky');
   const tags = Buffer.alloc(8 + 4 + vendor.length + 4);
   tags.write('OpusTags', 0, 'ascii');
   tags.writeUInt32LE(vendor.length, 8);

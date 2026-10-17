@@ -108,9 +108,9 @@ export const LEGACY_WAKE_SENSITIVITY_THRESHOLD = {
 } as const;
 
 /** Default wake phrase. Agent-agnostic, and every word is in the Vosk model's vocabulary. */
-export const DEFAULT_WAKE_START = 'hey squeaker';
-/** The default before the Squeakr rename; an untouched config is moved off it. */
-export const LEGACY_WAKE_START = 'cursor listen';
+export const DEFAULT_WAKE_START = 'hey squeaky';
+/** Earlier defaults — "cursor listen", then "hey squeaker" under Squeakr; an untouched config is moved off them. */
+export const LEGACY_WAKE_STARTS = ['cursor listen', 'hey squeaker'] as const;
 
 export const WakeWordsSchema = z
   .object({
@@ -245,7 +245,7 @@ export const VoiceSettingsSchema = z.object({
   workerPollTimeoutMs: z.number().int().min(5_000).max(60_000).default(25_000),
   /** `turns` (recommended) or `stream` — see VOICE_INPUT_MODES. */
   inputMode: z.enum(VOICE_INPUT_MODES).default('turns'),
-  /** Segmentation for `stream` mode and for `squeakr pipe`. */
+  /** Segmentation for `stream` mode and for `squeaky pipe`. */
   stream: AudioStreamSettingsSchema.default({}),
 });
 
@@ -345,7 +345,7 @@ export const SpeechServerSchema = z.object({
   manage: z.enum(['container', 'external']).default('container'),
   runtime: z.enum(['auto', 'docker', 'podman']).default('auto'),
   image: z.string().min(1).default('ghcr.io/speaches-ai/speaches:latest-cpu'),
-  containerName: z.string().min(1).max(64).default('squeakr-speech'),
+  containerName: z.string().min(1).max(64).default('squeaky-speech'),
   /** Host port bound to 127.0.0.1 — never exposed beyond loopback. */
   port: z.number().int().min(1024).max(65535).default(8770),
   /** Port the server listens on inside the container. */
@@ -357,7 +357,7 @@ export const SpeechServerSchema = z.object({
   /** Pass the GPU through (docker --gpus all / podman --device nvidia.com/gpu=all). */
   gpu: z.boolean().default(false),
   /** Named volume for the weights cache, so re-pulling the image keeps models. */
-  modelVolume: z.string().min(1).max(64).default('squeakr-speech-models'),
+  modelVolume: z.string().min(1).max(64).default('squeaky-speech-models'),
   modelCachePath: z.string().min(1).default('/home/ubuntu/.cache/huggingface/hub'),
 });
 
@@ -615,7 +615,7 @@ export const LOG_LEVELS = ['trace', 'debug', 'info', 'warn', 'error'] as const;
  */
 export const LoggingSettingsSchema = z
   .object({
-    /** Relative paths resolve against the working directory. `SQUEAKR_LOG_DIR` (legacy `AGENTVOICE_LOG_DIR`) overrides. */
+    /** Relative paths resolve against the working directory. `SQUEAKY_LOG_DIR` (legacy `AGENTVOICE_LOG_DIR`) overrides. */
     dir: z.string().min(1).default('logs'),
     /** Write a text .log file per bridge session (terminal / journald output is unchanged). */
     files: z.boolean().default(true),
@@ -640,7 +640,7 @@ export const AGENT_CLIENTS = ['cursor', 'codex', 'claude-code', 'codewhale'] as 
 export type AgentClient = (typeof AGENT_CLIENTS)[number];
 
 /**
- * Folders Squeakr owns as sources for automatic project registration.
+ * Folders Squeaky owns as sources for automatic project registration.
  *
  * A hot path is a container, never a project itself. Its immediate Git
  * subdirectories become allowlisted projects; add a nested container as a
@@ -670,13 +670,13 @@ export const ChannelCommonSchema = z.object({
   /**
    * Platform user ids allowed to command the bridge. Empty = nobody: a bot
    * token is control of your machine, so strangers are told their id and
-   * ignored until it is added here (`squeakr channel allow …`).
+   * ignored until it is added here (`squeaky channel allow …`).
    */
   allowUsers: z.array(z.string().min(1)).default([]),
   /** In group chats, react only when @-mentioned (or to the command prefix). DMs always count. */
   requireMention: z.boolean().default(true),
   /**
-   * The conversation that is Squeakr's own (a Discord text channel, a
+   * The conversation that is Squeaky's own (a Discord text channel, a
    * Telegram group, a Slack channel): untagged messages there count as for
    * the bot — commands, or text the agent takes as a turn — and calls and
    * session logs are posted there. null = DMs and mentions only.
@@ -767,7 +767,7 @@ const SettingsSchema = z.object({
   userName: z.string().min(1).max(64).optional(),
   /**
    * Active agent client for worker and voice agent spawning.
-   * Each client registers the squeakr MCP server through its own provider.
+   * Each client registers the squeaky MCP server through its own provider.
    * See docs/23-multi-agent-client.md for installation and flag details.
    */
   agentClient: z.enum(AGENT_CLIENTS).default('cursor'),
@@ -800,8 +800,8 @@ const ProjectConfigSchema = z.object({
   /**
    * Tell sessions in this project to poll `check_messages()`.
    *
-   * A session Squeakr did not start only receives mailbox messages if its
-   * squeakr rule tells it to look, which is why this is opt-in per project
+   * A session Squeaky did not start only receives mailbox messages if its
+   * squeaky rule tells it to look, which is why this is opt-in per project
    * rather than a global switch.
    */
   externalMailbox: z.boolean().default(false),
@@ -952,9 +952,9 @@ function migrateAudioSettings(audio: Record<string, unknown>): void {
 }
 
 /**
- * A speech server set up before the Squeakr rename runs as the container
+ * A speech server set up before the Squeakr rename (docs/45) runs as the container
  * `agentvoice-speech` with its models in the volume `agentvoice-speech-models`.
- * The defaults are now `squeakr-*`; a config that configured the server but
+ * The defaults are now `squeaky-*`; a config that configured the server but
  * left the names to the defaults is pinned to the old ones, so the upgrade
  * does not start a second container and download every model again.
  */
@@ -983,12 +983,14 @@ export function migrateRawConfig(raw: unknown): unknown {
         ww['end'] = 'send';
       }
       // The default wake phrase was "cursor listen" — from when this only
-      // drove Cursor. It is "hey squeaker" now, whichever agent CLI is in use
-      // ("squeakr" itself is not in the wake-word model's vocabulary). A
-      // phrase someone chose is left alone; only the untouched default moves.
-      if (typeof ww['start'] === 'string' && ww['start'].trim().toLowerCase() === LEGACY_WAKE_START) {
+      // drove Cursor — then "hey squeaker" under the Squeakr name, which was
+      // not in the wake-word model's vocabulary. It is "hey squeaky" now,
+      // whichever agent CLI is in use. A phrase someone chose is left alone;
+      // only an untouched default moves.
+      const start = typeof ww['start'] === 'string' ? ww['start'].trim().toLowerCase() : '';
+      if ((LEGACY_WAKE_STARTS as readonly string[]).includes(start)) {
         ww['start'] = DEFAULT_WAKE_START;
-        log.info({ from: LEGACY_WAKE_START, to: DEFAULT_WAKE_START }, 'Migrated config — default wake phrase');
+        log.info({ from: start, to: DEFAULT_WAKE_START }, 'Migrated config — default wake phrase');
       }
     }
     if (!voice['turnSubmit'] || typeof voice['turnSubmit'] !== 'object') {

@@ -29,13 +29,16 @@ read_backend_port() {
 
 BRIDGE_PORT="$(read_backend_port)"
 
-if systemctl --user is-active --quiet squeakr.service 2>/dev/null; then
-  warn "squeakr.service is running (serve mode)."
-  warn "Stopping it so npm run dev can use test ports (:${BRIDGE_PORT} bridge, :4200 Angular)."
-  systemctl --user stop squeakr.service
-fi
+# squeaky's, or a pre-rename squeakr / agentvoice unit (docs/45, docs/46).
+for svc in squeaky squeakr agentvoice; do
+  if systemctl --user is-active --quiet "${svc}.service" 2>/dev/null; then
+    warn "${svc}.service is running (serve mode)."
+    warn "Stopping it so npm run dev can use test ports (:${BRIDGE_PORT} bridge, :4200 Angular)."
+    systemctl --user stop "${svc}.service"
+  fi
+done
 
 info "Dev: open http://localhost:4200 — API/WS proxy to bridge on :${BRIDGE_PORT}"
 exec env NODE_ENV=development npx concurrently -n web,server -c cyan,magenta \
-  "ng serve squeakr-web" \
+  "ng serve squeaky-web" \
   "nodemon"

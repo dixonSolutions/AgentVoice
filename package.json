@@ -1,10 +1,10 @@
 {
-  "name": "squeakr",
+  "name": "squeaky-cli",
   "publishConfig": {
     "access": "public"
   },
   "version": "0.2.3",
-  "description": "Squeakr — talk to your coding agent. Self-hosted voice bridge for Cursor, Codex, Claude Code and Codewhale CLIs",
+  "description": "Squeaky — talk to your coding agent. Self-hosted voice bridge for Cursor, Codex, Claude Code and Codewhale CLIs",
   "keywords": [
     "voice",
     "agent",
@@ -19,25 +19,25 @@
     "mcp",
     "pwa"
   ],
-  "homepage": "https://github.com/dixonSolutions/Squeakr#readme",
+  "homepage": "https://github.com/dixonSolutions/Squeaky#readme",
   "bugs": {
-    "url": "https://github.com/dixonSolutions/Squeakr/issues"
+    "url": "https://github.com/dixonSolutions/Squeaky/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/dixonSolutions/Squeakr.git"
+    "url": "git+https://github.com/dixonSolutions/Squeaky.git"
   },
   "author": "dixonSolutions",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "squeakr": "bin/squeakr.mjs"
+    "squeaky": "bin/squeaky.mjs"
   },
   "files": [
     "bin/",
     "dist/",
     "prompts/",
-    "scripts/migrate-to-squeakr.sh",
+    "scripts/migrate-to-squeaky.sh",
     "web/dist/",
     "!web/dist/vosk/model.tar.gz",
     "config.example.json",
@@ -51,10 +51,10 @@
   "scripts": {
     "build": "npm run build:backend && npm run build:web",
     "build:backend": "tsup",
-    "build:web": "ng build squeakr-web --configuration production",
-    "cli": "node bin/squeakr.mjs",
+    "build:web": "ng build squeaky-web --configuration production",
+    "cli": "node bin/squeaky.mjs",
     "dev": "bash scripts/dev.sh",
-    "dev:web": "ng serve squeakr-web",
+    "dev:web": "ng serve squeaky-web",
     "gen-icons": "node scripts/gen-icons.mjs",
     "gen-vapid-keys": "bash scripts/gen-vapid-keys.sh",
     "mobile:sync": "npm run build:web && cd mobile && npm install --legacy-peer-deps && npx cap sync",

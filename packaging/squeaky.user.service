@@ -3,21 +3,21 @@
 # A user unit, not a system one: the bridge spawns the agent CLIs with the
 # developer's own credentials and writes their ~/.cursor/mcp.json,
 # ~/.codex/config.toml and ~/.claude.json. The repo's system unit
-# (User=squeakr, ProtectSystem=strict) only suits a dedicated server.
+# (User=squeaky, ProtectSystem=strict) only suits a dedicated server.
 #
 # The explicit PATH is not decoration: a systemd user unit inherits a minimal
 # environment, and every agent CLI installs itself into a per-user bin
 # directory, so without this the bridge starts and then cannot find a single
 # agent to run.
 [Unit]
-Description=Squeakr Bridge
-Documentation=https://github.com/dixonSolutions/Squeakr
+Description=Squeaky Bridge
+Documentation=https://github.com/dixonSolutions/Squeaky
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/squeakr run
+ExecStart=/usr/bin/squeaky run
 Restart=on-failure
 RestartSec=3
 Environment=NODE_ENV=production

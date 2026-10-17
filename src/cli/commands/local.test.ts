@@ -55,7 +55,7 @@ test('local refuses a missing directory before creating anything', async () => {
   const err = process.stderr.write.bind(process.stderr);
   process.stderr.write = ((chunk: string | Uint8Array) => ((output += String(chunk)), true)) as typeof process.stderr.write;
   try {
-    assert.equal(await localCommand({ dir: '/definitely/not/here/squeakr' }), 1);
+    assert.equal(await localCommand({ dir: '/definitely/not/here/squeaky' }), 1);
   } finally {
     process.stderr.write = err;
   }

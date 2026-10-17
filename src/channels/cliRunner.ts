@@ -1,7 +1,7 @@
 /**
- * Running `squeakr <argv>` for a chat — the same file the `squeakr`
+ * Running `squeaky <argv>` for a chat — the same file the `squeaky`
  * command runs (this package's dist/cli.js), against this bridge's own home,
- * with SQUEAKR_MARKDOWN=1 so answers carry **bold** / `code` marks a chat
+ * with SQUEAKY_MARKDOWN=1 so answers carry **bold** / `code` marks a chat
  * renders instead of terminal colour.
  *
  * Only CHAT_CLI commands get here: the ones that drive the agent (control
@@ -28,12 +28,12 @@ export const HOST_CLI: Readonly<Record<string, string>> = {
   channel: 'channel status; `channel allow <channel> <id>`; `channel set <channel> <key> <value>`',
 };
 
-/** Every `squeakr` command a chat may run. */
+/** Every `squeaky` command a chat may run. */
 export const CHAT_CLI: ReadonlySet<string> = new Set([...CONTROL_COMMANDS, ...Object.keys(HOST_CLI)]);
 
 export interface CliResult {
   ok: boolean;
-  /** What it printed (stdout), or why it failed (stderr, without the `squeakr:` prefix). */
+  /** What it printed (stdout), or why it failed (stderr, without the `squeaky:` prefix). */
   output: string;
 }
 
@@ -48,7 +48,7 @@ function cliEntry(): string | null {
 
 export const runChatCli: CliRunner = (argv) => {
   if (!argv[0] || !CHAT_CLI.has(argv[0])) {
-    return Promise.resolve({ ok: false, output: `\`squeakr ${argv[0] ?? ''}\` is not available from chat — run it on the host.` });
+    return Promise.resolve({ ok: false, output: `\`squeaky ${argv[0] ?? ''}\` is not available from chat — run it on the host.` });
   }
   if (argv.some((a) => a === '-f' || a === '--follow')) {
     return Promise.resolve({ ok: false, output: 'following a log never ends — use `logs -n 50` instead' });
@@ -64,11 +64,11 @@ export const runChatCli: CliRunner = (argv) => {
         cwd: home,
         timeout: CLI_TIMEOUT_MS,
         maxBuffer: 1 << 20,
-        env: { ...process.env, SQUEAKR_HOME: home, SQUEAKR_MARKDOWN: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
+        env: { ...process.env, SQUEAKY_HOME: home, SQUEAKY_MARKDOWN: '1', NO_COLOR: '1', FORCE_COLOR: '0' },
       },
       (err, stdout, stderr) => {
         const out = stripAnsi(stdout).trim();
-        const why = stripAnsi(stderr).replace(/^squeakr:\s*/gm, '').trim();
+        const why = stripAnsi(stderr).replace(/^squeaky:\s*/gm, '').trim();
         if (err) done({ ok: false, output: why || out || err.message });
         else done({ ok: true, output: out || why });
       },

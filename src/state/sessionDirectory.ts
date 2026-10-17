@@ -2,7 +2,7 @@
  * Session directory — every agent session the user could be talking about, in
  * one list (docs/37 §1, #56).
  *
- * Before this the phone could only see rows Squeakr itself had written:
+ * Before this the phone could only see rows Squeaky itself had written:
  * `listCursorSessionsForProject` reads the `job` and `voice_agent_run` tables
  * and nothing else. Meanwhile the host routinely runs several `claude`
  * sessions the user started themselves, and the bridge's own worktree workers
@@ -184,7 +184,7 @@ function workerEntries(opts: DirectoryOptions): SessionEntry[] {
       startedAt: run.startedAt.toISOString(),
       lastActivityAt: null,
       elapsedMs: Date.now() - run.startedAt.getTime(),
-      // A running worker reads its mailbox on its next Squeakr tool call.
+      // A running worker reads its mailbox on its next Squeaky tool call.
       delivery: 'mailbox',
       requiresConfirmation: false,
       pendingMessages: pendingCount(run.refId),
@@ -331,7 +331,7 @@ function externalEntries(projects: Project[], opts: DirectoryOptions): SessionEn
 
     const provider = getProvider(proc.provider);
     /**
-     * Writing into a session Squeakr did not start *is* prompt injection,
+     * Writing into a session Squeaky did not start *is* prompt injection,
      * and that session may be running with bypass permissions — so anyone
      * holding APP_TOKEN could otherwise drive it. Off unless the project opts
      * in (docs/37 §4); until then the row is visible but read-only.
@@ -359,7 +359,7 @@ function externalEntries(projects: Project[], opts: DirectoryOptions): SessionEn
       delivery: writable ? 'fork' : 'read_only',
       requiresConfirmation: true,
       pendingMessages: 0,
-      summary: `Started outside Squeakr in ${proc.cwd}`,
+      summary: `Started outside Squeaky in ${proc.cwd}`,
     });
   }
   return out;

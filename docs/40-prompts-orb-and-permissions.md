@@ -12,12 +12,12 @@ proposal.
 
 ## Positions (2026-09-15)
 
-Tracked in [#63](https://github.com/dixonSolutions/Squeakr/issues/63) (prompts read aloud), [#64](https://github.com/dixonSolutions/Squeakr/issues/64) (ask tools and tool consolidation), [#65](https://github.com/dixonSolutions/Squeakr/issues/65) (orb working state) and [#66](https://github.com/dixonSolutions/Squeakr/issues/66) (microphone and audio permissions).
+Tracked in [#63](https://github.com/dixonSolutions/Squeaky/issues/63) (prompts read aloud), [#64](https://github.com/dixonSolutions/Squeaky/issues/64) (ask tools and tool consolidation), [#65](https://github.com/dixonSolutions/Squeaky/issues/65) (orb working state) and [#66](https://github.com/dixonSolutions/Squeaky/issues/66) (microphone and audio permissions).
 
 | Question | Position |
 | --- | --- |
 | Should prompts on screen be read aloud? | **Yes, and configurable** |
-| With permissions bridged, do we still need Squeakr's own ask tools? | **Keep `request_user_input` and `submit_plan_for_approval`; consolidate duplicate tools** |
+| With permissions bridged, do we still need Squeaky's own ask tools? | **Keep `request_user_input` and `submit_plan_for_approval`; consolidate duplicate tools** |
 | Show when an agent is running? | **Yes — a working ring on the orb** |
 | Persist microphone and audio permissions? | **Yes — they are required for the app to work** |
 
@@ -106,7 +106,7 @@ onto the same cards as an optional per-provider capability.
 | `agent_info` / `agent_status` (version vs auth) | one provider-info tool |
 | `set_mode` | an argument on `spawn_agent` |
 | `agent_mcp_list` — "Cursor-only diagnostic" | implement for all four CLIs or declare unsupported per provider (provider rule) |
-| `inject` — never delivers ([#57](https://github.com/dixonSolutions/Squeakr/issues/57)) | rebuilt per [`37`](./37-session-directory-and-inject.md) |
+| `inject` — never delivers ([#57](https://github.com/dixonSolutions/Squeaky/issues/57)) | rebuilt per [`37`](./37-session-directory-and-inject.md) |
 
 Fewer, clearer tools means less prompt text and fewer wrong picks. Keep old
 names as deprecated aliases for one release.
@@ -187,14 +187,14 @@ names as deprecated aliases for one release.
 
 ## Status — implemented September 2026
 
-1. **Prompts read aloud** ([#63](https://github.com/dixonSolutions/Squeakr/issues/63)) —
+1. **Prompts read aloud** ([#63](https://github.com/dixonSolutions/Squeaky/issues/63)) —
    `voice.tts.readPrompts` (`off | announce | question | full`, default
    `question`), spoken on the phone from the card itself in
    `web/src/prompt-speech.ts`, so it is identical for every workflow and every
    CLI. Secrets are never read at any level. The `request_user_input`
    description no longer tells the agent its question is "read aloud" while
    forbidding it to speak.
-2. **The ask tools** ([#64](https://github.com/dixonSolutions/Squeakr/issues/64)) —
+2. **The ask tools** ([#64](https://github.com/dixonSolutions/Squeaky/issues/64)) —
    both kept, as decided. The seven overlapping pairs are consolidated:
    `spawn_agent` is the one way to start work and takes a project and a mode,
    and `get_agent_status`, `stop_agent`, `revert` (`to: checkpoint | head`),
@@ -203,13 +203,13 @@ names as deprecated aliases for one release.
    `agent_mcp_list` is no longer Cursor-only: every provider declares its own
    inspect commands or declares that it has none, verified against the
    installed CLIs.
-3. **The working orb** ([#65](https://github.com/dixonSolutions/Squeakr/issues/65)) —
+3. **The working orb** ([#65](https://github.com/dixonSolutions/Squeaky/issues/65)) —
    a single `agent_busy` event from the bridge (voice turn in progress, worker
    count, open approvals), re-sent on reconnect, drives a sweeping ring for
    `working` and a steady one for `waiting_for_you`, with a caption and a
    static-ring fallback under `prefers-reduced-motion`. Colour still comes only
    from the app theme.
-4. **The microphone** ([#66](https://github.com/dixonSolutions/Squeakr/issues/66)) —
+4. **The microphone** ([#66](https://github.com/dixonSolutions/Squeaky/issues/66)) —
    `web/src/mic-service.ts` owns one shared stream for the app's lifetime; the
    session, the Vosk spotter, server STT and the wake-word test all lease it.
    Tracks are muted rather than stopped between sessions and the device is

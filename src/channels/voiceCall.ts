@@ -1,5 +1,5 @@
 /**
- * A voice call on a channel — the platform-free half of "call Squeakr on
+ * A voice call on a channel — the platform-free half of "call Squeaky on
  * Discord".
  *
  * Shaped like the direct audio stream (docs/41) because that is what a call
@@ -96,7 +96,7 @@ export interface VoiceCallOptions {
   cues?: boolean;
   /** Something the call cannot go on without happened, was said, and the call should end ("stream broken"). */
   onBroken?(reason: string): void;
-  /** Spoken when the call opens ("Squeakr here — continuing …"). */
+  /** Spoken when the call opens ("Squeaky here — continuing …"). */
   greeting?: string;
   deps?: Partial<VoiceCallDeps>;
 }

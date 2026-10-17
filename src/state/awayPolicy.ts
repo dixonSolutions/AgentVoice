@@ -3,8 +3,8 @@
  * the phone, and how it tells the agent.
  *
  * MCP is pull-only: the bridge cannot push "the user left" into a running CLI.
- * So the signal rides on Squeakr tool results, exactly like the pending-turn
- * notice already does. Every squeakr tool result carries a `listener`
+ * So the signal rides on Squeaky tool results, exactly like the pending-turn
+ * notice already does. Every squeaky tool result carries a `listener`
  * block, and the voice tools answer differently while away instead of a bare
  * `NO_VOICE_SESSION` whose message told the agent to "use normal text" — which
  * in practice made it answer into a void and exit.
@@ -101,7 +101,7 @@ export function effectiveAwayPolicy(): AwayPolicy {
   return conversationOverride ?? deps.sessionSettings().onPhoneAway;
 }
 
-/** The `listener` block attached to every squeakr tool result. */
+/** The `listener` block attached to every squeaky tool result. */
 export function listenerBlock(): ListenerBlock {
   const snapshot = deps.presence().snapshot();
   const policy = effectiveAwayPolicy();
@@ -179,7 +179,7 @@ export interface BudgetVerdict {
 const OK: BudgetVerdict = { exceeded: false, reason: null, message: null };
 
 /**
- * Count one squeakr tool call against the away budget and report whether
+ * Count one squeaky tool call against the away budget and report whether
  * the budget is spent. Attended work is never counted.
  */
 export function chargeAwayBudget(now = Date.now()): BudgetVerdict {

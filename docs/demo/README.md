@@ -1,7 +1,7 @@
 # README demo video
 
-`squeakr-demo.mp4` (with sound) and `squeakr-demo.gif` (silent preview
-embedded in the README) show one real voice session in the Squeakr web
+`squeaky-demo.mp4` (with sound) and `squeaky-demo.gif` (silent preview
+embedded in the README) show one real voice session in the Squeaky web
 client: pick the project and model, tap the orb, say the wake word and a
 question, and hear Claude Code answer.
 
@@ -15,7 +15,7 @@ the published cut, verbatim.
 | Who | Line |
 | --- | --- |
 | you | Cursor listen. What does this project do? Answer in one sentence. |
-| agent | Squeakr is a voice bridge that lets you control coding agents like Claude Code hands-free from your phone, by carrying my speech to you and your words back to me. |
+| agent | Squeaky is a voice bridge that lets you control coding agents like Claude Code hands-free from your phone, by carrying my speech to you and your words back to me. |
 
 The bridge's speech-to-text heard the question word for word as "What does
 this project do? Answer in one sentence." The wake phrase is stripped before
@@ -25,8 +25,8 @@ the turn is sent.
 
 - **Bridge:** `node dist/index.js` from a source checkout, run
   with a throwaway config and home: Claude Code as the agent CLI (`manual`
-  permission mode), one project (the Squeakr repository itself, so the agent
-  describes Squeakr), speech-to-text `local_whisper` and text-to-speech
+  permission mode), one project (the Squeaky repository itself, so the agent
+  describes Squeaky), speech-to-text `local_whisper` and text-to-speech
   `local_speech` against a speaches server (faster-whisper small + Kokoro) on
   `127.0.0.1:8770`.
 - **Client:** the built web app served by the bridge, opened by Playwright in

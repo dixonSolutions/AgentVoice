@@ -1,7 +1,7 @@
 /**
  * The default session of a channel conversation.
  *
- * `@Squeakr default <session>` in a Discord channel (or a Telegram chat,
+ * `@Squeaky default <session>` in a Discord channel (or a Telegram chat,
  * a Slack channel, a WhatsApp DM) pins which agent conversation that place
  * talks to: calling the bot there, or `say`-ing something to it, continues
  * that session instead of whatever the phone last used — and a new call does

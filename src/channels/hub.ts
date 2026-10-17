@@ -1,6 +1,6 @@
 /**
  * The shared half of every channel: access control, commands (parsed into the
- * `squeakr` CLI — commands.ts), text and voice messages as turns, reply
+ * `squeaky` CLI — commands.ts), text and voice messages as turns, reply
  * relaying, session logs into the message channel, live status. Adapters own
  * their platform's connection and call into this; this calls back out through
  * `ChannelOutbound`. Nothing here knows which platform it is talking to.
@@ -43,7 +43,7 @@ export interface ChannelOutbound {
 /** How the agent's lines come back to a conversation. */
 export type ReplyMode = 'text' | 'voice' | 'both';
 
-/** A message the adapter decided is for Squeakr. `explicit`: tagged or prefixed (a command even in a stream). */
+/** A message the adapter decided is for Squeaky. `explicit`: tagged or prefixed (a command even in a stream). */
 export interface Addressed {
   text: string;
   explicit: boolean;
@@ -83,7 +83,7 @@ export interface HubDeps {
   listenMs?: number;
   /** Make sure the agent CLI can reach the bridge before the first turn. */
   prepare?: () => Promise<void>;
-  /** Run `squeakr <argv>` for a command (cliRunner.ts). */
+  /** Run `squeaky <argv>` for a command (cliRunner.ts). */
   cli?: CliRunner;
   /** Where an attachment for the agent is saved (default: `<data>/attachments/<day>/`). */
   saveAttachment?: (name: string, data: Buffer) => string;
@@ -200,7 +200,7 @@ export class ChannelHub {
     return targets;
   }
 
-  /** Run `squeakr <argv>` the way a chat command does (an adapter changing a setting). */
+  /** Run `squeaky <argv>` the way a chat command does (an adapter changing a setting). */
   runCli(argv: string[]): Promise<{ ok: boolean; output: string }> {
     return this.cli(argv);
   }
@@ -233,7 +233,7 @@ export class ChannelHub {
   }
 
   /**
-   * Is this message for Squeakr, and what is the command? DMs always are;
+   * Is this message for Squeaky, and what is the command? DMs always are;
    * in a group it takes a mention (already detected by the adapter) or the
    * command prefix, unless `requireMention` is off.
    */
@@ -262,7 +262,7 @@ export class ChannelHub {
     log.warn({ channel, userId }, 'channel message from a user not on the allowlist');
     return (
       `I only take commands from people on my allowlist. Your ${channel} id is \`${userId}\` — ` +
-      `the owner can add it on the host with \`squeakr channel allow ${channel} ${userId}\`.`
+      `the owner can add it on the host with \`squeaky channel allow ${channel} ${userId}\`.`
     );
   }
 
@@ -276,7 +276,7 @@ export class ChannelHub {
   }
 
   /**
-   * A message from an allowlisted user that is addressed to Squeakr. In a
+   * A message from an allowlisted user that is addressed to Squeaky. In a
    * stream everything is a turn — except a tagged / prefixed command and
    * `stream …` itself. Otherwise a command word runs the command; a voice
    * message is a turn; other text gets a pointer to `chat` (in a DM — group

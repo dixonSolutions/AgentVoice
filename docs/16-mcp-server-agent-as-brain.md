@@ -1,6 +1,6 @@
 # 16 — MCP Server: Cursor as Brain
 
-> **Design document:** `squeakr_mcp_design.docx` (dixonSolutions, June 2026)
+> **Design document:** `squeaky_mcp_design.docx` (dixonSolutions, June 2026)
 >
 > This document records the proposed architecture, an honest evaluation of its
 > strengths and weaknesses, the solutions adopted, and the implementation roadmap.
@@ -25,13 +25,13 @@ Cursor's native context window, model, and reasoning do the work.
 ## 2 — How Cursor Discovers the MCP Server
 
 The bridge exposes an **MCP HTTP server** at `/mcp`. On voice session start the
-bridge ensures **global** `~/.cursor/mcp.json` registers `squeakr` so
+bridge ensures **global** `~/.cursor/mcp.json` registers `squeaky` so
 Cursor loads it in **every workspace** (not per-project):
 
 ```json
 {
   "mcpServers": {
-    "squeakr": {
+    "squeaky": {
       "url": "https://<tailscale-hostname>:8787/mcp",
       "transport": "http",
       "headers": { "Authorization": "Bearer <app-token>" }
@@ -42,7 +42,7 @@ Cursor loads it in **every workspace** (not per-project):
 
 Restart Cursor after the first global install. The bridge exposes the tool
 manifest over HTTP. From that point Cursor's conversational agent has the full
-`squeakr` tool surface.
+`squeaky` tool surface.
 
 ---
 
@@ -125,12 +125,12 @@ every running agent session and makes it queryable via `get_agent_status()`.
 
 ## 6 — System Prompt & Boot Lifecycle
 
-Voice agent prompts live in `prompts/squeakr/system.md` (loaded by
-`src/mcp/squeakrPrompt.ts`). A matching Cursor rule exists at
-`.cursor/rules/squeakr.mdc` for `@squeakr` injection — the prompt
-directory moved to `squeakr/` in the rename (see
+Voice agent prompts live in `prompts/squeaky/system.md` (loaded by
+`src/mcp/squeakyPrompt.ts`). A matching Cursor rule exists at
+`.cursor/rules/squeaky.mdc` for `@squeaky` injection — the prompt
+directory moved to `squeaky/` in the rename (see
 [`docs/26-rename-agentvoice.md`](./26-rename-agentvoice.md)), but the MCP
-registration key and rule filename stay `squeakr` for compatibility with
+registration key and rule filename stay `squeaky` for compatibility with
 already-configured `~/.cursor/mcp.json`/`~/.cursor/rules/` on existing installs.
 
 ### First spawn (new session)
@@ -139,10 +139,10 @@ When no `resumeId` exists for the project, `spawnVoiceAgent()` passes the **full
 system prompt plus boot suffix to `cursor-agent -p`:
 
 ```
-<prompts/squeakr/system.md body>
+<prompts/squeaky/system.md body>
 
 ---
-The squeakr MCP server is connected. Start the voice loop now — call next_voice_turn() immediately.
+The squeaky MCP server is connected. Start the voice loop now — call next_voice_turn() immediately.
 ```
 
 ### Resume (existing session)
@@ -150,19 +150,19 @@ The squeakr MCP server is connected. Start the voice loop now — call next_voic
 When the project has a persisted `resumeId`, only a **short** prompt is sent:
 
 ```
-@squeakr
+@squeaky
 
-The squeakr MCP server is connected. Resume the voice loop — call next_voice_turn() immediately.
+The squeaky MCP server is connected. Resume the voice loop — call next_voice_turn() immediately.
 ```
 
-The `@squeakr` mention causes Cursor to inject the rule file. Conversation
+The `@squeaky` mention causes Cursor to inject the rule file. Conversation
 history comes from `--resume <session_id>`; the full system prompt is **not** resent.
 
 Implementation: `src/executor/voiceAgent.ts` — `buildVoiceBootPrompt(project)`.
 
 ### MCP server instructions
 
-Separate from the agent boot prompt: `prompts/squeakr/mcp-instructions.md` is
+Separate from the agent boot prompt: `prompts/squeaky/mcp-instructions.md` is
 returned as MCP server instructions when Cursor connects to `/mcp`.
 
 ---
@@ -220,7 +220,7 @@ even if the pipe existed. Every call returned `delivered: false` while the tool
 description invited the agent to try.
 
 **Resolution adopted (docs/37):** a per-session mailbox that rides out on the
-next Squeakr tool result — a channel that demonstrably exists, because every
+next Squeaky tool result — a channel that demonstrably exists, because every
 worker calls those tools — plus `check_messages()` for an explicit collect.
 Delivery is at the next tool call: later than "live", but real, and reported
 honestly as `mailbox_pending` rather than "sent". `inject` is kept as a
@@ -283,7 +283,7 @@ GET request. Cursor supports custom headers in `mcp.json`:
 ```json
 {
   "mcpServers": {
-    "squeakr": {
+    "squeaky": {
       "url": "https://host:3000/mcp/sse",
       "transport": "sse",
       "headers": { "Authorization": "Bearer <token>" }
@@ -326,7 +326,7 @@ See [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) and
 | `src/mcp/server/modeToolHandlers.ts` | `set_mode`, `execute_plan`, `agent_diff`, `agent_revert` |
 | `src/mcp/server/index.ts` | MCP `Server` using `@modelcontextprotocol/sdk`; tool dispatch |
 | `src/routes/mcpSse.ts` | Fastify SSE route (`GET /mcp/sse`) + post handler (`POST /mcp`) |
-| `prompts/squeakr/system.md` | System prompt for voice mode |
+| `prompts/squeaky/system.md` | System prompt for voice mode |
 | `.cursor/mcp.json.example` | Example MCP registration file |
 
 ### Phase 2 — `agent_native` Workflow ✅
@@ -344,15 +344,15 @@ See [`17-tts-barge-in-and-wake-echo.md`](./17-tts-barge-in-and-wake-echo.md) and
 
 - Voice agent spawns automatically on first `user_turn` when none is running.
 - MCP session bound on first `/mcp` connect (`bindVoiceAgentMcpSession`).
-- Boot prompt: full system prompt on first spawn; `@squeakr` on resume.
+- Boot prompt: full system prompt on first spawn; `@squeaky` on resume.
 
 ### Voice session MCP prepare (implemented)
 
 Before the mic opens, the bridge runs `ensureGlobalMcpSetup()` — **not** per-project:
 
-1. Check **global** `~/.cursor/mcp.json` for `squeakr` entry
+1. Check **global** `~/.cursor/mcp.json` for `squeaky` entry
    (Windows: `%USERPROFILE%\.cursor\mcp.json`)
-2. Install if missing; update if `squeakr.version` (in the MCP entry) is older than bridge
+2. Install if missing; update if `squeaky.version` (in the MCP entry) is older than bridge
 3. Set `enabled: true` and write bridge URL + Bearer token
 4. User root for metadata: `~/Projects` when that folder exists, else `~`
 

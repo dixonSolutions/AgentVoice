@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 import { detectProjectDetails, readmeSummary, slugify } from './projectDetails.js';
 
-const scratch = mkdtempSync(join(tmpdir(), 'squeakr-details-'));
+const scratch = mkdtempSync(join(tmpdir(), 'squeaky-details-'));
 after(() => rmSync(scratch, { recursive: true, force: true }));
 
 function dir(name: string, files: Record<string, string>): string {

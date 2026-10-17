@@ -1,5 +1,5 @@
 /**
- * Shared plumbing for registering the Squeakr MCP server with a coding CLI.
+ * Shared plumbing for registering the Squeaky MCP server with a coding CLI.
  *
  * Each CLI stores MCP servers somewhere different, in a different format:
  *
@@ -16,15 +16,15 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { formatPathForLog } from '../../mcp/hostPaths.js';
 
-/** Canonical MCP server key. Renamed from `agent-voice` (and `cursor-voice` before it) — see MCP_LEGACY_SERVER_NAMES. */
-export const MCP_SERVER_NAME = 'squeakr';
+/** Canonical MCP server key. Renamed from `squeakr` (`agent-voice` and `cursor-voice` before it) — see MCP_LEGACY_SERVER_NAMES. */
+export const MCP_SERVER_NAME = 'squeaky';
 
 /**
  * Server keys written by older builds. Every prepare removes these so a stale
  * entry pointing at a dead port can never register a second, conflicting
  * server alongside the live one.
  */
-export const MCP_LEGACY_SERVER_NAMES = ['agent-voice', 'cursor-voice'] as const;
+export const MCP_LEGACY_SERVER_NAMES = ['squeakr', 'agent-voice', 'cursor-voice'] as const;
 
 /** Bump when the generated MCP entry shape or defaults change. */
 export const MCP_ENTRY_VERSION = '0.3.0';
@@ -56,7 +56,7 @@ export interface McpRegistrationContext {
   /** APP_TOKEN, sent as `Authorization: Bearer …`. */
   token: string;
   /**
-   * The Squeakr system prompt, for CLIs that persist rules in a file
+   * The Squeaky system prompt, for CLIs that persist rules in a file
    * (Cursor's `.mdc`). Passed in rather than imported, because the prompt
    * loader itself resolves the *active provider* for `{{AGENT_DISPLAY_NAME}}` —
    * a provider importing it directly creates an import cycle through the
@@ -103,9 +103,10 @@ export interface JsonMcpEntry {
   transport?: string;
   url: string;
   headers?: Record<string, string>;
-  /** Squeakr bookkeeping so we know when to rewrite the entry. */
+  /** Squeaky bookkeeping so we know when to rewrite the entry. */
+  squeaky?: { version: string; enabled: boolean };
+  /** The same bookkeeping as written before the renames; read, never written. */
   squeakr?: { version: string; enabled: boolean };
-  /** The same bookkeeping as written before the Squeakr rename; read, never written. */
   agentVoice?: { version: string; enabled: boolean };
   disabled?: boolean;
   [key: string]: unknown;
@@ -133,7 +134,7 @@ export function writeJsonConfig(path: string, data: unknown): void {
 }
 
 /**
- * Merge the Squeakr entry into a JSON `mcpServers` map, dropping legacy keys.
+ * Merge the Squeaky entry into a JSON `mcpServers` map, dropping legacy keys.
  * Returns the merged file plus the action that describes what changed, so the
  * caller can skip the write when nothing moved.
  */
@@ -157,9 +158,9 @@ export function mergeJsonMcpEntry(
   let action: McpRegistrationAction;
   if (!current) {
     action = 'installed';
-  } else if (isOlderVersion((current.squeakr ?? current.agentVoice)?.version, ctx.version) || current.url !== entry.url) {
+  } else if (isOlderVersion((current.squeaky ?? current.squeakr ?? current.agentVoice)?.version, ctx.version) || current.url !== entry.url) {
     action = 'updated';
-  } else if (current.disabled === true || (current.squeakr ?? current.agentVoice)?.enabled === false) {
+  } else if (current.disabled === true || (current.squeaky ?? current.squeakr ?? current.agentVoice)?.enabled === false) {
     action = 'enabled';
   } else {
     action = 'unchanged';
@@ -168,7 +169,7 @@ export function mergeJsonMcpEntry(
   servers[ctx.serverName] = {
     ...current,
     ...entry,
-    squeakr: { version: ctx.version, enabled: true },
+    squeaky: { version: ctx.version, enabled: true },
     disabled: false,
   };
 
