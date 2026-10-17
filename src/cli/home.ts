@@ -26,6 +26,7 @@ import {
   statSync,
   rmSync,
   cpSync,
+  realpathSync,
 } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
@@ -65,6 +66,14 @@ export function resolveHome(): string {
   return defaultHomeDir();
 }
 
+function realpathOrNull(path: string): string | null {
+  try {
+    return realpathSync(path);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Point `<home>/<name>` at `<packageRoot>/<name>`. Symlink when the platform
  * allows it (so an upgrade is picked up without re-linking), copy otherwise.
@@ -84,8 +93,12 @@ export function link(home: string, name: string): void {
   }
   if (current) {
     if (!current.isSymbolicLink()) return; // user's own file/dir — leave it alone
-    if (existsSync(dest)) return; // live symlink, already good
-    rmSync(dest, { force: true }); // dangling symlink from an older install
+    // Already pointing at this install. A live link into a *different* install
+    // is replaced too: after `npm i -g squeakr` over AgentVoice the home still
+    // linked into @ratitisrad/agentvoice, so the bridge served — and reported
+    // the version of — a package that upgrade-from-agentvoice then deleted.
+    if (existsSync(dest) && realpathOrNull(dest) === realpathOrNull(target)) return;
+    rmSync(dest, { force: true }); // dangling, or from another install
   }
 
   mkdirSync(dirname(dest), { recursive: true });
