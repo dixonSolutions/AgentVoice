@@ -65,7 +65,7 @@ fi
 DIST_FILE="${PROJECT_DIR}/dist/index.js"
 
 # ── Start systemd units (user, then system), else manual nohup ──────────────
-if systemctl --user cat squeakr.service &>/dev/null; then
+if [ "$(systemctl --user show -p LoadState --value squeakr.service 2>/dev/null)" = loaded ]; then
   section "Starting systemd user units"
   systemctl --user start squeakr.service
   systemctl --user start squeakr-watch.path 2>/dev/null || \
@@ -78,7 +78,7 @@ if systemctl --user cat squeakr.service &>/dev/null; then
     systemctl --user status squeakr.service --no-pager -l | tail -15
   fi
 
-elif systemctl cat squeakr.service &>/dev/null 2>&1; then
+elif [ "$(systemctl show -p LoadState --value squeakr.service 2>/dev/null)" = loaded ]; then
   section "Starting systemd system unit"
   sudo systemctl start squeakr.service
   sudo systemctl start squeakr-watch.path 2>/dev/null || true

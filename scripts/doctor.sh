@@ -216,7 +216,7 @@ if command -v systemctl >/dev/null 2>&1; then
   if systemctl --user is-active --quiet squeakr.service 2>/dev/null; then
     pass "squeakr.service active"
     systemctl --user is-enabled --quiet squeakr.service 2>/dev/null && pass "squeakr.service enabled" || warn "squeakr.service not enabled — systemctl --user enable squeakr"
-  elif systemctl --user cat squeakr.service >/dev/null 2>&1; then
+  elif [ "$(systemctl --user show -p LoadState --value squeakr.service 2>/dev/null)" = loaded ]; then
     if $BRIDGE_UP; then warn "squeakr.service installed but inactive (bridge is running some other way)"
     else fail "squeakr.service inactive — systemctl --user start squeakr"; fi
   else
@@ -318,7 +318,7 @@ if [[ "$HOSTING" == "tailscale" ]]; then
     fi
   fi
 elif [[ "$HOSTING" == "manual" ]]; then
-  if systemctl --user cat squeakr-caddy.service >/dev/null 2>&1; then
+  if [ "$(systemctl --user show -p LoadState --value squeakr-caddy.service 2>/dev/null)" = loaded ]; then
     if systemctl --user is-active --quiet squeakr-caddy.service; then
       pass "squeakr-caddy.service active"
       CADDY_PORT="$(grep -hoE '^:[0-9]+' "${HOME}/.config/squeakr-tls/Caddyfile" "${HOME}/.config/agentvoice-tls/Caddyfile" 2>/dev/null | head -1 | tr -d ':' || true)"

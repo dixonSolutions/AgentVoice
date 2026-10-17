@@ -95,13 +95,26 @@ export async function detectUnit(): Promise<UnitInfo> {
   return cachedUnit;
 }
 
-async function detectSystemd(): Promise<UnitInfo> {
-  const user = await capture('systemctl', ['--user', 'cat', SERVICE_UNIT]);
-  if (!ran(user)) return { scope: 'none', unit: SERVICE_UNIT, noSystemd: true };
-  if (user.code === 0) return { scope: 'user', unit: SERVICE_UNIT, noSystemd: false };
+/**
+ * Is `unit` installed for this manager? Asks for its LoadState rather than
+ * `systemctl cat`: since systemd ~255 `cat` exits 0 for a unit that does not
+ * exist whenever a global drop-in applies to it (Fedora ships
+ * service.d/10-timeout-abort.conf), so every unit looked installed there.
+ * null when systemctl itself cannot run.
+ */
+export async function unitLoaded(managerArgs: string[], unit: string): Promise<boolean | null> {
+  const r = await capture('systemctl', [...managerArgs, 'show', '-p', 'LoadState', '--value', unit]);
+  if (!ran(r)) return null;
+  return r.code === 0 && r.stdout.trim() === 'loaded';
+}
 
-  const system = await capture('systemctl', ['cat', SERVICE_UNIT]);
-  return { scope: system.code === 0 ? 'system' : 'none', unit: SERVICE_UNIT, noSystemd: false };
+async function detectSystemd(): Promise<UnitInfo> {
+  const user = await unitLoaded(['--user'], SERVICE_UNIT);
+  if (user === null) return { scope: 'none', unit: SERVICE_UNIT, noSystemd: true };
+  if (user) return { scope: 'user', unit: SERVICE_UNIT, noSystemd: false };
+
+  const system = await unitLoaded([], SERVICE_UNIT);
+  return { scope: system ? 'system' : 'none', unit: SERVICE_UNIT, noSystemd: false };
 }
 
 function detectLaunchd(): UnitInfo {

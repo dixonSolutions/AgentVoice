@@ -330,7 +330,7 @@ if [[ "$DO_RESTART" != true ]]; then
   emit restart skip "--no-restart"
 else
   UNIT='squeakr.service'
-  if systemctl --user cat "$UNIT" >/dev/null 2>&1; then
+  if [ "$(systemctl --user show -p LoadState --value "$UNIT" 2>/dev/null)" = loaded ]; then
     systemctl --user restart "$UNIT" || fail restart "systemctl --user restart ${UNIT} failed"
     sleep 1
     if systemctl --user is-active --quiet "$UNIT"; then
@@ -338,7 +338,7 @@ else
     else
       fail restart "user unit ${UNIT} did not come back — journalctl --user -u ${UNIT} -n 50"
     fi
-  elif systemctl cat "$UNIT" >/dev/null 2>&1; then
+  elif [ "$(systemctl show -p LoadState --value "$UNIT" 2>/dev/null)" = loaded ]; then
     SUDO=()
     [[ "$(id -u)" -eq 0 ]] || SUDO=(sudo -n)
     "${SUDO[@]}" systemctl restart "$UNIT" \
