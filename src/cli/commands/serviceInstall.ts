@@ -181,7 +181,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=${opts.home}
 ExecStart=${opts.exec}
-${opts.stop ? `ExecStop=-${opts.stop}\n` : ''}Restart=on-failure
+${opts.stop ? `ExecStop=-${opts.stop}\n# The podman client exits 143 when ExecStop ends the bridge: a stop, not a failure.\nSuccessExitStatus=143\n` : ''}Restart=on-failure
 RestartSec=3
 # Agent CLIs live in per-user bin directories a user unit would not see.
 Environment=PATH=${servicePath()}
