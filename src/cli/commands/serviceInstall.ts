@@ -113,6 +113,20 @@ function launchCommand(): string[] {
 }
 
 /**
+ * Inside a distrobox (Bluefin, Aurora, Silverblue and friends) the CLI runs in
+ * the container but the user unit runs on the host, where this Node does not
+ * exist — the unit would fail on every start. Start it through the host's
+ * distrobox-enter into the same container instead. Empty anywhere else.
+ */
+export function distroboxPrefix(env: NodeJS.ProcessEnv = process.env, exists: (p: string) => boolean = existsSync): string[] {
+  const name = env['CONTAINER_ID']?.trim();
+  if (process.platform !== 'linux' || !name || !exists('/run/.containerenv')) return [];
+  // The host's /usr/bin, as the container sees it.
+  if (!exists('/run/host/usr/bin/distrobox-enter')) return [];
+  return ['/usr/bin/distrobox-enter', '-n', name, '--'];
+}
+
+/**
  * Write `content` to `path` unless an identical file is already there.
  * Returns false (after reporting) when a different file exists and --force was
  * not given.
@@ -199,7 +213,7 @@ async function installSystemd(home: string, opts: ServiceInstallOptions): Promis
   }
 
   const path = userUnitPath();
-  const unit = renderUnit({ exec: launchCommand().join(' '), home });
+  const unit = renderUnit({ exec: [...distroboxPrefix(), ...launchCommand()].join(' '), home });
 
   if (opts.dryRun) {
     say(`${yellow('dry run')} — would write ${path}:`);
