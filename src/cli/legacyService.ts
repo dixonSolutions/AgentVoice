@@ -143,7 +143,9 @@ export async function retireLegacyService(svc: LegacyService, opts: { dryRun?: b
       const sudo = process.getuid?.() === 0 ? [] : ['sudo', '-n'];
       const run = (args: string[]) =>
         sudo.length ? capture(sudo[0]!, [...sudo.slice(1), ...args]) : capture(args[0]!, args.slice(1));
-      const off = await run(['systemctl', 'disable', '--now', svc.unit]);
+      // Not `disable --now`: from inside a container systemctl skips the stop.
+      const off = await run(['systemctl', 'disable', svc.unit]);
+      await run(['systemctl', 'stop', svc.unit]);
       if (off.code !== 0) {
         note(`  ${yellow('note')}  could not disable the system unit ${svc.unit} without a password. Run:`);
         note(`          sudo systemctl disable --now ${svc.unit} && sudo rm -f /etc/systemd/system/${svc.unit}`);
@@ -186,7 +188,8 @@ async function retireUserUnits(svc: LegacyService): Promise<number> {
     const to = join(dir, toName);
     const wasEnabled = (await capture('systemctl', ['--user', 'is-enabled', unit])).stdout.trim() === 'enabled';
     const wasActive = (await capture('systemctl', ['--user', 'is-active', unit])).stdout.trim() === 'active';
-    await capture('systemctl', ['--user', 'disable', '--now', unit]);
+    await capture('systemctl', ['--user', 'disable', unit]);
+    await capture('systemctl', ['--user', 'stop', unit]);
     if (!existsSync(to)) {
       try {
         writeFileSync(to, renameLegacyUnits(readFileSync(from, 'utf-8')), 'utf-8');
@@ -200,15 +203,17 @@ async function retireUserUnits(svc: LegacyService): Promise<number> {
     say(`  ${green('renamed')}  ${unit} → ${toName}`);
     if (wasEnabled || wasActive) {
       await capture('systemctl', ['--user', 'daemon-reload']);
-      const args = ['--user', ...(wasEnabled ? ['enable'] : ['start']), ...(wasEnabled && wasActive ? ['--now'] : []), toName];
-      if ((await capture('systemctl', args)).code !== 0) {
-        problems++;
-        note(`  ${yellow('note')}  systemctl ${args.join(' ')} failed — run it once the new unit is in place`);
+      for (const verb of [...(wasEnabled ? ['enable'] : []), ...(wasActive ? ['start'] : [])]) {
+        if ((await capture('systemctl', ['--user', verb, toName])).code !== 0) {
+          problems++;
+          note(`  ${yellow('note')}  systemctl --user ${verb} ${toName} failed — run it once the new unit is in place`);
+        }
       }
     }
   }
 
-  await capture('systemctl', ['--user', 'disable', '--now', svc.unit]);
+  await capture('systemctl', ['--user', 'disable', svc.unit]);
+  await capture('systemctl', ['--user', 'stop', svc.unit]);
   rmSync(join(dir, svc.unit), { force: true });
   rmSync(join(dir, 'default.target.wants', svc.unit), { force: true });
   await capture('systemctl', ['--user', 'daemon-reload']);

@@ -113,6 +113,17 @@ function launchCommand(): string[] {
 }
 
 /**
+ * `enable` then `start`, never `enable --now`: run from inside a container,
+ * systemctl decides "systemd is not running", enables offline and silently
+ * skips the start (the same goes for `disable --now` and the stop).
+ */
+async function enableAndStart(unit: string): Promise<number> {
+  const enable = await passthrough('systemctl', ['--user', 'enable', unit]);
+  if (enable !== 0) return enable;
+  return passthrough('systemctl', ['--user', 'start', unit]);
+}
+
+/**
  * Inside a distrobox (Bluefin, Aurora, Silverblue and friends) the CLI runs in
  * the container but the user unit runs on the host, where this Node does not
  * exist — the unit would fail on every start. Start it through the host's
@@ -205,7 +216,7 @@ async function installSystemd(home: string, opts: ServiceInstallOptions): Promis
       note(`    systemctl --user enable --now ${SERVICE_UNIT}`);
       return 0;
     }
-    const enable = await passthrough('systemctl', ['--user', 'enable', '--now', SERVICE_UNIT]);
+    const enable = await enableAndStart(SERVICE_UNIT);
     if (enable !== 0) return enable;
     say(`${green('started')}  ${SERVICE_UNIT} ${dim('(packaged unit)')}`);
     await offerLinger();
@@ -230,7 +241,7 @@ async function installSystemd(home: string, opts: ServiceInstallOptions): Promis
   if (reload !== 0) return reload;
 
   if (opts.now) {
-    const enable = await passthrough('systemctl', ['--user', 'enable', '--now', SERVICE_UNIT]);
+    const enable = await enableAndStart(SERVICE_UNIT);
     if (enable !== 0) return enable;
     say(`${green('started')}  ${SERVICE_UNIT}`);
     await offerLinger();
@@ -498,7 +509,8 @@ export async function serviceUninstallCommand(opts: { dryRun?: boolean } = {}): 
     say(`${yellow('dry run')} — would disable and stop ${SERVICE_UNIT}${ours ? ` and remove ${path}` : ''}`);
     return 0;
   }
-  await passthrough('systemctl', ['--user', 'disable', '--now', SERVICE_UNIT]);
+  await passthrough('systemctl', ['--user', 'disable', SERVICE_UNIT]);
+  await passthrough('systemctl', ['--user', 'stop', SERVICE_UNIT]);
   if (ours) {
     rmSync(path, { force: true });
     say(`${green('removed')}  ${path}`);
