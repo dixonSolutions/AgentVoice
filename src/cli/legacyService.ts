@@ -15,6 +15,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { capture, passthrough, ran } from './exec.js';
 import { dim, green, note, say, yellow } from './out.js';
+import { unitLoaded } from './service.js';
 
 export const LEGACY_SERVICE_UNIT = 'agentvoice.service';
 export const LEGACY_LAUNCHD_LABEL = 'com.agentvoice.bridge';
@@ -91,14 +92,13 @@ export async function findLegacyService(): Promise<LegacyService | null> {
     /* not enabled */
   }
 
-  const user = await capture('systemctl', ['--user', 'cat', LEGACY_SERVICE_UNIT]);
-  if (!ran(user)) return null;
-  if (user.code === 0 || companions.length || dangling) {
+  const user = await unitLoaded(['--user'], LEGACY_SERVICE_UNIT);
+  if (user === null) return null;
+  if (user || companions.length || dangling) {
     const active = (await capture('systemctl', ['--user', 'is-active', LEGACY_SERVICE_UNIT])).stdout.trim() === 'active';
     return { scope: 'user', unit: LEGACY_SERVICE_UNIT, active, userFiles, companions };
   }
-  const system = await capture('systemctl', ['cat', LEGACY_SERVICE_UNIT]);
-  if (system.code !== 0) return null;
+  if (!(await unitLoaded([], LEGACY_SERVICE_UNIT))) return null;
   const active = (await capture('systemctl', ['is-active', LEGACY_SERVICE_UNIT])).stdout.trim() === 'active';
   return { scope: 'system', unit: LEGACY_SERVICE_UNIT, active, userFiles: [], companions: [] };
 }

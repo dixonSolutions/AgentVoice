@@ -63,7 +63,7 @@ $QUIET || echo -e "${CYN}${BLD}Squeakr — stop host${NC}  |  Project: ${BLD}${P
 stopped_via_systemd=false
 
 if systemctl --user list-unit-files squeakr.service &>/dev/null && \
-   systemctl --user cat squeakr.service &>/dev/null; then
+   [ "$(systemctl --user show -p LoadState --value squeakr.service 2>/dev/null)" = loaded ]; then
   section "Stopping systemd user units"
   # Stop the watch path first so it can't re-trigger the service.
   if systemctl --user is-active --quiet squeakr-watch.path; then
@@ -79,7 +79,7 @@ if systemctl --user list-unit-files squeakr.service &>/dev/null && \
     info "squeakr.service already inactive."
   fi
   stopped_via_systemd=true
-elif systemctl cat squeakr.service &>/dev/null 2>&1; then
+elif [ "$(systemctl show -p LoadState --value squeakr.service 2>/dev/null)" = loaded ]; then
   section "Stopping systemd system unit"
   sudo systemctl stop squeakr-watch.path 2>/dev/null || true
   sudo systemctl stop squeakr.service || warn "Could not stop system squeakr.service"
