@@ -113,6 +113,31 @@ function launchCommand(): string[] {
 }
 
 /**
+ * `enable` then `start`, never `enable --now`: run from inside a container,
+ * systemctl decides "systemd is not running", enables offline and silently
+ * skips the start (the same goes for `disable --now` and the stop).
+ */
+async function enableAndStart(unit: string): Promise<number> {
+  const enable = await passthrough('systemctl', ['--user', 'enable', unit]);
+  if (enable !== 0) return enable;
+  return passthrough('systemctl', ['--user', 'start', unit]);
+}
+
+/**
+ * Inside a distrobox (Bluefin, Aurora, Silverblue and friends) the CLI runs in
+ * the container but the user unit runs on the host, where this Node does not
+ * exist — the unit would fail on every start. Start it through the host's
+ * distrobox-enter into the same container instead. Empty anywhere else.
+ */
+export function distroboxPrefix(env: NodeJS.ProcessEnv = process.env, exists: (p: string) => boolean = existsSync): string[] {
+  const name = env['CONTAINER_ID']?.trim();
+  if (process.platform !== 'linux' || !name || !exists('/run/.containerenv')) return [];
+  // The host's /usr/bin, as the container sees it.
+  if (!exists('/run/host/usr/bin/distrobox-enter')) return [];
+  return ['/usr/bin/distrobox-enter', '-n', name, '--'];
+}
+
+/**
  * Write `content` to `path` unless an identical file is already there.
  * Returns false (after reporting) when a different file exists and --force was
  * not given.
@@ -145,7 +170,7 @@ function userUnitPath(): string {
   return join(base, 'systemd', 'user', SERVICE_UNIT);
 }
 
-function renderUnit(opts: { exec: string; home: string }): string {
+function renderUnit(opts: { exec: string; home: string; stop?: string }): string {
   return `[Unit]
 Description=Squeakr Bridge
 Documentation=https://github.com/dixonSolutions/Squeakr
@@ -156,7 +181,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=${opts.home}
 ExecStart=${opts.exec}
-Restart=on-failure
+${opts.stop ? `ExecStop=-${opts.stop}\n# The podman client exits 143 when ExecStop ends the bridge: a stop, not a failure.\nSuccessExitStatus=143\n` : ''}Restart=on-failure
 RestartSec=3
 # Agent CLIs live in per-user bin directories a user unit would not see.
 Environment=PATH=${servicePath()}
@@ -191,7 +216,7 @@ async function installSystemd(home: string, opts: ServiceInstallOptions): Promis
       note(`    systemctl --user enable --now ${SERVICE_UNIT}`);
       return 0;
     }
-    const enable = await passthrough('systemctl', ['--user', 'enable', '--now', SERVICE_UNIT]);
+    const enable = await enableAndStart(SERVICE_UNIT);
     if (enable !== 0) return enable;
     say(`${green('started')}  ${SERVICE_UNIT} ${dim('(packaged unit)')}`);
     await offerLinger();
@@ -199,7 +224,13 @@ async function installSystemd(home: string, opts: ServiceInstallOptions): Promis
   }
 
   const path = userUnitPath();
-  const unit = renderUnit({ exec: launchCommand().join(' '), home });
+  const prefix = distroboxPrefix();
+  const launch = launchCommand();
+  // Through distrobox-enter, systemd only ever sees the podman client: the
+  // bridge itself runs in the container, outside the unit's cgroup, so a stop
+  // would orphan it on the port. ExecStop ends it inside the container.
+  const stop = prefix.length ? [...prefix, '/usr/bin/pkill', '-TERM', '-f', `"${launch.slice(1).join(' ')}"`].join(' ') : undefined;
+  const unit = renderUnit({ exec: [...prefix, ...launch].join(' '), home, ...(stop ? { stop } : {}) });
 
   if (opts.dryRun) {
     say(`${yellow('dry run')} — would write ${path}:`);
@@ -216,7 +247,7 @@ async function installSystemd(home: string, opts: ServiceInstallOptions): Promis
   if (reload !== 0) return reload;
 
   if (opts.now) {
-    const enable = await passthrough('systemctl', ['--user', 'enable', '--now', SERVICE_UNIT]);
+    const enable = await enableAndStart(SERVICE_UNIT);
     if (enable !== 0) return enable;
     say(`${green('started')}  ${SERVICE_UNIT}`);
     await offerLinger();
@@ -484,7 +515,8 @@ export async function serviceUninstallCommand(opts: { dryRun?: boolean } = {}): 
     say(`${yellow('dry run')} — would disable and stop ${SERVICE_UNIT}${ours ? ` and remove ${path}` : ''}`);
     return 0;
   }
-  await passthrough('systemctl', ['--user', 'disable', '--now', SERVICE_UNIT]);
+  await passthrough('systemctl', ['--user', 'disable', SERVICE_UNIT]);
+  await passthrough('systemctl', ['--user', 'stop', SERVICE_UNIT]);
   if (ours) {
     rmSync(path, { force: true });
     say(`${green('removed')}  ${path}`);

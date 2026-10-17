@@ -103,12 +103,42 @@ export async function findLegacyService(): Promise<LegacyService | null> {
   return { scope: 'system', unit: LEGACY_SERVICE_UNIT, active, userFiles: [], companions: [] };
 }
 
+/**
+ * A unit that ran the bridge through distrobox-enter: systemd only stops the
+ * podman client, and the bridge keeps running in the container, on the port
+ * and in the home. This CLI runs in that same container, so end it here —
+ * matched on the unit's own command line, so nothing else is touched.
+ */
+async function stopInContainer(unit: string): Promise<void> {
+  if (!process.env['CONTAINER_ID']) return;
+  let execStart = '';
+  try {
+    const text = readFileSync(join(userUnitDir(), unit), 'utf-8');
+    execStart = /^ExecStart=(.*)$/m.exec(text)?.[1] ?? '';
+  } catch {
+    return;
+  }
+  if (!execStart.includes('distrobox-enter')) return;
+  const script = execStart.split(/\s+/).find((w) => w.endsWith('.mjs') || w.endsWith('cli.js'));
+  if (!script) return;
+  const pattern = `${script} run`;
+  await capture('pkill', ['-TERM', '-f', pattern]);
+  for (let i = 0; i < 20; i++) {
+    if ((await capture('pgrep', ['-f', pattern])).code !== 0) return;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  await capture('pkill', ['-KILL', '-f', pattern]);
+}
+
 /** Stop it, leaving it installed. 0 when it is stopped (or was never running). */
 export async function stopLegacyService(svc: LegacyService): Promise<number> {
   if (!svc.active) return 0;
   switch (svc.scope) {
-    case 'user':
-      return passthrough('systemctl', ['--user', 'stop', svc.unit]);
+    case 'user': {
+      const code = await passthrough('systemctl', ['--user', 'stop', svc.unit]);
+      await stopInContainer(svc.unit);
+      return code;
+    }
     case 'system':
       return process.getuid?.() === 0
         ? passthrough('systemctl', ['stop', svc.unit])
@@ -143,7 +173,9 @@ export async function retireLegacyService(svc: LegacyService, opts: { dryRun?: b
       const sudo = process.getuid?.() === 0 ? [] : ['sudo', '-n'];
       const run = (args: string[]) =>
         sudo.length ? capture(sudo[0]!, [...sudo.slice(1), ...args]) : capture(args[0]!, args.slice(1));
-      const off = await run(['systemctl', 'disable', '--now', svc.unit]);
+      // Not `disable --now`: from inside a container systemctl skips the stop.
+      const off = await run(['systemctl', 'disable', svc.unit]);
+      await run(['systemctl', 'stop', svc.unit]);
       if (off.code !== 0) {
         note(`  ${yellow('note')}  could not disable the system unit ${svc.unit} without a password. Run:`);
         note(`          sudo systemctl disable --now ${svc.unit} && sudo rm -f /etc/systemd/system/${svc.unit}`);
@@ -186,7 +218,8 @@ async function retireUserUnits(svc: LegacyService): Promise<number> {
     const to = join(dir, toName);
     const wasEnabled = (await capture('systemctl', ['--user', 'is-enabled', unit])).stdout.trim() === 'enabled';
     const wasActive = (await capture('systemctl', ['--user', 'is-active', unit])).stdout.trim() === 'active';
-    await capture('systemctl', ['--user', 'disable', '--now', unit]);
+    await capture('systemctl', ['--user', 'disable', unit]);
+    await capture('systemctl', ['--user', 'stop', unit]);
     if (!existsSync(to)) {
       try {
         writeFileSync(to, renameLegacyUnits(readFileSync(from, 'utf-8')), 'utf-8');
@@ -200,15 +233,18 @@ async function retireUserUnits(svc: LegacyService): Promise<number> {
     say(`  ${green('renamed')}  ${unit} → ${toName}`);
     if (wasEnabled || wasActive) {
       await capture('systemctl', ['--user', 'daemon-reload']);
-      const args = ['--user', ...(wasEnabled ? ['enable'] : ['start']), ...(wasEnabled && wasActive ? ['--now'] : []), toName];
-      if ((await capture('systemctl', args)).code !== 0) {
-        problems++;
-        note(`  ${yellow('note')}  systemctl ${args.join(' ')} failed — run it once the new unit is in place`);
+      for (const verb of [...(wasEnabled ? ['enable'] : []), ...(wasActive ? ['start'] : [])]) {
+        if ((await capture('systemctl', ['--user', verb, toName])).code !== 0) {
+          problems++;
+          note(`  ${yellow('note')}  systemctl --user ${verb} ${toName} failed — run it once the new unit is in place`);
+        }
       }
     }
   }
 
-  await capture('systemctl', ['--user', 'disable', '--now', svc.unit]);
+  await capture('systemctl', ['--user', 'disable', svc.unit]);
+  await capture('systemctl', ['--user', 'stop', svc.unit]);
+  await stopInContainer(svc.unit);
   rmSync(join(dir, svc.unit), { force: true });
   rmSync(join(dir, 'default.target.wants', svc.unit), { force: true });
   await capture('systemctl', ['--user', 'daemon-reload']);

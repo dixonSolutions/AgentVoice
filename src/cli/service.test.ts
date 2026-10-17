@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
-import { renderPlist } from './commands/serviceInstall.js';
+import { distroboxPrefix, renderPlist } from './commands/serviceInstall.js';
 import { parseLaunchctlPrint, parseScQuery } from './service.js';
 
 test('parseScQuery reads state, pid and start type from sc.exe', () => {
@@ -38,4 +38,12 @@ test('renderPlist escapes paths and carries the home and PATH', () => {
   assert.match(plist, /<string>\/Users\/a &amp; b\/squeakr\.mjs<\/string>/);
   assert.match(plist, /<key>SQUEAKR_HOME<\/key>\s*<string>\/Users\/a\/\.squeakr<\/string>/);
   assert.match(plist, /<key>Label<\/key>\s*<string>com\.squeakr\.bridge<\/string>/);
+});
+
+test('a unit written from inside a distrobox starts through distrobox-enter', () => {
+  const all = () => true;
+  if (process.platform !== 'linux') return;
+  assert.deepEqual(distroboxPrefix({ CONTAINER_ID: 'dev' }, all), ['/usr/bin/distrobox-enter', '-n', 'dev', '--']);
+  assert.deepEqual(distroboxPrefix({}, all), []);
+  assert.deepEqual(distroboxPrefix({ CONTAINER_ID: 'dev' }, (p) => p !== '/run/host/usr/bin/distrobox-enter'), []);
 });
