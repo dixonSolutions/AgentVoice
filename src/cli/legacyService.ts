@@ -103,12 +103,42 @@ export async function findLegacyService(): Promise<LegacyService | null> {
   return { scope: 'system', unit: LEGACY_SERVICE_UNIT, active, userFiles: [], companions: [] };
 }
 
+/**
+ * A unit that ran the bridge through distrobox-enter: systemd only stops the
+ * podman client, and the bridge keeps running in the container, on the port
+ * and in the home. This CLI runs in that same container, so end it here —
+ * matched on the unit's own command line, so nothing else is touched.
+ */
+async function stopInContainer(unit: string): Promise<void> {
+  if (!process.env['CONTAINER_ID']) return;
+  let execStart = '';
+  try {
+    const text = readFileSync(join(userUnitDir(), unit), 'utf-8');
+    execStart = /^ExecStart=(.*)$/m.exec(text)?.[1] ?? '';
+  } catch {
+    return;
+  }
+  if (!execStart.includes('distrobox-enter')) return;
+  const script = execStart.split(/\s+/).find((w) => w.endsWith('.mjs') || w.endsWith('cli.js'));
+  if (!script) return;
+  const pattern = `${script} run`;
+  await capture('pkill', ['-TERM', '-f', pattern]);
+  for (let i = 0; i < 20; i++) {
+    if ((await capture('pgrep', ['-f', pattern])).code !== 0) return;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  await capture('pkill', ['-KILL', '-f', pattern]);
+}
+
 /** Stop it, leaving it installed. 0 when it is stopped (or was never running). */
 export async function stopLegacyService(svc: LegacyService): Promise<number> {
   if (!svc.active) return 0;
   switch (svc.scope) {
-    case 'user':
-      return passthrough('systemctl', ['--user', 'stop', svc.unit]);
+    case 'user': {
+      const code = await passthrough('systemctl', ['--user', 'stop', svc.unit]);
+      await stopInContainer(svc.unit);
+      return code;
+    }
     case 'system':
       return process.getuid?.() === 0
         ? passthrough('systemctl', ['stop', svc.unit])
@@ -214,6 +244,7 @@ async function retireUserUnits(svc: LegacyService): Promise<number> {
 
   await capture('systemctl', ['--user', 'disable', svc.unit]);
   await capture('systemctl', ['--user', 'stop', svc.unit]);
+  await stopInContainer(svc.unit);
   rmSync(join(dir, svc.unit), { force: true });
   rmSync(join(dir, 'default.target.wants', svc.unit), { force: true });
   await capture('systemctl', ['--user', 'daemon-reload']);

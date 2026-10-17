@@ -170,7 +170,7 @@ function userUnitPath(): string {
   return join(base, 'systemd', 'user', SERVICE_UNIT);
 }
 
-function renderUnit(opts: { exec: string; home: string }): string {
+function renderUnit(opts: { exec: string; home: string; stop?: string }): string {
   return `[Unit]
 Description=Squeakr Bridge
 Documentation=https://github.com/dixonSolutions/Squeakr
@@ -181,7 +181,7 @@ Wants=network-online.target
 Type=simple
 WorkingDirectory=${opts.home}
 ExecStart=${opts.exec}
-Restart=on-failure
+${opts.stop ? `ExecStop=-${opts.stop}\n` : ''}Restart=on-failure
 RestartSec=3
 # Agent CLIs live in per-user bin directories a user unit would not see.
 Environment=PATH=${servicePath()}
@@ -224,7 +224,13 @@ async function installSystemd(home: string, opts: ServiceInstallOptions): Promis
   }
 
   const path = userUnitPath();
-  const unit = renderUnit({ exec: [...distroboxPrefix(), ...launchCommand()].join(' '), home });
+  const prefix = distroboxPrefix();
+  const launch = launchCommand();
+  // Through distrobox-enter, systemd only ever sees the podman client: the
+  // bridge itself runs in the container, outside the unit's cgroup, so a stop
+  // would orphan it on the port. ExecStop ends it inside the container.
+  const stop = prefix.length ? [...prefix, '/usr/bin/pkill', '-TERM', '-f', `"${launch.slice(1).join(' ')}"`].join(' ') : undefined;
+  const unit = renderUnit({ exec: [...prefix, ...launch].join(' '), home, ...(stop ? { stop } : {}) });
 
   if (opts.dryRun) {
     say(`${yellow('dry run')} — would write ${path}:`);
